@@ -1,0 +1,875 @@
+# Registrations App: Registration & Attendance
+
+## Overview
+
+The `registrations` app handles:
+- Event registrations (including guest/anonymous registrations)
+- Attendance tracking from Zoom
+- Custom field responses
+- Waitlist management
+- Attendance → certificate eligibility flow
+
+---
+
+## Models
+
+### Registration
+
+An attendee's registration for an event.
+
+```python
+# registrations/models.py
+
+from django.db import models
+from django.utils import timezone
+from common.models import SoftDeleteModel
+from common.fields import LowercaseEmailField
+
+
+class Registration(SoftDeleteModel):
+    """
+    An attendee's registration for an event.
+    
+    Key Concepts:
+    - User can be null (guest registration before account creation)
+    - Email is always stored (for matching and certificate delivery)
+    - When user creates account, registrations are linked via email
+    
+    Lifecycle:
+        Guest registers → Registration(user=None, email=X)
+        Guest creates account → Registration.user = new_user (matched by email)
+    
+    Soft Delete Behavior:
+    - Certificate is PROTECTED (cannot delete registration with certificate)
+    - Attendance records preserved (for audit)
+    """
+    
+    class Status(models.TextChoices):
+        CONFIRMED = 'confirmed', 'Confirmed'
+        WAITLISTED = 'waitlisted', 'Waitlisted'
+        CANCELLED = 'cancelled', 'Cancelled'
+    
+    class Source(models.TextChoices):
+        SELF = 'self', 'Self Registration'
+        INVITE = 'invite', 'Invitation Link'
+        IMPORT = 'import', 'CSV Import'
+        MANUAL = 'manual', 'Manual Entry'
+        API = 'api', 'API'
+    
+    # =========================================
+    # Relationships
+    # =========================================
+    event = models.ForeignKey(
+        'events.Event',
+        on_delete=models.CASCADE,
+        related_name='registrations'
+    )
+    
+    # User link (null for guest registrations)
+    user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='registrations',
+        help_text="Linked user account (null for guests)"
+    )
+    
+    # Who created this registration
+    registered_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='registrations_created',
+        help_text="User who created this registration (organizer for manual adds)"
+    )
+    
+    # =========================================
+    # Contact Info (always stored)
+    # =========================================
+    email = LowercaseEmailField(
+        db_index=True,
+        help_text="Registrant email (canonical, lowercase)"
+    )
+    full_name = models.CharField(
+        max_length=255,
+        help_text="Full name as entered at registration"
+    )
+    professional_title = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Professional title"
+    )
+    organization_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Organization/company"
+    )
+    
+    # =========================================
+    # Registration Metadata
+    # =========================================
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.CONFIRMED,
+        db_index=True
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.SELF,
+        help_text="How this registration was created"
+    )
+    
+    # Waitlist position (only if waitlisted)
+    waitlist_position = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Position in waitlist (1 = first)"
+    )
+    promoted_from_waitlist_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When promoted from waitlist to confirmed"
+    )
+    
+    # Cancellation
+    cancelled_at = models.DateTimeField(
+        null=True, blank=True
+    )
+    cancellation_reason = models.TextField(
+        blank=True
+    )
+    
+    # =========================================
+    # Attendance (denormalized summary)
+    # =========================================
+    attended = models.BooleanField(
+        default=False,
+        help_text="Whether attendee joined the event"
+    )
+    first_join_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="First time attendee joined"
+    )
+    last_leave_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Last time attendee left"
+    )
+    total_attendance_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text="Total minutes attended (sum of all sessions)"
+    )
+    attendance_eligible = models.BooleanField(
+        default=False,
+        help_text="Met minimum attendance threshold"
+    )
+    attendance_override = models.BooleanField(
+        default=False,
+        help_text="Attendance manually overridden by organizer"
+    )
+    attendance_override_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='attendance_overrides',
+        help_text="Who set the override"
+    )
+    attendance_override_reason = models.TextField(
+        blank=True,
+        help_text="Reason for override"
+    )
+    
+    # =========================================
+    # Certificate Status (denormalized)
+    # =========================================
+    certificate_issued = models.BooleanField(
+        default=False
+    )
+    certificate_issued_at = models.DateTimeField(
+        null=True, blank=True
+    )
+    
+    # =========================================
+    # Privacy
+    # =========================================
+    allow_public_verification = models.BooleanField(
+        default=True,
+        help_text="Allow certificate to be publicly verified"
+    )
+    
+    class Meta:
+        db_table = 'registrations'
+        unique_together = [['event', 'email']]
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['event', 'status']),
+            models.Index(fields=['email']),
+            models.Index(fields=['user']),
+            models.Index(fields=['uuid']),
+            models.Index(fields=['event', 'attendance_eligible']),
+            models.Index(fields=['user', 'status']),
+        ]
+        verbose_name = 'Registration'
+        verbose_name_plural = 'Registrations'
+    
+    def __str__(self):
+        return f"{self.full_name} → {self.event.title}"
+    
+    # =========================================
+    # Properties
+    # =========================================
+    @property
+    def is_confirmed(self):
+        return self.status == self.Status.CONFIRMED
+    
+    @property
+    def is_waitlisted(self):
+        return self.status == self.Status.WAITLISTED
+    
+    @property
+    def can_receive_certificate(self):
+        """Check if eligible for certificate."""
+        if not self.event.certificates_enabled:
+            return False
+        if self.status != self.Status.CONFIRMED:
+            return False
+        if not self.attendance_eligible and not self.attendance_override:
+            return False
+        return True
+    
+    @property
+    def attendance_percent(self):
+        """Calculate attendance percentage."""
+        if self.event.duration_minutes == 0:
+            return 0
+        return int(
+            (self.total_attendance_minutes / self.event.duration_minutes) * 100
+        )
+    
+    # =========================================
+    # Methods
+    # =========================================
+    def link_to_user(self, user):
+        """
+        Link this registration to a user account.
+        Called when user verifies email matching this registration.
+        """
+        if self.user is None and user.email.lower() == self.email.lower():
+            self.user = user
+            self.save(update_fields=['user', 'updated_at'])
+            return True
+        return False
+    
+    def cancel(self, reason='', cancelled_by=None):
+        """Cancel this registration."""
+        self.status = self.Status.CANCELLED
+        self.cancelled_at = timezone.now()
+        self.cancellation_reason = reason
+        self.save(update_fields=[
+            'status', 'cancelled_at', 'cancellation_reason', 'updated_at'
+        ])
+        
+        # Update event counts
+        self.event.update_counts()
+        
+        # Promote from waitlist if applicable
+        self._promote_next_from_waitlist()
+    
+    def _promote_next_from_waitlist(self):
+        """Promote next person from waitlist after cancellation."""
+        if not self.event.waitlist_enabled:
+            return
+        
+        next_waitlisted = Registration.objects.filter(
+            event=self.event,
+            status=self.Status.WAITLISTED,
+            deleted_at__isnull=True
+        ).order_by('waitlist_position').first()
+        
+        if next_waitlisted:
+            next_waitlisted.promote_from_waitlist()
+    
+    def promote_from_waitlist(self):
+        """Promote from waitlist to confirmed."""
+        if self.status != self.Status.WAITLISTED:
+            return
+        
+        self.status = self.Status.CONFIRMED
+        self.promoted_from_waitlist_at = timezone.now()
+        self.waitlist_position = None
+        self.save(update_fields=[
+            'status', 'promoted_from_waitlist_at', 'waitlist_position', 'updated_at'
+        ])
+        
+        self.event.update_counts()
+        
+        # TODO: Send notification email
+    
+    def update_attendance_summary(self):
+        """
+        Recalculate attendance summary from AttendanceRecords.
+        Called after attendance records are created/updated.
+        """
+        records = self.attendance_records.all()
+        
+        if not records.exists():
+            return
+        
+        # Calculate totals
+        total_minutes = sum(r.duration_minutes for r in records)
+        first_join = min(r.join_time for r in records)
+        last_leave = max(
+            r.leave_time for r in records if r.leave_time
+        ) if any(r.leave_time for r in records) else None
+        
+        self.total_attendance_minutes = total_minutes
+        self.attended = total_minutes > 0
+        self.first_join_at = first_join
+        self.last_leave_at = last_leave
+        
+        # Update eligibility (unless manually overridden)
+        if not self.attendance_override:
+            self.attendance_eligible = (
+                total_minutes >= self.event.minimum_attendance_minutes
+            )
+        
+        self.save(update_fields=[
+            'total_attendance_minutes',
+            'attended',
+            'first_join_at',
+            'last_leave_at',
+            'attendance_eligible',
+            'updated_at'
+        ])
+    
+    def set_attendance_override(self, eligible, user, reason=''):
+        """
+        Manually override attendance eligibility.
+        
+        Args:
+            eligible: Whether to mark as eligible
+            user: User setting the override
+            reason: Reason for override
+        """
+        self.attendance_override = True
+        self.attendance_eligible = eligible
+        self.attendance_override_by = user
+        self.attendance_override_reason = reason
+        self.save(update_fields=[
+            'attendance_override',
+            'attendance_eligible',
+            'attendance_override_by',
+            'attendance_override_reason',
+            'updated_at'
+        ])
+    
+    def clear_attendance_override(self):
+        """Clear manual override and recalculate from records."""
+        self.attendance_override = False
+        self.attendance_override_by = None
+        self.attendance_override_reason = ''
+        self.save(update_fields=[
+            'attendance_override',
+            'attendance_override_by',
+            'attendance_override_reason',
+            'updated_at'
+        ])
+        self.update_attendance_summary()
+    
+    @classmethod
+    def link_registrations_for_user(cls, user):
+        """
+        Link all registrations with matching email to this user.
+        Called after email verification.
+        """
+        count = cls.objects.filter(
+            email__iexact=user.email,
+            user__isnull=True,
+            deleted_at__isnull=True
+        ).update(user=user)
+        return count
+    
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('registrations:detail', kwargs={'uuid': self.uuid})
+```
+
+---
+
+### AttendanceRecord
+
+Individual attendance records from Zoom (join/leave events).
+
+```python
+class AttendanceRecord(BaseModel):
+    """
+    Individual attendance record from Zoom.
+    
+    A registration can have multiple records (join → leave → rejoin → leave).
+    Records are created from Zoom webhook events or participant reports.
+    
+    Matching Logic:
+    1. Try to match zoom_user_email to registration.email
+    2. If no match, flag as unmatched for manual review
+    3. Phone dial-ins may have no email and require manual matching
+    """
+    
+    event = models.ForeignKey(
+        'events.Event',
+        on_delete=models.CASCADE,
+        related_name='attendance_records'
+    )
+    
+    registration = models.ForeignKey(
+        Registration,
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='attendance_records',
+        help_text="Matched registration (null if unmatched)"
+    )
+    
+    # =========================================
+    # Zoom Participant Info
+    # =========================================
+    zoom_participant_id = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Zoom participant ID (unique per meeting session)"
+    )
+    zoom_user_id = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Zoom user ID (for registered Zoom users)"
+    )
+    zoom_user_email = LowercaseEmailField(
+        blank=True,
+        db_index=True,
+        help_text="Email from Zoom (for matching)"
+    )
+    zoom_user_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Display name in Zoom"
+    )
+    
+    # =========================================
+    # Join Method
+    # =========================================
+    join_method = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="How attendee joined (web, app, phone)"
+    )
+    device_type = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Device type (Windows, Mac, iOS, Android)"
+    )
+    ip_address = models.GenericIPAddressField(
+        null=True, blank=True,
+        help_text="IP address (if available, for compliance)"
+    )
+    location = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="GeoIP location (if required for compliance)"
+    )
+    
+    # =========================================
+    # Timing
+    # =========================================
+    join_time = models.DateTimeField(
+        db_index=True,
+        help_text="When participant joined"
+    )
+    leave_time = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When participant left (null if still in meeting)"
+    )
+    duration_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text="Duration in minutes"
+    )
+    
+    # =========================================
+    # Matching Status
+    # =========================================
+    is_matched = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Successfully matched to a registration"
+    )
+    matched_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When match was made"
+    )
+    matched_manually = models.BooleanField(
+        default=False,
+        help_text="Match was done manually by organizer"
+    )
+    matched_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='attendance_matches',
+        help_text="Who performed manual match"
+    )
+    
+    class Meta:
+        db_table = 'attendance_records'
+        ordering = ['join_time']
+        indexes = [
+            models.Index(fields=['event', 'registration']),
+            models.Index(fields=['event', 'is_matched']),
+            models.Index(fields=['zoom_user_email']),
+            models.Index(fields=['zoom_participant_id']),
+            models.Index(fields=['join_time']),
+        ]
+        verbose_name = 'Attendance Record'
+        verbose_name_plural = 'Attendance Records'
+    
+    def __str__(self):
+        name = self.zoom_user_name or self.zoom_user_email or 'Unknown'
+        return f"{name} @ {self.event.title}"
+    
+    # =========================================
+    # Properties
+    # =========================================
+    @property
+    def is_in_meeting(self):
+        """Check if participant is currently in the meeting."""
+        return self.leave_time is None
+    
+    @property
+    def display_name(self):
+        """Best available name for display."""
+        return self.zoom_user_name or self.zoom_user_email or 'Unknown Participant'
+    
+    # =========================================
+    # Methods
+    # =========================================
+    def calculate_duration(self):
+        """Calculate and update duration from join/leave times."""
+        if self.leave_time and self.join_time:
+            delta = self.leave_time - self.join_time
+            self.duration_minutes = max(0, int(delta.total_seconds() / 60))
+        else:
+            self.duration_minutes = 0
+    
+    def participant_left(self, leave_time=None):
+        """Mark participant as having left the meeting."""
+        self.leave_time = leave_time or timezone.now()
+        self.calculate_duration()
+        self.save(update_fields=['leave_time', 'duration_minutes', 'updated_at'])
+        
+        # Update registration summary
+        if self.registration:
+            self.registration.update_attendance_summary()
+    
+    def match_to_registration(self, registration, user=None, manual=False):
+        """
+        Match this record to a registration.
+        
+        Args:
+            registration: Registration to match to
+            user: User performing match (for manual matches)
+            manual: Whether this is a manual match
+        """
+        self.registration = registration
+        self.is_matched = True
+        self.matched_at = timezone.now()
+        self.matched_manually = manual
+        self.matched_by = user if manual else None
+        self.save(update_fields=[
+            'registration', 'is_matched', 'matched_at',
+            'matched_manually', 'matched_by', 'updated_at'
+        ])
+        
+        # Update registration summary
+        registration.update_attendance_summary()
+    
+    def unmatch(self):
+        """Remove match (e.g., if matched incorrectly)."""
+        old_registration = self.registration
+        
+        self.registration = None
+        self.is_matched = False
+        self.matched_at = None
+        self.matched_manually = False
+        self.matched_by = None
+        self.save(update_fields=[
+            'registration', 'is_matched', 'matched_at',
+            'matched_manually', 'matched_by', 'updated_at'
+        ])
+        
+        # Update old registration summary
+        if old_registration:
+            old_registration.update_attendance_summary()
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate duration on save
+        if self.leave_time and not kwargs.get('update_fields'):
+            self.calculate_duration()
+        super().save(*args, **kwargs)
+```
+
+---
+
+### CustomFieldResponse
+
+Responses to custom registration fields.
+
+```python
+class CustomFieldResponse(BaseModel):
+    """
+    Response to a custom registration field.
+    
+    Stores the value(s) submitted for each custom field in the registration.
+    """
+    
+    registration = models.ForeignKey(
+        Registration,
+        on_delete=models.CASCADE,
+        related_name='custom_field_responses'
+    )
+    field = models.ForeignKey(
+        'events.EventCustomField',
+        on_delete=models.CASCADE,
+        related_name='responses'
+    )
+    
+    # Value storage
+    value = models.TextField(
+        blank=True,
+        help_text="Response value (JSON for multi-select)"
+    )
+    
+    class Meta:
+        db_table = 'custom_field_responses'
+        unique_together = [['registration', 'field']]
+        verbose_name = 'Custom Field Response'
+        verbose_name_plural = 'Custom Field Responses'
+    
+    def __str__(self):
+        return f"{self.registration.email} - {self.field.label}"
+    
+    @property
+    def parsed_value(self):
+        """Parse value for multi-select fields."""
+        import json
+        if self.field.field_type in ['multiselect']:
+            try:
+                return json.loads(self.value)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        return self.value
+```
+
+---
+
+## Attendance Matching Algorithm
+
+The process of matching Zoom attendance to registrations:
+
+```python
+# registrations/matching.py
+
+from django.db.models import Q
+
+
+def match_attendance_record(record, event):
+    """
+    Attempt to match an attendance record to a registration.
+    
+    Priority:
+    1. Exact email match
+    2. Zoom user ID match (if user previously registered with Zoom)
+    3. Leave unmatched for manual review
+    
+    Args:
+        record: AttendanceRecord to match
+        event: Event the record belongs to
+    
+    Returns:
+        Registration if matched, None otherwise
+    """
+    # Skip if already matched
+    if record.is_matched:
+        return record.registration
+    
+    # Strategy 1: Exact email match
+    if record.zoom_user_email:
+        registration = event.registrations.filter(
+            email__iexact=record.zoom_user_email,
+            status=Registration.Status.CONFIRMED,
+            deleted_at__isnull=True
+        ).first()
+        
+        if registration:
+            record.match_to_registration(registration, manual=False)
+            return registration
+    
+    # Strategy 2: Fuzzy name match (optional, can be risky)
+    # Disabled by default due to name collision risk
+    
+    # No match found
+    return None
+
+
+def match_all_unmatched(event):
+    """
+    Attempt to match all unmatched attendance records for an event.
+    
+    Returns:
+        tuple: (matched_count, unmatched_count)
+    """
+    from registrations.models import AttendanceRecord
+    
+    unmatched = AttendanceRecord.objects.filter(
+        event=event,
+        is_matched=False
+    )
+    
+    matched = 0
+    still_unmatched = 0
+    
+    for record in unmatched:
+        if match_attendance_record(record, event):
+            matched += 1
+        else:
+            still_unmatched += 1
+    
+    return matched, still_unmatched
+
+
+def get_unmatched_summary(event):
+    """
+    Get summary of unmatched attendance for an event.
+    
+    Returns list of unmatched records with suggested matches.
+    """
+    from registrations.models import AttendanceRecord
+    
+    unmatched = AttendanceRecord.objects.filter(
+        event=event,
+        is_matched=False
+    ).order_by('zoom_user_name')
+    
+    results = []
+    
+    for record in unmatched:
+        result = {
+            'record': record,
+            'suggestions': []
+        }
+        
+        # Suggest registrations with similar names
+        if record.zoom_user_name:
+            name_parts = record.zoom_user_name.lower().split()
+            q = Q()
+            for part in name_parts[:2]:  # First two parts
+                if len(part) > 2:
+                    q |= Q(full_name__icontains=part)
+            
+            if q:
+                suggestions = event.registrations.filter(
+                    q,
+                    status=Registration.Status.CONFIRMED,
+                    deleted_at__isnull=True
+                ).exclude(
+                    id__in=AttendanceRecord.objects.filter(
+                        event=event,
+                        is_matched=True
+                    ).values_list('registration_id', flat=True)
+                )[:5]
+                
+                result['suggestions'] = list(suggestions)
+        
+        results.append(result)
+    
+    return results
+```
+
+---
+
+## Relationships
+
+```
+Registration
+├── Event (N:1, CASCADE)
+├── User (N:1, SET_NULL) — registered user
+├── User (N:1, SET_NULL) — registered_by
+├── User (N:1, SET_NULL) — attendance_override_by
+├── AttendanceRecord (1:N, CASCADE)
+├── CustomFieldResponse (1:N, CASCADE)
+├── Certificate (1:1, PROTECT) — see certificates.md
+└── EventInvitation (1:1, SET_NULL) — see events.md
+
+AttendanceRecord
+├── Event (N:1, CASCADE)
+├── Registration (N:1, CASCADE, nullable)
+└── User (N:1, SET_NULL) — matched_by
+```
+
+---
+
+## Indexes
+
+| Table | Index | Purpose |
+|-------|-------|---------|
+| registrations | event_id, email (unique) | One per email per event |
+| registrations | event_id, status | Event's registrations by status |
+| registrations | email | Find by email across events |
+| registrations | user_id | User's registrations |
+| registrations | user_id, status | User's active registrations |
+| registrations | event_id, attendance_eligible | Eligible for certificates |
+| attendance_records | event_id, registration_id | Event's attendance |
+| attendance_records | event_id, is_matched | Unmatched records |
+| attendance_records | zoom_user_email | Email matching |
+| attendance_records | zoom_participant_id | Duplicate prevention |
+| attendance_records | join_time | Timeline queries |
+
+---
+
+## Business Rules
+
+1. **One registration per email per event**: Enforced at database level
+2. **Guest registration**: user=None until account created and email verified
+3. **Waitlist order**: FIFO, tracked by waitlist_position
+4. **Attendance threshold**: Configurable per event (default 80%)
+5. **Attendance override**: Manual override possible with reason required
+6. **Certificate eligibility**: Requires confirmed status + attendance eligible (or override)
+7. **Cancellation cascade**: Promotes next from waitlist
+8. **Matching priority**: Email exact match first, then manual
+
+---
+
+## Signals
+
+```python
+# registrations/signals.py
+
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
+@receiver(post_save, sender=Registration)
+def on_registration_save(sender, instance, created, **kwargs):
+    if created:
+        # Update event counts
+        instance.event.update_counts()
+        
+        # Update invitation if exists
+        try:
+            if hasattr(instance, 'invitation') and instance.invitation:
+                instance.invitation.mark_registered(instance)
+        except:
+            pass
+
+@receiver(post_delete, sender=Registration)
+def on_registration_delete(sender, instance, **kwargs):
+    instance.event.update_counts()
+
+@receiver(post_save, sender=AttendanceRecord)
+def on_attendance_save(sender, instance, created, **kwargs):
+    if instance.registration:
+        instance.registration.update_attendance_summary()
+```
