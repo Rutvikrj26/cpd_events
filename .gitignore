@@ -1,0 +1,64 @@
+# ----- General -----
+.DS_Store
+*.log
+*.tmp
+*.swp
+*.swo
+*.orig
+*.bak
+Thumbs.db
+
+# ----- Python / Poetry -----
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.python-version
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.cache/
+.ruff_cache/
+
+# ----- React + Bun -----
+node_modules/
+.pnp.cjs
+.pnp.loader.mjs
+.pnp.data.json
+.pnp.data.mjs
+.npm/
+.yarn/
+.turbo/
+.parcel-cache/
+.vite/
+.next/
+out/
+coverage/
+build/
+dist/
+.eslintcache
+.stylelintcache
+.bun/
+
+# ----- Django backend -----
+*.sqlite3
+*.sqlite3-journal
+src/db.sqlite3
+static/
+staticfiles/
+media/
+mediafiles/
+
+# ----- Env / editor -----
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/

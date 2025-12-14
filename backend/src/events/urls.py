@@ -1,0 +1,35 @@
+"""
+Events app URL routing.
+"""
+
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from . import views
+from registrations.views import EventRegistrationViewSet
+
+app_name = 'events'
+
+# Main event router
+router = DefaultRouter()
+router.register(r'events', views.EventViewSet, basename='event')
+
+# Nested registration router
+registration_router = DefaultRouter()
+registration_router.register(r'registrations', EventRegistrationViewSet, basename='event-registration')
+
+# Custom fields router
+custom_field_router = DefaultRouter()
+custom_field_router.register(r'custom-fields', views.EventCustomFieldViewSet, basename='event-custom-field')
+
+urlpatterns = [
+    # Main events API
+    path('', include(router.urls)),
+    
+    # Nested routes under events/{event_uuid}/
+    path('events/<uuid:event_uuid>/', include(registration_router.urls)),
+    path('events/<uuid:event_uuid>/', include(custom_field_router.urls)),
+    
+    # Public events
+    path('public/events/', views.PublicEventListView.as_view(), name='public_event_list'),
+    path('public/events/<slug:slug>/', views.PublicEventDetailView.as_view(), name='public_event_detail'),
+]
