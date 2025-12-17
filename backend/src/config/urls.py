@@ -14,6 +14,11 @@ urlpatterns = [
     path('api/v1/', include('certificates.urls')),
     path('api/v1/', include('contacts.urls')),
     path('api/v1/', include('integrations.urls')),
+    path('api/v1/', include('billing.urls')),
+    path('api/v1/', include('learning.urls')),
+    
+    # Webhooks
+    path('webhooks/stripe/', include('billing.webhooks')),
     
     # OpenAPI Schema
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

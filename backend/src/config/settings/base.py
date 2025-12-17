@@ -39,6 +39,8 @@ LOCAL_APPS = [
     'certificates',
     'contacts',
     'integrations',
+    'billing',
+    'learning',
 ]
 
 THIRD_PARTY_APPS = [

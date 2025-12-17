@@ -1,20 +1,63 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = ""
+description = "CPD Events Platform Backend"
 authors = [
     {name = "Rutvik Solanki",email = "rutvikrj26@gmail.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    # Django core
     "django (>=6.0,<7.0)",
-    "pytz (>=2025.2,<2026.0)",
-    "cryptography (>=46.0.3,<47.0.0)",
     "djangorestframework (>=3.15.0,<4.0.0)",
     "djangorestframework-simplejwt (>=5.4.0,<6.0.0)",
     "django-filter (>=25.1,<26.0)",
-    "drf-spectacular (>=0.28.0,<1.0.0)"
+    "django-cors-headers (>=4.3.0,<5.0.0)",
+    "drf-spectacular (>=0.28.0,<1.0.0)",
+    "drf-nested-routers (>=0.94.0,<1.0.0)",
+    
+    # Database & Caching
+    "psycopg[binary] (>=3.1.0,<4.0.0)",
+    "redis (>=5.0.0,<6.0.0)",
+    
+    # Task Queue
+    "celery[redis] (>=5.3.0,<6.0.0)",
+    "django-celery-beat (>=2.6.0,<3.0.0)",
+    
+    # Payments
+    "stripe (>=8.0.0,<9.0.0)",
+    
+    # Cloud Storage
+    "django-storages[google] (>=1.14.0,<2.0.0)",
+    "google-cloud-storage (>=2.14.0,<3.0.0)",
+    
+    # Security & Encryption
+    "cryptography (>=46.0.3,<47.0.0)",
+    
+    # PDF Generation
+    "reportlab (>=4.1.0,<5.0.0)",
+    "Pillow (>=10.2.0,<11.0.0)",
+    
+    # HTTP Requests
+    "requests (>=2.31.0,<3.0.0)",
+    
+    # Utilities
+    "pytz (>=2025.2,<2026.0)",
+    "python-dateutil (>=2.8.0,<3.0.0)",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest (>=8.0.0,<9.0.0)",
+    "pytest-django (>=4.7.0,<5.0.0)",
+    "pytest-cov (>=4.1.0,<5.0.0)",
+    "factory-boy (>=3.3.0,<4.0.0)",
+    "faker (>=22.0.0,<23.0.0)",
+    "black (>=24.0.0,<25.0.0)",
+    "ruff (>=0.2.0,<1.0.0)",
+    "mypy (>=1.8.0,<2.0.0)",
+    "django-stubs (>=4.2.0,<5.0.0)",
 ]
 
 [tool.poetry]
@@ -24,3 +67,19 @@ packages = [{include = "backend", from = "src"}]
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py", "*_test.py"]
+testpaths = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ['py313']
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+

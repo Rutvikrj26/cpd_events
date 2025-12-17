@@ -609,3 +609,169 @@ class UserSession(BaseModel):
     def deactivate_all_for_user(cls, user):
         """Deactivate all sessions for a user (logout everywhere)."""
         return cls.objects.filter(user=user, is_active=True).update(is_active=False)
+
+
+class CPDRequirement(BaseModel):
+    """
+    CPD requirement tracking for a user.
+    
+    Tracks annual CPD requirements for different licensing bodies
+    and calculates progress toward completion.
+    """
+    
+    class PeriodType(models.TextChoices):
+        CALENDAR_YEAR = 'calendar_year', 'Calendar Year (Jan-Dec)'
+        FISCAL_YEAR = 'fiscal_year', 'Fiscal Year'
+        ROLLING_12 = 'rolling_12', 'Rolling 12 Months'
+    
+    # Relationships
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='cpd_requirements'
+    )
+    
+    # Requirement details
+    cpd_type = models.CharField(
+        max_length=100,
+        help_text="CPD type code (e.g., 'general', 'clinical', 'ethics')"
+    )
+    cpd_type_display = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Human-readable CPD type name"
+    )
+    annual_requirement = models.DecimalField(
+        max_digits=8, decimal_places=2,
+        validators=[MinValueValidator(0)],
+        help_text="Required credits per period"
+    )
+    
+    # Period settings
+    period_type = models.CharField(
+        max_length=20,
+        choices=PeriodType.choices,
+        default=PeriodType.CALENDAR_YEAR
+    )
+    fiscal_year_start_month = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Month when fiscal year starts (1-12)"
+    )
+    fiscal_year_start_day = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Day when fiscal year starts"
+    )
+    
+    # Licensing body
+    licensing_body = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Name of licensing body"
+    )
+    license_number = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="License number"
+    )
+    
+    # Notes
+    notes = models.TextField(
+        blank=True,
+        help_text="Additional notes about this requirement"
+    )
+    
+    # Status
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this requirement is active"
+    )
+    
+    class Meta:
+        db_table = 'cpd_requirements'
+        verbose_name = 'CPD Requirement'
+        verbose_name_plural = 'CPD Requirements'
+        unique_together = [['user', 'cpd_type']]
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.cpd_type_display or self.cpd_type}"
+    
+    def get_current_period_bounds(self):
+        """
+        Get start and end dates for the current period.
+        
+        Returns:
+            tuple: (start_date, end_date)
+        """
+        from datetime import date
+        today = date.today()
+        
+        if self.period_type == self.PeriodType.CALENDAR_YEAR:
+            start = date(today.year, 1, 1)
+            end = date(today.year, 12, 31)
+        
+        elif self.period_type == self.PeriodType.FISCAL_YEAR:
+            fy_month = self.fiscal_year_start_month
+            fy_day = self.fiscal_year_start_day
+            
+            if today.month < fy_month or (today.month == fy_month and today.day < fy_day):
+                start = date(today.year - 1, fy_month, fy_day)
+                end = date(today.year, fy_month, fy_day) - timezone.timedelta(days=1)
+            else:
+                start = date(today.year, fy_month, fy_day)
+                end = date(today.year + 1, fy_month, fy_day) - timezone.timedelta(days=1)
+        
+        elif self.period_type == self.PeriodType.ROLLING_12:
+            end = today
+            start = today - timezone.timedelta(days=365)
+        
+        else:
+            start = date(today.year, 1, 1)
+            end = date(today.year, 12, 31)
+        
+        return (start, end)
+    
+    def get_earned_credits(self):
+        """
+        Get credits earned in current period.
+        
+        Returns:
+            Decimal: Total credits earned
+        """
+        from django.db.models import Sum
+        from certificates.models import Certificate
+        from decimal import Decimal
+        
+        start, end = self.get_current_period_bounds()
+        
+        earned = Certificate.objects.filter(
+            registration__user=self.user,
+            cpd_type=self.cpd_type,
+            status='issued',
+            issued_at__date__gte=start,
+            issued_at__date__lte=end
+        ).aggregate(
+            total=Sum('cpd_credits')
+        )['total']
+        
+        return earned or Decimal('0')
+    
+    @property
+    def completion_percent(self):
+        """Calculate completion percentage."""
+        if self.annual_requirement == 0:
+            return 100
+        earned = self.get_earned_credits()
+        percent = (earned / self.annual_requirement) * 100
+        return min(int(percent), 100)
+    
+    @property
+    def credits_remaining(self):
+        """Calculate remaining credits needed."""
+        from decimal import Decimal
+        earned = self.get_earned_credits()
+        remaining = self.annual_requirement - earned
+        return max(remaining, Decimal('0'))
+
