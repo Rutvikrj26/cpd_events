@@ -6,20 +6,25 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  Form, 
-  FormControl, 
-  FormField, 
-  FormItem, 
-  FormLabel, 
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
   FormMessage,
   FormDescription
 } from "@/components/ui/form";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const formSchema = z.object({
   email: z.string().email({
     message: "Please enter a valid email address.",
+  }),
+  fullName: z.string().min(2, {
+    message: "Name must be at least 2 characters.",
   }),
   password: z.string().min(8, {
     message: "Password must be at least 8 characters.",
@@ -35,25 +40,37 @@ const formSchema = z.object({
 
 export function SignupPage() {
   const navigate = useNavigate();
+  const { register } = useAuth();
   const [isLoading, setIsLoading] = React.useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       email: "",
+      fullName: "",
       password: "",
       confirmPassword: "",
       terms: false,
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Backend expects: email, password, full_name (optional), account_type (optional)
+      // Form has email, password.
+      await register({
+        email: values.email,
+        password: values.password,
+        full_name: values.fullName
+      });
+      toast.success("Account created! Please check your email to verify.");
+      navigate("/login");
+    } catch (error) {
+      toast.error("Registration failed. Email might be already taken.");
+    } finally {
       setIsLoading(false);
-      navigate("/dashboard");
-    }, 1500);
+    }
   }
 
   return (
@@ -73,7 +90,7 @@ export function SignupPage() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <FormField
-            control={form.control}
+            control={form.control as any}
             name="email"
             render={({ field }) => (
               <FormItem>

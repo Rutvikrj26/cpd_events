@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Registration, AttendanceRecord, CustomFieldResponse
+
+from .models import AttendanceRecord, CustomFieldResponse, Registration
 
 
 class CustomFieldResponseInline(admin.TabularInline):
@@ -21,7 +22,7 @@ class RegistrationAdmin(admin.ModelAdmin):
     search_fields = ('email', 'full_name', 'event__title')
     ordering = ('-created_at',)
     inlines = [CustomFieldResponseInline, AttendanceRecordInline]
-    
+
     fieldsets = (
         (None, {'fields': ('event', 'user', 'email', 'full_name', 'status')}),
         ('Professional Info', {'fields': ('professional_title', 'organization_name')}),

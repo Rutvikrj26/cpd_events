@@ -2,15 +2,15 @@
 URL routes for billing API.
 """
 
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
-    SubscriptionViewSet,
+    BillingPortalView,
+    CheckoutSessionView,
     InvoiceViewSet,
     PaymentMethodViewSet,
-    CheckoutSessionView,
-    BillingPortalView,
+    SubscriptionViewSet,
 )
 
 router = DefaultRouter()

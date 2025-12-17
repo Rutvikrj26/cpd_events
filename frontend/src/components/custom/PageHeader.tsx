@@ -5,10 +5,11 @@ interface PageHeaderProps {
   title: string;
   description?: string;
   actions?: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
 }
 
-export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
+export function PageHeader({ title, description, actions, children, className }: PageHeaderProps) {
   return (
     <div className={cn("flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8", className)}>
       <div className="space-y-1">
@@ -16,6 +17,7 @@ export function PageHeader({ title, description, actions, className }: PageHeade
         {description && (
           <p className="text-sm text-gray-500">{description}</p>
         )}
+        {children}
       </div>
       {actions && (
         <div className="flex items-center gap-2">

@@ -1,7 +1,9 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/toaster";
+import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/layout/ProtectedRoute";
+
 
 // Layouts
 import { PublicLayout } from './components/layout/PublicLayout';
@@ -16,6 +18,14 @@ import { EventDetail } from './pages/public/EventDetail';
 // Auth Pages
 import { LoginPage } from './pages/auth/LoginPage';
 import { SignupPage } from './pages/auth/SignupPage';
+import { DashboardPage } from './pages/dashboard/DashboardPage';
+import { EventsPage } from './pages/events/EventsPage';
+import { EventCreatePage } from './pages/events/EventCreatePage';
+import { EventDetailPage } from './pages/events/EventDetailPage';
+import { MyRegistrationsPage } from './pages/registrations/MyRegistrationsPage';
+import { CertificatesPage } from './pages/certificates/CertificatesPage';
+import { BillingPage } from './pages/billing/BillingPage';
+import { ProfilePage } from './pages/profile/ProfilePage';
 
 // Shared Dashboard Pages
 import { Notifications } from './pages/dashboard/Notifications';
@@ -37,7 +47,7 @@ import { EventManagement } from './pages/dashboard/organizer/EventManagement';
 export default function App() {
   return (
     <BrowserRouter>
-      <TooltipProvider>
+      <AuthProvider>
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={
@@ -45,7 +55,7 @@ export default function App() {
               <LandingPage />
             </PublicLayout>
           } />
-          
+
           <Route path="/events/browse" element={
             <PublicLayout>
               <EventDiscovery />
@@ -73,119 +83,125 @@ export default function App() {
               <LoginPage />
             </AuthLayout>
           } />
-          
+
           <Route path="/signup" element={
             <AuthLayout>
               <SignupPage />
             </AuthLayout>
           } />
 
-          {/* SHARED DASHBOARD ROUTES (Accessible by both roles) */}
-          {/* Note: In a real app, these would be accessible under both /dashboard and /organizer paths or checked via context */}
-          
-          <Route path="/notifications" element={
-             <DashboardLayout role="attendee"> {/* Defaulting to attendee layout for shared pages for now, or could handle dynamically */}
+          {/* Protected Routes - Attendee */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/events" element={<EventsPage />} />
+            <Route path="/events/create" element={<EventCreatePage />} />
+            <Route path="/events/:uuid" element={<EventDetailPage />} />
+            <Route path="/registrations" element={<MyRegistrationsPage />} />
+            <Route path="/certificates" element={<CertificatesPage />} />
+            <Route path="/billing" element={<BillingPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/notifications" element={
+              <DashboardLayout role="attendee">
                 <Notifications />
-             </DashboardLayout>
-          } />
+              </DashboardLayout>
+            } />
 
-          <Route path="/settings" element={
-             <DashboardLayout role="attendee">
+            <Route path="/settings" element={
+              <DashboardLayout role="attendee">
                 <ProfileSettings />
-             </DashboardLayout>
-          } />
+              </DashboardLayout>
+            } />
 
-          {/* Attendee Dashboard Routes */}
-          <Route path="/dashboard" element={
-            <DashboardLayout role="attendee">
-              <AttendeeDashboard />
-            </DashboardLayout>
-          } />
+            <Route path="/dashboard" element={
+              <DashboardLayout role="attendee">
+                <AttendeeDashboard />
+              </DashboardLayout>
+            } />
 
-          <Route path="/events" element={
-            <DashboardLayout role="attendee">
-              <MyEvents />
-            </DashboardLayout>
-          } />
+            <Route path="/events" element={
+              <DashboardLayout role="attendee">
+                <MyEvents />
+              </DashboardLayout>
+            } />
 
-          <Route path="/certificates" element={
-            <DashboardLayout role="attendee">
-               <CertificatesList />
-            </DashboardLayout>
-          } />
-          
-          <Route path="/certificates/:id" element={
-            <DashboardLayout role="attendee">
-               <CertificateDetail />
-            </DashboardLayout>
-          } />
-          
-           <Route path="/cpd" element={
-            <DashboardLayout role="attendee">
-               <CPDTracking />
-            </DashboardLayout>
-          } />
+            <Route path="/certificates" element={
+              <DashboardLayout role="attendee">
+                <CertificatesList />
+              </DashboardLayout>
+            } />
 
-          {/* Organizer Routes */}
-          <Route path="/organizer/dashboard" element={
-             <DashboardLayout role="organizer">
+            <Route path="/certificates/:id" element={
+              <DashboardLayout role="attendee">
+                <CertificateDetail />
+              </DashboardLayout>
+            } />
+
+            <Route path="/cpd" element={
+              <DashboardLayout role="attendee">
+                <CPDTracking />
+              </DashboardLayout>
+            } />
+
+            {/* Organizer Routes - could be separated into another role-protected route later */}
+            <Route path="/organizer/dashboard" element={
+              <DashboardLayout role="organizer">
                 <OrganizerDashboard />
-             </DashboardLayout>
-          } />
+              </DashboardLayout>
+            } />
 
-          <Route path="/organizer/events" element={
-             <DashboardLayout role="organizer">
+            <Route path="/organizer/events" element={
+              <DashboardLayout role="organizer">
                 <EventsList />
-             </DashboardLayout>
-          } />
+              </DashboardLayout>
+            } />
 
-           <Route path="/organizer/events/new" element={
-             <DashboardLayout role="organizer">
+            <Route path="/organizer/events/new" element={
+              <DashboardLayout role="organizer">
                 <CreateEvent />
-             </DashboardLayout>
-          } />
-          
-          <Route path="/organizer/events/:id" element={
-             <DashboardLayout role="organizer">
+              </DashboardLayout>
+            } />
+
+            <Route path="/organizer/events/:id" element={
+              <DashboardLayout role="organizer">
                 <EventManagement />
-             </DashboardLayout>
-          } />
-          
-           <Route path="/organizer/events/:id/edit" element={
-             <DashboardLayout role="organizer">
-                <CreateEvent /> {/* Reuse create form for edit */}
-             </DashboardLayout>
-          } />
+              </DashboardLayout>
+            } />
 
-          <Route path="/organizer/contacts" element={
-             <DashboardLayout role="organizer">
+            <Route path="/organizer/events/:id/edit" element={
+              <DashboardLayout role="organizer">
+                <CreateEvent />
+              </DashboardLayout>
+            } />
+
+            <Route path="/organizer/contacts" element={
+              <DashboardLayout role="organizer">
                 <div className="text-center py-10">Contacts Manager (Coming Soon)</div>
-             </DashboardLayout>
-          } />
+              </DashboardLayout>
+            } />
 
-          <Route path="/organizer/reports" element={
-             <DashboardLayout role="organizer">
+            <Route path="/organizer/reports" element={
+              <DashboardLayout role="organizer">
                 <div className="text-center py-10">Reports (Coming Soon)</div>
-             </DashboardLayout>
-          } />
-           
-           {/* Fallback for Organizer Settings/Notifications if needed specific URL */}
-           <Route path="/organizer/settings" element={
-             <DashboardLayout role="organizer">
+              </DashboardLayout>
+            } />
+
+            <Route path="/organizer/settings" element={
+              <DashboardLayout role="organizer">
                 <ProfileSettings />
-             </DashboardLayout>
-          } />
-          <Route path="/organizer/notifications" element={
-             <DashboardLayout role="organizer">
+              </DashboardLayout>
+            } />
+            <Route path="/organizer/notifications" element={
+              <DashboardLayout role="organizer">
                 <Notifications />
-             </DashboardLayout>
-          } />
+              </DashboardLayout>
+            } />
+          </Route>
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-        <Toaster />
-      </TooltipProvider>
-    </BrowserRouter>
+      </AuthProvider>
+      <Toaster />
+    </BrowserRouter >
   );
 }

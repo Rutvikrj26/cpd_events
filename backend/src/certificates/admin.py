@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import CertificateTemplate, Certificate, CertificateStatusHistory
+
+from .models import Certificate, CertificateStatusHistory, CertificateTemplate
 
 
 @admin.register(CertificateTemplate)

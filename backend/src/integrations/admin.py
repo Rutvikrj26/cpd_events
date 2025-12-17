@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import ZoomWebhookLog, ZoomRecording, ZoomRecordingFile, EmailLog
+
+from .models import EmailLog, ZoomRecording, ZoomRecordingFile, ZoomWebhookLog
 
 
 @admin.register(ZoomWebhookLog)

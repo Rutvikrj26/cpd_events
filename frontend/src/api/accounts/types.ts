@@ -1,0 +1,55 @@
+export interface User {
+    uuid: string;
+    email: string;
+    full_name: string;
+    account_type: 'attendee' | 'organizer' | 'admin';
+    is_active: boolean;
+    date_joined: string;
+    profile_image?: string;
+}
+
+
+export interface LoginRequest {
+    email: string; // Backend uses 'email' field for auth
+    password: string;
+}
+
+export interface SignupRequest {
+    email: string;
+    password: string;
+    confirm_password?: string;
+    full_name: string;
+    account_type?: 'attendee' | 'organizer';
+}
+
+export interface RefreshTokenRequest {
+    refresh: string;
+}
+
+export interface PasswordResetRequest {
+    email: string;
+}
+
+export interface PasswordResetConfirm {
+    uidb64: string;
+    token: string;
+    password: string;
+}
+
+export interface OrganizerProfile {
+    organization_name: string;
+    bio?: string;
+    website?: string;
+}
+
+export interface UpgradeOrganizerRequest {
+    organization_name: string;
+    bio?: string;
+    website?: string;
+}
+
+export interface AuthResponse {
+    access: string;
+    refresh: string;
+    user?: User;
+}

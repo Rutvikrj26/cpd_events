@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import ContactList, Contact, Tag
+
+from .models import Contact, ContactList, Tag
 
 
 class ContactInline(admin.TabularInline):

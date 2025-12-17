@@ -2,8 +2,9 @@
 Certificates app URL routing.
 """
 
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+
 from . import views
 
 app_name = 'certificates'
@@ -19,7 +20,6 @@ certificate_router.register(r'certificates', views.EventCertificateViewSet, base
 urlpatterns = [
     # Main certificate templates API
     path('', include(router.urls)),
-    
     # Public verification
     path('public/certificates/verify/<str:code>/', views.CertificateVerificationView.as_view(), name='verify'),
 ]

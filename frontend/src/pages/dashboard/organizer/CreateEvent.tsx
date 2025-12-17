@@ -7,21 +7,21 @@ import { Calendar as CalendarIcon, Clock, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Form, 
-  FormControl, 
-  FormDescription, 
-  FormField, 
-  FormItem, 
-  FormLabel, 
-  FormMessage 
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage
 } from "@/components/ui/form";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +31,7 @@ import { toast } from "sonner";
 const eventSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
   description: z.string().optional(),
-  type: z.string({ required_error: "Please select an event type" }),
+  type: z.string().min(1, "Please select an event type"),
   startDate: z.string().refine((val) => !isNaN(Date.parse(val)), { message: "Invalid date" }),
   startTime: z.string(),
   duration: z.string(),
@@ -48,7 +48,7 @@ export function CreateEvent() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<z.infer<typeof eventSchema>>({
-    resolver: zodResolver(eventSchema),
+    resolver: zodResolver(eventSchema) as any,
     defaultValues: {
       title: "",
       description: "",
@@ -78,14 +78,14 @@ export function CreateEvent() {
 
   return (
     <div className="max-w-4xl mx-auto pb-12">
-      <PageHeader 
-        title="Create New Event" 
+      <PageHeader
+        title="Create New Event"
         description="Fill in the details to publish your event."
       />
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          
+        <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-8">
+
           {/* Basic Info */}
           <Card>
             <CardHeader>
@@ -93,7 +93,7 @@ export function CreateEvent() {
             </CardHeader>
             <CardContent className="grid gap-6">
               <FormField
-                control={form.control}
+                control={form.control as any}
                 name="title"
                 render={({ field }) => (
                   <FormItem>
@@ -105,10 +105,10 @@ export function CreateEvent() {
                   </FormItem>
                 )}
               />
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
-                  control={form.control}
+                  control={form.control as any}
                   name="type"
                   render={({ field }) => (
                     <FormItem>
@@ -132,7 +132,7 @@ export function CreateEvent() {
                 />
 
                 <FormField
-                  control={form.control}
+                  control={form.control as any}
                   name="capacity"
                   render={({ field }) => (
                     <FormItem>
@@ -147,16 +147,16 @@ export function CreateEvent() {
               </div>
 
               <FormField
-                control={form.control}
+                control={form.control as any}
                 name="description"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <Textarea 
-                        placeholder="Describe your event..." 
+                      <Textarea
+                        placeholder="Describe your event..."
                         className="min-h-[120px]"
-                        {...field} 
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -173,7 +173,7 @@ export function CreateEvent() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <FormField
-                control={form.control}
+                control={form.control as any}
                 name="startDate"
                 render={({ field }) => (
                   <FormItem>
@@ -190,7 +190,7 @@ export function CreateEvent() {
               />
 
               <FormField
-                control={form.control}
+                control={form.control as any}
                 name="startTime"
                 render={({ field }) => (
                   <FormItem>
@@ -207,7 +207,7 @@ export function CreateEvent() {
               />
 
               <FormField
-                control={form.control}
+                control={form.control as any}
                 name="duration"
                 render={({ field }) => (
                   <FormItem>
@@ -241,7 +241,7 @@ export function CreateEvent() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <FormField
-                control={form.control}
+                control={form.control as any}
                 name="creditType"
                 render={({ field }) => (
                   <FormItem>
@@ -266,7 +266,7 @@ export function CreateEvent() {
               />
 
               <FormField
-                control={form.control}
+                control={form.control as any}
                 name="credits"
                 render={({ field }) => (
                   <FormItem>
@@ -280,7 +280,7 @@ export function CreateEvent() {
               />
 
               <FormField
-                control={form.control}
+                control={form.control as any}
                 name="price"
                 render={({ field }) => (
                   <FormItem>
@@ -303,7 +303,7 @@ export function CreateEvent() {
             </CardHeader>
             <CardContent className="space-y-4">
               <FormField
-                control={form.control}
+                control={form.control as any}
                 name="enableCertificates"
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
@@ -324,7 +324,7 @@ export function CreateEvent() {
               />
 
               <FormField
-                control={form.control}
+                control={form.control as any}
                 name="enableZoom"
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">

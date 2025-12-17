@@ -11,10 +11,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-dev-key-change-in-production'
-)
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-dev-key-change-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
@@ -47,12 +44,23 @@ THIRD_PARTY_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'django_filters',
-    'drf_spectacular',
+    'drf_yasg',
+    'corsheaders',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
+# ... existing code ...
+
+
+GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', 'dev-project')
+GCP_LOCATION = os.environ.get('GCP_LOCATION', 'us-central1')
+GCP_QUEUE_NAME = os.environ.get('GCP_QUEUE_NAME', 'default')
+GCP_SA_EMAIL = os.environ.get('GCP_SA_EMAIL', 'service-account@example.com')
+GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', '')  # Required for production
+
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -119,10 +127,7 @@ MEDIA_ROOT = BASE_DIR / 'mediafiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Encryption key for sensitive fields (generate new in production)
-ENCRYPTION_KEY = os.environ.get(
-    'ENCRYPTION_KEY',
-    'YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY='  # dev placeholder
-)
+ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', 'YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=')  # dev placeholder
 
 # Site URL for generating absolute URLs
 SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
@@ -138,23 +143,19 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
-    
     # Permissions
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
-    
     # Pagination
     'DEFAULT_PAGINATION_CLASS': 'common.pagination.StandardPagination',
     'PAGE_SIZE': 20,
-    
     # Filtering
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
-    
     # Throttling
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
@@ -164,17 +165,14 @@ REST_FRAMEWORK = {
         'anon': '100/hour',
         'user': '1000/hour',
     },
-    
     # Rendering
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
     ],
-    
     # Exception handling
     'EXCEPTION_HANDLER': 'common.exceptions.custom_exception_handler',
-    
     # Schema
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema',
 }
 
 # JWT Settings
@@ -187,10 +185,14 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_uuid',
 }
 
-# OpenAPI/Spectacular Settings
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'CPD Events API',
-    'DESCRIPTION': 'API for managing events, certificates, and CPD tracking',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
+# drf-yasg / Swagger Settings
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {'Bearer': {'type': 'apiKey', 'name': 'Authorization', 'in': 'header'}},
+    'USE_SESSION_AUTH': False,
+    'JSON_EDITOR': True,
 }
+
+# CORS Settings
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+]

@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Event, EventStatusHistory, EventCustomField
+
+from .models import Event, EventCustomField, EventStatusHistory
 
 
 class EventCustomFieldInline(admin.TabularInline):
@@ -16,7 +17,7 @@ class EventAdmin(admin.ModelAdmin):
     date_hierarchy = 'starts_at'
     ordering = ('-starts_at',)
     inlines = [EventCustomFieldInline]
-    
+
     fieldsets = (
         (None, {'fields': ('owner', 'title', 'slug', 'description', 'event_type', 'status')}),
         ('Schedule', {'fields': ('timezone', 'starts_at', 'duration_minutes')}),

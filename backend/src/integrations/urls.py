@@ -2,8 +2,9 @@
 Integrations app URL routing.
 """
 
-from django.urls import path, include
+from django.urls import path
 from rest_framework.routers import DefaultRouter
+
 from . import views
 
 app_name = 'integrations'

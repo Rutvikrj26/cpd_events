@@ -93,9 +93,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="certificatetemplate",
-            index=models.Index(
-                fields=["owner", "is_active"], name="certificate_owner_i_e1234c_idx"
-            ),
+            index=models.Index(fields=["owner", "is_active"], name="certificate_owner_i_e1234c_idx"),
         ),
         migrations.AddIndex(
             model_name="certificatetemplate",
@@ -103,15 +101,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="certificate",
-            index=models.Index(
-                fields=["verification_code"], name="certificate_verific_8df4b9_idx"
-            ),
+            index=models.Index(fields=["verification_code"], name="certificate_verific_8df4b9_idx"),
         ),
         migrations.AddIndex(
             model_name="certificate",
-            index=models.Index(
-                fields=["short_code"], name="certificate_short_c_6c3728_idx"
-            ),
+            index=models.Index(fields=["short_code"], name="certificate_short_c_6c3728_idx"),
         ),
         migrations.AddIndex(
             model_name="certificate",

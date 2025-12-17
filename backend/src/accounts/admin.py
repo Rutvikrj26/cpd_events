@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, ZoomConnection, UserSession
+
+from .models import User, UserSession, ZoomConnection
 
 
 @admin.register(User)
@@ -9,7 +10,7 @@ class UserAdmin(BaseUserAdmin):
     list_filter = ('account_type', 'is_active', 'email_verified', 'is_staff')
     search_fields = ('email', 'full_name')
     ordering = ('-created_at',)
-    
+
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Profile', {'fields': ('full_name', 'professional_title', 'organization_name', 'timezone')}),
@@ -18,12 +19,15 @@ class UserAdmin(BaseUserAdmin):
         ('Notifications', {'fields': ('notify_event_reminders', 'notify_certificate_issued', 'notify_marketing')}),
         ('Organizer Profile', {'fields': ('organizer_bio', 'organizer_website', 'organizer_slug')}),
     )
-    
+
     add_fieldsets = (
-        (None, {
-            'classes': ('wide',),
-            'fields': ('email', 'full_name', 'password1', 'password2'),
-        }),
+        (
+            None,
+            {
+                'classes': ('wide',),
+                'fields': ('email', 'full_name', 'password1', 'password2'),
+            },
+        ),
     )
 
 
