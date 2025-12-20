@@ -20,6 +20,12 @@ email_router.register(r'emails', views.EmailLogViewSet, basename='event-email')
 urlpatterns = [
     # Webhooks
     path('webhooks/zoom/', views.ZoomWebhookView.as_view(), name='zoom_webhook'),
+
+    # OAuth
+    path('zoom/initiate/', views.ZoomInitiateView.as_view(), name='zoom_initiate'),
+    path('zoom/callback/', views.ZoomCallbackView.as_view(), name='zoom_callback'),
+    path('zoom/status/', views.ZoomStatusView.as_view(), name='zoom_status'),
+    path('zoom/disconnect/', views.ZoomDisconnectView.as_view(), name='zoom_disconnect'),
 ]
 
 # Note: Recording and email routes are included via events URLs

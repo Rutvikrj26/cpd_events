@@ -4,8 +4,8 @@ import { Registration, RegistrationCreateRequest, LinkRegistrationRequest } from
 // My Registrations (Attendee)
 export const getMyRegistrations = async (): Promise<Registration[]> => {
     // registrations/urls.py is mounted at /api/v1/registrations/
-    const response = await client.get<Registration[]>('/registrations/');
-    return response.data;
+    const response = await client.get<any>('/registrations/');
+    return Array.isArray(response.data) ? response.data : response.data.results;
 };
 
 export const getMyRegistration = async (uuid: string): Promise<Registration> => {

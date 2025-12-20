@@ -27,6 +27,8 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { toast } from "sonner";
+import { createEvent } from "@/api/events";
+import { EventCreateRequest } from "@/api/events/types";
 
 const eventSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -65,15 +67,44 @@ export function CreateEvent() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof eventSchema>) {
+  async function onSubmit(values: z.infer<typeof eventSchema>) {
     setIsSubmitting(true);
-    // Simulate API call
-    console.log(values);
-    setTimeout(() => {
-      setIsSubmitting(false);
+
+    try {
+      const payload: EventCreateRequest = {
+        title: values.title,
+        description: values.description || '',
+        short_description: values.description?.substring(0, 450) || '',
+
+        event_type: values.type.toLowerCase(),
+        format: 'online', // Defaulting to online based on form context
+
+        timezone: 'UTC', // Default for now
+        starts_at: `${values.startDate}T${values.startTime}:00Z`,
+        duration_minutes: parseInt(values.duration),
+
+        max_attendees: values.capacity,
+        registration_enabled: true,
+
+        cpd_credit_type: values.creditType,
+        cpd_credit_value: values.credits,
+        cpd_enabled: values.credits > 0,
+
+        certificates_enabled: values.enableCertificates,
+        auto_issue_certificates: values.enableCertificates,
+
+        zoom_settings: values.enableZoom ? { enabled: true } : {},
+      };
+
+      await createEvent(payload);
       toast.success("Event created successfully");
       navigate("/organizer/events");
-    }, 1500);
+    } catch (error) {
+      console.error("Failed to create event:", error);
+      toast.error("Failed to create event. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (

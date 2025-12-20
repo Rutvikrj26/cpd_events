@@ -235,6 +235,7 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
             'attendance_percent',
             'attendance_eligible',
             'certificate_issued',
+            'certificate_issued_at',
             'allow_public_verification',
             'waitlist_position',
             'promoted_from_waitlist_at',

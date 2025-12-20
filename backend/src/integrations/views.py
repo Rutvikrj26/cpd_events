@@ -302,3 +302,91 @@ class EmailLogViewSet(ReadOnlyModelViewSet):
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
         return EmailLog.objects.filter(event__uuid=event_uuid, event__owner=self.request.user).order_by('-created_at')
+
+
+# =============================================================================
+# Zoom OAuth Views (H8)
+# =============================================================================
+
+
+class ZoomInitiateView(generics.GenericAPIView):
+    """
+    GET /api/v1/integrations/zoom/initiate/
+
+    Start OAuth flow. Returns authorization URL.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from accounts.services import zoom_service
+
+        result = zoom_service.initiate_oauth(request.user)
+
+        if result.get('success'):
+            return Response({'url': result.get('authorization_url')})
+        
+        return error_response(result.get('error', 'Configuration error'), code='CONFIG_ERROR')
+
+
+class ZoomCallbackView(generics.GenericAPIView):
+    """
+    GET /api/v1/integrations/zoom/callback/
+
+    Handle OAuth redirect from Zoom.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        code = request.query_params.get('code')
+        error = request.query_params.get('error')
+
+        if error:
+            return error_response(f"Zoom authorization failed: {error}", code='AUTH_FAILED')
+
+        if not code:
+            return error_response('Missing authorization code', code='MISSING_CODE')
+
+        from accounts.services import zoom_service
+
+        result = zoom_service.complete_oauth(request.user, code)
+
+        if result.get('success'):
+            return Response({'status': 'connected'})
+        
+        return error_response(result.get('error', 'Unknown error'), code='CONNECTION_FAILED')
+
+
+class ZoomStatusView(generics.RetrieveAPIView):
+    """
+    GET /api/v1/integrations/zoom/status/
+
+    Check if current user has Zoom connected.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({
+            'is_connected': request.user.has_zoom_connected,
+            'zoom_email': request.user.zoom_connection.zoom_email if request.user.has_zoom_connected else None
+        })
+
+
+class ZoomDisconnectView(generics.GenericAPIView):
+    """
+    POST /api/v1/integrations/zoom/disconnect/
+
+    Disconnect Zoom account.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from accounts.services import zoom_service
+
+        if zoom_service.disconnect(request.user):
+            return Response({'status': 'disconnected'})
+        
+        return error_response('Failed to disconnect Zoom', code='DISCONNECT_FAILED')

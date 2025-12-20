@@ -50,7 +50,7 @@ export const EventDetailPage = () => {
                             <div className="flex items-center gap-2">
                                 <Calendar size={18} />
                                 <span>
-                                    {new Date(event.start_date).toLocaleDateString()} - {new Date(event.end_date).toLocaleDateString()}
+                                    {new Date(event.starts_at).toLocaleDateString()} - {new Date(event.ends_at).toLocaleDateString()}
                                 </span>
                             </div>
                             <div className="flex items-center gap-2 capitalize">
@@ -70,7 +70,7 @@ export const EventDetailPage = () => {
                             <Button variant="outline">Edit Event</Button>
                         </Link>
                         {/* If registration open */}
-                        {event.is_registration_open && (
+                        {event.registration_enabled && (
                             <Button>Register Now</Button>
                         )}
                     </div>
@@ -85,8 +85,8 @@ export const EventDetailPage = () => {
                             key={tab}
                             onClick={() => setActiveTab(tab as any)}
                             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors capitalize ${activeTab === tab
-                                    ? 'border-blue-500 text-blue-600'
-                                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                                ? 'border-blue-500 text-blue-600'
+                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                                 }`}
                         >
                             {tab}

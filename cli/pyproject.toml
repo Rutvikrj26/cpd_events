@@ -1,0 +1,18 @@
+[project]
+name = "cpd-cli"
+version = "0.1.0"
+description = "CLI for CPD Events local dev"
+authors = [
+    {name = "Rutvik Solanki",email = "rutvikrj26@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "typer (>=0.20.0,<0.21.0)",
+    "rich (>=14.2.0,<15.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

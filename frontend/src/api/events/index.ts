@@ -4,8 +4,8 @@ import { Event, EventCreateRequest, EventUpdateRequest, EventSession, EventCusto
 // -- Organizer / Admin Routes --
 
 export const getEvents = async (): Promise<Event[]> => {
-    const response = await client.get<Event[]>('/events/');
-    return response.data;
+    const response = await client.get<any>('/events/');
+    return Array.isArray(response.data) ? response.data : response.data.results;
 };
 
 export const getEvent = async (uuid: string): Promise<Event> => {

@@ -70,6 +70,11 @@ class ZoomService:
         Returns:
             Dict with authorization_url and state
         """
+        # Unconditional debug logging
+        logger.error(f"DEBUG ZOOM CONFIG CHECK: configured={self.is_configured}")
+        logger.error(f"DEBUG CLIENT_ID: '{self.client_id}' (Type: {type(self.client_id)})")
+        logger.error(f"DEBUG REDIRECT_URI: '{self.redirect_uri}' (Type: {type(self.redirect_uri)})")
+        
         if not self.is_configured:
             return {'success': False, 'error': 'Zoom is not configured'}
 

@@ -29,7 +29,7 @@ urlpatterns = [
     path('api/v1/registrations/', include('registrations.urls')),
     path('api/v1/', include('certificates.urls')),
     path('api/v1/', include('contacts.urls')),
-    path('api/v1/', include('integrations.urls')),
+    path('api/v1/integrations/', include('integrations.urls')),
     path('api/v1/', include('billing.urls')),
     path('api/v1/', include('learning.urls')),
     # Webhooks

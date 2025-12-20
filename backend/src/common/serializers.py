@@ -66,3 +66,5 @@ class MinimalEventSerializer(serializers.Serializer):
     slug = serializers.SlugField()
     starts_at = serializers.DateTimeField()
     status = serializers.CharField()
+    cpd_credit_value = serializers.DecimalField(max_digits=5, decimal_places=2)
+    cpd_credit_type = serializers.CharField()

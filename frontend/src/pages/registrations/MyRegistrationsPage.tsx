@@ -57,22 +57,17 @@ export const MyRegistrationsPage = () => {
                                 <tr key={reg.uuid} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="font-semibold text-slate-900">
-                                            {/* Ideally 'event' field is expanded object or we fetch it. Assuming it might be ID or object based on serializer. 
-                                            If ID, we need to fetch event details. For now assumes expanded or just ID string shown.
-                                            Actually, usually list endpoints expand related fields for UI.
-                                         */}
-                                            Event {typeof reg.event === 'string' ? reg.event.substring(0, 8) : (reg.event as any).title}
+                                            {reg.event.title}
                                         </div>
-                                        {/* <div className="text-slate-500 text-xs mt-1">UUID: {reg.uuid}</div> */}
                                     </td>
                                     <td className="px-6 py-4 text-slate-600">
-                                        {new Date(reg.registration_date).toLocaleDateString()}
+                                        {new Date(reg.created_at).toLocaleDateString()}
                                     </td>
                                     <td className="px-6 py-4">
                                         {getStatusBadge(reg.status)}
                                     </td>
                                     <td className="px-6 py-4">
-                                        <Link to={`/events/${typeof reg.event === 'string' ? reg.event : (reg.event as any).uuid}`} className="text-blue-600 hover:text-blue-800 font-medium text-xs">
+                                        <Link to={`/events/${reg.event.uuid}`} className="text-blue-600 hover:text-blue-800 font-medium text-xs">
                                             View Event
                                         </Link>
                                     </td>

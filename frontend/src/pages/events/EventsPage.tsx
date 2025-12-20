@@ -88,7 +88,7 @@ export const EventsPage = () => {
                                 <div className="mt-4 space-y-2 text-sm text-slate-500">
                                     <div className="flex items-center gap-2">
                                         <Calendar size={14} />
-                                        <span>{new Date(event.start_date).toLocaleDateString()}</span>
+                                        <span>{new Date(event.starts_at).toLocaleDateString()}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <MapPin size={14} />

@@ -4,8 +4,17 @@ import os
 import sys
 
 
+
 def main():
     """Run administrative tasks."""
+    try:
+        from dotenv import load_dotenv
+        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+        result = load_dotenv(env_path)
+        raise Exception(f"DEBUG FORCE CRASH: env_path={env_path}, load_dotenv={result}, ZOOM_ID={os.environ.get('ZOOM_CLIENT_ID')}")
+    except ImportError:
+        pass
+
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.development')
     try:
         from django.core.management import execute_from_command_line

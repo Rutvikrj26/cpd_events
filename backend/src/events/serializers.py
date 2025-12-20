@@ -63,6 +63,9 @@ class EventListSerializer(SoftDeleteModelSerializer):
     """Lightweight event for list views."""
 
     owner_name = serializers.SerializerMethodField()
+    registration_count = serializers.IntegerField(read_only=True)
+    attendee_count = serializers.IntegerField(read_only=True)
+    waitlist_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Event
@@ -76,8 +79,6 @@ class EventListSerializer(SoftDeleteModelSerializer):
             'ends_at',
             'timezone',
             'registration_count',
-            'attendee_count',
-            'waitlist_count',
             'attendee_count',
             'waitlist_count',
             'owner_name',
@@ -207,7 +208,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
             'format',
             # Scheduling
             'starts_at',
-            'ends_at',
+            'duration_minutes',
             'timezone',
             # Registration
             'registration_enabled',
@@ -232,17 +233,10 @@ class EventCreateSerializer(serializers.ModelSerializer):
             'minimum_attendance_percent',
             # Custom fields
             'custom_fields',
+            'zoom_settings',
         ]
 
-    def validate(self, attrs):
-        # Validate timing
-        starts_at = attrs.get('starts_at')
-        ends_at = attrs.get('ends_at')
 
-        if starts_at and ends_at and ends_at <= starts_at:
-            raise serializers.ValidationError({'ends_at': 'End time must be after start time.'})
-
-        return attrs
 
     def create(self, validated_data):
         custom_fields_data = validated_data.pop('custom_fields', [])
@@ -273,7 +267,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             'description',
             # Scheduling
             'starts_at',
-            'ends_at',
+            'duration_minutes',
             'timezone',
             # Registration
             'registration_enabled',
@@ -298,6 +292,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             # Multi-session (H2)
             'is_multi_session',
             'minimum_attendance_percent',
+            'zoom_settings',
         ]
 
 

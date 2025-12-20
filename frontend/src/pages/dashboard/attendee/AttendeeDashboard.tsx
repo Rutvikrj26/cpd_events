@@ -1,153 +1,248 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Calendar, Award, Clock } from "lucide-react";
+import { ArrowRight, Calendar, Award, Clock, Video, GraduationCap, ExternalLink, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageHeader } from "@/components/custom/PageHeader";
-import { EventCard } from "@/components/custom/EventCard";
-import { mockEvents, mockCertificates, mockStats } from "@/lib/mock-data";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { DashboardStat } from "@/components/dashboard/DashboardStats";
+import { getMyRegistrations } from "@/api/registrations";
+import { Registration } from "@/api/registrations/types";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function AttendeeDashboard() {
-  const registeredEvents = mockEvents.filter(e => e.isRegistered && e.status !== "completed");
-  const recentCertificates = mockCertificates.slice(0, 3);
-  const stats = mockStats.attendee;
+  const { user } = useAuth();
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchRegistrations() {
+      try {
+        const data = await getMyRegistrations();
+        // The API client now handles unwrapping the response
+        setRegistrations(data);
+      } catch (error) {
+        console.error("Failed to fetch registrations", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchRegistrations();
+  }, []);
+
+  const stats = {
+    totalCredits: registrations.reduce((acc, r) => acc + (r.event.cpd_credit_value || 0), 0),
+    certificates: registrations.filter(r => r.certificate_issued_at).length,
+    upcomingEvents: registrations.filter(r => new Date(r.event.starts_at) > new Date()).length,
+    learningHours: registrations.reduce((acc, r) => acc + (r.event.cpd_credit_value || 0), 0), // Assuming 1 credit = 1 hour for now
+  };
+
+  const upcomingRegistrations = registrations
+    .filter(r => new Date(r.event.starts_at) > new Date())
+    .sort((a, b) => new Date(a.event.starts_at).getTime() - new Date(b.event.starts_at).getTime());
+
+  const recentCertificates = registrations
+    .filter(r => r.certificate_issued_at)
+    .sort((a, b) => new Date(b.certificate_issued_at!).getTime() - new Date(a.certificate_issued_at!).getTime())
+    .slice(0, 3);
+
+  if (loading) {
+    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-slate-500">Loading dashboard...</div>;
+  }
 
   return (
-    <div className="space-y-8">
-      {/* Welcome & Stats */}
-      <div className="space-y-6">
-        <PageHeader 
-          title="Dashboard" 
-          description="Welcome back, Jane. Here's what's happening with your professional development."
-          actions={
-            <Link to="/events/browse">
-               <Button>Browse Events</Button>
-            </Link>
-          }
-        />
-        
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatsCard 
-            title="Total Credits" 
-            value={stats.totalCredits} 
-            subtitle={`of ${stats.requiredCredits} required`}
-            icon={Award}
-            trend="+4 this month"
-          />
-          <StatsCard 
-            title="Certificates" 
-            value={stats.certificates} 
-            subtitle="Earned all time"
-            icon={Award}
-          />
-          <StatsCard 
-            title="Upcoming Events" 
-            value={stats.upcomingEvents} 
-            subtitle="Registered"
-            icon={Calendar}
-          />
-          <StatsCard 
-            title="Learning Hours" 
-            value="32.5" 
-            subtitle="This year"
-            icon={Clock}
-          />
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Hero / Welcome Section */}
+      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-white shadow-lg">
+        <div className="relative z-10">
+          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user?.first_name || 'Professional'}!</h1>
+          <p className="mt-2 text-blue-100 max-w-xl">
+            You're making great progress. Here's what's happening with your professional development journey.
+          </p>
+          <div className="mt-6 flex gap-3">
+            <Button asChild variant="secondary" className="font-semibold">
+              <Link to="/events">Browse Events</Link>
+            </Button>
+            <Button variant="outline" className="bg-transparent text-white border-white/30 hover:bg-white/10 hover:text-white">
+              View Profile
+            </Button>
+          </div>
         </div>
+        {/* Decorative background element */}
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
+        <div className="absolute bottom-0 right-20 -mb-10 h-40 w-40 rounded-full bg-blue-400/20 blur-2xl"></div>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <DashboardStat
+          title="Total Credits"
+          value={stats.totalCredits}
+          icon={Award}
+          description="CPD credits earned"
+          className="border-indigo-100 bg-indigo-50/30"
+        />
+        <DashboardStat
+          title="Certificates"
+          value={stats.certificates}
+          icon={GraduationCap}
+          description="Earned & Ready"
+        />
+        <DashboardStat
+          title="Upcoming Events"
+          value={stats.upcomingEvents}
+          icon={Calendar}
+          description="Registered events"
+        />
+        <DashboardStat
+          title="Learning Hours"
+          value={stats.learningHours}
+          icon={Clock}
+          description="Total time invested"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Column */}
-        <div className="lg:col-span-2 space-y-8">
-          {/* Upcoming Events */}
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Your Upcoming Events</h2>
-              <Link to="/events" className="text-sm font-medium text-blue-600 hover:text-blue-500 flex items-center">
-                View all <ArrowRight className="ml-1 h-4 w-4" />
-              </Link>
-            </div>
-            
-            {registeredEvents.length > 0 ? (
-              <div className="space-y-4">
-                {registeredEvents.map(event => (
-                  <EventCard key={event.id} event={event} variant="horizontal" showStatus />
-                ))}
-              </div>
-            ) : (
-              <Card className="bg-gray-50 border-dashed">
-                <CardContent className="flex flex-col items-center justify-center py-10 text-center">
-                  <Calendar className="h-10 w-10 text-gray-400 mb-3" />
-                  <h3 className="text-sm font-medium text-gray-900">No upcoming events</h3>
-                  <p className="mt-1 text-sm text-gray-500 max-w-sm mb-4">
-                    You haven't registered for any upcoming events yet.
-                  </p>
-                  <Link to="/events/browse">
-                    <Button variant="outline">Browse Events</Button>
-                  </Link>
-                </CardContent>
-              </Card>
+        {/* Main Column: Upcoming Events */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold tracking-tight text-slate-900">Your Upcoming Events</h2>
+            {upcomingRegistrations.length > 0 && (
+              <Button variant="link" asChild className="text-primary p-0 h-auto font-medium">
+                <Link to="/my-registrations">View All</Link>
+              </Button>
             )}
-          </section>
+          </div>
 
-          {/* Recommended Events (could be added here) */}
-        </div>
-
-        {/* Side Column */}
-        <div className="space-y-8">
-          {/* Recent Certificates */}
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Recent Certificates</h2>
-              <Link to="/certificates" className="text-sm font-medium text-blue-600 hover:text-blue-500">
-                View all
-              </Link>
-            </div>
-            
-            <Card>
-              <CardContent className="p-0">
-                <div className="divide-y divide-gray-100">
-                  {recentCertificates.map((cert) => (
-                    <div key={cert.id} className="p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 bg-blue-50 rounded-lg p-2 text-blue-600">
-                          <Award className="h-5 w-5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {cert.eventTitle}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            Issued {new Date(cert.issueDate).toLocaleDateString()}
-                          </p>
-                          <div className="mt-2 flex items-center gap-2">
-                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                               {cert.credits} {cert.creditType}
-                             </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+          {upcomingRegistrations.length === 0 ? (
+            <Card className="border-dashed border-2 bg-slate-50/50 shadow-none">
+              <CardContent className="flex flex-col items-center justify-center p-12 text-center">
+                <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                  <Calendar className="h-8 w-8 text-slate-400" />
                 </div>
-                <div className="p-3 border-t border-gray-100 bg-gray-50 rounded-b-lg">
-                  <Button variant="ghost" size="sm" className="w-full text-xs text-gray-500 h-8">
-                    Download All
-                  </Button>
-                </div>
+                <h3 className="text-lg font-medium text-slate-900">No upcoming events</h3>
+                <p className="text-slate-500 mt-2 max-w-sm">
+                  You haven't registered for any upcoming events yet. Explore our catalog to find your next learning opportunity.
+                </p>
+                <Button asChild className="mt-6">
+                  <Link to="/events">Browse Events Catalog</Link>
+                </Button>
               </CardContent>
             </Card>
-          </section>
+          ) : (
+            <div className="space-y-4">
+              {upcomingRegistrations.map((reg) => (
+                <div key={reg.uuid} className="group relative overflow-hidden rounded-lg border bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-200">
+                  <div className="flex flex-col sm:flex-row gap-5">
+                    {/* Date Badge */}
+                    <div className="flex flex-col items-center justify-center rounded-lg bg-blue-50 p-3 min-w-[80px] text-center border border-blue-100">
+                      <span className="text-xs font-semibold uppercase text-blue-600">
+                        {new Date(reg.event.starts_at).toLocaleString('default', { month: 'short' })}
+                      </span>
+                      <span className="text-2xl font-bold text-blue-700">
+                        {new Date(reg.event.starts_at).getDate()}
+                      </span>
+                      <span className="text-xs text-blue-600/80 mt-1">
+                        {new Date(reg.event.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
 
-          {/* Quick Actions or Upsell */}
-          <Card className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-none">
-            <CardHeader>
-              <CardTitle className="text-lg">Upgrade to Organizer?</CardTitle>
+                    {/* Event Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-slate-900 group-hover:text-blue-700 transition-colors line-clamp-1">
+                            <Link to={`/events/${reg.event.uuid}`}>
+                              <span className="absolute inset-0" aria-hidden="true" />
+                              {reg.event.title}
+                            </Link>
+                          </h3>
+                          <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs font-normal bg-slate-50">
+                              {reg.event.event_type}
+                            </Badge>
+                            <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                            <span>{reg.event.cpd_credit_value} CPD Credits</span>
+                          </p>
+                        </div>
+                        <Button variant="outline" size="icon" className="shrink-0 z-10 relative bg-white hover:bg-slate-50">
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      {/* Action Area */}
+                      <div className="mt-4 flex items-center gap-3 relative z-10">
+                        <Button size="sm" className="h-8">
+                          Join Session
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-8 text-slate-500 hover:text-slate-900" asChild>
+                          <Link to={`/events/${reg.event.uuid}`}>View Details</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Side Column: Certificates & Upsell */}
+        <div className="space-y-6">
+          {/* Recent Certificates */}
+          <Card>
+            <CardHeader className="pb-3 border-b border-slate-50">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Award className="h-4 w-4 text-amber-500" />
+                Recent Certificates
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-blue-100 text-sm mb-4">
-                Host your own events, issue certificates, and track attendance automatically.
+            <CardContent className="pt-4">
+              {recentCertificates.length === 0 ? (
+                <div className="text-center py-6 text-slate-500 text-sm">
+                  No certificates earned yet.
+                </div>
+              ) : (
+                <ul className="space-y-4">
+                  {recentCertificates.map(reg => (
+                    <li key={reg.uuid} className="flex gap-3 items-start pb-3 border-b border-slate-50 last:border-0 last:pb-0">
+                      <div className="mt-0.5 bg-amber-100 p-1.5 rounded-md text-amber-600 shrink-0">
+                        <Award size={14} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-900 line-clamp-1">{reg.event.title}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Issued {new Date(reg.certificate_issued_at!).toLocaleDateString()}
+                        </p>
+                        <Button variant="link" size="sm" className="h-auto p-0 text-xs mt-1 text-blue-600">
+                          Download
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Button variant="outline" className="w-full mt-4 text-xs h-8" asChild>
+                <Link to="/my-certificates">View All Certificates</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Organizer Upsell */}
+          <Card className="bg-slate-900 text-white border-none overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+              <Users size={100} />
+            </div>
+            <CardHeader>
+              <CardTitle className="text-lg relative z-10">Host Your Own Events</CardTitle>
+              <CardDescription className="text-slate-300 relative z-10">
+                Ready to share your knowledge?
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <p className="text-sm text-slate-300 mb-4">
+                Upgrade to an Organizer account to create events, issue certificates, and track attendance automatically.
               </p>
-              <Button size="sm" className="w-full bg-white text-blue-600 hover:bg-blue-50 border-0">
+              <Button className="w-full bg-white text-slate-900 hover:bg-slate-100 font-semibold" size="sm">
                 Learn More
               </Button>
             </CardContent>
@@ -155,31 +250,5 @@ export function AttendeeDashboard() {
         </div>
       </div>
     </div>
-  );
-}
-
-function StatsCard({ title, value, subtitle, icon: Icon, trend }: any) {
-  return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-500">{title}</p>
-            <div className="mt-2 flex items-baseline">
-              <span className="text-3xl font-bold text-gray-900">{value}</span>
-            </div>
-          </div>
-          <div className="p-3 bg-blue-50 rounded-lg">
-            <Icon className="h-6 w-6 text-blue-600" />
-          </div>
-        </div>
-        {(subtitle || trend) && (
-          <div className="mt-4 flex items-center justify-between text-sm">
-             {subtitle && <span className="text-gray-500">{subtitle}</span>}
-             {trend && <span className="text-green-600 font-medium">{trend}</span>}
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
