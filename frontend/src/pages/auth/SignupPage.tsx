@@ -76,10 +76,10 @@ export function SignupPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2 text-center">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           Create your account
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500">
             Sign in
@@ -146,7 +146,7 @@ export function SignupPage() {
                   />
                 </FormControl>
                 <div className="space-y-1 leading-none">
-                  <FormLabel className="font-normal text-gray-900">
+                  <FormLabel className="font-normal text-foreground">
                     I agree to the{" "}
                     <Link to="/terms" className="text-blue-600 hover:text-blue-500">
                       Terms of Service

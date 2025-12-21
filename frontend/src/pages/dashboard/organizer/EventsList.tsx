@@ -72,9 +72,9 @@ export function EventsList() {
         }
       />
 
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+      <div className="bg-card rounded-lg border border-border shadow-sm">
         {/* Filters Bar */}
-        <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="p-4 border-b border-border flex flex-col sm:flex-row gap-4 items-center justify-between">
           <div className="relative w-full sm:max-w-sm">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-gray-400" />
@@ -113,40 +113,40 @@ export function EventsList() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Registrations</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Event</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Date & Time</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Registrations</th>
                   <th className="px-6 py-3 relative"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-card divide-y divide-gray-200">
                 {filteredEvents.length > 0 ? (
                   filteredEvents.map((event) => (
                     <tr key={event.uuid} className="hover:bg-gray-50 group">
                       <td className="px-6 py-4">
                         <div className="flex items-center">
                           <div>
-                            <div className="text-sm font-medium text-gray-900 line-clamp-1 max-w-xs">{event.title}</div>
-                            <div className="text-xs text-gray-500 hidden sm:block">{event.slug}</div>
+                            <div className="text-sm font-medium text-foreground line-clamp-1 max-w-xs">{event.title}</div>
+                            <div className="text-xs text-muted-foreground hidden sm:block">{event.slug}</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{new Date(event.starts_at).toLocaleDateString()}</div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-sm text-foreground">{new Date(event.starts_at).toLocaleDateString()}</div>
+                        <div className="text-xs text-muted-foreground">
                           {new Date(event.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <StatusBadge status={event.status} />
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground capitalize">
                         {event.event_type}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="text-sm text-gray-900">
+                        <div className="text-sm text-foreground">
                           {event.registration_count} {event.capacity || event.max_attendees ? `/ ${event.capacity || event.max_attendees}` : ''}
                         </div>
                         {(event.capacity || event.max_attendees) && (
@@ -190,7 +190,7 @@ export function EventsList() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                       {events.length === 0 ? "No events yet. Create your first event!" : "No events found matching your filters."}
                     </td>
                   </tr>
@@ -201,8 +201,8 @@ export function EventsList() {
         </div>
 
         {/* Pagination */}
-        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-          <div className="text-sm text-gray-500">
+        <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
             Showing <span className="font-medium">{filteredEvents.length}</span> of <span className="font-medium">{events.length}</span> events
           </div>
         </div>

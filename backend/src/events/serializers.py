@@ -11,6 +11,7 @@ from common.utils import generate_unique_slug
 
 from .models import Event, EventCustomField, EventStatusHistory
 from .sessions import EventSession, SessionAttendance
+from certificates.models import CertificateTemplate
 
 # =============================================================================
 # Custom Field Serializers
@@ -104,6 +105,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
     cpd_type = serializers.CharField(source='cpd_credit_type', read_only=True)
     featured_image_url = serializers.URLField(source='cover_image_url', read_only=True)
     attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
+    certificate_template = serializers.SlugRelatedField(read_only=True, slug_field='uuid')
 
     class Meta:
         model = Event
@@ -131,6 +133,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'registration_closes_at',
             'capacity',
             'waitlist_enabled',
+            'waitlist_max',
             'waitlist_auto_promote',
             # Zoom
             'zoom_meeting_id',
@@ -196,6 +199,9 @@ class EventCreateSerializer(serializers.ModelSerializer):
     """Create new event with slug uniqueness validation (M1)."""
 
     custom_fields = EventCustomFieldCreateSerializer(many=True, required=False)
+    certificate_template = serializers.SlugRelatedField(
+        slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
+    )
 
     class Meta:
         model = Event
@@ -233,6 +239,9 @@ class EventCreateSerializer(serializers.ModelSerializer):
             # Custom fields
             'custom_fields',
             'zoom_settings',
+            # Attendance
+            'minimum_attendance_minutes',
+            'minimum_attendance_percent',
         ]
 
 
@@ -258,6 +267,10 @@ class EventCreateSerializer(serializers.ModelSerializer):
 class EventUpdateSerializer(serializers.ModelSerializer):
     """Update existing event."""
 
+    certificate_template = serializers.SlugRelatedField(
+        slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
+    )
+
     class Meta:
         model = Event
         fields = [
@@ -275,6 +288,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             'registration_closes_at',
             'max_attendees',
             'waitlist_enabled',
+            'waitlist_max',
             'waitlist_auto_promote',
             # CPD
             'cpd_credit_value',
@@ -289,6 +303,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             # Multi-session (H2)
             'is_multi_session',
             'minimum_attendance_percent',
+            'minimum_attendance_minutes',
             'zoom_settings',
         ]
 

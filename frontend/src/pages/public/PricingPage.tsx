@@ -129,11 +129,11 @@ export function PricingPage() {
                                 <div className="mb-6">
                                     {typeof plan.price === "number" ? (
                                         <div className="flex items-baseline">
-                                            <span className="text-4xl font-bold text-slate-900">${plan.price}</span>
-                                            <span className="text-slate-500 ml-2">/{isAnnual ? "year" : "month"}</span>
+                                            <span className="text-4xl font-bold text-foreground">${plan.price}</span>
+                                            <span className="text-muted-foreground ml-2">/{isAnnual ? "year" : "month"}</span>
                                         </div>
                                     ) : (
-                                        <div className="text-4xl font-bold text-slate-900">{plan.price}</div>
+                                        <div className="text-4xl font-bold text-foreground">{plan.price}</div>
                                     )}
                                 </div>
                                 <ul className="space-y-3">
@@ -156,10 +156,10 @@ export function PricingPage() {
             </section>
 
             {/* FAQ Section */}
-            <section className="py-20 bg-slate-50">
+            <section className="py-20 bg-muted/30">
                 <div className="container mx-auto px-4 max-w-3xl">
                     <div className="text-center mb-12">
-                        <h2 className="text-3xl font-bold text-slate-900">Frequently Asked Questions</h2>
+                        <h2 className="text-3xl font-bold text-foreground">Frequently Asked Questions</h2>
                         <p className="text-slate-600 mt-2">Everything you need to know about our pricing.</p>
                     </div>
 

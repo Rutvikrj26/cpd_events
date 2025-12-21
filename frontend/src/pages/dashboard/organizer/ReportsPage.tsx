@@ -86,7 +86,7 @@ export function ReportsPage() {
                     </CardHeader>
                     <CardContent className="pl-2">
                         {/* Placeholder for Chart */}
-                        <div className="h-[300px] flex items-center justify-center bg-slate-50/50 rounded-lg border border-dashed text-slate-400">
+                        <div className="h-[300px] flex items-center justify-center bg-muted/30/50 rounded-lg border border-dashed text-slate-400">
                             <div className="text-center">
                                 <BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-50" />
                                 <p>Chart Visualization Placeholder</p>
@@ -103,7 +103,7 @@ export function ReportsPage() {
                     </CardHeader>
                     <CardContent>
                         {/* Placeholder for Pie Chart */}
-                        <div className="h-[300px] flex items-center justify-center bg-slate-50/50 rounded-lg border border-dashed text-slate-400">
+                        <div className="h-[300px] flex items-center justify-center bg-muted/30/50 rounded-lg border border-dashed text-slate-400">
                             <div className="text-center">
                                 <div className="h-32 w-32 rounded-full border-8 border-blue-100 border-t-blue-500 mx-auto mb-4 opacity-75"></div>
                                 <p>Distribution Chart Placeholder</p>
@@ -122,19 +122,19 @@ export function ReportsPage() {
                 <CardContent>
                     <div className="space-y-4">
                         {[1, 2, 3, 4, 5].map((i) => (
-                            <div key={i} className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 transition-colors">
+                            <div key={i} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors">
                                 <div className="flex items-center gap-4">
                                     <div className="h-10 w-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center font-bold">
                                         $
                                     </div>
                                     <div>
-                                        <p className="font-medium text-slate-900">Ticket Sale #{1000 + i}</p>
-                                        <p className="text-xs text-slate-500">Professional Development Summit 2024</p>
+                                        <p className="font-medium text-foreground">Ticket Sale #{1000 + i}</p>
+                                        <p className="text-xs text-muted-foreground">Professional Development Summit 2024</p>
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <p className="font-bold text-slate-900">+$150.00</p>
-                                    <p className="text-xs text-slate-500">Today, 2:30 PM</p>
+                                    <p className="font-bold text-foreground">+$150.00</p>
+                                    <p className="text-xs text-muted-foreground">Today, 2:30 PM</p>
                                 </div>
                             </div>
                         ))}

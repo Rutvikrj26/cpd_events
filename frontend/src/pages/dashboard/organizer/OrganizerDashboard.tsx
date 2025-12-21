@@ -87,14 +87,14 @@ export function OrganizerDashboard() {
     switch (status) {
       case 'published': return 'bg-blue-100 text-blue-700 hover:bg-blue-100/80 border-blue-200';
       case 'live': return 'bg-green-100 text-green-700 hover:bg-green-100/80 border-green-200';
-      case 'draft': return 'bg-slate-100 text-slate-700 hover:bg-slate-100/80 border-slate-200';
+      case 'draft': return 'bg-muted text-slate-700 hover:bg-muted/80 border-border';
       case 'completed': return 'bg-purple-100 text-purple-700 hover:bg-purple-100/80 border-purple-200';
-      default: return 'bg-gray-100 text-gray-700 hover:bg-gray-100/80 border-gray-200';
+      default: return 'bg-muted text-gray-700 hover:bg-muted/80 border-border';
     }
   };
 
   if (loading) {
-    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-slate-500 animate-pulse">Loading dashboard...</div>;
+    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-muted-foreground animate-pulse">Loading dashboard...</div>;
   }
 
   return (
@@ -145,7 +145,7 @@ export function OrganizerDashboard() {
         {/* Recent Events Table - Takes up 2/3 width */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold tracking-tight text-slate-900">Recent Activity</h2>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">Recent Activity</h2>
             <Button variant="ghost" size="sm" asChild className="text-primary">
               <Link to="/events">
                 View All <ArrowRight className="ml-1 h-4 w-4" />
@@ -156,12 +156,12 @@ export function OrganizerDashboard() {
           <Card className="border-border/60 shadow-sm overflow-hidden">
             <CardContent className="p-0">
               {recentEvents.length === 0 ? (
-                <div className="p-12 text-center bg-slate-50/50">
-                  <div className="w-12 h-12 bg-white border border-slate-200 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                <div className="p-12 text-center bg-muted/30/50">
+                  <div className="w-12 h-12 bg-card border border-border rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
                     <Calendar className="h-6 w-6 text-slate-400" />
                   </div>
-                  <h3 className="text-lg font-medium text-slate-900">No events found</h3>
-                  <p className="text-slate-500 mt-1 max-w-sm mx-auto mb-6">
+                  <h3 className="text-lg font-medium text-foreground">No events found</h3>
+                  <p className="text-muted-foreground mt-1 max-w-sm mx-auto mb-6">
                     Get started by creating your first event to engage with your audience.
                   </p>
                   <Button asChild variant="outline">
@@ -171,7 +171,7 @@ export function OrganizerDashboard() {
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-medium">
+                    <thead className="bg-muted/30/80 border-b border-border text-muted-foreground font-medium">
                       <tr>
                         <th className="px-6 py-4">Event Name</th>
                         <th className="px-6 py-4">Date</th>
@@ -182,8 +182,8 @@ export function OrganizerDashboard() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {recentEvents.map((event) => (
-                        <tr key={event.uuid} className="group hover:bg-slate-50/50 transition-colors">
-                          <td className="px-6 py-4 font-medium text-slate-900">
+                        <tr key={event.uuid} className="group hover:bg-muted/30/50 transition-colors">
+                          <td className="px-6 py-4 font-medium text-foreground">
                             <Link to={`/events/${event.uuid}`} className="hover:text-primary transition-colors block truncate max-w-[200px] sm:max-w-xs">
                               {event.title}
                             </Link>
@@ -237,31 +237,31 @@ export function OrganizerDashboard() {
               <CardTitle className="text-lg">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-2">
-              <Button variant="outline" className="justify-start h-auto py-3 px-4 border-slate-200 hover:bg-slate-50 hover:text-primary transition-all group" asChild>
+              <Button variant="outline" className="justify-start h-auto py-3 px-4 border-border hover:bg-muted/30 hover:text-primary transition-all group" asChild>
                 <Link to="/events/create">
                   <div className="bg-primary/10 p-2 rounded-md mr-3 group-hover:bg-primary/20 transition-colors">
                     <Plus className="h-4 w-4 text-primary" />
                   </div>
                   <div className="text-left">
-                    <span className="font-semibold block text-slate-900 group-hover:text-primary">Create Event</span>
-                    <span className="text-xs text-slate-500 font-normal">Schedule a new webinar</span>
+                    <span className="font-semibold block text-foreground group-hover:text-primary">Create Event</span>
+                    <span className="text-xs text-muted-foreground font-normal">Schedule a new webinar</span>
                   </div>
                 </Link>
               </Button>
-              <Button variant="outline" className="justify-start h-auto py-3 px-4 border-slate-200 hover:bg-slate-50 hover:text-blue-600 transition-all group">
+              <Button variant="outline" className="justify-start h-auto py-3 px-4 border-border hover:bg-muted/30 hover:text-blue-600 transition-all group">
                 <div className="bg-blue-100 p-2 rounded-md mr-3 group-hover:bg-blue-200 transition-colors">
                   <Users className="h-4 w-4 text-blue-600" />
                 </div>
                 <div className="text-left">
-                  <span className="font-semibold block text-slate-900 group-hover:text-blue-600">Attendees</span>
-                  <span className="text-xs text-slate-500 font-normal">View registered users</span>
+                  <span className="font-semibold block text-foreground group-hover:text-blue-600">Attendees</span>
+                  <span className="text-xs text-muted-foreground font-normal">View registered users</span>
                 </div>
               </Button>
             </CardContent>
           </Card>
 
           {/* Zoom Status */}
-          <Card className={`border shadow-sm transition-all ${zoomStatus?.is_connected ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200'}`}>
+          <Card className={`border shadow-sm transition-all ${zoomStatus?.is_connected ? 'bg-slate-900 border-slate-800 text-white' : 'bg-card border-border'}`}>
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center justify-between">
                 <span>Zoom Integration</span>
@@ -270,7 +270,7 @@ export function OrganizerDashboard() {
                   <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${zoomStatus?.is_connected ? 'bg-green-500' : 'bg-slate-300'}`}></span>
                 </span>
               </CardTitle>
-              <CardDescription className={zoomStatus?.is_connected ? "text-slate-400" : "text-slate-500"}>
+              <CardDescription className={zoomStatus?.is_connected ? "text-slate-400" : "text-muted-foreground"}>
                 {zoomStatus?.is_connected ? 'Automated meeting creation active' : 'Connect for auto-meetings'}
               </CardDescription>
             </CardHeader>
@@ -298,7 +298,7 @@ export function OrganizerDashboard() {
                   <div className="h-12 w-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3">
                     <Video className="h-6 w-6 text-blue-600" />
                   </div>
-                  <p className="text-sm text-slate-500 mb-4">
+                  <p className="text-sm text-muted-foreground mb-4">
                     Enable one-click Zoom meetings for your webinars and workshops.
                   </p>
                   <Button

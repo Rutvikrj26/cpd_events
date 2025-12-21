@@ -35,6 +35,8 @@ export interface Event {
     // Certificates
     certificates_enabled?: boolean;
     auto_issue_certificates?: boolean;
+    minimum_attendance_minutes?: number;
+    minimum_attendance_percent?: number;
 
     // Branding
     featured_image_url?: string;
@@ -58,7 +60,7 @@ export interface EventCreateRequest {
     starts_at: string;
     duration_minutes: number;
     timezone: string;
-    event_type: string;
+    event_type: 'webinar' | 'workshop' | 'training' | 'lecture' | 'other';
     format: 'online' | 'in-person' | 'hybrid';
 
     short_description?: string;
@@ -88,6 +90,9 @@ export interface EventCreateRequest {
     // Certificates
     certificates_enabled?: boolean;
     auto_issue_certificates?: boolean;
+    certificate_template?: string | null;
+    minimum_attendance_minutes?: number;
+    minimum_attendance_percent?: number;
 
     // Zoom
     zoom_settings?: any;

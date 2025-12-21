@@ -46,7 +46,7 @@ export function AttendeeDashboard() {
     .slice(0, 3);
 
   if (loading) {
-    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-slate-500 animate-pulse">Loading dashboard...</div>;
+    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-muted-foreground animate-pulse">Loading dashboard...</div>;
   }
 
   return (
@@ -63,13 +63,13 @@ export function AttendeeDashboard() {
             <Button asChild variant="secondary" className="font-semibold shadow-sm">
               <Link to="/events">Browse Events</Link>
             </Button>
-            <Button asChild variant="outline" className="bg-transparent text-white border-white/30 hover:bg-white/10 hover:text-white hover:border-white/50">
+            <Button asChild variant="outline" className="bg-transparent text-white border-white/30 hover:bg-card/10 hover:text-white hover:border-white/50">
               <Link to="/profile">View Profile</Link>
             </Button>
           </div>
         </div>
         {/* Decorative background element */}
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-card/10 blur-3xl"></div>
         <div className="absolute bottom-0 right-20 -mb-10 h-40 w-40 rounded-full bg-blue-400/20 blur-2xl"></div>
       </div>
 
@@ -106,7 +106,7 @@ export function AttendeeDashboard() {
         {/* Main Column: Upcoming Events */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold tracking-tight text-slate-900">Your Upcoming Events</h2>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">Your Upcoming Events</h2>
             {upcomingRegistrations.length > 0 && (
               <Button variant="link" asChild className="text-primary p-0 h-auto font-medium">
                 <Link to="/my-registrations">View All</Link>
@@ -115,13 +115,13 @@ export function AttendeeDashboard() {
           </div>
 
           {upcomingRegistrations.length === 0 ? (
-            <Card className="border-dashed border-2 bg-slate-50/50 shadow-none border-slate-200">
+            <Card className="border-dashed border-2 bg-muted/30/50 shadow-none border-border">
               <CardContent className="flex flex-col items-center justify-center p-12 text-center">
-                <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                <div className="p-4 bg-card rounded-full shadow-sm mb-4">
                   <Calendar className="h-8 w-8 text-slate-400" />
                 </div>
-                <h3 className="text-lg font-medium text-slate-900">No upcoming events</h3>
-                <p className="text-slate-500 mt-2 max-w-sm">
+                <h3 className="text-lg font-medium text-foreground">No upcoming events</h3>
+                <p className="text-muted-foreground mt-2 max-w-sm">
                   You haven't registered for any upcoming events yet. Explore our catalog to find your next learning opportunity.
                 </p>
                 <Button asChild className="mt-6">
@@ -132,7 +132,7 @@ export function AttendeeDashboard() {
           ) : (
             <div className="space-y-4">
               {upcomingRegistrations.map((reg) => (
-                <div key={reg.uuid} className="group relative overflow-hidden rounded-xl border border-border/60 bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-200">
+                <div key={reg.uuid} className="group relative overflow-hidden rounded-xl border border-border/60 bg-card p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-200">
                   <div className="flex flex-col sm:flex-row gap-5">
                     {/* Date Badge */}
                     <div className="flex flex-col items-center justify-center rounded-lg bg-blue-50 p-3 min-w-[80px] text-center border border-blue-100/50">
@@ -151,7 +151,7 @@ export function AttendeeDashboard() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between">
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900 group-hover:text-blue-700 transition-colors line-clamp-1">
+                          <h3 className="text-lg font-bold text-foreground group-hover:text-blue-700 transition-colors line-clamp-1">
                             <Link to={`/events/${reg.event.uuid}`}>
                               <span className="absolute inset-0" aria-hidden="true" />
                               {reg.event.title}
@@ -162,7 +162,7 @@ export function AttendeeDashboard() {
                               {reg.event.event_type}
                             </Badge>
                             <span className="text-slate-300 text-xs">•</span>
-                            <span className="text-xs font-medium text-slate-500 flex items-center">
+                            <span className="text-xs font-medium text-muted-foreground flex items-center">
                               <Award className="h-3 w-3 mr-1 text-amber-500" />
                               {reg.event.cpd_credit_value} CPD Credits
                             </span>
@@ -202,7 +202,7 @@ export function AttendeeDashboard() {
             </CardHeader>
             <CardContent className="pt-4">
               {recentCertificates.length === 0 ? (
-                <div className="text-center py-6 text-slate-500 text-sm">
+                <div className="text-center py-6 text-muted-foreground text-sm">
                   No certificates earned yet.
                 </div>
               ) : (
@@ -213,8 +213,8 @@ export function AttendeeDashboard() {
                         <Award size={16} />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-slate-900 line-clamp-1">{reg.event.title}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">
+                        <p className="text-sm font-semibold text-foreground line-clamp-1">{reg.event.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
                           Issued {new Date(reg.certificate_issued_at!).toLocaleDateString()}
                         </p>
                         <Button variant="link" size="sm" className="h-auto p-0 text-xs mt-1 text-blue-600 font-medium">
@@ -225,7 +225,7 @@ export function AttendeeDashboard() {
                   ))}
                 </ul>
               )}
-              <Button variant="ghost" className="w-full mt-4 text-xs h-8 text-slate-500 hover:text-slate-900" asChild>
+              <Button variant="ghost" className="w-full mt-4 text-xs h-8 text-muted-foreground hover:text-foreground" asChild>
                 <Link to="/my-certificates">View All Certificates <ArrowRight className="h-3 w-3 ml-1" /></Link>
               </Button>
             </CardContent>
@@ -246,7 +246,7 @@ export function AttendeeDashboard() {
               <p className="text-sm text-slate-300 mb-4 font-medium">
                 Upgrade to an Organizer account to create events, issue certificates, and track attendance automatically.
               </p>
-              <Button className="w-full bg-white text-slate-900 hover:bg-slate-100 font-bold border-0" size="sm">
+              <Button className="w-full bg-card text-foreground hover:bg-muted font-bold border-0" size="sm">
                 Become an Organizer
               </Button>
             </CardContent>

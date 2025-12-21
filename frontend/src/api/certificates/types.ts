@@ -2,16 +2,18 @@ export interface CertificateTemplate {
     uuid: string;
     name: string;
     description?: string;
-    format: 'html' | 'image';
+    format?: 'html' | 'image';
     html_template?: string;
     background_image_url?: string;
+    file_url?: string;
+    file_type?: string;
     field_positions?: Record<string, any>;
     is_default: boolean;
-    is_active: boolean;
+    is_active?: boolean;
     version: number;
     usage_count: number;
     created_at: string;
-    updated_at: string;
+    updated_at?: string;
 }
 
 export interface Certificate {

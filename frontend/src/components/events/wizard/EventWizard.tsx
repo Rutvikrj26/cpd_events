@@ -61,12 +61,12 @@ const WizardContent = () => {
                                         className={cn(
                                             "group flex flex-col border-l-4 py-2 pl-4 transition-colors md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4",
                                             isComplete ? "border-primary hover:border-primary/80" :
-                                                isCurrent ? "border-primary" : "border-slate-200"
+                                                isCurrent ? "border-primary" : "border-muted"
                                         )}
                                     >
                                         <span className={cn(
                                             "text-xs font-semibold uppercase tracking-wide",
-                                            isComplete || isCurrent ? "text-primary" : "text-slate-500"
+                                            isComplete || isCurrent ? "text-primary" : "text-muted-foreground"
                                         )}>
                                             Step {step.id + 1}
                                         </span>
@@ -80,7 +80,7 @@ const WizardContent = () => {
             </div>
 
             {/* Step Content */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm min-h-[400px] flex flex-col">
+            <div className="bg-card rounded-xl border border-border shadow-sm min-h-[400px] flex flex-col">
                 <div className="p-6 md:p-8 flex-1">
                     {currentStep === WizardStep.BasicInfo && <StepBasicInfo />}
                     {currentStep === WizardStep.Schedule && <StepSchedule />}
@@ -90,7 +90,7 @@ const WizardContent = () => {
                 </div>
 
                 {/* Footer Controls */}
-                <div className="bg-slate-50 p-4 rounded-b-xl border-t border-slate-100 flex justify-between items-center">
+                <div className="bg-muted/30 p-4 rounded-b-xl border-t border-border flex justify-between items-center">
                     <Button
                         variant="ghost"
                         onClick={currentStep === 0 ? () => navigate('/events') : prevStep}

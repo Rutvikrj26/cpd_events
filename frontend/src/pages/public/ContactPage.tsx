@@ -70,39 +70,39 @@ export function ContactPage() {
                                 </h3>
                                 <div className="space-y-6">
                                     <div className="flex items-start gap-4">
-                                        <div className="bg-white p-2 rounded-full shadow-sm text-blue-600">
+                                        <div className="bg-card p-2 rounded-full shadow-sm text-blue-600">
                                             <MapPin className="h-5 w-5" />
                                         </div>
                                         <div>
-                                            <p className="font-semibold text-slate-900">Headquarters</p>
+                                            <p className="font-semibold text-foreground">Headquarters</p>
                                             <p className="text-slate-600">123 Innovation Drive,<br />Tech City, TC 90210</p>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-4">
-                                        <div className="bg-white p-2 rounded-full shadow-sm text-blue-600">
+                                        <div className="bg-card p-2 rounded-full shadow-sm text-blue-600">
                                             <Mail className="h-5 w-5" />
                                         </div>
                                         <div>
-                                            <p className="font-semibold text-slate-900">Email Us</p>
+                                            <p className="font-semibold text-foreground">Email Us</p>
                                             <p className="text-slate-600">support@cpdevents.com</p>
                                             <p className="text-slate-600">sales@cpdevents.com</p>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-4">
-                                        <div className="bg-white p-2 rounded-full shadow-sm text-blue-600">
+                                        <div className="bg-card p-2 rounded-full shadow-sm text-blue-600">
                                             <Phone className="h-5 w-5" />
                                         </div>
                                         <div>
-                                            <p className="font-semibold text-slate-900">Call Us</p>
+                                            <p className="font-semibold text-foreground">Call Us</p>
                                             <p className="text-slate-600">+1 (555) 123-4567</p>
-                                            <p className="text-xs text-slate-500">Mon-Fri, 9am - 6pm EST</p>
+                                            <p className="text-xs text-muted-foreground">Mon-Fri, 9am - 6pm EST</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="bg-slate-100 rounded-2xl overflow-hidden h-64 border border-slate-200 relative flex items-center justify-center">
+                        <div className="bg-muted rounded-2xl overflow-hidden h-64 border border-border relative flex items-center justify-center">
                             <img
                                 src={contactIllustration}
                                 alt="Contact Support"
@@ -114,7 +114,7 @@ export function ContactPage() {
                     {/* Right Column: Contact Form */}
                     <Card className="shadow-lg border-t-4 border-t-primary">
                         <CardContent className="p-8">
-                            <h2 className="text-2xl font-bold mb-6 text-slate-900">Send us a message</h2>
+                            <h2 className="text-2xl font-bold mb-6 text-foreground">Send us a message</h2>
                             <Form {...form}>
                                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -61,11 +61,11 @@ export const ZoomCallbackPage = () => {
     }, [searchParams, navigate]);
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
+        <div className="flex flex-col items-center justify-center min-h-screen bg-muted/30">
             <div className="text-center space-y-4">
                 <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-                <h1 className="text-xl font-semibold text-slate-900">Connecting to Zoom...</h1>
-                <p className="text-slate-500">Please wait while we complete the secure connection.</p>
+                <h1 className="text-xl font-semibold text-foreground">Connecting to Zoom...</h1>
+                <p className="text-muted-foreground">Please wait while we complete the secure connection.</p>
             </div>
         </div>
     );

@@ -46,6 +46,8 @@ const initialFormData: Partial<EventCreateRequest> = {
     cpd_enabled: true,
     cpd_credit_value: 1,
     is_public: true,
+    minimum_attendance_minutes: 0,
+    minimum_attendance_percent: 80,
     zoom_settings: {},
 };
 
@@ -82,7 +84,7 @@ export const EventWizardProvider = ({ children, initialData, isEditMode }: Event
             case WizardStep.Schedule:
                 // Check if starts_at and duration are present
                 // Note: starts_at might be partial if typing, so we check carefully
-                return !!formData.starts_at && (formData.duration_minutes || 0) > 0;
+                return !!formData.starts_at && (formData.duration_minutes || 0) >= 15;
             case WizardStep.Details:
                 return !!formData.description;
             default:

@@ -7,7 +7,7 @@ export const DashboardPage = () => {
     const { user } = useAuth();
 
     if (!user) {
-        return <div className="p-8 text-center text-slate-500">Loading profile...</div>;
+        return <div className="p-8 text-center text-muted-foreground">Loading profile...</div>;
     }
 
     if (user.account_type === 'organizer') {

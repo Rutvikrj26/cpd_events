@@ -128,7 +128,7 @@ export function EventRegistration() {
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="text-center">
                     <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                    <h2 className="text-xl font-semibold text-gray-900">{error}</h2>
+                    <h2 className="text-xl font-semibold text-foreground">{error}</h2>
                     <Link to="/events/browse">
                         <Button className="mt-4">Browse Events</Button>
                     </Link>
@@ -145,7 +145,7 @@ export function EventRegistration() {
                         <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <CheckCircle className="h-8 w-8 text-green-600" />
                         </div>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-2">You're Registered!</h2>
+                        <h2 className="text-2xl font-bold text-foreground mb-2">You're Registered!</h2>
                         <p className="text-gray-600 mb-6">
                             Check your email for confirmation details and event information.
                         </p>
@@ -174,8 +174,8 @@ export function EventRegistration() {
                                 <Calendar className="h-6 w-6 text-blue-600" />
                             </div>
                             <div className="flex-1">
-                                <h1 className="text-xl font-bold text-gray-900">{event?.title}</h1>
-                                <p className="text-sm text-gray-500 mt-1">
+                                <h1 className="text-xl font-bold text-foreground">{event?.title}</h1>
+                                <p className="text-sm text-muted-foreground mt-1">
                                     {event?.starts_at && new Date(event.starts_at).toLocaleDateString(undefined, {
                                         weekday: 'long',
                                         month: 'long',
@@ -340,7 +340,7 @@ export function EventRegistration() {
                                         <Award className="h-4 w-4 text-amber-600" />
                                     </div>
                                     <div>
-                                        <h4 className="font-medium text-gray-900 text-sm">Track CPD Credits</h4>
+                                        <h4 className="font-medium text-foreground text-sm">Track CPD Credits</h4>
                                         <p className="text-xs text-gray-600">Automatically log your professional development hours.</p>
                                     </div>
                                 </div>
@@ -350,7 +350,7 @@ export function EventRegistration() {
                                         <FileText className="h-4 w-4 text-green-600" />
                                     </div>
                                     <div>
-                                        <h4 className="font-medium text-gray-900 text-sm">Digital Certificates</h4>
+                                        <h4 className="font-medium text-foreground text-sm">Digital Certificates</h4>
                                         <p className="text-xs text-gray-600">Access and share your certificates anytime.</p>
                                     </div>
                                 </div>
@@ -360,7 +360,7 @@ export function EventRegistration() {
                                         <TrendingUp className="h-4 w-4 text-blue-600" />
                                     </div>
                                     <div>
-                                        <h4 className="font-medium text-gray-900 text-sm">Progress Dashboard</h4>
+                                        <h4 className="font-medium text-foreground text-sm">Progress Dashboard</h4>
                                         <p className="text-xs text-gray-600">See your learning journey at a glance.</p>
                                     </div>
                                 </div>
@@ -370,7 +370,7 @@ export function EventRegistration() {
                                         <Shield className="h-4 w-4 text-purple-600" />
                                     </div>
                                     <div>
-                                        <h4 className="font-medium text-gray-900 text-sm">Verified Records</h4>
+                                        <h4 className="font-medium text-foreground text-sm">Verified Records</h4>
                                         <p className="text-xs text-gray-600">Employer-verifiable attendance and completion records.</p>
                                     </div>
                                 </div>

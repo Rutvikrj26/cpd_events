@@ -9,15 +9,15 @@ export const StepReview = () => {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="space-y-2">
-                <h2 className="text-xl font-semibold text-slate-900">Review & Create</h2>
-                <p className="text-sm text-slate-500">Please verify your event details before finalizing.</p>
+                <h2 className="text-xl font-semibold text-foreground">Review & Create</h2>
+                <p className="text-sm text-muted-foreground">Please verify your event details before finalizing.</p>
             </div>
 
             <div className="grid gap-6">
-                <Card className="bg-slate-50/50 border-slate-200 shadow-sm">
+                <Card className="bg-muted/30/50 border-border shadow-sm">
                     <CardContent className="p-6 space-y-6">
                         <div>
-                            <h3 className="text-2xl font-bold text-slate-900 mb-2">{formData.title || 'Untitled Event'}</h3>
+                            <h3 className="text-2xl font-bold text-foreground mb-2">{formData.title || 'Untitled Event'}</h3>
                             <p className="text-slate-600 whitespace-pre-wrap">{formData.description || 'No description provided.'}</p>
                         </div>
 
@@ -50,14 +50,14 @@ export const StepReview = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm border-t pt-4">
                     <div>
-                        <span className="font-semibold text-slate-900 block mb-1">Registration</span>
-                        <span className={formData.registration_enabled ? "text-green-600 font-medium" : "text-slate-500"}>
+                        <span className="font-semibold text-foreground block mb-1">Registration</span>
+                        <span className={formData.registration_enabled ? "text-green-600 font-medium" : "text-muted-foreground"}>
                             {formData.registration_enabled ? "Enabled" : "Disabled"}
                         </span>
                     </div>
                     <div>
-                        <span className="font-semibold text-slate-900 block mb-1">CPD Credits</span>
-                        <span className={formData.cpd_enabled ? "text-green-600 font-medium" : "text-slate-500"}>
+                        <span className="font-semibold text-foreground block mb-1">CPD Credits</span>
+                        <span className={formData.cpd_enabled ? "text-green-600 font-medium" : "text-muted-foreground"}>
                             {formData.cpd_enabled ? `${formData.cpd_credit_value} Credits` : "Disabled"}
                         </span>
                     </div>

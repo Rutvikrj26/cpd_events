@@ -107,6 +107,142 @@ class CertificateService:
             logger.error(f"PDF rendering failed: {e}")
             return b''
 
+    def generate_template_preview(self, template, field_positions: dict, sample_data: dict) -> bytes | None:
+        """
+        Generate a preview PDF with sample data overlaid on the template.
+
+        Args:
+            template: CertificateTemplate with file_url
+            field_positions: Dict of {field_name: {x, y, fontSize, fontFamily}}
+            sample_data: Dict of {field_name: value}
+
+        Returns:
+            PDF bytes with text overlaid
+        """
+        try:
+            from io import BytesIO
+            from PyPDF2 import PdfReader, PdfWriter
+            from reportlab.lib.pagesizes import letter, A4
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.colors import black
+
+            # Get template PDF
+            template_bytes = self._download_template(template)
+            if not template_bytes:
+                logger.warning("No template PDF, generating blank preview")
+                return self._generate_blank_preview(field_positions, sample_data)
+
+            # Read template PDF
+            template_reader = PdfReader(BytesIO(template_bytes))
+            if len(template_reader.pages) == 0:
+                logger.error("Template PDF has no pages")
+                return None
+
+            template_page = template_reader.pages[0]
+            page_width = float(template_page.mediabox.width)
+            page_height = float(template_page.mediabox.height)
+
+            # Create overlay with text
+            overlay_buffer = BytesIO()
+            c = canvas.Canvas(overlay_buffer, pagesize=(page_width, page_height))
+
+            # Draw text at field positions
+            for field_name, position in (field_positions or {}).items():
+                text = sample_data.get(field_name, '')
+                if not text:
+                    continue
+
+                x = position.get('x', 100)
+                y = page_height - position.get('y', 100)  # Convert from top-left to PDF coords
+                font_size = position.get('fontSize', 24)
+                font_family = position.get('fontFamily', 'Helvetica')
+
+                try:
+                    c.setFont(font_family, font_size)
+                except KeyError:
+                    c.setFont('Helvetica', font_size)
+
+                c.setFillColor(black)
+                c.drawString(x, y, str(text))
+
+            c.save()
+            overlay_buffer.seek(0)
+
+            # Merge template with overlay
+            overlay_reader = PdfReader(overlay_buffer)
+            overlay_page = overlay_reader.pages[0]
+
+            template_page.merge_page(overlay_page)
+
+            # Write result
+            writer = PdfWriter()
+            writer.add_page(template_page)
+
+            output = BytesIO()
+            writer.write(output)
+            return output.getvalue()
+
+        except ImportError as e:
+            logger.error(f"PDF library not installed: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Preview generation failed: {e}")
+            return None
+
+    def _download_template(self, template) -> bytes | None:
+        """Download template PDF from storage."""
+        if not template.file_url:
+            return None
+
+        try:
+            from common.storage import gcs_storage
+
+            file_url = template.file_url
+            if file_url.startswith('gs://'):
+                path = '/'.join(file_url.split('/')[3:])
+                return gcs_storage.download(path)
+            elif file_url.startswith('/media/'):
+                # Local file
+                from django.conf import settings
+                import os
+                local_path = os.path.join(settings.MEDIA_ROOT, file_url.replace('/media/', ''))
+                with open(local_path, 'rb') as f:
+                    return f.read()
+            else:
+                logger.warning(f"Unknown file URL format: {file_url}")
+                return None
+        except Exception as e:
+            logger.error(f"Template download failed: {e}")
+            return None
+
+    def _generate_blank_preview(self, field_positions: dict, sample_data: dict) -> bytes:
+        """Generate a blank preview with just the text fields visible."""
+        from io import BytesIO
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+
+        buffer = BytesIO()
+        c = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
+
+        # Light gray background to show it's a preview
+        c.setFillColorRGB(0.95, 0.95, 0.95)
+        c.rect(0, 0, width, height, fill=True)
+
+        # Draw text at field positions
+        for field_name, position in (field_positions or {}).items():
+            text = sample_data.get(field_name, field_name)
+            x = position.get('x', 100)
+            y = height - position.get('y', 100)
+            font_size = position.get('fontSize', 24)
+
+            c.setFillColorRGB(0, 0, 0)
+            c.setFont('Helvetica', font_size)
+            c.drawString(x, y, str(text))
+
+        c.save()
+        return buffer.getvalue()
+
     def upload_pdf(self, certificate, pdf_bytes: bytes) -> str | None:
         """
         Upload PDF to cloud storage.

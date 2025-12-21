@@ -2,14 +2,19 @@
 Certificates app views and viewsets.
 """
 
+import logging
+
 from django.db.models import Q
 from django.utils import timezone
 from django_filters import rest_framework as filters
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
+
+logger = logging.getLogger(__name__)
 
 from common.pagination import SmallPagination
 from common.permissions import IsOrganizer
@@ -63,6 +68,115 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
         template = self.get_object()
         template.set_as_default()
         return Response(serializers.CertificateTemplateDetailSerializer(template).data)
+
+    @swagger_auto_schema(
+        operation_summary="Upload template PDF",
+        operation_description="Upload a PDF file to use as the certificate background.",
+    )
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser])
+    def upload(self, request, uuid=None):
+        """Upload PDF template file."""
+        template = self.get_object()
+        
+        file = request.FILES.get('file')
+        if not file:
+            return error_response('No file provided.', code='MISSING_FILE', status_code=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate file type
+        if not file.name.lower().endswith('.pdf'):
+            return error_response('Only PDF files are allowed.', code='INVALID_FILE_TYPE', status_code=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate file size (max 10MB)
+        if file.size > 10 * 1024 * 1024:
+            return error_response('File too large. Maximum size is 10MB.', code='FILE_TOO_LARGE', status_code=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            from common.storage import gcs_storage
+            
+            # Read file content
+            content = file.read()
+            
+            # Generate path
+            path = f"certificate-templates/{template.uuid}/{file.name}"
+            
+            # Upload to storage
+            file_url = gcs_storage.upload(
+                content=content,
+                path=path,
+                content_type='application/pdf',
+                public=False,
+            )
+            
+            if not file_url:
+                return error_response('Failed to upload file.', code='UPLOAD_FAILED', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # Update template
+            template.file_url = file_url
+            template.file_type = 'pdf'
+            template.file_size_bytes = file.size
+            template.save(update_fields=['file_url', 'file_type', 'file_size_bytes', 'updated_at'])
+            
+            return Response({
+                'file_url': file_url,
+                'file_size': file.size,
+                'message': 'Template uploaded successfully.',
+            })
+            
+        except Exception as e:
+            logger.error(f"Template upload failed: {e}")
+            return error_response('Upload failed.', code='UPLOAD_FAILED', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @swagger_auto_schema(
+        operation_summary="Preview certificate",
+        operation_description="Generate a preview of the certificate with sample data.",
+    )
+    @action(detail=True, methods=['post'])
+    def preview(self, request, uuid=None):
+        """Generate preview with sample data."""
+        template = self.get_object()
+        
+        # Get field positions from request or use template's saved positions
+        field_positions = request.data.get('field_positions', template.field_positions)
+        
+        # Sample data for preview
+        sample_data = {
+            'first_name': 'First Name',
+            'last_name': 'Last Name',
+            'cpd_hours': 'Cr.H',
+            'event_title': 'Sample Event Title',
+            'event_date': 'December 20, 2025',
+            'certificate_code': 'ABC12345',
+        }
+        
+        try:
+            from .services import certificate_service
+            
+            # Generate preview PDF
+            preview_bytes = certificate_service.generate_template_preview(template, field_positions, sample_data)
+            
+            if not preview_bytes:
+                return error_response('Failed to generate preview.', code='PREVIEW_FAILED', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # Upload preview (temporary)
+            from common.storage import gcs_storage
+            import uuid as uuid_lib
+            
+            preview_path = f"certificate-templates/{template.uuid}/preview-{uuid_lib.uuid4().hex[:8]}.pdf"
+            preview_url = gcs_storage.upload(
+                content=preview_bytes,
+                path=preview_path,
+                content_type='application/pdf',
+                public=True,  # Preview can be public
+            )
+            
+            return Response({
+                'preview_url': preview_url,
+                'field_positions': field_positions,
+            })
+            
+        except Exception as e:
+            logger.error(f"Preview generation failed: {e}")
+            return error_response('Preview failed.', code='PREVIEW_FAILED', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # =============================================================================

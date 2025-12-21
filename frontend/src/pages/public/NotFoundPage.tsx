@@ -17,7 +17,7 @@ export function NotFoundPage() {
                     />
                 </div>
 
-                <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl mb-4">
+                <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl mb-4">
                     Page Not Found
                 </h1>
                 <p className="text-lg text-slate-600 mb-8">

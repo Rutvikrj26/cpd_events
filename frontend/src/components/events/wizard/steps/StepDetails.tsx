@@ -9,8 +9,8 @@ export const StepDetails = () => {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="space-y-2">
-                <h2 className="text-xl font-semibold text-slate-900">Event Details</h2>
-                <p className="text-sm text-slate-500">Provide a comprehensive description for your attendees.</p>
+                <h2 className="text-xl font-semibold text-foreground">Event Details</h2>
+                <p className="text-sm text-muted-foreground">Provide a comprehensive description for your attendees.</p>
             </div>
 
             <div className="space-y-2">
@@ -25,8 +25,8 @@ export const StepDetails = () => {
 
             <div className="space-y-2">
                 <Label>Cover Image</Label>
-                <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center bg-slate-50/50 hover:bg-slate-50 transition-colors cursor-not-allowed opacity-60">
-                    <p className="text-sm text-slate-500">Drag and drop or click to upload</p>
+                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center bg-muted/30/50 hover:bg-muted/30 transition-colors cursor-not-allowed opacity-60">
+                    <p className="text-sm text-muted-foreground">Drag and drop or click to upload</p>
                     <p className="text-xs text-slate-400 mt-1">(Image upload coming soon)</p>
                 </div>
             </div>

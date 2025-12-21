@@ -35,17 +35,17 @@ export const EventDetailPage = () => {
 
     return (
         <div className="space-y-6">
-            <Link to="/events" className="flex items-center text-slate-500 hover:text-slate-900 transition-colors">
+            <Link to="/events" className="flex items-center text-muted-foreground hover:text-foreground transition-colors">
                 <ArrowLeft size={16} className="mr-2" /> Back to Events
             </Link>
 
-            <div className="bg-white rounded-xl shadow-sm border p-6 md:p-8">
+            <div className="bg-card rounded-xl shadow-sm border p-6 md:p-8">
                 <div className="flex flex-col md:flex-row justify-between gap-4 md:items-start">
                     <div>
                         <span className="inline-block px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs uppercase font-bold tracking-wide mb-2">
                             {event.status}
                         </span>
-                        <h1 className="text-3xl font-bold text-slate-900">{event.title}</h1>
+                        <h1 className="text-3xl font-bold text-foreground">{event.title}</h1>
                         <div className="flex flex-wrap gap-4 mt-4 text-slate-600">
                             <div className="flex items-center gap-2">
                                 <Calendar size={18} />
@@ -78,7 +78,7 @@ export const EventDetailPage = () => {
             </div>
 
             {/* Tabs */}
-            <div className="border-b border-slate-200">
+            <div className="border-b border-border">
                 <nav className="flex space-x-8">
                     {['overview', 'sessions', 'learning'].map((tab) => (
                         <button
@@ -86,7 +86,7 @@ export const EventDetailPage = () => {
                             onClick={() => setActiveTab(tab as any)}
                             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors capitalize ${activeTab === tab
                                 ? 'border-blue-500 text-blue-600'
-                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                                : 'border-transparent text-muted-foreground hover:text-slate-700 hover:border-slate-300'
                                 }`}
                         >
                             {tab}
@@ -97,7 +97,7 @@ export const EventDetailPage = () => {
 
             <div className="mt-6">
                 {activeTab === 'overview' && (
-                    <div className="bg-white p-6 rounded-xl border prose max-w-none">
+                    <div className="bg-card p-6 rounded-xl border prose max-w-none">
                         <h3 className="text-xl font-bold mb-4">About the Event</h3>
                         <p className="whitespace-pre-line">{event.description}</p>
                     </div>
@@ -111,14 +111,14 @@ export const EventDetailPage = () => {
                             <Button size="sm" variant="outline"><PlusIcon size={16} className="mr-2" /> Add Session</Button>
                         </div>
                         {sessions.length === 0 ? (
-                            <div className="text-slate-500 text-center py-8 bg-white border rounded-xl border-dashed">No sessions scheduled yet.</div>
+                            <div className="text-muted-foreground text-center py-8 bg-card border rounded-xl border-dashed">No sessions scheduled yet.</div>
                         ) : (
                             <div className="grid gap-4">
                                 {sessions.map(session => (
-                                    <div key={session.uuid} className="bg-white p-4 rounded-lg border flex justify-between items-center">
+                                    <div key={session.uuid} className="bg-card p-4 rounded-lg border flex justify-between items-center">
                                         <div>
                                             <h4 className="font-bold">{session.title}</h4>
-                                            <p className="text-sm text-slate-500">
+                                            <p className="text-sm text-muted-foreground">
                                                 {new Date(session.start_time).toLocaleTimeString()} - {new Date(session.end_time).toLocaleTimeString()}
                                             </p>
                                         </div>
@@ -130,7 +130,7 @@ export const EventDetailPage = () => {
                 )}
 
                 {activeTab === 'learning' && (
-                    <div className="text-slate-500 text-center py-12 bg-white rounded-xl border border-dashed">
+                    <div className="text-muted-foreground text-center py-12 bg-card rounded-xl border border-dashed">
                         Learning modules content will appear here.
                     </div>
                 )}

@@ -52,7 +52,7 @@ export function ForgotPasswordPage() {
                     </div>
                     <CardTitle className="text-xl">Check your email</CardTitle>
                     <CardDescription>
-                        We've sent a password reset link to <span className="font-semibold text-slate-900">{form.getValues().email}</span>
+                        We've sent a password reset link to <span className="font-semibold text-foreground">{form.getValues().email}</span>
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="text-center space-y-4">
@@ -65,7 +65,7 @@ export function ForgotPasswordPage() {
                 </CardContent>
                 <CardFooter className="justify-center">
                     <Button variant="link" asChild>
-                        <Link to="/login" className="flex items-center text-slate-500">
+                        <Link to="/login" className="flex items-center text-muted-foreground">
                             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Login
                         </Link>
                     </Button>
@@ -113,7 +113,7 @@ export function ForgotPasswordPage() {
             </CardContent>
             <CardFooter className="justify-center">
                 <Button variant="link" asChild>
-                    <Link to="/login" className="flex items-center text-slate-500 hover:text-slate-900">
+                    <Link to="/login" className="flex items-center text-muted-foreground hover:text-foreground">
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Login
                     </Link>
                 </Button>

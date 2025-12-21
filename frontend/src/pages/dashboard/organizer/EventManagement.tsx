@@ -29,15 +29,21 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { StatusBadge } from "@/components/custom/StatusBadge";
 import { toast } from "sonner";
-import { getEvent, publishEvent, getEventRegistrations } from "@/api/events";
+import { getEvent, publishEvent, getEventRegistrations, checkInAttendee } from "@/api/events";
 import { issueCertificates } from "@/api/certificates";
 
 
+
+import { EditAttendanceDialog } from "@/components/events/EditAttendanceDialog";
 
 export function EventManagement() {
    const { uuid } = useParams<{ uuid: string }>();
    const [event, setEvent] = useState<any | null>(null);
    const [loading, setLoading] = useState(true);
+
+   // Dialog State
+   const [editAttendanceOpen, setEditAttendanceOpen] = useState(false);
+   const [selectedAttendee, setSelectedAttendee] = useState<any>(null);
 
    useEffect(() => {
       async function fetchEvent() {
@@ -59,17 +65,18 @@ export function EventManagement() {
    const [searchTerm, setSearchTerm] = useState("");
    const [publishing, setPublishing] = useState(false);
 
+   const fetchRegistrations = async () => {
+      if (!uuid) return;
+      try {
+         const regs = await getEventRegistrations(uuid);
+         setAttendees(regs);
+      } catch (e) {
+         console.error("Failed to fetch registrations", e);
+      }
+   };
+
    // Fetch registrations for the event
    useEffect(() => {
-      async function fetchRegistrations() {
-         if (!uuid) return;
-         try {
-            const regs = await getEventRegistrations(uuid);
-            setAttendees(regs);
-         } catch (e) {
-            console.error("Failed to fetch registrations", e);
-         }
-      }
       fetchRegistrations();
    }, [uuid]);
 
@@ -78,19 +85,62 @@ export function EventManagement() {
    }
 
    // Handler for Check-in
-   const handleCheckIn = (attendeeId: string) => {
+   // Handler for Check-in
+   // Handler for Check-in
+   const handleCheckIn = async (attendeeUuid: string) => {
+      // Find the attendee first to get current state
+      const attendee = attendees.find(a => a.uuid === attendeeUuid);
+      if (!attendee) return;
+
+      const newAttended = !attendee.attended;
+
+      // Optimistic Update
       setAttendees(prev => prev.map(a => {
-         if (a.id === attendeeId) {
-            const isCheckedIn = a.status === "Checked In";
+         if (a.uuid === attendeeUuid) {
             return {
                ...a,
-               status: isCheckedIn ? "Registered" : "Checked In",
-               checkIn: isCheckedIn ? null : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+               attended: newAttended,
+               checkIn: newAttended ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null
             };
          }
          return a;
       }));
-      toast.success("Attendance updated");
+
+      try {
+         if (uuid) {
+            const updatedReg = await checkInAttendee(uuid, attendeeUuid, newAttended);
+
+            // Update with server response (logic: server returns updated object)
+            // checkInAttendee returns the response data which in partial_update returns the serializer data
+            setAttendees(prev => prev.map(a => {
+               if (a.uuid === attendeeUuid) {
+                  return {
+                     ...a,
+                     attended: updatedReg.attended,
+                     check_in_time: updatedReg.check_in_time
+                  };
+               }
+               return a;
+            }));
+
+            toast.success(newAttended ? "Attendee checked in" : "Check-in canceled");
+         }
+      } catch (error) {
+         console.error("Check-in failed", error);
+         toast.error("Failed to update check-in status");
+         // Revert State
+         setAttendees(prev => prev.map(a => {
+            if (a.uuid === attendeeUuid) {
+               // Revert to original state
+               return {
+                  ...a,
+                  attended: !newAttended,
+                  check_in_time: attendee.check_in_time
+               };
+            }
+            return a;
+         }));
+      }
    };
 
    const handleIssueCertificate = async (registrationUuid: string) => {
@@ -164,7 +214,7 @@ export function EventManagement() {
                </div>
             }
          >
-            <div className="flex flex-wrap items-center gap-4 mt-4 text-sm text-gray-500">
+            <div className="flex flex-wrap items-center gap-4 mt-4 text-sm text-muted-foreground">
                <StatusBadge status={event.status} />
                <div className="flex items-center gap-1">
                   <Clock className="h-4 w-4" />
@@ -178,33 +228,33 @@ export function EventManagement() {
          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card>
                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-500">Total Registrations</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Registrations</CardTitle>
                </CardHeader>
                <CardContent>
                   <div className="text-2xl font-bold">{stats.registered}</div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                      {(stats.registered / event.capacity * 100).toFixed(0)}% of capacity
                   </p>
                </CardContent>
             </Card>
             <Card>
                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-500">Checked In</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Checked In</CardTitle>
                </CardHeader>
                <CardContent>
                   <div className="text-2xl font-bold">{stats.checkedIn}</div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                      {stats.registered > 0 ? (stats.checkedIn / stats.registered * 100).toFixed(0) : 0}% attendance rate
                   </p>
                </CardContent>
             </Card>
             <Card>
                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-500">Certificates Issued</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Certificates Issued</CardTitle>
                </CardHeader>
                <CardContent>
                   <div className="text-2xl font-bold">0</div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                      Pending event completion
                   </p>
                </CardContent>
@@ -212,13 +262,15 @@ export function EventManagement() {
          </div>
 
          <Tabs defaultValue="registrations" className="w-full">
-            <TabsList className="w-full justify-start border-b border-gray-200 bg-transparent p-0 h-auto rounded-none mb-6">
+            <TabsList className="w-full justify-start border-b border-border bg-transparent p-0 h-auto rounded-none mb-6">
                <TabsTrigger value="registrations" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
                   Registrations
                </TabsTrigger>
-               <TabsTrigger value="attendance" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
-                  Attendance
-               </TabsTrigger>
+               {event.format !== 'online' && (
+                  <TabsTrigger value="attendance" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
+                     Attendance
+                  </TabsTrigger>
+               )}
                <TabsTrigger value="certificates" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
                   Certificates
                </TabsTrigger>
@@ -226,7 +278,7 @@ export function EventManagement() {
 
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
                <div className="relative w-full sm:w-80">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                      placeholder="Search attendees..."
                      className="pl-9"
@@ -248,18 +300,18 @@ export function EventManagement() {
             <TabsContent value="registrations" className="mt-0">
                <Card>
                   <div className="overflow-x-auto">
-                     <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                     <table className="min-w-full divide-y divide-border">
+                        <thead className="bg-muted/50">
                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendee</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket Type</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Attendee</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Ticket Type</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
                               <th className="px-6 py-3 relative"><span className="sr-only">Actions</span></th>
                            </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-card divide-y divide-border">
                            {filteredAttendees.map((attendee) => (
-                              <tr key={attendee.uuid} className="hover:bg-gray-50">
+                              <tr key={attendee.uuid} className="hover:bg-muted/50">
                                  <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center">
                                        <Avatar className="h-8 w-8 mr-3">
@@ -267,12 +319,12 @@ export function EventManagement() {
                                           <AvatarFallback>{(attendee.full_name || 'U').charAt(0)}</AvatarFallback>
                                        </Avatar>
                                        <div>
-                                          <div className="text-sm font-medium text-gray-900">{attendee.full_name}</div>
-                                          <div className="text-xs text-gray-500">{attendee.email}</div>
+                                          <div className="text-sm font-medium text-foreground">{attendee.full_name}</div>
+                                          <div className="text-xs text-muted-foreground">{attendee.email}</div>
                                        </div>
                                     </div>
                                  </td>
-                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
+                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground capitalize">
                                     {attendee.status}
                                  </td>
                                  <td className="px-6 py-4 whitespace-nowrap">
@@ -280,8 +332,8 @@ export function EventManagement() {
                                        variant="outline"
                                        className={
                                           attendee.status === "Cancelled"
-                                             ? "text-red-600 border-red-200 bg-red-50"
-                                             : "text-green-600 border-green-200 bg-green-50"
+                                             ? "text-red-600 border-red-200 bg-red-500/10"
+                                             : "text-green-600 border-green-200 bg-green-500/10"
                                        }
                                     >
                                        {attendee.status}
@@ -297,6 +349,12 @@ export function EventManagement() {
                                        <DropdownMenuContent align="end">
                                           <DropdownMenuItem>View Profile</DropdownMenuItem>
                                           <DropdownMenuItem>Send Email</DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => {
+                                             setSelectedAttendee(attendee);
+                                             setEditAttendanceOpen(true);
+                                          }}>
+                                             Edit Attendance
+                                          </DropdownMenuItem>
                                           <DropdownMenuSeparator />
                                           <DropdownMenuItem className="text-red-600">Cancel Registration</DropdownMenuItem>
                                        </DropdownMenuContent>
@@ -310,11 +368,20 @@ export function EventManagement() {
                </Card>
             </TabsContent>
 
+            {/* Attendance Dialog */}
+            <EditAttendanceDialog
+               isOpen={editAttendanceOpen}
+               onOpenChange={setEditAttendanceOpen}
+               attendee={selectedAttendee}
+               eventUuid={uuid || ''}
+               onSuccess={fetchRegistrations}
+            />
+
             {/* ATTENDANCE TAB */}
             <TabsContent value="attendance" className="mt-0">
                <Card>
-                  <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-                     <div className="text-sm text-gray-500">
+                  <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
+                     <div className="text-sm text-muted-foreground">
                         Mark attendance manually or use the QR scanner app.
                      </div>
                      <Button size="sm" variant="outline" className="gap-2">
@@ -322,35 +389,35 @@ export function EventManagement() {
                      </Button>
                   </div>
                   <div className="overflow-x-auto">
-                     <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                     <table className="min-w-full divide-y divide-border">
+                        <thead className="bg-muted/50">
                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
+                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-10">
                                  Present
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendee</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check-in Time</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Attendee</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Check-in Time</th>
                            </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-card divide-y divide-border">
                            {filteredAttendees.filter(a => a.status !== "Cancelled").map((attendee) => (
-                              <tr key={attendee.id} className="hover:bg-gray-50">
+                              <tr key={attendee.uuid} className="hover:bg-muted/50">
                                  <td className="px-6 py-4 whitespace-nowrap">
                                     <Checkbox
-                                       checked={attendee.status === "Checked In"}
-                                       onCheckedChange={() => handleCheckIn(attendee.id)}
+                                       checked={attendee.attended}
+                                       onCheckedChange={() => handleCheckIn(attendee.uuid)}
                                     />
                                  </td>
                                  <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center">
                                        <div>
-                                          <div className="text-sm font-medium text-gray-900">{attendee.name}</div>
-                                          <div className="text-xs text-gray-500">{attendee.email}</div>
+                                          <div className="text-sm font-medium text-foreground">{attendee.name}</div>
+                                          <div className="text-xs text-muted-foreground">{attendee.email}</div>
                                        </div>
                                     </div>
                                  </td>
-                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {attendee.checkIn || "-"}
+                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                                    {attendee.check_in_time ? new Date(attendee.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-"}
                                  </td>
                               </tr>
                            ))}
@@ -362,48 +429,48 @@ export function EventManagement() {
 
             {/* CERTIFICATES TAB */}
             <TabsContent value="certificates" className="mt-0">
-               <div className="mb-4 flex justify-between items-center bg-blue-50 border border-blue-100 p-4 rounded-lg">
+               <div className="mb-4 flex justify-between items-center bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg">
                   <div className="flex gap-3">
-                     <div className="bg-blue-100 p-2 rounded-full h-10 w-10 flex items-center justify-center text-blue-600">
+                     <div className="bg-blue-500/20 p-2 rounded-full h-10 w-10 flex items-center justify-center text-blue-600">
                         <Award className="h-5 w-5" />
                      </div>
                      <div>
-                        <h3 className="text-sm font-bold text-blue-900">Ready to issue?</h3>
-                        <p className="text-sm text-blue-700">
+                        <h3 className="text-sm font-bold text-blue-600 dark:text-blue-400">Ready to issue?</h3>
+                        <p className="text-sm text-blue-600/80 dark:text-blue-400/80">
                            You have {stats.checkedIn} verified attendees eligible for certificates.
                         </p>
                      </div>
                   </div>
-                  <Button onClick={handleIssueAllCertificates} className="bg-blue-600 hover:bg-blue-700">
+                  <Button onClick={handleIssueAllCertificates} className="bg-blue-600 hover:bg-blue-700 text-white">
                      Issue All Certificates
                   </Button>
                </div>
 
                <Card>
                   <div className="overflow-x-auto">
-                     <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                     <table className="min-w-full divide-y divide-border">
+                        <thead className="bg-muted/50">
                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendee</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Eligibility</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Certificate Status</th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Attendee</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Eligibility</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Certificate Status</th>
+                              <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Action</th>
                            </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-card divide-y divide-border">
                            {filteredAttendees.filter(a => a.status !== "cancelled").map((attendee) => (
-                              <tr key={attendee.uuid} className="hover:bg-gray-50">
+                              <tr key={attendee.uuid} className="hover:bg-muted/50">
                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm font-medium text-gray-900">{attendee.full_name}</div>
+                                    <div className="text-sm font-medium text-foreground">{attendee.full_name}</div>
                                  </td>
                                  <td className="px-6 py-4 whitespace-nowrap">
                                     {attendee.attended ? (
-                                       <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200">Eligible</Badge>
+                                       <Badge variant="outline" className="text-green-600 bg-green-500/10 border-green-200">Eligible</Badge>
                                     ) : (
-                                       <Badge variant="outline" className="text-gray-500 bg-gray-50 border-gray-200">Not Attended</Badge>
+                                       <Badge variant="outline" className="text-muted-foreground bg-muted border-border">Not Attended</Badge>
                                     )}
                                  </td>
-                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                                     {attendee.certificate_uuid ? 'Issued' : 'Not Issued'}
                                  </td>
                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

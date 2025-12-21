@@ -104,8 +104,10 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
             'full_name',
             'status',
             'attended',
+            'check_in_time',
             'attendance_eligible',
             'attendance_percent',
+            'attendance_override',
             'certificate_issued',
             'waitlist_position',
             'created_at',
@@ -139,6 +141,7 @@ class RegistrationDetailSerializer(SoftDeleteModelSerializer):
             'source',
             # Attendance
             'attended',
+            'check_in_time',
             'first_join_at',
             'last_leave_at',
             'total_attendance_minutes',

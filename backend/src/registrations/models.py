@@ -95,6 +95,7 @@ class Registration(SoftDeleteModel):
     # Attendance (denormalized summary)
     # =========================================
     attended = models.BooleanField(default=False, help_text="Whether attendee joined the event")
+    check_in_time = models.DateTimeField(null=True, blank=True, help_text="When attendee was checked in")
     first_join_at = models.DateTimeField(null=True, blank=True, help_text="First time attendee joined")
     last_leave_at = models.DateTimeField(null=True, blank=True, help_text="Last time attendee left")
     total_attendance_minutes = models.PositiveIntegerField(default=0, help_text="Total minutes attended (sum of all sessions)")

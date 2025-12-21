@@ -57,8 +57,8 @@ export function EventDetail() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900">Event Not Found</h2>
-          <p className="text-gray-500 mt-2">{error || "The event you're looking for doesn't exist."}</p>
+          <h2 className="text-xl font-semibold text-foreground">Event Not Found</h2>
+          <p className="text-muted-foreground mt-2">{error || "The event you're looking for doesn't exist."}</p>
           <Link to="/events/browse">
             <Button className="mt-4">Browse Events</Button>
           </Link>
@@ -94,7 +94,7 @@ export function EventDetail() {
   return (
     <div className="bg-gray-50 min-h-screen pb-12">
       {/* Hero Header */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-card border-b border-border">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
           <div className="flex flex-col lg:flex-row gap-8 items-start">
             <div className="flex-1 space-y-4">
@@ -109,11 +109,11 @@ export function EventDetail() {
                 )}
               </div>
 
-              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
+              <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
                 {event.title}
               </h1>
 
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 text-gray-500 pt-2">
+              <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 text-muted-foreground pt-2">
                 <div className="flex items-center gap-2">
                   <Calendar className="h-5 w-5 text-gray-400" />
                   <span className="text-sm font-medium">
@@ -137,7 +137,7 @@ export function EventDetail() {
                 <div className="flex items-center gap-2">
                   <User className="h-5 w-5 text-gray-400" />
                   <span className="text-sm font-medium">
-                    by <span className="text-gray-900">{organizerName}</span>
+                    by <span className="text-foreground">{organizerName}</span>
                   </span>
                 </div>
               </div>
@@ -168,7 +168,7 @@ export function EventDetail() {
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
             {/* Featured Image or Placeholder */}
-            <div className="aspect-video w-full overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-gray-100 flex items-center justify-center">
+            <div className="aspect-video w-full overflow-hidden rounded-xl border border-border shadow-sm bg-muted flex items-center justify-center">
               {event.featured_image_url || event.cover_image_url ? (
                 <img
                   src={event.featured_image_url || event.cover_image_url}
@@ -183,7 +183,7 @@ export function EventDetail() {
             </div>
 
             <Tabs defaultValue="about" className="w-full">
-              <TabsList className="w-full justify-start border-b border-gray-200 bg-transparent p-0 h-auto rounded-none space-x-8">
+              <TabsList className="w-full justify-start border-b border-border bg-transparent p-0 h-auto rounded-none space-x-8">
                 <TabsTrigger
                   value="about"
                   className="rounded-none border-b-2 border-transparent px-0 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none"
@@ -200,7 +200,7 @@ export function EventDetail() {
 
               <TabsContent value="about" className="pt-6 space-y-6">
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-3">Event Description</h3>
+                  <h3 className="text-xl font-semibold text-foreground mb-3">Event Description</h3>
                   <p className="text-gray-600 leading-relaxed whitespace-pre-line">
                     {event.description || event.short_description || "No description available."}
                   </p>
@@ -210,11 +210,11 @@ export function EventDetail() {
                   <>
                     <Separator />
                     <div>
-                      <h3 className="text-xl font-semibold text-gray-900 mb-4">CPD Credits</h3>
+                      <h3 className="text-xl font-semibold text-foreground mb-4">CPD Credits</h3>
                       <div className="flex items-center gap-3 bg-amber-50 p-4 rounded-lg border border-amber-100">
                         <Award className="h-8 w-8 text-amber-600" />
                         <div>
-                          <p className="font-medium text-gray-900">{event.cpd_credits} {event.cpd_type || 'CPD'} Credits</p>
+                          <p className="font-medium text-foreground">{event.cpd_credits} {event.cpd_type || 'CPD'} Credits</p>
                           <p className="text-sm text-gray-600">Earn professional development credits upon completion</p>
                         </div>
                       </div>
@@ -224,7 +224,7 @@ export function EventDetail() {
               </TabsContent>
 
               <TabsContent value="schedule" className="pt-6">
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-muted-foreground">
                   <Clock className="h-8 w-8 mx-auto mb-2 text-gray-300" />
                   <p>Detailed schedule will be available soon.</p>
                 </div>
@@ -234,7 +234,7 @@ export function EventDetail() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            <Card className="shadow-md border-gray-200">
+            <Card className="shadow-md border-border">
               <CardHeader>
                 <CardTitle>Registration</CardTitle>
                 <CardDescription>Secure your spot today.</CardDescription>
@@ -243,7 +243,7 @@ export function EventDetail() {
                 {(event.capacity || event.max_attendees) && (
                   <div className="flex justify-between items-center py-2 border-b border-gray-100">
                     <span className="text-gray-600">Capacity</span>
-                    <span className="text-gray-900">
+                    <span className="text-foreground">
                       {event.registration_count} / {event.capacity || event.max_attendees} registered
                     </span>
                   </div>
@@ -252,7 +252,7 @@ export function EventDetail() {
                 {event.spots_remaining !== null && event.spots_remaining !== undefined && (
                   <div className="flex justify-between items-center py-2 border-b border-gray-100">
                     <span className="text-gray-600">Spots Remaining</span>
-                    <span className="text-gray-900 font-semibold">
+                    <span className="text-foreground font-semibold">
                       {event.spots_remaining}
                     </span>
                   </div>
@@ -275,7 +275,7 @@ export function EventDetail() {
                 )}
 
                 {event.registration_closes_at && !isPast && (
-                  <p className="text-xs text-center text-gray-500">
+                  <p className="text-xs text-center text-muted-foreground">
                     Registration closes {new Date(event.registration_closes_at).toLocaleDateString()}
                   </p>
                 )}
@@ -292,8 +292,8 @@ export function EventDetail() {
                     {organizerName.charAt(0)}
                   </div>
                   <div>
-                    <div className="font-medium text-gray-900">{organizerName}</div>
-                    <div className="text-xs text-gray-500">Event Organizer</div>
+                    <div className="font-medium text-foreground">{organizerName}</div>
+                    <div className="text-xs text-muted-foreground">Event Organizer</div>
                   </div>
                 </div>
                 <Button variant="outline" className="w-full text-xs h-8">Contact Organizer</Button>
@@ -310,7 +310,7 @@ export function EventDetail() {
                     <>
                       <Video className="h-4 w-4 shrink-0 mt-0.5" />
                       <div>
-                        <p className="font-medium text-gray-900">Online Event</p>
+                        <p className="font-medium text-foreground">Online Event</p>
                         <p className="mt-1">Link provided upon registration</p>
                       </div>
                     </>
@@ -318,7 +318,7 @@ export function EventDetail() {
                     <>
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
                       <div>
-                        <p className="font-medium text-gray-900">Hybrid Event</p>
+                        <p className="font-medium text-foreground">Hybrid Event</p>
                         <p className="mt-1">In-person + Online options available</p>
                       </div>
                     </>
@@ -326,7 +326,7 @@ export function EventDetail() {
                     <>
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
                       <div>
-                        <p className="font-medium text-gray-900">In-Person Event</p>
+                        <p className="font-medium text-foreground">In-Person Event</p>
                         <p className="mt-1">Location details upon registration</p>
                       </div>
                     </>

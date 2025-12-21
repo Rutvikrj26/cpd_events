@@ -124,14 +124,14 @@ export function EventDiscovery() {
           {/* Main Content */}
           <div className="flex-1 min-w-0">
             {/* Search and Sort Bar */}
-            <div className="bg-card p-4 rounded-xl border border-border/80 shadow-sm mb-8 flex flex-col sm:flex-row gap-4 items-center justify-between sticky top-0 z-10 lg:static backdrop-blur-xl lg:backdrop-blur-none bg-white/80 lg:bg-white">
+            <div className="bg-card p-4 rounded-xl border border-border/80 shadow-sm mb-8 flex flex-col sm:flex-row gap-4 items-center justify-between sticky top-0 z-10 lg:static backdrop-blur-xl lg:backdrop-blur-none bg-card/80 lg:bg-card">
               <div className="relative w-full sm:max-w-md">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Search className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <Input
                   placeholder="Search events, topics, or organizers..."
-                  className="pl-10 h-11 bg-slate-50 border-border shadow-none focus:bg-white transition-colors"
+                  className="pl-10 h-11 bg-muted/30 border-border shadow-none focus:bg-card transition-colors"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -160,7 +160,7 @@ export function EventDiscovery() {
             {loading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                 {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className="h-80 rounded-xl bg-slate-100 animate-pulse"></div>
+                  <div key={i} className="h-80 rounded-xl bg-muted animate-pulse"></div>
                 ))}
               </div>
             ) : filteredEvents.length > 0 ? (
@@ -171,7 +171,7 @@ export function EventDiscovery() {
               </div>
             ) : (
               <div className="text-center py-24 bg-card rounded-xl border border-dashed border-border/80">
-                <div className="mx-auto h-16 w-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                <div className="mx-auto h-16 w-16 bg-muted/30 rounded-full flex items-center justify-center mb-4">
                   <CalendarIcon className="h-8 w-8 text-slate-300" />
                 </div>
                 <h3 className="mt-2 text-lg font-semibold text-foreground">No events found</h3>
@@ -205,7 +205,7 @@ function EventCard({ event }: { event: Event }) {
           <CalendarIcon className="h-10 w-10 text-slate-300 group-hover:scale-110 transition-transform duration-500" />
 
           <div className="absolute top-3 right-3">
-            <Badge variant={event.format === 'online' ? 'secondary' : 'default'} className="uppercase text-[10px] tracking-wider font-bold shadow-sm backdrop-blur-md bg-white/90 text-slate-900 border-0">
+            <Badge variant={event.format === 'online' ? 'secondary' : 'default'} className="uppercase text-[10px] tracking-wider font-bold shadow-sm backdrop-blur-md bg-card/90 text-foreground border-0">
               {event.format}
             </Badge>
           </div>

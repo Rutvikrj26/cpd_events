@@ -10,12 +10,12 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white">
             <Layout className="h-6 w-6" />
           </div>
-          <span className="text-2xl font-bold tracking-tight text-gray-900">CPD Events</span>
+          <span className="text-2xl font-bold tracking-tight text-foreground">CPD Events</span>
         </Link>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-100">
+        <div className="bg-card py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-100">
           {children}
         </div>
         

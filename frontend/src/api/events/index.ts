@@ -64,5 +64,15 @@ export const getEventRegistrations = async (eventUuid: string): Promise<any[]> =
     return Array.isArray(response.data) ? response.data : response.data.results || [];
 };
 
+export const checkInAttendee = async (eventUuid: string, registrationUuid: string, attended: boolean): Promise<any> => {
+    const response = await client.patch<any>(`/events/${eventUuid}/registrations/${registrationUuid}/`, { attended });
+    return response.data;
+};
+
+export const overrideAttendance = async (eventUuid: string, registrationUuid: string, eligible: boolean, reason: string): Promise<any> => {
+    const response = await client.post<any>(`/events/${eventUuid}/registrations/${registrationUuid}/override-attendance/`, { eligible, reason });
+    return response.data;
+};
+
 // Event actions
 export { publishEvent, cancelEvent, duplicateEvent } from './actions';

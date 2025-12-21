@@ -58,10 +58,10 @@ export function LoginPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2 text-center">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           Sign in to your account
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           Or{" "}
           <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-500">
             create a new account
@@ -119,7 +119,7 @@ export function LoginPage() {
                   />
                 </FormControl>
                 <div className="space-y-1 leading-none">
-                  <FormLabel className="font-normal text-gray-900">
+                  <FormLabel className="font-normal text-foreground">
                     Remember me
                   </FormLabel>
                 </div>
@@ -139,7 +139,7 @@ export function LoginPage() {
           <span className="w-full border-t border-gray-300" />
         </div>
         <div className="relative flex justify-center text-sm">
-          <span className="bg-white px-2 text-gray-500">Or continue with</span>
+          <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
         </div>
       </div>
 

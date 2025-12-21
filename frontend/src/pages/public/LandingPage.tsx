@@ -82,31 +82,31 @@ export function LandingPage() {
                 <img
                   src={heroImage}
                   alt="CPD Platform Dashboard"
-                  className="w-full rounded-xl shadow-inner bg-slate-50"
+                  className="w-full rounded-xl shadow-inner bg-muted/30"
                 />
 
                 {/* Floating Badge 1 */}
-                <div className="absolute -left-4 top-20 bg-white p-4 rounded-xl shadow-xl border border-slate-100 hidden md:block animate-in slide-in-from-left-4 duration-1000 delay-300 fill-mode-forwards">
+                <div className="absolute -left-4 top-20 bg-card p-4 rounded-xl shadow-xl border border-slate-100 hidden md:block animate-in slide-in-from-left-4 duration-1000 delay-300 fill-mode-forwards">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center text-green-600">
                       <Award className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-900">Certificate Issued</p>
-                      <p className="text-xs text-slate-500">Just now</p>
+                      <p className="text-sm font-bold text-foreground">Certificate Issued</p>
+                      <p className="text-xs text-muted-foreground">Just now</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Floating Badge 2 */}
-                <div className="absolute -right-4 bottom-20 bg-white p-4 rounded-xl shadow-xl border border-slate-100 hidden md:block animate-in slide-in-from-right-4 duration-1000 delay-500 fill-mode-forwards">
+                <div className="absolute -right-4 bottom-20 bg-card p-4 rounded-xl shadow-xl border border-slate-100 hidden md:block animate-in slide-in-from-right-4 duration-1000 delay-500 fill-mode-forwards">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
                       <Users className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-900">120 Attendees</p>
-                      <p className="text-xs text-slate-500">Live Session</p>
+                      <p className="text-sm font-bold text-foreground">120 Attendees</p>
+                      <p className="text-xs text-muted-foreground">Live Session</p>
                     </div>
                   </div>
                 </div>
@@ -121,16 +121,16 @@ export function LandingPage() {
       </section>
 
       {/* Social Proof / Trust */}
-      <section className="border-y border-border/40 bg-slate-50/50 py-10">
+      <section className="border-y border-border/40 bg-muted/30/50 py-10">
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm font-medium text-muted-foreground mb-6">TRUSTED BY FORWARD-THINKING ORGANIZATIONS</p>
           <div className="flex flex-wrap justify-center items-center gap-x-12 gap-y-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
             {/* Placeholders for logos */}
-            <div className="text-lg font-bold text-slate-900">ACME Corp</div>
-            <div className="text-lg font-bold text-slate-900">GlobalHealth</div>
-            <div className="text-lg font-bold text-slate-900">EduTech Inc</div>
-            <div className="text-lg font-bold text-slate-900">FutureSkills</div>
-            <div className="text-lg font-bold text-slate-900">LegalOne</div>
+            <div className="text-lg font-bold text-foreground">ACME Corp</div>
+            <div className="text-lg font-bold text-foreground">GlobalHealth</div>
+            <div className="text-lg font-bold text-foreground">EduTech Inc</div>
+            <div className="text-lg font-bold text-foreground">FutureSkills</div>
+            <div className="text-lg font-bold text-foreground">LegalOne</div>
           </div>
         </div>
       </section>
@@ -165,7 +165,7 @@ export function LandingPage() {
       </section>
 
       {/* Featured Events Preview */}
-      <section className="py-24 bg-slate-50/50 border-t border-border/40">
+      <section className="py-24 bg-muted/30/50 border-t border-border/40">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-end mb-10">
             <div>
@@ -188,10 +188,10 @@ export function LandingPage() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-20 border-2 border-dashed border-slate-200 rounded-2xl">
+            <div className="text-center py-20 border-2 border-dashed border-border rounded-2xl">
               <Calendar className="h-10 w-10 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-slate-900">No upcoming events</h3>
-              <p className="text-slate-500 mt-1">Check back soon for new learning opportunities.</p>
+              <h3 className="text-lg font-medium text-foreground">No upcoming events</h3>
+              <p className="text-muted-foreground mt-1">Check back soon for new learning opportunities.</p>
             </div>
           )}
 
@@ -216,7 +216,7 @@ export function LandingPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/signup">
-              <Button size="lg" className="bg-white text-slate-900 hover:bg-slate-100 min-w-[160px] h-14 text-lg font-semibold border-0">
+              <Button size="lg" className="bg-card text-foreground hover:bg-muted min-w-[160px] h-14 text-lg font-semibold border-0">
                 Sign Up Free
               </Button>
             </Link>
@@ -255,7 +255,7 @@ function EventCardFromApi({ event }: { event: Event }) {
           <Calendar className="h-10 w-10 text-slate-300 group-hover:scale-110 transition-transform duration-500" />
 
           <div className="absolute top-4 right-4">
-            <Badge variant={event.format === 'online' ? 'secondary' : 'default'} className="uppercase text-[10px] tracking-wider font-bold shadow-sm backdrop-blur-md bg-white/90 text-slate-900 hover:bg-white">
+            <Badge variant={event.format === 'online' ? 'secondary' : 'default'} className="uppercase text-[10px] tracking-wider font-bold shadow-sm backdrop-blur-md bg-card/90 text-foreground hover:bg-card">
               {event.format}
             </Badge>
           </div>
@@ -280,7 +280,7 @@ function EventCardFromApi({ event }: { event: Event }) {
             {event.short_description || event.description}
           </p>
           <div className="flex items-center justify-between mt-auto">
-            <div className="flex items-center text-xs font-medium text-slate-500">
+            <div className="flex items-center text-xs font-medium text-muted-foreground">
               <Users className="h-3.5 w-3.5 mr-1" />
               <span>{event.registration_count || 0} Registered</span>
             </div>

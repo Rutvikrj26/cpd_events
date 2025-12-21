@@ -49,13 +49,13 @@ export const ProfilePage = () => {
 
     return (
         <div className="max-w-2xl">
-            <h1 className="text-3xl font-bold text-slate-900 mb-8">Profile Settings</h1>
+            <h1 className="text-3xl font-bold text-foreground mb-8">Profile Settings</h1>
 
-            <form onSubmit={handleSave} className="bg-white p-8 rounded-xl border shadow-sm space-y-6">
+            <form onSubmit={handleSave} className="bg-card p-8 rounded-xl border shadow-sm space-y-6">
                 <div className="space-y-2">
                     <label className="text-sm font-medium">Email Address</label>
-                    <Input disabled value={user?.email} className="bg-slate-50" />
-                    <p className="text-xs text-slate-500">Email cannot be changed directly.</p>
+                    <Input disabled value={user?.email} className="bg-muted/30" />
+                    <p className="text-xs text-muted-foreground">Email cannot be changed directly.</p>
                 </div>
 
                 <div className="space-y-2">

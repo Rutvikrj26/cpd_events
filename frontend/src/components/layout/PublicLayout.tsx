@@ -30,7 +30,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
                   <Layout className="h-5 w-5" />
                 </div>
-                <span className="text-xl font-bold tracking-tight text-gray-900">CPD Events</span>
+                <span className="text-xl font-bold tracking-tight text-foreground">CPD Events</span>
               </Link>
             </div>
 
@@ -54,7 +54,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 {isAuthenticated ? (
                   <>
                     <Link to="/dashboard">
-                      <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
+                      <Button variant="ghost" size="sm" className="text-gray-600 hover:text-foreground">
                         Dashboard
                       </Button>
                     </Link>
@@ -85,7 +85,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 ) : (
                   <>
                     <Link to="/login">
-                      <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
+                      <Button variant="ghost" size="sm" className="text-gray-600 hover:text-foreground">
                         Log in
                       </Button>
                     </Link>
@@ -101,7 +101,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             {/* Mobile Menu Button */}
             <button
-              className="flex items-center justify-center p-2 rounded-md text-gray-600 md:hidden hover:bg-gray-100"
+              className="flex items-center justify-center p-2 rounded-md text-gray-600 md:hidden hover:bg-muted"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -111,7 +111,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 bg-white px-4 py-4 shadow-lg">
+          <div className="md:hidden border-t border-border bg-card px-4 py-4 shadow-lg">
             <nav className="flex flex-col gap-4">
               <Link to="/events/browse" className="text-base font-medium text-gray-600 hover:text-blue-600">
                 Browse Events
@@ -151,35 +151,35 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 bg-gray-50">
+      <footer className="border-t border-border bg-gray-50">
         <div className="container mx-auto px-4 py-12 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             <div>
-              <h3 className="text-sm font-semibold text-gray-900">Platform</h3>
+              <h3 className="text-sm font-semibold text-foreground">Platform</h3>
               <ul className="mt-4 space-y-3">
-                <li><Link to="/events/browse" className="text-sm text-gray-600 hover:text-gray-900">Browse Events</Link></li>
-                <li><Link to="#" className="text-sm text-gray-600 hover:text-gray-900">For Organizers</Link></li>
-                <li><Link to="/pricing" className="text-sm text-gray-600 hover:text-gray-900">Pricing</Link></li>
+                <li><Link to="/events/browse" className="text-sm text-gray-600 hover:text-foreground">Browse Events</Link></li>
+                <li><Link to="#" className="text-sm text-gray-600 hover:text-foreground">For Organizers</Link></li>
+                <li><Link to="/pricing" className="text-sm text-gray-600 hover:text-foreground">Pricing</Link></li>
               </ul>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900">Support</h3>
+              <h3 className="text-sm font-semibold text-foreground">Support</h3>
               <ul className="mt-4 space-y-3">
-                <li><Link to="#" className="text-sm text-gray-600 hover:text-gray-900">Help Center</Link></li>
-                <li><Link to="/contact" className="text-sm text-gray-600 hover:text-gray-900">Contact Us</Link></li>
-                <li><Link to="#" className="text-sm text-gray-600 hover:text-gray-900">Status</Link></li>
+                <li><Link to="#" className="text-sm text-gray-600 hover:text-foreground">Help Center</Link></li>
+                <li><Link to="/contact" className="text-sm text-gray-600 hover:text-foreground">Contact Us</Link></li>
+                <li><Link to="#" className="text-sm text-gray-600 hover:text-foreground">Status</Link></li>
               </ul>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900">Legal</h3>
+              <h3 className="text-sm font-semibold text-foreground">Legal</h3>
               <ul className="mt-4 space-y-3">
-                <li><Link to="#" className="text-sm text-gray-600 hover:text-gray-900">Privacy Policy</Link></li>
-                <li><Link to="#" className="text-sm text-gray-600 hover:text-gray-900">Terms of Service</Link></li>
+                <li><Link to="#" className="text-sm text-gray-600 hover:text-foreground">Privacy Policy</Link></li>
+                <li><Link to="#" className="text-sm text-gray-600 hover:text-foreground">Terms of Service</Link></li>
               </ul>
             </div>
           </div>
-          <div className="mt-12 border-t border-gray-200 pt-8">
-            <p className="text-sm text-gray-500">&copy; 2024 CPD Events Management. All rights reserved.</p>
+          <div className="mt-12 border-t border-border pt-8">
+            <p className="text-sm text-muted-foreground">&copy; 2024 CPD Events Management. All rights reserved.</p>
           </div>
         </div>
       </footer>

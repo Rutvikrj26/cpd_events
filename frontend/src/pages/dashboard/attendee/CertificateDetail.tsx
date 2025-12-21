@@ -35,9 +35,9 @@ export function CertificateDetail() {
         {/* Main Column - Preview */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="overflow-hidden border-2 border-gray-100 shadow-lg">
-            <div className="aspect-[1.414/1] bg-white relative p-8 md:p-12 flex flex-col items-center justify-center text-center border-b border-gray-100">
+            <div className="aspect-[1.414/1] bg-card relative p-8 md:p-12 flex flex-col items-center justify-center text-center border-b border-gray-100">
                {/* Certificate Frame Decor */}
-               <div className="absolute inset-4 border-4 border-double border-gray-200 pointer-events-none"></div>
+               <div className="absolute inset-4 border-4 border-double border-border pointer-events-none"></div>
                
                {/* Certificate Content Mockup */}
                <div className="relative z-10 space-y-6 max-w-lg">
@@ -45,21 +45,21 @@ export function CertificateDetail() {
                      <ShieldCheck className="h-10 w-10" />
                   </div>
                   
-                  <h1 className="text-3xl font-serif text-gray-900">Certificate of Completion</h1>
+                  <h1 className="text-3xl font-serif text-foreground">Certificate of Completion</h1>
                   
-                  <p className="text-gray-500 italic">This certifies that</p>
+                  <p className="text-muted-foreground italic">This certifies that</p>
                   
-                  <h2 className="text-2xl font-bold text-gray-900 border-b border-gray-300 pb-2 inline-block min-w-[200px]">
+                  <h2 className="text-2xl font-bold text-foreground border-b border-gray-300 pb-2 inline-block min-w-[200px]">
                     Jane Doe
                   </h2>
                   
-                  <p className="text-gray-500">has successfully completed the course</p>
+                  <p className="text-muted-foreground">has successfully completed the course</p>
                   
                   <h3 className="text-xl font-bold text-blue-700">
                     {cert.eventTitle}
                   </h3>
                   
-                  <div className="text-sm text-gray-500 pt-4">
+                  <div className="text-sm text-muted-foreground pt-4">
                     <p>Awarded on {new Date(cert.issueDate).toLocaleDateString()}</p>
                     <p>{cert.credits} {cert.creditType} Credits</p>
                   </div>
@@ -99,8 +99,8 @@ export function CertificateDetail() {
               <div className="flex items-start gap-3">
                 <CheckCircle className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
                 <div>
-                   <p className="font-medium text-gray-900">Valid Certificate</p>
-                   <p className="text-sm text-gray-500">Issued by {cert.organizer}</p>
+                   <p className="font-medium text-foreground">Valid Certificate</p>
+                   <p className="text-sm text-muted-foreground">Issued by {cert.organizer}</p>
                 </div>
               </div>
               
@@ -108,16 +108,16 @@ export function CertificateDetail() {
               
               <div className="space-y-3 text-sm">
                  <div className="flex justify-between">
-                    <span className="text-gray-500">Issue Date</span>
-                    <span className="font-medium text-gray-900">{new Date(cert.issueDate).toLocaleDateString()}</span>
+                    <span className="text-muted-foreground">Issue Date</span>
+                    <span className="font-medium text-foreground">{new Date(cert.issueDate).toLocaleDateString()}</span>
                  </div>
                  <div className="flex justify-between">
-                    <span className="text-gray-500">Credential ID</span>
-                    <span className="font-medium text-gray-900 font-mono text-xs">{cert.id.toUpperCase()}</span>
+                    <span className="text-muted-foreground">Credential ID</span>
+                    <span className="font-medium text-foreground font-mono text-xs">{cert.id.toUpperCase()}</span>
                  </div>
                  <div className="flex justify-between">
-                    <span className="text-gray-500">Credits</span>
-                    <span className="font-medium text-gray-900">{cert.credits} {cert.creditType}</span>
+                    <span className="text-muted-foreground">Credits</span>
+                    <span className="font-medium text-foreground">{cert.credits} {cert.creditType}</span>
                  </div>
               </div>
             </CardContent>
@@ -128,7 +128,7 @@ export function CertificateDetail() {
               <CardTitle className="text-base">About the Event</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-               <h4 className="font-medium text-gray-900">{cert.eventTitle}</h4>
+               <h4 className="font-medium text-foreground">{cert.eventTitle}</h4>
                <Link to={`/events/${cert.eventId}`}>
                  <Button variant="link" className="p-0 h-auto text-blue-600">View Event Details</Button>
                </Link>

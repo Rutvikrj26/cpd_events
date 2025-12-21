@@ -115,18 +115,18 @@ export function Notifications() {
         <TabsContent value={filter} className="mt-0 space-y-4">
           {filteredNotifications.length > 0 ? (
             filteredNotifications.map((notification) => (
-              <Card key={notification.id} className={`transition-all ${notification.read ? 'bg-white' : 'bg-blue-50/50 border-blue-100'}`}>
+              <Card key={notification.id} className={`transition-all ${notification.read ? 'bg-card' : 'bg-blue-50/50 border-blue-100'}`}>
                 <div className="p-4 flex gap-4 items-start">
-                  <div className={`mt-1 p-2 rounded-full shrink-0 ${notification.read ? 'bg-gray-100' : 'bg-white shadow-sm'}`}>
+                  <div className={`mt-1 p-2 rounded-full shrink-0 ${notification.read ? 'bg-muted' : 'bg-card shadow-sm'}`}>
                     {getIcon(notification.type)}
                   </div>
                   
                   <div className="flex-1 space-y-1">
                     <div className="flex justify-between items-start">
-                      <h4 className={`text-sm font-semibold ${notification.read ? 'text-gray-900' : 'text-blue-900'}`}>
+                      <h4 className={`text-sm font-semibold ${notification.read ? 'text-foreground' : 'text-blue-900'}`}>
                         {notification.title}
                       </h4>
-                      <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0 ml-2">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0 ml-2">
                         <Clock className="h-3 w-3" /> {notification.time}
                       </span>
                     </div>
@@ -149,14 +149,14 @@ export function Notifications() {
               </Card>
             ))
           ) : (
-            <div className="flex flex-col items-center justify-center py-16 px-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-              <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-gray-400">
+            <div className="flex flex-col items-center justify-center py-16 px-4 bg-gray-50 rounded-lg border border-dashed border-border">
+              <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4 text-gray-400">
                 <Bell className="h-6 w-6" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-1">
+              <h3 className="text-lg font-medium text-foreground mb-1">
                 All caught up!
               </h3>
-              <p className="text-gray-500 text-center max-w-sm">
+              <p className="text-muted-foreground text-center max-w-sm">
                 You have no {filter === 'unread' ? 'unread' : ''} notifications at this time.
               </p>
             </div>

@@ -1,4 +1,5 @@
 import client from '../client';
+export * from './types';
 import { Certificate, CertificateTemplate, CertificateIssueRequest, CertificateSummary } from './types';
 
 // ============================================
@@ -49,7 +50,47 @@ export const deleteCertificateTemplate = async (uuid: string): Promise<void> => 
 };
 
 export const setDefaultTemplate = async (uuid: string): Promise<CertificateTemplate> => {
-    const response = await client.post<CertificateTemplate>(`/certificate-templates/${uuid}/set_default/`);
+    const response = await client.post<CertificateTemplate>(`/certificate-templates/${uuid}/set-default/`);
+    return response.data;
+};
+
+export const uploadTemplateFile = async (uuid: string, file: File): Promise<{ file_url: string; file_size: number }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await client.post<{ file_url: string; file_size: number }>(
+        `/certificate-templates/${uuid}/upload/`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+};
+
+export interface FieldPosition {
+    x: number;
+    y: number;
+    fontSize: number;
+    fontFamily?: string;
+}
+
+export interface FieldPositions {
+    first_name?: FieldPosition;
+    last_name?: FieldPosition;
+    cpd_hours?: FieldPosition;
+    [key: string]: FieldPosition | undefined;
+}
+
+export const generateTemplatePreview = async (uuid: string, fieldPositions: FieldPositions): Promise<{ preview_url: string }> => {
+    const response = await client.post<{ preview_url: string }>(
+        `/certificate-templates/${uuid}/preview/`,
+        { field_positions: fieldPositions }
+    );
+    return response.data;
+};
+
+export const saveFieldPositions = async (uuid: string, fieldPositions: FieldPositions): Promise<CertificateTemplate> => {
+    const response = await client.patch<CertificateTemplate>(`/certificate-templates/${uuid}/`, {
+        field_positions: fieldPositions
+    });
     return response.data;
 };
 

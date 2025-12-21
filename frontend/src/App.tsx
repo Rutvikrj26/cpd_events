@@ -54,127 +54,131 @@ import { CertificateTemplatesPage } from './pages/dashboard/organizer/Certificat
 // Integrations
 import { ZoomCallbackPage } from './pages/integrations/ZoomCallbackPage';
 
+import { ThemeProvider } from "@/components/theme-provider";
+
 export default function App() {
   return (
-    <BrowserRouter>
-      <ScrollToTop />
-      <AuthProvider>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={
-            <PublicLayout>
-              <LandingPage />
-            </PublicLayout>
-          } />
+    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+      <BrowserRouter>
+        <ScrollToTop />
+        <AuthProvider>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={
+              <PublicLayout>
+                <LandingPage />
+              </PublicLayout>
+            } />
 
-          <Route path="/events/browse" element={
-            <PublicLayout>
-              <EventDiscovery />
-            </PublicLayout>
-          } />
+            <Route path="/events/browse" element={
+              <PublicLayout>
+                <EventDiscovery />
+              </PublicLayout>
+            } />
 
-          <Route path="/events/:id" element={
-            <PublicLayout>
-              <EventDetail />
-            </PublicLayout>
-          } />
+            <Route path="/events/:id" element={
+              <PublicLayout>
+                <EventDetail />
+              </PublicLayout>
+            } />
 
-          <Route path="/events/:id/register" element={
-            <PublicLayout>
-              <EventRegistration />
-            </PublicLayout>
-          } />
+            <Route path="/events/:id/register" element={
+              <PublicLayout>
+                <EventRegistration />
+              </PublicLayout>
+            } />
 
-          <Route path="/pricing" element={
-            <PublicLayout>
-              <PricingPage />
-            </PublicLayout>
-          } />
+            <Route path="/pricing" element={
+              <PublicLayout>
+                <PricingPage />
+              </PublicLayout>
+            } />
 
-          <Route path="/contact" element={
-            <PublicLayout>
-              <ContactPage />
-            </PublicLayout>
-          } />
+            <Route path="/contact" element={
+              <PublicLayout>
+                <ContactPage />
+              </PublicLayout>
+            } />
 
-          <Route path="/forgot-password" element={
-            <AuthLayout>
-              <ForgotPasswordPage />
-            </AuthLayout>
-          } />
+            <Route path="/forgot-password" element={
+              <AuthLayout>
+                <ForgotPasswordPage />
+              </AuthLayout>
+            } />
 
-          {/* Auth Routes */}
-          <Route path="/login" element={
-            <AuthLayout>
-              <LoginPage />
-            </AuthLayout>
-          } />
+            {/* Auth Routes */}
+            <Route path="/login" element={
+              <AuthLayout>
+                <LoginPage />
+              </AuthLayout>
+            } />
 
-          <Route path="/signup" element={
-            <AuthLayout>
-              <SignupPage />
-            </AuthLayout>
-          } />
+            <Route path="/signup" element={
+              <AuthLayout>
+                <SignupPage />
+              </AuthLayout>
+            } />
 
-          {/* Protected Routes - Unified Dashboard */}
-          <Route element={<ProtectedRoute />}>
+            {/* Protected Routes - Unified Dashboard */}
+            <Route element={<ProtectedRoute />}>
 
-            {/* Integrations */}
-            <Route path="/zoom/callback" element={<ZoomCallbackPage />} />
+              {/* Integrations */}
+              <Route path="/zoom/callback" element={<ZoomCallbackPage />} />
 
-            {/* Main Dashboard Layout - all authenticated users */}
-            <Route element={<DashboardLayout />}>
-              {/* Dashboard - shows role-appropriate content */}
-              <Route path="/dashboard" element={<DashboardPage />} />
+              {/* Main Dashboard Layout - all authenticated users */}
+              <Route element={<DashboardLayout />}>
+                {/* Dashboard - shows role-appropriate content */}
+                <Route path="/dashboard" element={<DashboardPage />} />
 
-              {/* Events - unified routes for both roles */}
-              <Route path="/events" element={<EventsPage />} />
-              <Route path="/events/create" element={<EventCreatePage />} />
-              <Route path="/events/:uuid" element={<EventDetailPage />} />
-              <Route path="/events/:uuid/edit" element={<EventCreatePage />} />
+                {/* Events - unified routes for both roles */}
+                <Route path="/events" element={<EventsPage />} />
+                <Route path="/events/create" element={<EventCreatePage />} />
+                <Route path="/events/:uuid" element={<EventDetailPage />} />
+                <Route path="/events/:uuid/edit" element={<EventCreatePage />} />
 
-              {/* Attendee-specific pages */}
-              <Route path="/registrations" element={<MyRegistrationsPage />} />
-              <Route path="/certificates" element={<CertificatesPage />} />
-              <Route path="/my-events" element={<MyEvents />} />
-              <Route path="/my-certificates" element={<CertificatesList />} />
-              <Route path="/my-certificates/:id" element={<CertificateDetail />} />
-              <Route path="/cpd" element={<CPDTracking />} />
+                {/* Attendee-specific pages */}
+                <Route path="/registrations" element={<MyRegistrationsPage />} />
+                <Route path="/certificates" element={<CertificatesPage />} />
+                <Route path="/my-events" element={<MyEvents />} />
+                <Route path="/my-certificates" element={<CertificatesList />} />
+                <Route path="/my-certificates/:id" element={<CertificateDetail />} />
+                <Route path="/cpd" element={<CPDTracking />} />
 
-              {/* Shared pages */}
-              <Route path="/billing" element={<BillingPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/settings" element={<ProfileSettings />} />
+                {/* Shared pages */}
+                <Route path="/billing" element={<BillingPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/notifications" element={<Notifications />} />
+                <Route path="/settings" element={<ProfileSettings />} />
 
-              {/* Organizer-specific pages (non-event) */}
-              <Route path="/organizer/dashboard" element={<OrganizerDashboard />} />
-              <Route path="/organizer/contacts" element={<ContactsPage />} />
-              <Route path="/organizer/reports" element={<ReportsPage />} />
-              <Route path="/organizer/certificates/templates" element={<CertificateTemplatesPage />} />
-              <Route path="/organizer/events/:uuid/manage" element={<EventManagement />} />
+                {/* Organizer-specific pages (non-event) */}
+                <Route path="/organizer/dashboard" element={<OrganizerDashboard />} />
+                <Route path="/organizer/contacts" element={<ContactsPage />} />
+                <Route path="/organizer/reports" element={<ReportsPage />} />
+                <Route path="/organizer/certificates/templates" element={<CertificateTemplatesPage />} />
+                <Route path="/organizer/events/:uuid/manage" element={<EventManagement />} />
+              </Route>
+
+              {/* Redirects for old organizer event routes */}
+              <Route path="/organizer/events" element={<Navigate to="/events" replace />} />
+              <Route path="/organizer/events/new" element={<Navigate to="/events/create" replace />} />
+              <Route path="/organizer/events/:id" element={<Navigate to="/events/:id" replace />} />
+              <Route path="/organizer/events/:id/edit" element={<Navigate to="/events/:id/edit" replace />} />
+              <Route path="/organizer/settings" element={<Navigate to="/settings" replace />} />
+              <Route path="/organizer/notifications" element={<Navigate to="/notifications" replace />} />
+
             </Route>
 
-            {/* Redirects for old organizer event routes */}
-            <Route path="/organizer/events" element={<Navigate to="/events" replace />} />
-            <Route path="/organizer/events/new" element={<Navigate to="/events/create" replace />} />
-            <Route path="/organizer/events/:id" element={<Navigate to="/events/:id" replace />} />
-            <Route path="/organizer/events/:id/edit" element={<Navigate to="/events/:id/edit" replace />} />
-            <Route path="/organizer/settings" element={<Navigate to="/settings" replace />} />
-            <Route path="/organizer/notifications" element={<Navigate to="/notifications" replace />} />
-
-          </Route>
-
-          {/* Fallback */}
-          <Route path="*" element={
-            <PublicLayout>
-              <NotFoundPage />
-            </PublicLayout>
-          } />
-        </Routes>
-      </AuthProvider>
-      <Toaster />
-    </BrowserRouter >
+            {/* Fallback */}
+            <Route path="*" element={
+              <PublicLayout>
+                <NotFoundPage />
+              </PublicLayout>
+            } />
+          </Routes>
+        </AuthProvider>
+        <Toaster />
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

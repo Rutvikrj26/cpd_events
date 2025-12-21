@@ -387,7 +387,7 @@ export function ProfileSettings() {
                          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                             Email Notifications
                          </label>
-                         <p className="text-sm text-gray-500">Receive emails about your account activity.</p>
+                         <p className="text-sm text-muted-foreground">Receive emails about your account activity.</p>
                       </div>
                       <Switch defaultChecked />
                    </div>
@@ -397,7 +397,7 @@ export function ProfileSettings() {
                          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                             Event Reminders
                          </label>
-                         <p className="text-sm text-gray-500">Get notified 24 hours before events start.</p>
+                         <p className="text-sm text-muted-foreground">Get notified 24 hours before events start.</p>
                       </div>
                       <Switch defaultChecked />
                    </div>
@@ -407,7 +407,7 @@ export function ProfileSettings() {
                          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                             Marketing Updates
                          </label>
-                         <p className="text-sm text-gray-500">Receive news about new features and promotions.</p>
+                         <p className="text-sm text-muted-foreground">Receive news about new features and promotions.</p>
                       </div>
                       <Switch />
                    </div>

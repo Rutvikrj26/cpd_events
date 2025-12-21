@@ -16,8 +16,8 @@ export const StepBasicInfo = () => {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="space-y-2">
-                <h2 className="text-xl font-semibold text-slate-900">Basic Information</h2>
-                <p className="text-sm text-slate-500">Let's start with the core details of your event.</p>
+                <h2 className="text-xl font-semibold text-foreground">Basic Information</h2>
+                <p className="text-sm text-muted-foreground">Let's start with the core details of your event.</p>
             </div>
 
             <div className="grid gap-6">
@@ -37,7 +37,7 @@ export const StepBasicInfo = () => {
                         <Label>Event Type</Label>
                         <Select
                             value={formData.event_type}
-                            onValueChange={(value) => updateFormData({ event_type: value })}
+                            onValueChange={(value) => updateFormData({ event_type: value as any })}
                         >
                             <SelectTrigger>
                                 <SelectValue placeholder="Select type" />
@@ -45,9 +45,9 @@ export const StepBasicInfo = () => {
                             <SelectContent>
                                 <SelectItem value="webinar">Webinar</SelectItem>
                                 <SelectItem value="workshop">Workshop</SelectItem>
-                                <SelectItem value="conference">Conference</SelectItem>
                                 <SelectItem value="training">Training Session</SelectItem>
-                                <SelectItem value="networking">Networking Event</SelectItem>
+                                <SelectItem value="lecture">Lecture</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

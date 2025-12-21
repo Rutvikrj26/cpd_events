@@ -90,10 +90,10 @@ export function ContactsPage() {
                 <CardContent className="p-0">
                     <div className="p-4 border-b flex flex-col sm:flex-row gap-4 items-center justify-between bg-zinc-50/50">
                         <div className="relative w-full sm:w-96">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input
                                 placeholder="Search contacts..."
-                                className="pl-9 bg-white"
+                                className="pl-9 bg-card"
                                 value={searchTerm}
                                 onChange={(e) => handleSearch(e.target.value)}
                             />
@@ -123,14 +123,14 @@ export function ContactsPage() {
                                         <TableRow key={contact.id}>
                                             <TableCell className="font-medium">
                                                 <div className="flex flex-col">
-                                                    <span className="text-slate-900">{contact.name}</span>
-                                                    <span className="text-xs text-slate-500">{contact.email}</span>
+                                                    <span className="text-foreground">{contact.name}</span>
+                                                    <span className="text-xs text-muted-foreground">{contact.email}</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex flex-col">
-                                                    <span className="text-slate-900 text-sm">{contact.role}</span>
-                                                    <span className="text-xs text-slate-500">{contact.company}</span>
+                                                    <span className="text-foreground text-sm">{contact.role}</span>
+                                                    <span className="text-xs text-muted-foreground">{contact.company}</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
@@ -139,7 +139,7 @@ export function ContactsPage() {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right font-medium">{contact.eventsAttended}</TableCell>
-                                            <TableCell className="text-right text-slate-500 text-sm">{contact.lastActive}</TableCell>
+                                            <TableCell className="text-right text-muted-foreground text-sm">{contact.lastActive}</TableCell>
                                             <TableCell>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>

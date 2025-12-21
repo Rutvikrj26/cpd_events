@@ -125,8 +125,8 @@ function RegistrationCard({ registration, isPast = false }: { registration: Regi
       </div>
       <CardContent className="p-4 space-y-3">
         <div>
-          <h3 className="font-semibold text-gray-900 line-clamp-2">{event.title}</h3>
-          <p className="text-sm text-gray-500 mt-1">
+          <h3 className="font-semibold text-foreground line-clamp-2">{event.title}</h3>
+          <p className="text-sm text-muted-foreground mt-1">
             {new Date(event.starts_at).toLocaleDateString(undefined, {
               weekday: 'short',
               month: 'short',
@@ -171,14 +171,14 @@ function RegistrationCard({ registration, isPast = false }: { registration: Regi
 
 function EmptyState({ tab }: { tab: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 px-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-      <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-gray-400">
+    <div className="flex flex-col items-center justify-center py-16 px-4 bg-gray-50 rounded-lg border border-dashed border-border">
+      <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4 text-gray-400">
         <Calendar className="h-6 w-6" />
       </div>
-      <h3 className="text-lg font-medium text-gray-900 mb-1">
+      <h3 className="text-lg font-medium text-foreground mb-1">
         No {tab} events found
       </h3>
-      <p className="text-gray-500 text-center max-w-sm mb-6">
+      <p className="text-muted-foreground text-center max-w-sm mb-6">
         {tab === "upcoming"
           ? "You haven't registered for any upcoming events yet."
           : "You haven't attended any events yet."}

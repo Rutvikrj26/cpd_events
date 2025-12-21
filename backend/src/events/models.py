@@ -42,7 +42,6 @@ class Event(SoftDeleteModel):
     class EventType(models.TextChoices):
         WEBINAR = 'webinar', 'Webinar'
         WORKSHOP = 'workshop', 'Workshop'
-        CONFERENCE = 'conference', 'Conference'
         TRAINING = 'training', 'Training Session'
         LECTURE = 'lecture', 'Lecture'
         OTHER = 'other', 'Other'

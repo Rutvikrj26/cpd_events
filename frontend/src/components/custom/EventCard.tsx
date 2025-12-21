@@ -32,11 +32,11 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
                 <div className="flex items-center gap-2 text-xs text-blue-600 font-medium">
                   {event.type} • {event.creditType} {event.credits} Credits
                 </div>
-                <h3 className="font-semibold text-lg text-gray-900 line-clamp-1">{event.title}</h3>
+                <h3 className="font-semibold text-lg text-foreground line-clamp-1">{event.title}</h3>
               </div>
               {showStatus && <StatusBadge status={event.status} />}
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Calendar className="h-4 w-4" />
                 <span>{new Date(event.startDate).toLocaleDateString()}</span>
@@ -52,7 +52,7 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between">
-            <div className="text-sm font-medium text-gray-900">
+            <div className="text-sm font-medium text-foreground">
               {event.price === "Free" ? "Free" : `$${event.price}`}
             </div>
             <Link to={`/events/${event.id}`}>
@@ -75,7 +75,7 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
           />
         </AspectRatio>
         <div className="absolute top-2 left-2 flex gap-2">
-          <Badge className="bg-white/90 text-gray-900 hover:bg-white/90 font-medium shadow-sm backdrop-blur-sm border-0">
+          <Badge className="bg-card/90 text-foreground hover:bg-card/90 font-medium shadow-sm backdrop-blur-sm border-0">
             {event.type}
           </Badge>
           {showStatus && <StatusBadge status={event.status} className="shadow-sm backdrop-blur-sm" />}
@@ -88,16 +88,16 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
       </div>
       
       <CardHeader className="p-4 pb-2 space-y-2">
-        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           {new Date(event.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' })}
         </div>
-        <h3 className="font-semibold text-lg text-gray-900 line-clamp-2 leading-tight min-h-[3rem]">
+        <h3 className="font-semibold text-lg text-foreground line-clamp-2 leading-tight min-h-[3rem]">
           {event.title}
         </h3>
       </CardHeader>
       
       <CardContent className="p-4 py-2 flex-1">
-        <div className="space-y-2 text-sm text-gray-500">
+        <div className="space-y-2 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 shrink-0" />
             <span className="truncate">{event.organizer}</span>
@@ -110,7 +110,7 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
       </CardContent>
       
       <CardFooter className="p-4 pt-2 flex items-center justify-between border-t border-gray-50 mt-auto">
-        <span className="font-semibold text-gray-900">
+        <span className="font-semibold text-foreground">
           {event.price === "Free" ? "Free" : `$${event.price}`}
         </span>
         <Link to={`/events/${event.id}`}>

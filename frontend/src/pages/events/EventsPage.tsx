@@ -56,8 +56,8 @@ export const EventsPage = () => {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900">Events</h1>
-                    <p className="text-slate-500">Manage your CPD events</p>
+                    <h1 className="text-3xl font-bold text-foreground">Events</h1>
+                    <p className="text-muted-foreground">Manage your CPD events</p>
                 </div>
                 {isOrganizer && (
                     <Link to="/events/create">
@@ -75,21 +75,21 @@ export const EventsPage = () => {
                         to={isOrganizer ? `/organizer/events/${event.uuid}/manage` : `/events/${event.uuid}`}
                         className="group block"
                     >
-                        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-                            <div className="h-48 bg-slate-100 relative">
+                        <div className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-md transition-shadow">
+                            <div className="h-48 bg-muted relative">
                                 {/* Placeholder for event image if we had one */}
                                 <div className="absolute inset-0 flex items-center justify-center text-slate-300">
                                     <Calendar size={48} />
                                 </div>
-                                <div className="absolute top-4 right-4 bg-white/90 px-2 py-1 rounded text-xs font-semibold uppercase">
+                                <div className="absolute top-4 right-4 bg-card/90 px-2 py-1 rounded text-xs font-semibold uppercase">
                                     {event.status}
                                 </div>
                             </div>
                             <div className="p-5">
-                                <h3 className="font-bold text-lg text-slate-900 group-hover:text-blue-600 transition-colors">
+                                <h3 className="font-bold text-lg text-foreground group-hover:text-blue-600 transition-colors">
                                     {event.title}
                                 </h3>
-                                <div className="mt-4 space-y-2 text-sm text-slate-500">
+                                <div className="mt-4 space-y-2 text-sm text-muted-foreground">
                                     <div className="flex items-center gap-2">
                                         <Calendar size={14} />
                                         <span>{new Date(event.starts_at).toLocaleDateString()}</span>
@@ -104,7 +104,7 @@ export const EventsPage = () => {
                     </Link>
                 ))}
                 {events.length === 0 && (
-                    <div className="col-span-full py-12 text-center text-slate-500 bg-white rounded-xl border border-dashed border-slate-300">
+                    <div className="col-span-full py-12 text-center text-muted-foreground bg-card rounded-xl border border-dashed border-slate-300">
                         No events found. {isOrganizer && "Create your first one!"}
                     </div>
                 )}

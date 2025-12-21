@@ -35,28 +35,28 @@ export const MyRegistrationsPage = () => {
 
     return (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-slate-900">My Registrations</h1>
+            <h1 className="text-3xl font-bold text-foreground">My Registrations</h1>
 
-            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+            <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
                 {registrations.length === 0 ? (
-                    <div className="p-12 text-center text-slate-500">
+                    <div className="p-12 text-center text-muted-foreground">
                         You have not registered for any events yet. <Link to="/events" className="text-blue-600 hover:underline">Browse Events</Link>
                     </div>
                 ) : (
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-50 border-b">
+                        <thead className="bg-muted/30 border-b">
                             <tr>
-                                <th className="px-6 py-4 font-medium text-slate-500">Event</th>
-                                <th className="px-6 py-4 font-medium text-slate-500">Date Registered</th>
-                                <th className="px-6 py-4 font-medium text-slate-500">Status</th>
-                                <th className="px-6 py-4 font-medium text-slate-500">Actions</th>
+                                <th className="px-6 py-4 font-medium text-muted-foreground">Event</th>
+                                <th className="px-6 py-4 font-medium text-muted-foreground">Date Registered</th>
+                                <th className="px-6 py-4 font-medium text-muted-foreground">Status</th>
+                                <th className="px-6 py-4 font-medium text-muted-foreground">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {registrations.map(reg => (
-                                <tr key={reg.uuid} className="hover:bg-slate-50 transition-colors">
+                                <tr key={reg.uuid} className="hover:bg-muted/30 transition-colors">
                                     <td className="px-6 py-4">
-                                        <div className="font-semibold text-slate-900">
+                                        <div className="font-semibold text-foreground">
                                             {reg.event.title}
                                         </div>
                                     </td>

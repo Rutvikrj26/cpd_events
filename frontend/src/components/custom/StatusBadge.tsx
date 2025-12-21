@@ -19,7 +19,7 @@ interface StatusBadgeProps {
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; className?: string }> = {
-  draft: { label: "Draft", variant: "secondary", className: "bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200" },
+  draft: { label: "Draft", variant: "secondary", className: "bg-muted text-gray-700 hover:bg-gray-200 border-border" },
   published: { label: "Published", variant: "default", className: "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200" },
   live: { label: "Live Now", variant: "default", className: "bg-red-100 text-red-700 hover:bg-red-200 border-red-200 animate-pulse" },
   completed: { label: "Completed", variant: "outline", className: "text-gray-600 border-gray-300" },

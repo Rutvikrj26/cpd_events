@@ -41,17 +41,17 @@ export const BillingPage = () => {
 
     return (
         <div className="space-y-8">
-            <h1 className="text-3xl font-bold text-slate-900">Billing & Subscription</h1>
+            <h1 className="text-3xl font-bold text-foreground">Billing & Subscription</h1>
 
             {/* Subscription Card */}
-            <div className="bg-white rounded-xl border shadow-sm p-6">
+            <div className="bg-card rounded-xl border shadow-sm p-6">
                 <div className="flex justify-between items-start">
                     <div>
-                        <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                        <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
                             Current Plan
                             {subscription?.status === 'active' && <CheckCircle size={18} className="text-green-500" />}
                         </h2>
-                        <p className="text-slate-500 mt-1">
+                        <p className="text-muted-foreground mt-1">
                             {subscription ? `You are on the ${subscription.plan} plan.` : 'You are currently on the Free plan.'}
                         </p>
                     </div>
@@ -61,7 +61,7 @@ export const BillingPage = () => {
                 </div>
 
                 {subscription && (
-                    <div className="mt-6 p-4 bg-slate-50 rounded-lg border flex gap-6">
+                    <div className="mt-6 p-4 bg-muted/30 rounded-lg border flex gap-6">
                         <div>
                             <span className="text-xs font-semibold text-slate-400 uppercase">Status</span>
                             <div className="font-medium capitalize">{subscription.status}</div>
@@ -75,18 +75,18 @@ export const BillingPage = () => {
             </div>
 
             {/* Invoices List */}
-            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b bg-slate-50 font-semibold text-slate-700">Payment History</div>
+            <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b bg-muted/30 font-semibold text-slate-700">Payment History</div>
                 {invoices.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500">No invoices found.</div>
+                    <div className="p-8 text-center text-muted-foreground">No invoices found.</div>
                 ) : (
                     <table className="w-full text-left text-sm">
                         <thead className="border-b">
                             <tr>
-                                <th className="px-6 py-3 font-medium text-slate-500">Date</th>
-                                <th className="px-6 py-3 font-medium text-slate-500">Amount</th>
-                                <th className="px-6 py-3 font-medium text-slate-500">Status</th>
-                                <th className="px-6 py-3 font-medium text-slate-500">Invoice</th>
+                                <th className="px-6 py-3 font-medium text-muted-foreground">Date</th>
+                                <th className="px-6 py-3 font-medium text-muted-foreground">Amount</th>
+                                <th className="px-6 py-3 font-medium text-muted-foreground">Status</th>
+                                <th className="px-6 py-3 font-medium text-muted-foreground">Invoice</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">

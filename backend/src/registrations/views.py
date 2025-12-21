@@ -135,7 +135,16 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        instance.attended = serializer.validated_data['attended']
+        if serializer.validated_data['attended']:
+            instance.attended = True
+            if not instance.check_in_time:
+                instance.check_in_time = timezone.now()
+        else:
+            instance.attended = False
+            # Optional: Clear check_in_time if unchecked? Usually better to keep history or minimal change. 
+            # User wants audit log. If unchecked, maybe we keep the time or clear it? 
+            # For now, let's just specific logic: if attended becomes True, set time.
+        
         if 'attendance_eligible' in serializer.validated_data:
             instance.attendance_eligible = serializer.validated_data['attendance_eligible']
         instance.save()

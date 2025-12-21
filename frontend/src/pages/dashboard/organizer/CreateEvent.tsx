@@ -211,7 +211,7 @@ export function CreateEvent() {
                     <FormLabel>Date</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <CalendarIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+                        <CalendarIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input type="date" className="pl-9" {...field} />
                       </div>
                     </FormControl>
@@ -228,7 +228,7 @@ export function CreateEvent() {
                     <FormLabel>Start Time</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Clock className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+                        <Clock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input type="time" className="pl-9" {...field} />
                       </div>
                     </FormControl>

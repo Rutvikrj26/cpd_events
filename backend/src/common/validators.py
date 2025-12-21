@@ -29,11 +29,15 @@ def validate_field_positions_schema(value):
         raise ValidationError("Field positions must be a dictionary")
 
     valid_fields = {
+        'first_name',
+        'last_name',
         'attendee_name',
         'event_title',
         'event_date',
-        'cpd_credits',
+        'cpd_hours',  # Matches frontend
+        'cpd_credits', # Legacy/Backend
         'cpd_type',
+        'certificate_code', # Matches preview sample data
         'certificate_id',
         'organizer_name',
         'signature',
@@ -63,8 +67,14 @@ def validate_field_positions_schema(value):
         if 'align' in config and config['align'] not in valid_alignments:
             raise ValidationError(f"Field {field_name}: align must be left, center, or right")
 
-        if 'font_size' in config and not isinstance(config['font_size'], int):
-            raise ValidationError(f"Field {field_name}: font_size must be an integer")
+        # Support both snake_case and camelCase
+        if 'font_size' in config:
+            if not isinstance(config['font_size'], (int, float)):
+                raise ValidationError(f"Field {field_name}: font_size must be a number")
+        
+        if 'fontSize' in config:
+             if not isinstance(config['fontSize'], (int, float)):
+                raise ValidationError(f"Field {field_name}: fontSize must be a number")
 
 
 def validate_zoom_settings_schema(value):
