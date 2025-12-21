@@ -231,6 +231,8 @@ class EventCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = [
+            'uuid',
+            'slug',
             'title',
             'short_description',
             'description',
@@ -257,19 +259,17 @@ class EventCreateSerializer(serializers.ModelSerializer):
             'certificate_template',
             'auto_issue_certificates',
             # Branding
-            # Branding
             'is_public',
             # Attendance
             'minimum_attendance_percent',
+            'minimum_attendance_minutes',
             # Custom fields
             'custom_fields',
             'zoom_settings',
-            # Attendance
-            'minimum_attendance_minutes',
-            'minimum_attendance_percent',
             # Location
             'location',
         ]
+        read_only_fields = ['uuid', 'slug']
 
 
 
@@ -336,6 +336,15 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             # Location
             'location',
         ]
+
+    def validate(self, attrs):
+        """
+        Validate that the event can be updated.
+        """
+        instance = self.instance
+        if instance and instance.starts_at <= timezone.now():
+             raise serializers.ValidationError("Cannot edit event details after the event has started.")
+        return attrs
 
 
 class EventStatusChangeSerializer(serializers.Serializer):

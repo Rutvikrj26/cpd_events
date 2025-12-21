@@ -21,3 +21,10 @@ export const duplicateEvent = async (uuid: string): Promise<any> => {
     const response = await client.post(`/events/${uuid}/duplicate/`);
     return response.data;
 };
+
+/**
+ * Revert an event to draft status
+ */
+export const unpublishEvent = async (uuid: string): Promise<void> => {
+    await client.post(`/events/${uuid}/unpublish/`);
+};

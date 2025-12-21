@@ -34,7 +34,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { StatusBadge } from "@/components/custom/StatusBadge";
 import { toast } from "sonner";
-import { getEvent, publishEvent, getEventRegistrations, checkInAttendee, deleteEvent } from "@/api/events";
+import { getEvent, publishEvent, unpublishEvent, getEventRegistrations, checkInAttendee, deleteEvent } from "@/api/events";
 import { issueCertificates } from "@/api/certificates";
 import {
    AlertDialog,
@@ -97,6 +97,8 @@ export function EventManagement() {
    useEffect(() => {
       fetchRegistrations();
    }, [uuid]);
+
+   const hasStarted = event ? new Date(event.starts_at) < new Date() : false;
 
    if (loading || !event) {
       return <div className="p-8">Loading event details...</div>;
@@ -196,6 +198,25 @@ export function EventManagement() {
       }
    };
 
+   const handleUnpublish = async () => {
+      if (!uuid) return;
+      if (hasStarted) {
+         toast.error("Cannot convert to draft after event has started");
+         return;
+      }
+
+      setPublishing(true);
+      try {
+         await unpublishEvent(uuid);
+         setEvent((prev: any) => prev ? { ...prev, status: 'draft' } : prev);
+         toast.success("Event reverted to draft.");
+      } catch (error: any) {
+         toast.error(error?.response?.data?.message || "Failed to revert to draft");
+      } finally {
+         setPublishing(false);
+      }
+   };
+
    const handleDelete = async () => {
       if (!uuid) return;
       setDeleting(true);
@@ -227,7 +248,7 @@ export function EventManagement() {
             description={`Manage registrations and attendance for your ${event.format || 'event'}.`}
             actions={
                <div className="flex gap-2">
-                  {event.status === 'draft' && (
+                  {event.status === 'draft' && !hasStarted && (
                      <Button
                         onClick={handlePublish}
                         disabled={publishing}
@@ -236,9 +257,23 @@ export function EventManagement() {
                         {publishing ? 'Publishing...' : 'Publish Event'}
                      </Button>
                   )}
-                  <Link to={`/events/${event.uuid}/edit`}>
-                     <Button variant="outline">Edit Event</Button>
-                  </Link>
+                  {event.status === 'published' && !hasStarted && (
+                     <Button
+                        onClick={handleUnpublish}
+                        disabled={publishing}
+                        variant="outline"
+                        className="text-orange-600 border-orange-200 hover:bg-orange-50"
+                     >
+                        {publishing ? 'Updating...' : 'Convert to Draft'}
+                     </Button>
+                  )}
+                  {hasStarted ? (
+                     <Button variant="outline" disabled title="Event has started">Edit Event</Button>
+                  ) : (
+                     <Link to={`/events/${event.uuid}/edit`}>
+                        <Button variant="outline">Edit Event</Button>
+                     </Link>
+                  )}
                   <Link to={`/events/${event.slug}`}>
                      <Button className="bg-blue-600 hover:bg-blue-700">View Public Page</Button>
                   </Link>

@@ -27,7 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export function EventDetail() {
   const { id } = useParams<{ id: string }>();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +102,9 @@ export function EventDetail() {
   const isRegistrationOpen = event.is_registration_open ?? event.registration_enabled;
   const organizerName = event.organizer?.display_name || event.organizer_name || event.owner?.display_name || "Unknown Organizer";
 
+  // Check if current user is the organizer (check both nested objects as per API variant)
+  const isOrganizer = isAuthenticated && (user?.uuid === event.owner?.uuid || user?.uuid === event.organizer?.uuid);
+
   // Calculate duration display
   const getDurationDisplay = () => {
     if (event.duration_minutes) {
@@ -123,6 +126,19 @@ export function EventDetail() {
 
   // Render the registration button based on state
   const renderRegistrationButton = (isLarge = false) => {
+    if (isOrganizer) {
+      return (
+        <Link to={`/organizer/events/${event.uuid}/manage`}>
+          <Button
+            size={isLarge ? "lg" : "default"}
+            className={`${isLarge ? 'w-full py-6 text-lg' : ''} bg-slate-800 hover:bg-slate-900`}
+          >
+            Manage Event
+          </Button>
+        </Link>
+      );
+    }
+
     if (isPast) {
       return <Button disabled>Event Ended</Button>;
     }
@@ -322,9 +338,13 @@ export function EventDetail() {
           <div className="space-y-6">
             <Card className="shadow-md border-border">
               <CardHeader>
-                <CardTitle>Registration</CardTitle>
+                <CardTitle>{isOrganizer ? "Event Management" : "Registration"}</CardTitle>
                 <CardDescription>
-                  {isAlreadyRegistered ? "You're registered for this event!" : "Secure your spot today."}
+                  {isOrganizer
+                    ? "Manage your event details and registrations."
+                    : isAlreadyRegistered
+                      ? "You're registered for this event!"
+                      : "Secure your spot today."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">

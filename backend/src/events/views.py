@@ -111,7 +111,27 @@ class EventViewSet(SoftDeleteModelViewSet):
         if event.status != 'draft':
             return error_response('Can only publish draft events.', code='INVALID_STATE', status_code=status.HTTP_400_BAD_REQUEST)
 
-        event.publish()
+        event.publish(user=request.user)
+        return Response(serializers.EventDetailSerializer(event).data)
+
+    @swagger_auto_schema(
+        operation_summary="Unpublish event",
+        operation_description="Revert a published event to draft status. Restricted if event has started.",
+        responses={200: serializers.EventDetailSerializer, 400: '{"error": {"code": "INVALID_STATE"}}'},
+    )
+    @action(detail=True, methods=['post'])
+    def unpublish(self, request, uuid=None):
+        """Revert event to draft."""
+        event = self.get_object()
+
+        if event.starts_at <= timezone.now():
+             return error_response('Cannot revert to draft after event has started.', code='INVALID_STATE', status_code=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            event.unpublish(user=request.user)
+        except ValueError as e:
+            return error_response(str(e), code='INVALID_STATE')
+
         return Response(serializers.EventDetailSerializer(event).data)
 
     @swagger_auto_schema(
@@ -344,14 +364,22 @@ class PublicEventDetailView(generics.RetrieveAPIView):
         raise Http404("Event not found")
 
     def get_queryset(self):
-        return (
-            Event.objects.filter(
-                status__in=['published', 'live'],
-                is_public=True,
-                deleted_at__isnull=True,
-            )
-            .select_related('owner')
-            .prefetch_related('custom_fields')
+        # Allow owners to see their events regardless of status
+        user = self.request.user
+        queryset = Event.objects.select_related('owner').prefetch_related('custom_fields')
+
+        if user.is_authenticated:
+            # If user is authenticated, they can see published/live public events OR any event they own
+            return queryset.filter(
+                Q(status__in=['published', 'live'], is_public=True, deleted_at__isnull=True) |
+                Q(owner=user, deleted_at__isnull=True)
+            ).distinct()
+        
+        # Public users only see published/live public events
+        return queryset.filter(
+            status__in=['published', 'live'],
+            is_public=True,
+            deleted_at__isnull=True,
         )
 
 

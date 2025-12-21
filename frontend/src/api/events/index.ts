@@ -93,4 +93,4 @@ export const deleteEventImage = async (eventUuid: string): Promise<Event> => {
 };
 
 // Event actions
-export { publishEvent, cancelEvent, duplicateEvent } from './actions';
+export { publishEvent, unpublishEvent, cancelEvent, duplicateEvent } from './actions';
