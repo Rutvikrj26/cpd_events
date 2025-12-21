@@ -22,7 +22,6 @@ export function EventCreatePage() {
                     // Map aliased fields back to form field names
                     cpd_credit_value: data.cpd_credits,
                     cpd_credit_type: data.cpd_type,
-                    cover_image_url: data.featured_image_url,
                 });
             } catch (e) {
                 console.error("Failed to fetch event", e);

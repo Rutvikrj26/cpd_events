@@ -58,7 +58,9 @@ def generate_unique_slug(model_or_slugs, base_string, max_length=200):
     if isinstance(model_or_slugs, type) and issubclass(model_or_slugs, Model):
         # It's a model class - query the database
         def slug_exists(slug):
-            return model_or_slugs.objects.filter(slug=slug).exists()
+            # Use all_objects if available to check against soft-deleted records too
+            manager = getattr(model_or_slugs, 'all_objects', model_or_slugs.objects)
+            return manager.filter(slug=slug).exists()
 
     elif isinstance(model_or_slugs, set):
         # It's a set of existing slugs

@@ -36,5 +36,5 @@ urlpatterns = [
     path('events/<uuid:event_uuid>/', include(session_router.urls)),
     # Public events
     path('public/events/', views.PublicEventListView.as_view(), name='public_event_list'),
-    path('public/events/<slug:slug>/', views.PublicEventDetailView.as_view(), name='public_event_detail'),
+    path('public/events/<str:identifier>/', views.PublicEventDetailView.as_view(), name='public_event_detail'),
 ]

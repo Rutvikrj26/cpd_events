@@ -20,21 +20,46 @@ import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
 
 export const Sidebar = () => {
-    const { user, logout } = useAuth();
+    const { user, logout, hasRoute, manifest } = useAuth();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const isOrganizer = user?.account_type === 'organizer' || user?.account_type === 'admin';
 
+    // Define nav items with route keys matching backend ROUTE_REGISTRY
     const navItems = [
-        { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-        { to: '/events', icon: Calendar, label: 'Events' },
-        { to: '/registrations', icon: BookOpen, label: 'My Registrations', show: !isOrganizer },
-        { to: '/certificates', icon: Award, label: 'Certificates', show: !isOrganizer },
-        { to: '/organizer/certificates/templates', icon: FileText, label: 'Cert. Templates', show: isOrganizer },
-        { to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', show: isOrganizer },
-        { to: '/billing', icon: CreditCard, label: 'Billing' },
-        { to: '/profile', icon: UserCircle, label: 'Profile' },
-        { to: '/settings', icon: Settings, label: 'Settings', show: false }, // Placeholder
+        { routeKey: 'dashboard', to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+        { routeKey: 'events', to: '/events', icon: Calendar, label: 'Events' },
+        { routeKey: 'registrations', to: '/registrations', icon: BookOpen, label: 'My Registrations' },
+        { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'Certificates' },
+        { routeKey: 'cert_templates', to: '/organizer/certificates/templates', icon: FileText, label: 'Cert. Templates' },
+        { routeKey: 'zoom', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings' },
+        { routeKey: 'billing', to: '/billing', icon: CreditCard, label: 'Billing' },
+        { routeKey: 'profile', to: '/profile', icon: UserCircle, label: 'Profile' },
     ];
+
+    // Filter items: use manifest if available, otherwise fall back to role-based logic
+    const visibleItems = navItems.filter(item => {
+        // If manifest is loaded, use it (except for items not in registry like dashboard/profile)
+        if (manifest && manifest.routes.length > 0) {
+            // Items always visible (not in RBAC registry)
+            if (['dashboard', 'profile', 'billing'].includes(item.routeKey)) {
+                return true;
+            }
+            return hasRoute(item.routeKey);
+        }
+
+        // Fallback: use role-based logic until manifest loads
+        switch (item.routeKey) {
+            case 'events':
+            case 'cert_templates':
+            case 'zoom':
+                return isOrganizer;
+            case 'registrations':
+            case 'certificates':
+                return !isOrganizer;
+            default:
+                return true;
+        }
+    });
 
     const toggleSidebar = () => setIsCollapsed(!isCollapsed);
 
@@ -93,7 +118,7 @@ export const Sidebar = () => {
 
             {/* Navigation */}
             <nav className="flex-1 p-3 space-y-2 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted">
-                {navItems.filter(item => item.show !== false).map((item) => (
+                {visibleItems.map((item) => (
                     <NavItem key={item.to} item={item} />
                 ))}
             </nav>

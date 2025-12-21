@@ -9,10 +9,12 @@ from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from drf_yasg.utils import swagger_auto_schema
 
 from common.pagination import SmallPagination
 from common.permissions import IsOrganizer
+from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import SoftDeleteModelViewSet
 
@@ -60,6 +62,7 @@ class PublicEventFilter(filters.FilterSet):
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='events')
 class EventViewSet(SoftDeleteModelViewSet):
     """
     Organizer-level CRUD for events.
@@ -71,6 +74,7 @@ class EventViewSet(SoftDeleteModelViewSet):
     DELETE /api/v1/events/{uuid}/
     """
 
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
     permission_classes = [IsAuthenticated, IsOrganizer]
     filterset_class = EventFilter
     search_fields = ['title', 'description']
@@ -178,6 +182,61 @@ class EventViewSet(SoftDeleteModelViewSet):
         return Response(serializers.EventDetailSerializer(new_event).data, status=status.HTTP_201_CREATED)
 
     @swagger_auto_schema(
+        method='post',
+        operation_summary="Upload featured image",
+        operation_description="Upload a featured image for the event.",
+        responses={200: serializers.EventDetailSerializer, 400: '{"error": {"code": "NO_FILE"}}'},
+    )
+    @swagger_auto_schema(
+        method='delete',
+        operation_summary="Delete featured image",
+        operation_description="Remove the featured image from the event.",
+        responses={200: serializers.EventDetailSerializer},
+    )
+    @action(detail=True, methods=['post', 'delete'], url_path='upload-image')
+    def upload_image(self, request, uuid=None):
+        """
+        Upload or delete a featured image.
+        POST: Upload new image.
+        DELETE: Remove existing image.
+        """
+        event = self.get_object()
+
+        if request.method == 'DELETE':
+            event.featured_image.delete(save=False) # Delete file from storage
+            event.featured_image = None
+            event.save(update_fields=['featured_image', 'updated_at'])
+            return Response(serializers.EventDetailSerializer(event, context={'request': request}).data)
+        
+        if 'image' not in request.FILES:
+            return error_response('No image file provided.', code='NO_FILE', status_code=status.HTTP_400_BAD_REQUEST)
+        
+        image_file = request.FILES['image']
+        
+        # Validate file type
+        valid_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+        if image_file.content_type not in valid_types:
+            return error_response(
+                f'Invalid file type. Allowed: {", ".join(valid_types)}',
+                code='INVALID_TYPE',
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate file size (max 5MB)
+        max_size = 5 * 1024 * 1024
+        if image_file.size > max_size:
+            return error_response(
+                'File too large. Maximum size is 5MB.',
+                code='FILE_TOO_LARGE',
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        event.featured_image = image_file
+        event.save(update_fields=['featured_image', 'updated_at'])
+        
+        return Response(serializers.EventDetailSerializer(event, context={'request': request}).data)
+
+    @swagger_auto_schema(
         operation_summary="Event history",
         operation_description="Get the status change history for this event.",
         responses={200: serializers.EventStatusHistorySerializer(many=True)},
@@ -226,6 +285,7 @@ class EventViewSet(SoftDeleteModelViewSet):
 # =============================================================================
 
 
+@roles('public', route_name='public_events')
 class PublicEventListView(generics.ListAPIView):
     """
     GET /api/v1/public/events/
@@ -251,15 +311,37 @@ class PublicEventListView(generics.ListAPIView):
 
 class PublicEventDetailView(generics.RetrieveAPIView):
     """
-    GET /api/v1/public/events/{slug}/
+    GET /api/v1/public/events/{slug_or_uuid}/
 
-    Public event detail by slug.
+    Public event detail by slug or uuid.
     """
 
     serializer_class = serializers.PublicEventDetailSerializer
     permission_classes = [AllowAny]
-    lookup_field = 'slug'
-    lookup_url_kwarg = 'slug'
+
+    def get_object(self):
+        """Look up event by slug first, then by uuid if slug lookup fails."""
+        identifier = self.kwargs.get('identifier')
+        queryset = self.get_queryset()
+
+        # Try slug first
+        obj = queryset.filter(slug=identifier).first()
+        if obj:
+            return obj
+
+        # Try uuid
+        try:
+            import uuid
+            uuid_obj = uuid.UUID(identifier)
+            obj = queryset.filter(uuid=uuid_obj).first()
+            if obj:
+                return obj
+        except (ValueError, TypeError):
+            pass
+
+        # Not found
+        from django.http import Http404
+        raise Http404("Event not found")
 
     def get_queryset(self):
         return (

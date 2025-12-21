@@ -74,5 +74,23 @@ export const overrideAttendance = async (eventUuid: string, registrationUuid: st
     return response.data;
 };
 
+// Upload event featured image
+export const uploadEventImage = async (eventUuid: string, imageFile: File): Promise<Event> => {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+
+    const response = await client.post<Event>(`/events/${eventUuid}/upload-image/`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+    return response.data;
+};
+
+export const deleteEventImage = async (eventUuid: string): Promise<Event> => {
+    const response = await client.delete<Event>(`/events/${eventUuid}/upload-image/`);
+    return response.data;
+};
+
 // Event actions
 export { publishEvent, cancelEvent, duplicateEvent } from './actions';

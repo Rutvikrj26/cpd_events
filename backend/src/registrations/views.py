@@ -13,6 +13,7 @@ from drf_yasg.utils import swagger_auto_schema
 
 from common.pagination import SmallPagination
 from common.permissions import IsOrganizer
+from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import ReadOnlyModelViewSet, SoftDeleteModelViewSet
 
@@ -402,6 +403,7 @@ class PublicRegistrationView(generics.CreateAPIView):
 # =============================================================================
 
 
+@roles('attendee', 'organizer', 'admin', route_name='registrations')
 class MyRegistrationViewSet(ReadOnlyModelViewSet):
     """
     Current user's registrations.

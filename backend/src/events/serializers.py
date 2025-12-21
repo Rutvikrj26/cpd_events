@@ -66,7 +66,9 @@ class EventListSerializer(SoftDeleteModelSerializer):
     owner_name = serializers.SerializerMethodField()
     registration_count = serializers.IntegerField(read_only=True)
     attendee_count = serializers.IntegerField(read_only=True)
+    attendee_count = serializers.IntegerField(read_only=True)
     waitlist_count = serializers.IntegerField(read_only=True)
+    featured_image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -84,12 +86,23 @@ class EventListSerializer(SoftDeleteModelSerializer):
             'waitlist_count',
             'owner_name',
             'is_public',
+            'is_public',
+            'featured_image_url',
             'created_at',
         ]
         read_only_fields = fields
 
     def get_owner_name(self, obj):
         return obj.owner.display_name
+
+    def get_featured_image_url(self, obj):
+        """Return featured image URL."""
+        if obj.featured_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.featured_image.url)
+            return obj.featured_image.url
+        return None
 
 
 class EventDetailSerializer(SoftDeleteModelSerializer):
@@ -103,7 +116,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
     zoom_passcode = serializers.CharField(source='zoom_password', read_only=True)
     cpd_credits = serializers.DecimalField(source='cpd_credit_value', max_digits=5, decimal_places=2, read_only=True)
     cpd_type = serializers.CharField(source='cpd_credit_type', read_only=True)
-    featured_image_url = serializers.URLField(source='cover_image_url', read_only=True)
+    featured_image_url = serializers.SerializerMethodField()
     attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
     certificate_template = serializers.SlugRelatedField(read_only=True, slug_field='uuid')
 
@@ -149,6 +162,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'auto_issue_certificates',
             # Branding
             'featured_image_url',
+            'location',
             'is_public',
             # Counts
             'registration_count',
@@ -195,6 +209,15 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
         }
         return transitions.get(obj.status, [])
 
+    def get_featured_image_url(self, obj):
+        """Return featured image URL, preferring uploaded image over URL."""
+        if obj.featured_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.featured_image.url)
+            return obj.featured_image.url
+        return None
+
 
 class EventCreateSerializer(serializers.ModelSerializer):
     """Create new event with slug uniqueness validation (M1)."""
@@ -203,6 +226,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
     certificate_template = serializers.SlugRelatedField(
         slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
+
 
     class Meta:
         model = Event
@@ -233,7 +257,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
             'certificate_template',
             'auto_issue_certificates',
             # Branding
-            'cover_image_url',
+            # Branding
             'is_public',
             # Attendance
             'minimum_attendance_percent',
@@ -243,6 +267,8 @@ class EventCreateSerializer(serializers.ModelSerializer):
             # Attendance
             'minimum_attendance_minutes',
             'minimum_attendance_percent',
+            # Location
+            'location',
         ]
 
 
@@ -268,6 +294,9 @@ class EventCreateSerializer(serializers.ModelSerializer):
 class EventUpdateSerializer(serializers.ModelSerializer):
     """Update existing event."""
 
+    certificate_template = serializers.SlugRelatedField(
+        slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
+    )
     certificate_template = serializers.SlugRelatedField(
         slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
@@ -299,13 +328,13 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             'certificate_template',
             'auto_issue_certificates',
             # Branding
-            'cover_image_url',
+            # Branding
             'is_public',
-            # Multi-session (H2)
-            'is_multi_session',
             'minimum_attendance_percent',
             'minimum_attendance_minutes',
             'zoom_settings',
+            # Location
+            'location',
         ]
 
 
@@ -328,7 +357,7 @@ class PublicEventListSerializer(serializers.ModelSerializer):
     is_registration_open = serializers.SerializerMethodField()
     # Field aliases to match API contract with model field names
     cpd_credits = serializers.DecimalField(source='cpd_credit_value', max_digits=5, decimal_places=2, read_only=True)
-    featured_image_url = serializers.URLField(source='cover_image_url', read_only=True)
+    featured_image_url = serializers.SerializerMethodField()
     capacity = serializers.IntegerField(source='max_attendees', read_only=True)
 
     class Meta:
@@ -361,6 +390,15 @@ class PublicEventListSerializer(serializers.ModelSerializer):
         if obj.registration_opens_at and now < obj.registration_opens_at:
             return False
         return not (obj.registration_closes_at and now > obj.registration_closes_at)
+
+    def get_featured_image_url(self, obj):
+        """Return featured image URL, preferring uploaded image over URL."""
+        if obj.featured_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.featured_image.url)
+            return obj.featured_image.url
+        return None
 
 
 class PublicEventDetailSerializer(PublicEventListSerializer):

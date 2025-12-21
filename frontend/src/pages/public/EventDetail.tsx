@@ -20,13 +20,22 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/custom/StatusBadge";
 import { getPublicEvent } from "@/api/events";
+import { getMyRegistrations } from "@/api/registrations";
 import { Event } from "@/api/events/types";
+import { Registration } from "@/api/registrations/types";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function EventDetail() {
   const { id } = useParams<{ id: string }>();
+  const { isAuthenticated } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userRegistration, setUserRegistration] = useState<Registration | null>(null);
+  const [checkingRegistration, setCheckingRegistration] = useState(false);
+
+  // Derived state
+  const isAlreadyRegistered = userRegistration !== null;
 
   useEffect(() => {
     async function fetchEvent() {
@@ -43,6 +52,27 @@ export function EventDetail() {
     }
     fetchEvent();
   }, [id]);
+
+  // Check if authenticated user is already registered
+  useEffect(() => {
+    async function checkRegistration() {
+      if (!isAuthenticated || !event) return;
+
+      setCheckingRegistration(true);
+      try {
+        const registrations = await getMyRegistrations();
+        const myReg = registrations.find(
+          reg => reg.event.uuid === event.uuid && reg.status !== 'cancelled'
+        );
+        setUserRegistration(myReg || null);
+      } catch (e) {
+        console.error("Failed to check registration status", e);
+      } finally {
+        setCheckingRegistration(false);
+      }
+    }
+    checkRegistration();
+  }, [isAuthenticated, event]);
 
   if (loading) {
     return (
@@ -91,6 +121,43 @@ export function EventDetail() {
     return "TBD";
   };
 
+  // Render the registration button based on state
+  const renderRegistrationButton = (isLarge = false) => {
+    if (isPast) {
+      return <Button disabled>Event Ended</Button>;
+    }
+
+    if (isAlreadyRegistered) {
+      return (
+        <Link to="/registrations">
+          <Button
+            size={isLarge ? "lg" : "default"}
+            variant="outline"
+            className={`${isLarge ? 'w-full py-6 text-lg' : ''} border-green-200 bg-green-50 text-green-700 hover:bg-green-100`}
+          >
+            <CheckCircle className="mr-2 h-4 w-4" />
+            Already Registered
+          </Button>
+        </Link>
+      );
+    }
+
+    if (isRegistrationOpen) {
+      return (
+        <Link to={`/events/${id}/register`}>
+          <Button
+            size={isLarge ? "lg" : "default"}
+            className={`${isLarge ? 'w-full py-6 text-lg' : ''} bg-blue-600 hover:bg-blue-700`}
+          >
+            Register Now
+          </Button>
+        </Link>
+      );
+    }
+
+    return <Button disabled>Registration Closed</Button>;
+  };
+
   return (
     <div className="bg-gray-50 min-h-screen pb-12">
       {/* Hero Header */}
@@ -105,6 +172,12 @@ export function EventDetail() {
                 {event.cpd_credits && Number(event.cpd_credits) > 0 && (
                   <Badge variant="outline" className="border-gray-300">
                     {event.cpd_type || 'CPD'} • {event.cpd_credits} Credits
+                  </Badge>
+                )}
+                {isAlreadyRegistered && (
+                  <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700">
+                    <CheckCircle className="mr-1 h-3 w-3" />
+                    Registered
                   </Badge>
                 )}
               </div>
@@ -144,20 +217,33 @@ export function EventDetail() {
             </div>
 
             <div className="flex gap-3">
-              <Button variant="outline" size="icon">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={async () => {
+                  const shareUrl = window.location.href;
+                  const shareData = {
+                    title: event.title,
+                    text: `Check out this event: ${event.title}`,
+                    url: shareUrl,
+                  };
+
+                  try {
+                    if (navigator.share) {
+                      await navigator.share(shareData);
+                    } else {
+                      await navigator.clipboard.writeText(shareUrl);
+                      alert('Link copied to clipboard!');
+                    }
+                  } catch (err) {
+                    // User cancelled or error
+                    console.log('Share cancelled or failed:', err);
+                  }
+                }}
+              >
                 <Share2 className="h-4 w-4" />
               </Button>
-              {isPast ? (
-                <Button disabled>Event Ended</Button>
-              ) : isRegistrationOpen ? (
-                <Link to={`/events/${id}/register`}>
-                  <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
-                    Register Now
-                  </Button>
-                </Link>
-              ) : (
-                <Button disabled>Registration Closed</Button>
-              )}
+              {renderRegistrationButton()}
             </div>
           </div>
         </div>
@@ -169,9 +255,9 @@ export function EventDetail() {
           <div className="lg:col-span-2 space-y-8">
             {/* Featured Image or Placeholder */}
             <div className="aspect-video w-full overflow-hidden rounded-xl border border-border shadow-sm bg-muted flex items-center justify-center">
-              {event.featured_image_url || event.cover_image_url ? (
+              {event.featured_image_url ? (
                 <img
-                  src={event.featured_image_url || event.cover_image_url}
+                  src={event.featured_image_url}
                   alt={event.title}
                   className="h-full w-full object-cover"
                 />
@@ -237,7 +323,9 @@ export function EventDetail() {
             <Card className="shadow-md border-border">
               <CardHeader>
                 <CardTitle>Registration</CardTitle>
-                <CardDescription>Secure your spot today.</CardDescription>
+                <CardDescription>
+                  {isAlreadyRegistered ? "You're registered for this event!" : "Secure your spot today."}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {(event.capacity || event.max_attendees) && (
@@ -258,23 +346,9 @@ export function EventDetail() {
                   </div>
                 )}
 
-                {isPast ? (
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-center">
-                    <p className="font-medium text-gray-600">This event has ended</p>
-                  </div>
-                ) : isRegistrationOpen ? (
-                  <Link to={`/events/${id}/register`}>
-                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-lg py-6">
-                      Register Now
-                    </Button>
-                  </Link>
-                ) : (
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-center">
-                    <p className="font-medium text-gray-600">Registration is closed</p>
-                  </div>
-                )}
+                {renderRegistrationButton(true)}
 
-                {event.registration_closes_at && !isPast && (
+                {event.registration_closes_at && !isPast && !isAlreadyRegistered && (
                   <p className="text-xs text-center text-muted-foreground">
                     Registration closes {new Date(event.registration_closes_at).toLocaleDateString()}
                   </p>
@@ -309,17 +383,45 @@ export function EventDetail() {
                   {event.format === 'online' ? (
                     <>
                       <Video className="h-4 w-4 shrink-0 mt-0.5" />
-                      <div>
+                      <div className="flex-1">
                         <p className="font-medium text-foreground">Online Event</p>
-                        <p className="mt-1">Link provided upon registration</p>
+                        {isAlreadyRegistered && userRegistration?.zoom_join_url ? (
+                          <a
+                            href={userRegistration.zoom_join_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                          >
+                            <Video className="h-4 w-4" />
+                            Join Meeting
+                          </a>
+                        ) : isAlreadyRegistered ? (
+                          <p className="mt-1 text-green-600">Meeting link will be available before the event</p>
+                        ) : (
+                          <p className="mt-1">Link provided upon registration</p>
+                        )}
                       </div>
                     </>
                   ) : event.format === 'hybrid' ? (
                     <>
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
-                      <div>
+                      <div className="flex-1">
                         <p className="font-medium text-foreground">Hybrid Event</p>
-                        <p className="mt-1">In-person + Online options available</p>
+                        {isAlreadyRegistered && userRegistration?.zoom_join_url ? (
+                          <a
+                            href={userRegistration.zoom_join_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                          >
+                            <Video className="h-4 w-4" />
+                            Join Online
+                          </a>
+                        ) : isAlreadyRegistered ? (
+                          <p className="mt-1 text-green-600">Details will be available before the event</p>
+                        ) : (
+                          <p className="mt-1">In-person + Online options available</p>
+                        )}
                       </div>
                     </>
                   ) : (
@@ -327,7 +429,11 @@ export function EventDetail() {
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
                       <div>
                         <p className="font-medium text-foreground">In-Person Event</p>
-                        <p className="mt-1">Location details upon registration</p>
+                        {isAlreadyRegistered ? (
+                          <p className="mt-1 text-green-600">Location details sent to your email</p>
+                        ) : (
+                          <p className="mt-1">Location details upon registration</p>
+                        )}
                       </div>
                     </>
                   )}
@@ -340,3 +446,4 @@ export function EventDetail() {
     </div>
   );
 }
+

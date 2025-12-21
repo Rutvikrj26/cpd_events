@@ -38,7 +38,4 @@ export interface RegistrationCreateRequest {
     allow_public_verification?: boolean;
 }
 
-export interface LinkRegistrationRequest {
-    email: string;
-    token?: string; // If used
-}
+// LinkRegistrationRequest removed - backend uses authenticated user's email

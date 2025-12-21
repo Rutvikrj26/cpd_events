@@ -185,21 +185,33 @@ export const StepSettings = () => {
                 )}
             </div>
 
-            <Separator />
+            {/* Zoom Settings - Only shown for online/hybrid events */}
+            {(formData.format === 'online' || formData.format === 'hybrid') && (
+                <>
+                    <Separator />
 
-            {/* Zoom Settings - Placeholder for now as integration is backend-heavy */}
-            <div className="space-y-4 opacity-75">
-                <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                        <Label className="text-base">Zoom Integration</Label>
-                        <p className="text-sm text-muted-foreground">Automatically create a Zoom meeting.</p>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                                <Label className="text-base">Zoom Integration</Label>
+                                <p className="text-sm text-muted-foreground">Automatically create a Zoom meeting for this event.</p>
+                            </div>
+                            <Switch
+                                checked={!!formData.zoom_settings?.enabled}
+                                onCheckedChange={(checked) => updateFormData({ zoom_settings: { ...formData.zoom_settings, enabled: checked } })}
+                            />
+                        </div>
+
+                        {formData.zoom_settings?.enabled && (
+                            <div className="pl-6 border-l-2 border-slate-100 ml-2">
+                                <p className="text-sm text-muted-foreground">
+                                    A Zoom meeting will be created when you publish this event. Make sure you have connected your Zoom account in Settings → Integrations.
+                                </p>
+                            </div>
+                        )}
                     </div>
-                    <Switch
-                        checked={!!formData.zoom_settings?.enabled}
-                        onCheckedChange={(checked) => updateFormData({ zoom_settings: { ...formData.zoom_settings, enabled: checked } })}
-                    />
-                </div>
-            </div>
+                </>
+            )}
         </div>
     );
 };

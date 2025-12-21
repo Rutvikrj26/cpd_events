@@ -1,5 +1,5 @@
 import client from '../client';
-import { Registration, RegistrationCreateRequest, LinkRegistrationRequest } from './types';
+import { Registration, RegistrationCreateRequest } from './types';
 
 // My Registrations (Attendee)
 export const getMyRegistrations = async (): Promise<Registration[]> => {
@@ -13,9 +13,10 @@ export const getMyRegistration = async (uuid: string): Promise<Registration> => 
     return response.data;
 };
 
-// Link Registrations
-export const linkRegistrations = async (data: LinkRegistrationRequest): Promise<void> => {
-    await client.post('/users/me/link-registrations/', data);
+// Link Registrations - Links guest registrations to the current user's account
+export const linkRegistrations = async (): Promise<{ linked_count: number; message: string }> => {
+    const response = await client.post<{ linked_count: number; message: string }>('/registrations/users/me/link-registrations/');
+    return response.data;
 };
 
 // Public Registration

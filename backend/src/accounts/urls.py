@@ -22,6 +22,7 @@ urlpatterns = [
     path('auth/password-reset/', views.PasswordResetRequestView.as_view(), name='password_reset'),
     path('auth/password-reset/confirm/', views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('auth/password-change/', views.PasswordChangeView.as_view(), name='password_change'),
+    path('auth/manifest/', views.ManifestView.as_view(), name='manifest'),
     # Current user
     path('users/me/', views.CurrentUserView.as_view(), name='current_user'),
     path('users/me/organizer-profile/', views.OrganizerProfileView.as_view(), name='organizer_profile'),

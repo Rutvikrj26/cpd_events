@@ -152,7 +152,7 @@ export function AttendeeDashboard() {
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="text-lg font-bold text-foreground group-hover:text-blue-700 transition-colors line-clamp-1">
-                            <Link to={`/events/${reg.event.uuid}`}>
+                            <Link to={`/events/${reg.event.slug || reg.event.uuid}`}>
                               <span className="absolute inset-0" aria-hidden="true" />
                               {reg.event.title}
                             </Link>
@@ -179,7 +179,7 @@ export function AttendeeDashboard() {
                           Join Session
                         </Button>
                         <Button variant="outline" size="sm" className="h-8" asChild>
-                          <Link to={`/events/${reg.event.uuid}`}>View Details</Link>
+                          <Link to={`/events/${reg.event.slug || reg.event.uuid}`}>View Details</Link>
                         </Button>
                       </div>
                     </div>

@@ -184,9 +184,24 @@ class Event(SoftDeleteModel):
     auto_issue_certificates = models.BooleanField(default=False, help_text="Auto-issue when event completes")
 
     # =========================================
-    # Media
+    # Media & Location
     # =========================================
     cover_image_url = models.URLField(blank=True, help_text="Cover image URL")
+    featured_image = models.ImageField(
+        upload_to='events/featured_images/',
+        blank=True,
+        null=True,
+        help_text="Featured image upload"
+    )
+    
+    # =========================================
+    # Location (for in-person/hybrid events)
+    # =========================================
+    location = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Venue address or location description"
+    )
 
     # =========================================
     # Recording Settings
@@ -393,7 +408,6 @@ class Event(SoftDeleteModel):
             certificates_enabled=self.certificates_enabled,
             certificate_template=self.certificate_template,
             auto_issue_certificates=self.auto_issue_certificates,
-            cover_image_url=self.cover_image_url,
             recording_enabled=self.recording_enabled,
             is_public=self.is_public,
         )

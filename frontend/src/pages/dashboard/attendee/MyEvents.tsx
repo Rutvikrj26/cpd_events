@@ -1,33 +1,56 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Calendar, Search, Loader2, Award, ExternalLink } from "lucide-react";
+import { Calendar, Search, Loader2, Award, ExternalLink, Link2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/custom/PageHeader";
-import { getMyRegistrations } from "@/api/registrations";
+import { Separator } from "@/components/ui/separator";
+import { getMyRegistrations, linkRegistrations } from "@/api/registrations";
 import { Registration } from "@/api/registrations/types";
+import { toast } from "sonner";
 
 export function MyEvents() {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
+  const [linking, setLinking] = useState(false);
   const [searchTerm, setSearchTerm] = React.useState("");
 
-  useEffect(() => {
-    async function fetchRegistrations() {
-      try {
-        const data = await getMyRegistrations();
-        setRegistrations(data);
-      } catch (error) {
-        console.error("Failed to load registrations", error);
-      } finally {
-        setLoading(false);
-      }
+  const fetchRegistrations = async () => {
+    try {
+      const data = await getMyRegistrations();
+      setRegistrations(data);
+    } catch (error) {
+      console.error("Failed to load registrations", error);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
     fetchRegistrations();
   }, []);
+
+  const handleLinkRegistrations = async () => {
+    setLinking(true);
+    try {
+      const result = await linkRegistrations();
+      if (result.linked_count > 0) {
+        toast.success(`Found and linked ${result.linked_count} event${result.linked_count > 1 ? 's' : ''} to your account!`);
+        // Refresh the list
+        await fetchRegistrations();
+      } else {
+        toast.info("No additional events found to link to your account.");
+      }
+    } catch (error) {
+      console.error("Failed to link registrations", error);
+      toast.error("Failed to link events. Please try again.");
+    } finally {
+      setLinking(false);
+    }
+  };
 
   // Filter by upcoming vs past based on event start date
   const now = new Date();
@@ -106,6 +129,41 @@ export function MyEvents() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Link Events Section */}
+      <Separator className="my-8" />
+
+      <Card className="border-dashed">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Link2 className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-base">Missing Events?</CardTitle>
+          </div>
+          <CardDescription>
+            If you registered for events before creating your account, or used the same email on a different device,
+            we can find and link those registrations to your account.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            onClick={handleLinkRegistrations}
+            disabled={linking}
+          >
+            {linking ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Searching...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Find & Link My Events
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

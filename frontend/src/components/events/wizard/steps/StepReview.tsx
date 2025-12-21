@@ -15,6 +15,20 @@ export const StepReview = () => {
 
             <div className="grid gap-6">
                 <Card className="bg-muted/30/50 border-border shadow-sm">
+                    {/* Image Preview */}
+                    {(formData._imageFile || formData.featured_image_url) && (
+                        <div className="relative w-full h-48 sm:h-64 overflow-hidden rounded-t-lg bg-slate-100">
+                            <img
+                                src={
+                                    formData._imageFile
+                                        ? URL.createObjectURL(formData._imageFile)
+                                        : formData.featured_image_url
+                                }
+                                alt="Event Cover"
+                                className="w-full h-full object-cover"
+                            />
+                        </div>
+                    )}
                     <CardContent className="p-6 space-y-6">
                         <div>
                             <h3 className="text-2xl font-bold text-foreground mb-2">{formData.title || 'Untitled Event'}</h3>

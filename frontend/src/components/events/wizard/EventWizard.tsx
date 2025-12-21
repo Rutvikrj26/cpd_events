@@ -9,7 +9,8 @@ import { StepSchedule } from './steps/StepSchedule';
 import { StepDetails } from './steps/StepDetails';
 import { StepSettings } from './steps/StepSettings';
 import { StepReview } from './steps/StepReview';
-import { createEvent, updateEvent } from '@/api/events';
+import { createEvent, updateEvent, uploadEventImage, deleteEventImage } from '@/api/events';
+import { EventCreateRequest } from '@/api/events/types';
 import { toast } from 'sonner';
 
 // The inner content that consumes the context
@@ -29,13 +30,42 @@ const WizardContent = () => {
     const handleFinish = async () => {
         setIsSubmitting(true);
         try {
+            // Extract image file from form data (if any)
+            const { _imageFile, ...eventData } = formData;
+
+            let savedEvent;
             if (isEditMode && formData.uuid) {
-                await updateEvent(formData.uuid as string, formData as any);
+                // For update, we use the UUID and Partial data
+                savedEvent = await updateEvent(formData.uuid, eventData as any);
                 toast.success('Event updated successfully!');
             } else {
-                await createEvent(formData as any);
+                // For create, we assert that the form data is complete enough (validated by steps)
+                savedEvent = await createEvent(eventData as EventCreateRequest);
                 toast.success('Event created successfully!');
             }
+
+            // Robustly get UUID - fallback to formData.uuid for updates if response is partial
+            const targetUuid = savedEvent?.uuid || (isEditMode ? formData.uuid : undefined);
+
+            // Upload image if a file was selected
+            if (_imageFile && targetUuid) {
+                try {
+                    await uploadEventImage(targetUuid, _imageFile);
+                    toast.success('Image uploaded successfully!');
+                } catch (imgError) {
+                    console.error('Image upload failed:', imgError);
+                    toast.warning('Event saved but image upload failed. You can try again later.');
+                }
+            } else if ((formData as any)._isImageRemoved && targetUuid) {
+                // If explicit removal was requested and no new file replaced it
+                try {
+                    await deleteEventImage(targetUuid);
+                    toast.info('Cover image removed.');
+                } catch (delError) {
+                    console.error('Image deletion failed:', delError);
+                }
+            }
+
             navigate('/events');
         } catch (error) {
             console.error(error);

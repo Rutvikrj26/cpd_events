@@ -72,13 +72,28 @@ export const EventsPage = () => {
                 {events.map((event) => (
                     <Link
                         key={event.uuid}
-                        to={isOrganizer ? `/organizer/events/${event.uuid}/manage` : `/events/${event.uuid}`}
+                        to={isOrganizer ? `/organizer/events/${event.uuid}/manage` : `/events/${event.slug || event.uuid}`}
                         className="group block"
                     >
                         <div className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-md transition-shadow">
                             <div className="h-48 bg-muted relative">
-                                {/* Placeholder for event image if we had one */}
-                                <div className="absolute inset-0 flex items-center justify-center text-slate-300">
+                                {event.featured_image_url ? (
+                                    <img
+                                        src={event.featured_image_url}
+                                        alt={event.title}
+                                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                        onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                        }}
+                                    />
+                                ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center text-slate-300">
+                                        <Calendar size={48} />
+                                    </div>
+                                )}
+                                {/* Fallback placeholder if image fails to load */}
+                                <div className="absolute inset-0 flex items-center justify-center text-slate-300 hidden bg-muted">
                                     <Calendar size={48} />
                                 </div>
                                 <div className="absolute top-4 right-4 bg-card/90 px-2 py-1 rounded text-xs font-semibold uppercase">

@@ -409,3 +409,36 @@ class CPDRequirementViewSet(viewsets.ModelViewSet):
             'requirements': cpd_serializers.CPDRequirementSerializer(requirements, many=True).data,
         }
         return Response(data)
+
+
+# =============================================================================
+# RBAC Manifest Views
+# =============================================================================
+
+
+class ManifestView(generics.GenericAPIView):
+    """
+    GET /api/v1/auth/manifest/
+
+    Returns the allowed routes and features for the current user.
+    Used by frontend to determine which UI elements to show.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="Get user manifest",
+        operation_description="Returns allowed routes and features for the authenticated user.",
+    )
+    def get(self, request):
+        from common.rbac import get_allowed_routes_for_user, get_features_for_user
+
+        user = request.user
+
+        return Response({
+            'role': user.account_type,
+            'is_admin': user.is_staff,
+            'routes': get_allowed_routes_for_user(user),
+            'features': get_features_for_user(user),
+        })
+

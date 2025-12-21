@@ -1,26 +1,50 @@
 import React, { useEffect, useState } from 'react';
-import { getMyRegistrations } from '@/api/registrations';
+import { getMyRegistrations, linkRegistrations } from '@/api/registrations';
 import { Registration } from '@/api/registrations/types';
-import { Calendar, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Calendar, CheckCircle, XCircle, Clock, Link2, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
 
 export const MyRegistrationsPage = () => {
     const [registrations, setRegistrations] = useState<Registration[]>([]);
     const [loading, setLoading] = useState(true);
+    const [linking, setLinking] = useState(false);
+
+    const fetchRegistrations = async () => {
+        try {
+            const data = await getMyRegistrations();
+            setRegistrations(data);
+        } catch (error) {
+            console.error("Failed to load registrations", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchRegistrations = async () => {
-            try {
-                const data = await getMyRegistrations();
-                setRegistrations(data);
-            } catch (error) {
-                console.error("Failed to load registrations", error);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchRegistrations();
     }, []);
+
+    const handleLinkRegistrations = async () => {
+        setLinking(true);
+        try {
+            const result = await linkRegistrations();
+            if (result.linked_count > 0) {
+                toast.success(`Found and linked ${result.linked_count} event${result.linked_count > 1 ? 's' : ''} to your account!`);
+                await fetchRegistrations();
+            } else {
+                toast.info("No additional events found to link to your account.");
+            }
+        } catch (error) {
+            console.error("Failed to link registrations", error);
+            toast.error("Failed to link events. Please try again.");
+        } finally {
+            setLinking(false);
+        }
+    };
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -67,7 +91,7 @@ export const MyRegistrationsPage = () => {
                                         {getStatusBadge(reg.status)}
                                     </td>
                                     <td className="px-6 py-4">
-                                        <Link to={`/events/${reg.event.uuid}`} className="text-blue-600 hover:text-blue-800 font-medium text-xs">
+                                        <Link to={`/events/${reg.event.slug || reg.event.uuid}`} className="text-blue-600 hover:text-blue-800 font-medium text-xs">
                                             View Event
                                         </Link>
                                     </td>
@@ -77,6 +101,41 @@ export const MyRegistrationsPage = () => {
                     </table>
                 )}
             </div>
+
+            {/* Link Events Section */}
+            <Separator className="my-6" />
+
+            <Card className="border-dashed">
+                <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                        <Link2 className="h-5 w-5 text-muted-foreground" />
+                        <CardTitle className="text-base">Missing Events?</CardTitle>
+                    </div>
+                    <CardDescription>
+                        If you registered for events before creating your account, or used the same email on a different device,
+                        we can find and link those registrations to your account.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button
+                        variant="outline"
+                        onClick={handleLinkRegistrations}
+                        disabled={linking}
+                    >
+                        {linking ? (
+                            <>
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                Searching...
+                            </>
+                        ) : (
+                            <>
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Find & Link My Events
+                            </>
+                        )}
+                    </Button>
+                </CardContent>
+            </Card>
         </div>
     );
 };

@@ -40,7 +40,6 @@ export interface Event {
 
     // Branding
     featured_image_url?: string;
-    cover_image_url?: string;
 
     // Misc
     is_public: boolean;
@@ -97,8 +96,19 @@ export interface EventCreateRequest {
     // Zoom
     zoom_settings?: any;
 
+    // Location (for in-person/hybrid events)
+    location?: string;
+
+    // Branding
+
     is_public?: boolean;
     custom_fields?: any[];
+
+    // Frontend-only fields for Wizard state
+    featured_image_url?: string;
+    _imageFile?: File;
+    _isImageRemoved?: boolean;
+    uuid?: string;
 }
 
 export interface EventUpdateRequest extends Partial<EventCreateRequest> {

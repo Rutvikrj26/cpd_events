@@ -2,14 +2,19 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { setToken, getToken, removeToken, isTokenValid, getUserFromToken } from '@/lib/auth';
 import { login as apiLogin, signup as apiSignup, getCurrentUser } from '@/api/accounts';
 import { User, LoginRequest, SignupRequest } from '@/api/accounts/types';
+import { getManifest, Manifest } from '@/api/auth/manifest';
 
 interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     isLoading: boolean;
+    manifest: Manifest | null;
     login: (data: LoginRequest) => Promise<void>;
     register: (data: SignupRequest) => Promise<void>;
     logout: () => void;
+    hasRoute: (routeKey: string) => boolean;
+    hasFeature: (feature: keyof Manifest['features']) => boolean;
+    refreshManifest: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,34 +23,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [manifest, setManifest] = useState<Manifest | null>(null);
+
+    // Fetch manifest from backend
+    const fetchManifest = async () => {
+        try {
+            const data = await getManifest();
+            setManifest(data);
+        } catch (error) {
+            console.error('Failed to fetch manifest', error);
+        }
+    };
+
+    // Helper: Check if user has access to a route
+    const hasRoute = (routeKey: string): boolean => {
+        if (!manifest) return false;
+        return manifest.routes.includes(routeKey);
+    };
+
+    // Helper: Check if user has a feature enabled
+    const hasFeature = (feature: keyof Manifest['features']): boolean => {
+        if (!manifest) return false;
+        return manifest.features[feature] ?? false;
+    };
 
     // Initialize auth state
     useEffect(() => {
         const initializeAuth = async () => {
             const token = getToken();
             if (token && isTokenValid(token)) {
-                // We have a token, try to fetch user details
                 try {
-                    // You might want to create a dedicated 'me' endpoint in backend
-                    // For now, we'll decode the token to get UUID and maybe fetch profile
-                    // But looking at backend, we don't have a direct /users/me endpoint standard yet
-                    // except implicitly via /accounts/profile/ or similar.
-                    // Let's assume we can rely on token for minimal auth state
-                    // and fetch full profile later if needed.
-
                     const decodedUser = getUserFromToken();
-                    // Ideally fetch full user profile here:
-                    // const response = await api.get('/accounts/profile/');
-                    // setUser(response.data);
-
-                    // Temporary: just set basic user from token
                     if (decodedUser) {
-                        setUser({ uuid: decodedUser.uuid } as User); // We initially only have UUID
+                        setUser({ uuid: decodedUser.uuid } as User);
                         setIsAuthenticated(true);
 
-                        // Try to fetch full profile to get name and role
+                        // Fetch full profile and manifest
                         try {
-                            const userProfile = await getCurrentUser();
+                            const [userProfile] = await Promise.all([
+                                getCurrentUser(),
+                                fetchManifest(),
+                            ]);
                             setUser(userProfile);
                         } catch (e) {
                             console.error("Failed to fetch profile", e);
@@ -68,8 +86,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setToken(access, refresh);
             setIsAuthenticated(true);
 
-            // Fetch profile immediately after login
-            const userProfile = await getCurrentUser();
+            // Fetch profile and manifest after login
+            const [userProfile] = await Promise.all([
+                getCurrentUser(),
+                fetchManifest(),
+            ]);
             setUser(userProfile);
 
         } catch (error) {
@@ -81,9 +102,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const register = async (data: SignupRequest) => {
         try {
             await apiSignup(data);
-            // Automatically login after register? Or redirect to login? 
-            // Spec says redirect to verify email mostly. 
-            // We will let the calling component handle the next steps.
         } catch (error) {
             console.error("Registration failed", error);
             throw error;
@@ -93,12 +111,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const logout = () => {
         removeToken();
         setUser(null);
+        setManifest(null);
         setIsAuthenticated(false);
         window.location.href = '/login';
     };
 
     return (
-        <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, register, logout }}>
+        <AuthContext.Provider value={{
+            user,
+            isAuthenticated,
+            isLoading,
+            manifest,
+            login,
+            register,
+            logout,
+            hasRoute,
+            hasFeature,
+            refreshManifest: fetchManifest,
+        }}>
             {children}
         </AuthContext.Provider>
     );
@@ -111,3 +141,4 @@ export const useAuth = () => {
     }
     return context;
 };
+
