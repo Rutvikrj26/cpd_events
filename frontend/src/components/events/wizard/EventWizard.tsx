@@ -36,7 +36,7 @@ const WizardContent = () => {
             let savedEvent;
             if (isEditMode && formData.uuid) {
                 // For update, we use the UUID and Partial data
-                savedEvent = await updateEvent(formData.uuid, eventData as any);
+                savedEvent = await updateEvent(formData.uuid, eventData);
                 toast.success('Event updated successfully!');
             } else {
                 // For create, we assert that the form data is complete enough (validated by steps)
@@ -56,7 +56,7 @@ const WizardContent = () => {
                     console.error('Image upload failed:', imgError);
                     toast.warning('Event saved but image upload failed. You can try again later.');
                 }
-            } else if ((formData as any)._isImageRemoved && targetUuid) {
+            } else if (formData._isImageRemoved && targetUuid) {
                 // If explicit removal was requested and no new file replaced it
                 try {
                     await deleteEventImage(targetUuid);
