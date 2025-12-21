@@ -3,6 +3,7 @@ Registrations app views and viewsets.
 """
 
 from django.db.models import Max
+from django.utils import timezone
 from django_filters import rest_framework as filters
 from rest_framework import generics, status
 from rest_framework.decorators import action

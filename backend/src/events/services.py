@@ -80,9 +80,9 @@ class ZoomMeetingService:
             # Update event with Zoom details
             event.zoom_meeting_id = str(zoom_data.get('id', ''))
             event.zoom_join_url = zoom_data.get('join_url', '')
-            event.zoom_host_url = zoom_data.get('start_url', '')
+            event.zoom_start_url = zoom_data.get('start_url', '')
             event.zoom_password = zoom_data.get('password', '')
-            event.save(update_fields=['zoom_meeting_id', 'zoom_join_url', 'zoom_host_url', 'zoom_password', 'updated_at'])
+            event.save(update_fields=['zoom_meeting_id', 'zoom_join_url', 'zoom_start_url', 'zoom_password', 'updated_at'])
 
             return {'success': True, 'meeting_id': event.zoom_meeting_id, 'join_url': event.zoom_join_url}
 
@@ -167,9 +167,9 @@ class ZoomMeetingService:
             if response.status_code in [200, 204, 404]:  # 404 = already deleted
                 event.zoom_meeting_id = ''
                 event.zoom_join_url = ''
-                event.zoom_host_url = ''
+                event.zoom_start_url = ''
                 event.zoom_password = ''
-                event.save(update_fields=['zoom_meeting_id', 'zoom_join_url', 'zoom_host_url', 'zoom_password', 'updated_at'])
+                event.save(update_fields=['zoom_meeting_id', 'zoom_join_url', 'zoom_start_url', 'zoom_password', 'updated_at'])
                 return True
 
             return False

@@ -105,6 +105,7 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
             'status',
             'attended',
             'check_in_time',
+            'total_attendance_minutes',
             'attendance_eligible',
             'attendance_percent',
             'attendance_override',

@@ -125,7 +125,6 @@ export function OrganizerDashboard() {
           value={stats.activeEvents}
           icon={Activity}
           description="Currently live or published"
-          className="border-blue-100 bg-blue-50/50"
         />
         <DashboardStat
           title="Total Registrations"

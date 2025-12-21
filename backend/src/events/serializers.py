@@ -139,6 +139,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'zoom_meeting_id',
             'zoom_join_url',
             'zoom_passcode',
+            'zoom_settings',
             # CPD
             'cpd_credits',
             'cpd_type',

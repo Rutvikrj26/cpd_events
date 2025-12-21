@@ -266,11 +266,9 @@ export function EventManagement() {
                <TabsTrigger value="registrations" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
                   Registrations
                </TabsTrigger>
-               {event.format !== 'online' && (
-                  <TabsTrigger value="attendance" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
-                     Attendance
-                  </TabsTrigger>
-               )}
+               <TabsTrigger value="attendance" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
+                  Attendance
+               </TabsTrigger>
                <TabsTrigger value="certificates" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
                   Certificates
                </TabsTrigger>
@@ -382,43 +380,71 @@ export function EventManagement() {
                <Card>
                   <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
                      <div className="text-sm text-muted-foreground">
-                        Mark attendance manually or use the QR scanner app.
+                        {event.format === 'online'
+                           ? 'Attendance is tracked automatically via Zoom participation.'
+                           : event.format === 'hybrid'
+                              ? 'Track in-person check-ins and online participation.'
+                              : 'Mark attendance manually or use the QR scanner app.'}
                      </div>
-                     <Button size="sm" variant="outline" className="gap-2">
-                        <QrCode className="h-4 w-4" /> Launch Scanner
-                     </Button>
+                     {event.format !== 'online' && (
+                        <Button size="sm" variant="outline" className="gap-2">
+                           <QrCode className="h-4 w-4" /> Launch Scanner
+                        </Button>
+                     )}
                   </div>
                   <div className="overflow-x-auto">
                      <table className="min-w-full divide-y divide-border">
                         <thead className="bg-muted/50">
                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-10">
-                                 Present
-                              </th>
+                              {/* Present checkbox - show for in-person and hybrid */}
+                              {event.format !== 'online' && (
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-10">
+                                    Present
+                                 </th>
+                              )}
                               <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Attendee</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Check-in Time</th>
+                              {/* Check-in Time - show for in-person and hybrid */}
+                              {event.format !== 'online' && (
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Check-in Time</th>
+                              )}
+                              {/* Attendance Minutes - show for online and hybrid */}
+                              {event.format !== 'in-person' && (
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Attendance Minutes</th>
+                              )}
                            </tr>
                         </thead>
                         <tbody className="bg-card divide-y divide-border">
                            {filteredAttendees.filter(a => a.status !== "Cancelled").map((attendee) => (
                               <tr key={attendee.uuid} className="hover:bg-muted/50">
-                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <Checkbox
-                                       checked={attendee.attended}
-                                       onCheckedChange={() => handleCheckIn(attendee.uuid)}
-                                    />
-                                 </td>
+                                 {/* Present checkbox - show for in-person and hybrid */}
+                                 {event.format !== 'online' && (
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                       <Checkbox
+                                          checked={attendee.attended}
+                                          onCheckedChange={() => handleCheckIn(attendee.uuid)}
+                                       />
+                                    </td>
+                                 )}
                                  <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center">
                                        <div>
-                                          <div className="text-sm font-medium text-foreground">{attendee.name}</div>
+                                          <div className="text-sm font-medium text-foreground">{attendee.full_name}</div>
                                           <div className="text-xs text-muted-foreground">{attendee.email}</div>
                                        </div>
                                     </div>
                                  </td>
-                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                                    {attendee.check_in_time ? new Date(attendee.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-"}
-                                 </td>
+                                 {/* Check-in Time - show for in-person and hybrid */}
+                                 {event.format !== 'online' && (
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                                       {attendee.check_in_time ? new Date(attendee.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-"}
+                                    </td>
+                                 )}
+                                 {/* Attendance Minutes - show for online and hybrid */}
+                                 {event.format !== 'in-person' && (
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                                       {attendee.total_attendance_minutes != null ? `${attendee.total_attendance_minutes} min` : "-"}
+                                    </td>
+                                 )}
                               </tr>
                            ))}
                         </tbody>

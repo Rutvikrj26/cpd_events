@@ -43,7 +43,7 @@ export const Sidebar = () => {
                 cn(
                     "flex items-center space-x-3 px-3 py-3 rounded-lg transition-all duration-200 group relative",
                     isActive
-                        ? 'bg-primary text-primary-foreground'
+                        ? 'bg-accent text-foreground font-medium'
                         : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                     isCollapsed ? "justify-center" : ""
                 )
