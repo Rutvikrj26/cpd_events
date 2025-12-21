@@ -54,7 +54,7 @@ class CertificateTemplate(SoftDeleteModel):
     # =========================================
     # Template File
     # =========================================
-    file_url = models.URLField(help_text="URL to template file in cloud storage")
+    file_url = models.URLField(blank=True, help_text="URL to template file in cloud storage")
     file_type = models.CharField(max_length=10, default='pdf', help_text="File type (pdf, png, jpg)")
     file_size_bytes = models.PositiveIntegerField(default=0, help_text="File size in bytes")
 

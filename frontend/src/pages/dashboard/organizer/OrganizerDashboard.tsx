@@ -7,7 +7,9 @@ import {
   Award,
   ArrowRight,
   MoreHorizontal,
-  Activity
+  Activity,
+  Video,
+  Settings
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -21,11 +23,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { DashboardStat } from "@/components/dashboard/DashboardStats";
+import { PageHeader } from "@/components/ui/page-header";
 import { getEvents } from "@/api/events";
 import { Event } from "@/api/events/types";
 import { getZoomStatus, initiateZoomOAuth, disconnectZoom } from "@/api/integrations";
 import { ZoomStatus } from "@/api/integrations/types";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 export function OrganizerDashboard() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -55,11 +58,7 @@ export function OrganizerDashboard() {
       const url = await initiateZoomOAuth();
       window.location.href = url;
     } catch (error) {
-      toast({
-        title: "Connection Failed",
-        description: "Could not initiate Zoom connection.",
-        variant: "destructive",
-      });
+      toast.error("Connection Failed: Could not initiate Zoom connection.");
     }
   };
 
@@ -67,16 +66,9 @@ export function OrganizerDashboard() {
     try {
       await disconnectZoom();
       setZoomStatus({ is_connected: false });
-      toast({
-        title: "Disconnected",
-        description: "Zoom account has been disconnected.",
-      });
+      toast.success("Zoom account has been disconnected.");
     } catch (error) {
-      toast({
-        title: "Disconnect Failed",
-        description: "Could not disconnect Zoom account.",
-        variant: "destructive",
-      });
+      toast.error("Disconnect Failed: Could not disconnect Zoom account.");
     }
   };
 
@@ -93,39 +85,32 @@ export function OrganizerDashboard() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'published': return 'bg-blue-100 text-blue-800 hover:bg-blue-100/80';
-      case 'live': return 'bg-green-100 text-green-800 hover:bg-green-100/80';
-      case 'draft': return 'bg-slate-100 text-slate-800 hover:bg-slate-100/80';
-      case 'completed': return 'bg-purple-100 text-purple-800 hover:bg-purple-100/80';
-      default: return 'bg-gray-100 text-gray-800 hover:bg-gray-100/80';
+      case 'published': return 'bg-blue-100 text-blue-700 hover:bg-blue-100/80 border-blue-200';
+      case 'live': return 'bg-green-100 text-green-700 hover:bg-green-100/80 border-green-200';
+      case 'draft': return 'bg-slate-100 text-slate-700 hover:bg-slate-100/80 border-slate-200';
+      case 'completed': return 'bg-purple-100 text-purple-700 hover:bg-purple-100/80 border-purple-200';
+      default: return 'bg-gray-100 text-gray-700 hover:bg-gray-100/80 border-gray-200';
     }
   };
 
   if (loading) {
-    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-slate-500">Loading dashboard...</div>;
+    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-slate-500 animate-pulse">Loading dashboard...</div>;
   }
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Organizer Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Manage your events and track performance.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <Calendar className="mr-2 h-4 w-4" />
-            Calendar
-          </Button>
-          <Button asChild size="sm" className="bg-primary hover:bg-primary/90">
+      <PageHeader
+        title="Organizer Dashboard"
+        description="Manage your professional events, track attendance, and issue certificates."
+        actions={
+          <Button asChild size="lg" className="shadow-sm">
             <Link to="/events/create">
               <Plus className="mr-2 h-4 w-4" />
-              Create Event
+              Create New Event
             </Link>
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -140,7 +125,7 @@ export function OrganizerDashboard() {
           value={stats.activeEvents}
           icon={Activity}
           description="Currently live or published"
-          className="border-blue-100 bg-blue-50/30"
+          className="border-blue-100 bg-blue-50/50"
         />
         <DashboardStat
           title="Total Registrations"
@@ -160,33 +145,33 @@ export function OrganizerDashboard() {
         {/* Recent Events Table - Takes up 2/3 width */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold tracking-tight">Recent Events</h2>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/events" className="text-primary hover:text-primary/80">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">Recent Activity</h2>
+            <Button variant="ghost" size="sm" asChild className="text-primary">
+              <Link to="/events">
                 View All <ArrowRight className="ml-1 h-4 w-4" />
               </Link>
             </Button>
           </div>
 
-          <Card className="border-slate-200 shadow-sm">
+          <Card className="border-border/60 shadow-sm overflow-hidden">
             <CardContent className="p-0">
               {recentEvents.length === 0 ? (
-                <div className="p-12 text-center">
-                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="p-12 text-center bg-slate-50/50">
+                  <div className="w-12 h-12 bg-white border border-slate-200 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
                     <Calendar className="h-6 w-6 text-slate-400" />
                   </div>
                   <h3 className="text-lg font-medium text-slate-900">No events found</h3>
-                  <p className="text-slate-500 mt-1 max-w-sm mx-auto">
+                  <p className="text-slate-500 mt-1 max-w-sm mx-auto mb-6">
                     Get started by creating your first event to engage with your audience.
                   </p>
-                  <Button asChild className="mt-6" variant="outline">
+                  <Button asChild variant="outline">
                     <Link to="/events/create">Create Event</Link>
                   </Button>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-medium">
+                    <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-medium">
                       <tr>
                         <th className="px-6 py-4">Event Name</th>
                         <th className="px-6 py-4">Date</th>
@@ -197,9 +182,9 @@ export function OrganizerDashboard() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {recentEvents.map((event) => (
-                        <tr key={event.uuid} className="group hover:bg-slate-50 transition-colors">
+                        <tr key={event.uuid} className="group hover:bg-slate-50/50 transition-colors">
                           <td className="px-6 py-4 font-medium text-slate-900">
-                            <Link to={`/events/${event.uuid}`} className="hover:text-primary hover:underline block truncate max-w-[200px] sm:max-w-xs">
+                            <Link to={`/events/${event.uuid}`} className="hover:text-primary transition-colors block truncate max-w-[200px] sm:max-w-xs">
                               {event.title}
                             </Link>
                           </td>
@@ -207,7 +192,7 @@ export function OrganizerDashboard() {
                             {new Date(event.starts_at).toLocaleDateString()}
                           </td>
                           <td className="px-6 py-4">
-                            <Badge variant="secondary" className={getStatusColor(event.status)}>
+                            <Badge variant="outline" className={getStatusColor(event.status)}>
                               {event.status}
                             </Badge>
                           </td>
@@ -217,7 +202,7 @@ export function OrganizerDashboard() {
                           <td className="px-6 py-4 text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
@@ -247,69 +232,83 @@ export function OrganizerDashboard() {
         {/* Sidebar Actions */}
         <div className="space-y-6">
           {/* Quick Actions */}
-          <Card>
-            <CardHeader>
+          <Card className="border-border/60 shadow-sm">
+            <CardHeader className="pb-3">
               <CardTitle className="text-lg">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-2">
-              <Button variant="outline" className="justify-start h-auto py-3" asChild>
+              <Button variant="outline" className="justify-start h-auto py-3 px-4 border-slate-200 hover:bg-slate-50 hover:text-primary transition-all group" asChild>
                 <Link to="/events/create">
-                  <Plus className="mr-2 h-4 w-4 text-primary" />
-                  <span>Create New Event</span>
+                  <div className="bg-primary/10 p-2 rounded-md mr-3 group-hover:bg-primary/20 transition-colors">
+                    <Plus className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="text-left">
+                    <span className="font-semibold block text-slate-900 group-hover:text-primary">Create Event</span>
+                    <span className="text-xs text-slate-500 font-normal">Schedule a new webinar</span>
+                  </div>
                 </Link>
               </Button>
-              <Button variant="outline" className="justify-start h-auto py-3">
-                <Users className="mr-2 h-4 w-4 text-blue-500" />
-                <span>View All Attendees</span>
-              </Button>
-              <Button variant="outline" className="justify-start h-auto py-3">
-                <Award className="mr-2 h-4 w-4 text-amber-500" />
-                <span>Manage Certificates</span>
+              <Button variant="outline" className="justify-start h-auto py-3 px-4 border-slate-200 hover:bg-slate-50 hover:text-blue-600 transition-all group">
+                <div className="bg-blue-100 p-2 rounded-md mr-3 group-hover:bg-blue-200 transition-colors">
+                  <Users className="h-4 w-4 text-blue-600" />
+                </div>
+                <div className="text-left">
+                  <span className="font-semibold block text-slate-900 group-hover:text-blue-600">Attendees</span>
+                  <span className="text-xs text-slate-500 font-normal">View registered users</span>
+                </div>
               </Button>
             </CardContent>
           </Card>
 
           {/* Zoom Status */}
-          <Card className="bg-slate-900 text-slate-50 border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center">
-                <div className={`w-2 h-2 rounded-full mr-2 ${zoomStatus?.is_connected ? 'bg-green-500 animate-pulse' : 'bg-slate-500'}`}></div>
-                Zoom Integration
+          <Card className={`border shadow-sm transition-all ${zoomStatus?.is_connected ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200'}`}>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center justify-between">
+                <span>Zoom Integration</span>
+                <span className={`relative flex h-2.5 w-2.5`}>
+                  {zoomStatus?.is_connected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>}
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${zoomStatus?.is_connected ? 'bg-green-500' : 'bg-slate-300'}`}></span>
+                </span>
               </CardTitle>
-              <CardDescription className="text-slate-400">
-                Status: {zoomStatus?.is_connected ? 'Connected' : 'Not Connected'}
+              <CardDescription className={zoomStatus?.is_connected ? "text-slate-400" : "text-slate-500"}>
+                {zoomStatus?.is_connected ? 'Automated meeting creation active' : 'Connect for auto-meetings'}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {zoomStatus?.is_connected ? (
                 <>
-                  <p className="text-sm text-slate-300 mb-4">
-                    Connected as <span className="font-medium text-white">{zoomStatus.zoom_email}</span>.
-                    Meetings will be automatically created.
-                  </p>
+                  <div className="flex items-center gap-3 mb-6 p-3 rounded-lg bg-slate-800/50 border border-slate-700">
+                    <Video className="h-8 w-8 text-blue-400" />
+                    <div className="overflow-hidden">
+                      <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Connected Account</p>
+                      <p className="text-sm font-semibold truncate hover:text-clip" title={zoomStatus.zoom_email}>{zoomStatus.zoom_email}</p>
+                    </div>
+                  </div>
                   <Button
                     size="sm"
                     variant="destructive"
-                    className="w-full bg-red-900/50 hover:bg-red-900/80 text-red-100"
+                    className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-200 border border-red-500/20"
                     onClick={handleDisconnectZoom}
                   >
-                    Disconnect
+                    Disconnect Integration
                   </Button>
                 </>
               ) : (
-                <>
-                  <p className="text-sm text-slate-300 mb-4">
-                    Connect your Zoom account to automatically create meetings for your events.
+                <div className="text-center">
+                  <div className="h-12 w-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Video className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <p className="text-sm text-slate-500 mb-4">
+                    Enable one-click Zoom meetings for your webinars and workshops.
                   </p>
                   <Button
                     size="sm"
-                    variant="secondary"
-                    className="w-full"
+                    className="w-full bg-blue-600 hover:bg-blue-700"
                     onClick={handleConnectZoom}
                   >
-                    Connect Zoom
+                    Connect Zoom Account
                   </Button>
-                </>
+                </div>
               )}
             </CardContent>
           </Card>

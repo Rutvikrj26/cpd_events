@@ -1,18 +1,28 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "../ui/button";
-import { Menu, X, Layout } from "lucide-react";
+import { Menu, X, Layout, User, LogOut } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const location = useLocation();
+  const { user, isAuthenticated, logout } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="min-h-screen flex flex-col bg-background font-sans anti-aliased">
       {/* Navigation */}
-      <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-2">
@@ -26,29 +36,66 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-6">
-              <Link 
-                to="/events/browse" 
+              <Link
+                to="/events/browse"
                 className={`text-sm font-medium transition-colors hover:text-blue-600 ${isActive('/events/browse') ? 'text-blue-600' : 'text-gray-600'}`}
               >
                 Browse Events
               </Link>
-              <Link 
-                to="/pricing" 
+              <Link
+                to="/pricing"
                 className={`text-sm font-medium transition-colors hover:text-blue-600 ${isActive('/pricing') ? 'text-blue-600' : 'text-gray-600'}`}
               >
                 Pricing
               </Link>
+
+              {/* Auth-aware buttons */}
               <div className="flex items-center gap-2 ml-4">
-                <Link to="/login">
-                  <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
-                    Log in
-                  </Button>
-                </Link>
-                <Link to="/signup">
-                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-                    Sign up
-                  </Button>
-                </Link>
+                {isAuthenticated ? (
+                  <>
+                    <Link to="/dashboard">
+                      <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
+                        Dashboard
+                      </Button>
+                    </Link>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="flex items-center gap-2">
+                          <User className="h-4 w-4" />
+                          <span className="max-w-[100px] truncate">{user?.full_name || user?.email || 'Account'}</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                          <Link to="/profile">Profile</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link to="/settings">Settings</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={logout} className="text-red-600">
+                          <LogOut className="h-4 w-4 mr-2" />
+                          Sign out
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                ) : (
+                  <>
+                    <Link to="/login">
+                      <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
+                        Log in
+                      </Button>
+                    </Link>
+                    <Link to="/signup">
+                      <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                        Sign up
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </nav>
 
@@ -73,12 +120,25 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 Pricing
               </Link>
               <div className="flex flex-col gap-2 pt-4 border-t border-gray-100">
-                <Link to="/login" className="w-full">
-                  <Button variant="outline" className="w-full justify-center">Log in</Button>
-                </Link>
-                <Link to="/signup" className="w-full">
-                  <Button className="w-full justify-center bg-blue-600 hover:bg-blue-700">Sign up</Button>
-                </Link>
+                {isAuthenticated ? (
+                  <>
+                    <Link to="/dashboard" className="w-full">
+                      <Button variant="outline" className="w-full justify-center">Dashboard</Button>
+                    </Link>
+                    <Button variant="ghost" className="w-full justify-center text-red-600" onClick={logout}>
+                      Sign out
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Link to="/login" className="w-full">
+                      <Button variant="outline" className="w-full justify-center">Log in</Button>
+                    </Link>
+                    <Link to="/signup" className="w-full">
+                      <Button className="w-full justify-center bg-blue-600 hover:bg-blue-700">Sign up</Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </nav>
           </div>
@@ -99,14 +159,14 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <ul className="mt-4 space-y-3">
                 <li><Link to="/events/browse" className="text-sm text-gray-600 hover:text-gray-900">Browse Events</Link></li>
                 <li><Link to="#" className="text-sm text-gray-600 hover:text-gray-900">For Organizers</Link></li>
-                <li><Link to="#" className="text-sm text-gray-600 hover:text-gray-900">Pricing</Link></li>
+                <li><Link to="/pricing" className="text-sm text-gray-600 hover:text-gray-900">Pricing</Link></li>
               </ul>
             </div>
             <div>
               <h3 className="text-sm font-semibold text-gray-900">Support</h3>
               <ul className="mt-4 space-y-3">
                 <li><Link to="#" className="text-sm text-gray-600 hover:text-gray-900">Help Center</Link></li>
-                <li><Link to="#" className="text-sm text-gray-600 hover:text-gray-900">Contact Us</Link></li>
+                <li><Link to="/contact" className="text-sm text-gray-600 hover:text-gray-900">Contact Us</Link></li>
                 <li><Link to="#" className="text-sm text-gray-600 hover:text-gray-900">Status</Link></li>
               </ul>
             </div>
@@ -126,3 +186,4 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+

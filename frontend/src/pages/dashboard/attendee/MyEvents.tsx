@@ -1,28 +1,61 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Calendar, Search } from "lucide-react";
+import { Calendar, Search, Loader2, Award, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/custom/PageHeader";
-import { EventCard } from "@/components/custom/EventCard";
-import { mockEvents } from "@/lib/mock-data";
+import { getMyRegistrations } from "@/api/registrations";
+import { Registration } from "@/api/registrations/types";
 
 export function MyEvents() {
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = React.useState("");
 
-  const allRegistered = mockEvents.filter(e => e.isRegistered);
-  const upcomingEvents = allRegistered.filter(e => e.status !== "completed" && e.status !== "cancelled");
-  const pastEvents = allRegistered.filter(e => e.status === "completed");
+  useEffect(() => {
+    async function fetchRegistrations() {
+      try {
+        const data = await getMyRegistrations();
+        setRegistrations(data);
+      } catch (error) {
+        console.error("Failed to load registrations", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchRegistrations();
+  }, []);
 
-  const filterEvents = (events: typeof mockEvents) => {
-    return events.filter(e => e.title.toLowerCase().includes(searchTerm.toLowerCase()));
+  // Filter by upcoming vs past based on event start date
+  const now = new Date();
+  const upcomingRegistrations = registrations.filter(r =>
+    new Date(r.event.starts_at) >= now && r.status !== 'cancelled'
+  );
+  const pastRegistrations = registrations.filter(r =>
+    new Date(r.event.starts_at) < now || r.status === 'cancelled'
+  );
+
+  const filterRegistrations = (regs: Registration[]) => {
+    return regs.filter(r =>
+      r.event.title.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
-      <PageHeader 
-        title="My Events" 
+      <PageHeader
+        title="My Events"
         description="View your upcoming schedule and past event history."
         actions={
           <Link to="/events/browse">
@@ -34,14 +67,14 @@ export function MyEvents() {
       <Tabs defaultValue="upcoming" className="w-full">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
           <TabsList>
-            <TabsTrigger value="upcoming">Upcoming ({upcomingEvents.length})</TabsTrigger>
-            <TabsTrigger value="past">Past ({pastEvents.length})</TabsTrigger>
+            <TabsTrigger value="upcoming">Upcoming ({upcomingRegistrations.length})</TabsTrigger>
+            <TabsTrigger value="past">Past ({pastRegistrations.length})</TabsTrigger>
           </TabsList>
 
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-            <Input 
-              placeholder="Search my events..." 
+            <Input
+              placeholder="Search my events..."
               className="pl-9"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -50,10 +83,10 @@ export function MyEvents() {
         </div>
 
         <TabsContent value="upcoming" className="mt-0">
-          {filterEvents(upcomingEvents).length > 0 ? (
+          {filterRegistrations(upcomingRegistrations).length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filterEvents(upcomingEvents).map(event => (
-                <EventCard key={event.id} event={event} showStatus />
+              {filterRegistrations(upcomingRegistrations).map(reg => (
+                <RegistrationCard key={reg.uuid} registration={reg} />
               ))}
             </div>
           ) : (
@@ -62,10 +95,10 @@ export function MyEvents() {
         </TabsContent>
 
         <TabsContent value="past" className="mt-0">
-          {filterEvents(pastEvents).length > 0 ? (
+          {filterRegistrations(pastRegistrations).length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filterEvents(pastEvents).map(event => (
-                <EventCard key={event.id} event={event} showStatus />
+              {filterRegistrations(pastRegistrations).map(reg => (
+                <RegistrationCard key={reg.uuid} registration={reg} isPast />
               ))}
             </div>
           ) : (
@@ -74,6 +107,65 @@ export function MyEvents() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function RegistrationCard({ registration, isPast = false }: { registration: Registration; isPast?: boolean }) {
+  const event = registration.event;
+
+  return (
+    <Card className="overflow-hidden hover:shadow-md transition-shadow">
+      <div className="h-32 bg-gradient-to-br from-blue-50 to-slate-100 relative flex items-center justify-center">
+        <Calendar className="h-8 w-8 text-slate-300" />
+        <div className="absolute top-3 right-3">
+          <Badge variant={registration.status === 'confirmed' ? 'default' : 'secondary'} className="capitalize">
+            {registration.status}
+          </Badge>
+        </div>
+      </div>
+      <CardContent className="p-4 space-y-3">
+        <div>
+          <h3 className="font-semibold text-gray-900 line-clamp-2">{event.title}</h3>
+          <p className="text-sm text-gray-500 mt-1">
+            {new Date(event.starts_at).toLocaleDateString(undefined, {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            })}
+          </p>
+        </div>
+
+        {event.cpd_credit_value > 0 && (
+          <div className="flex items-center gap-1 text-xs text-amber-600">
+            <Award className="h-3 w-3" />
+            <span>{event.cpd_credit_value} {event.cpd_credit_type || 'CPD'} Credits</span>
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-2">
+          <Link to={`/events/${event.slug || event.uuid}`} className="flex-1">
+            <Button variant="outline" size="sm" className="w-full">
+              View Event
+            </Button>
+          </Link>
+          {registration.can_join && registration.zoom_join_url && (
+            <a href={registration.zoom_join_url} target="_blank" rel="noopener noreferrer">
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                <ExternalLink className="h-3 w-3 mr-1" /> Join
+              </Button>
+            </a>
+          )}
+          {isPast && registration.certificate_issued && registration.certificate_url && (
+            <a href={registration.certificate_url} target="_blank" rel="noopener noreferrer">
+              <Button size="sm" variant="outline">
+                <Award className="h-3 w-3 mr-1" /> Certificate
+              </Button>
+            </a>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -87,8 +179,8 @@ function EmptyState({ tab }: { tab: string }) {
         No {tab} events found
       </h3>
       <p className="text-gray-500 text-center max-w-sm mb-6">
-        {tab === "upcoming" 
-          ? "You haven't registered for any upcoming events yet." 
+        {tab === "upcoming"
+          ? "You haven't registered for any upcoming events yet."
           : "You haven't attended any events yet."}
       </p>
       {tab === "upcoming" && (

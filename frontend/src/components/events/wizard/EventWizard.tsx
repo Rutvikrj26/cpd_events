@@ -1,0 +1,135 @@
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Check, ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { EventWizardProvider, useEventWizard, WizardStep } from './EventWizardContext';
+import { StepBasicInfo } from './steps/StepBasicInfo';
+import { StepSchedule } from './steps/StepSchedule';
+import { StepDetails } from './steps/StepDetails';
+import { StepSettings } from './steps/StepSettings';
+import { StepReview } from './steps/StepReview';
+import { createEvent, updateEvent } from '@/api/events';
+import { toast } from 'sonner';
+
+// The inner content that consumes the context
+const WizardContent = () => {
+    const { currentStep, nextStep, prevStep, formData, isStepValid, isEditMode } = useEventWizard();
+    const navigate = useNavigate();
+    const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+    const steps = [
+        { id: WizardStep.BasicInfo, label: 'Basic Info' },
+        { id: WizardStep.Schedule, label: 'Schedule' },
+        { id: WizardStep.Details, label: 'Details' },
+        { id: WizardStep.Settings, label: 'Settings' },
+        { id: WizardStep.Review, label: 'Review' },
+    ];
+
+    const handleFinish = async () => {
+        setIsSubmitting(true);
+        try {
+            if (isEditMode && formData.uuid) {
+                await updateEvent(formData.uuid as string, formData as any);
+                toast.success('Event updated successfully!');
+            } else {
+                await createEvent(formData as any);
+                toast.success('Event created successfully!');
+            }
+            navigate('/events');
+        } catch (error) {
+            console.error(error);
+            toast.error(isEditMode ? 'Failed to update event. Please try again.' : 'Failed to create event. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="max-w-4xl mx-auto py-8 px-4">
+            {/* Stepper Header */}
+            <div className="mb-8">
+                <nav aria-label="Progress">
+                    <ol role="list" className="space-y-4 md:flex md:space-x-8 md:space-y-0">
+                        {steps.map((step) => {
+                            const isComplete = currentStep > step.id;
+                            const isCurrent = currentStep === step.id;
+
+                            return (
+                                <li key={step.id} className="md:flex-1">
+                                    <div
+                                        className={cn(
+                                            "group flex flex-col border-l-4 py-2 pl-4 transition-colors md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4",
+                                            isComplete ? "border-primary hover:border-primary/80" :
+                                                isCurrent ? "border-primary" : "border-slate-200"
+                                        )}
+                                    >
+                                        <span className={cn(
+                                            "text-xs font-semibold uppercase tracking-wide",
+                                            isComplete || isCurrent ? "text-primary" : "text-slate-500"
+                                        )}>
+                                            Step {step.id + 1}
+                                        </span>
+                                        <span className="text-sm font-medium">{step.label}</span>
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ol>
+                </nav>
+            </div>
+
+            {/* Step Content */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm min-h-[400px] flex flex-col">
+                <div className="p-6 md:p-8 flex-1">
+                    {currentStep === WizardStep.BasicInfo && <StepBasicInfo />}
+                    {currentStep === WizardStep.Schedule && <StepSchedule />}
+                    {currentStep === WizardStep.Details && <StepDetails />}
+                    {currentStep === WizardStep.Settings && <StepSettings />}
+                    {currentStep === WizardStep.Review && <StepReview />}
+                </div>
+
+                {/* Footer Controls */}
+                <div className="bg-slate-50 p-4 rounded-b-xl border-t border-slate-100 flex justify-between items-center">
+                    <Button
+                        variant="ghost"
+                        onClick={currentStep === 0 ? () => navigate('/events') : prevStep}
+                    >
+                        {currentStep === 0 ? 'Cancel' : 'Back'}
+                    </Button>
+
+                    <div className="flex gap-3">
+                        {/* Optional Draft Save could go here */}
+
+                        {currentStep === WizardStep.Review ? (
+                            <Button onClick={handleFinish} disabled={isSubmitting} className="min-w-[120px]">
+                                {isSubmitting ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update Event' : 'Create Event')}
+                            </Button>
+                        ) : (
+                            <Button
+                                onClick={nextStep}
+                                disabled={!isStepValid(currentStep)}
+                                className="min-w-[100px]"
+                            >
+                                Next <ChevronRight className="ml-2 h-4 w-4" />
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+interface EventWizardProps {
+    initialData?: any;
+    isEditMode?: boolean;
+}
+
+export const EventWizard = ({ initialData, isEditMode }: EventWizardProps) => {
+    return (
+        <EventWizardProvider initialData={initialData} isEditMode={isEditMode}>
+            <WizardContent />
+        </EventWizardProvider>
+    );
+};

@@ -1,0 +1,49 @@
+import React from "react";
+import { LucideIcon } from "lucide-react";
+import { Button } from "./button";
+import { cn } from "@/lib/utils";
+
+interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
+    icon?: LucideIcon;
+    title: string;
+    description: string;
+    action?: {
+        label: string;
+        onClick: () => void;
+        variant?: "default" | "secondary" | "outline" | "ghost" | "link";
+    };
+}
+
+export function EmptyState({
+    icon: Icon,
+    title,
+    description,
+    action,
+    className,
+    ...props
+}: EmptyStateProps) {
+    return (
+        <div
+            className={cn(
+                "flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50/50 p-12 text-center",
+                className
+            )}
+            {...props}
+        >
+            {Icon && (
+                <div className="flex h-12 w-12 item-center justify-center rounded-full bg-gray-100 mb-4 p-3 ring-4 ring-white">
+                    <Icon className="h-full w-full text-gray-400" />
+                </div>
+            )}
+            <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+            <p className="mt-1 text-sm text-gray-500 max-w-sm">{description}</p>
+            {action && (
+                <div className="mt-6">
+                    <Button onClick={action.onClick} variant={action.variant || "default"}>
+                        {action.label}
+                    </Button>
+                </div>
+            )}
+        </div>
+    );
+}

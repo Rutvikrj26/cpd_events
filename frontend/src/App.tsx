@@ -2,22 +2,28 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/contexts/AuthContext";
-import ProtectedRoute from "@/components/layout/ProtectedRoute";
+import { ProtectedRoute } from "@/features/auth";
 
 
 // Layouts
 import { PublicLayout } from './components/layout/PublicLayout';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { AuthLayout } from './components/layout/AuthLayout';
+import ScrollToTop from './components/layout/ScrollToTop';
 
 // Public Pages
 import { LandingPage } from './pages/public/LandingPage';
 import { EventDiscovery } from './pages/public/EventDiscovery';
 import { EventDetail } from './pages/public/EventDetail';
+import { EventRegistration } from './pages/public/EventRegistration';
+import { PricingPage } from './pages/public/PricingPage';
+import { ContactPage } from './pages/public/ContactPage';
+import { NotFoundPage } from './pages/public/NotFoundPage';
 
 // Auth Pages
 import { LoginPage } from './pages/auth/LoginPage';
 import { SignupPage } from './pages/auth/SignupPage';
+import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { EventsPage } from './pages/events/EventsPage';
 import { EventCreatePage } from './pages/events/EventCreatePage';
@@ -38,11 +44,12 @@ import { CertificateDetail } from './pages/dashboard/attendee/CertificateDetail'
 import { CertificatesList } from './pages/dashboard/attendee/CertificatesList';
 import { CPDTracking } from './pages/dashboard/attendee/CPDTracking';
 
-// Dashboard Pages - Organizer
+// Dashboard Pages - Organizer (non-duplicate pages only)
 import { OrganizerDashboard } from './pages/dashboard/organizer/OrganizerDashboard';
-import { EventsList } from './pages/dashboard/organizer/EventsList';
-import { CreateEvent } from './pages/dashboard/organizer/CreateEvent';
+import { ContactsPage } from './pages/dashboard/organizer/ContactsPage';
+import { ReportsPage } from './pages/dashboard/organizer/ReportsPage';
 import { EventManagement } from './pages/dashboard/organizer/EventManagement';
+import { CertificateTemplatesPage } from './pages/dashboard/organizer/CertificateTemplatesPage';
 
 // Integrations
 import { ZoomCallbackPage } from './pages/integrations/ZoomCallbackPage';
@@ -50,6 +57,7 @@ import { ZoomCallbackPage } from './pages/integrations/ZoomCallbackPage';
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <Routes>
           {/* Public Routes */}
@@ -71,13 +79,28 @@ export default function App() {
             </PublicLayout>
           } />
 
+          <Route path="/events/:id/register" element={
+            <PublicLayout>
+              <EventRegistration />
+            </PublicLayout>
+          } />
+
           <Route path="/pricing" element={
             <PublicLayout>
-              <div className="container py-20 text-center">
-                <h1 className="text-3xl font-bold">Pricing Page</h1>
-                <p className="text-gray-500 mt-4">Coming soon...</p>
-              </div>
+              <PricingPage />
             </PublicLayout>
+          } />
+
+          <Route path="/contact" element={
+            <PublicLayout>
+              <ContactPage />
+            </PublicLayout>
+          } />
+
+          <Route path="/forgot-password" element={
+            <AuthLayout>
+              <ForgotPasswordPage />
+            </AuthLayout>
           } />
 
           {/* Auth Routes */}
@@ -93,56 +116,65 @@ export default function App() {
             </AuthLayout>
           } />
 
-          {/* Protected Routes */}
+          {/* Protected Routes - Unified Dashboard */}
           <Route element={<ProtectedRoute />}>
 
             {/* Integrations */}
             <Route path="/zoom/callback" element={<ZoomCallbackPage />} />
 
-            {/* Attendee Layout Group */}
-            <Route element={<DashboardLayout role="attendee" />}>
+            {/* Main Dashboard Layout - all authenticated users */}
+            <Route element={<DashboardLayout />}>
+              {/* Dashboard - shows role-appropriate content */}
               <Route path="/dashboard" element={<DashboardPage />} />
+
+              {/* Events - unified routes for both roles */}
               <Route path="/events" element={<EventsPage />} />
               <Route path="/events/create" element={<EventCreatePage />} />
               <Route path="/events/:uuid" element={<EventDetailPage />} />
+              <Route path="/events/:uuid/edit" element={<EventCreatePage />} />
+
+              {/* Attendee-specific pages */}
               <Route path="/registrations" element={<MyRegistrationsPage />} />
               <Route path="/certificates" element={<CertificatesPage />} />
+              <Route path="/my-events" element={<MyEvents />} />
+              <Route path="/my-certificates" element={<CertificatesList />} />
+              <Route path="/my-certificates/:id" element={<CertificateDetail />} />
+              <Route path="/cpd" element={<CPDTracking />} />
+
+              {/* Shared pages */}
               <Route path="/billing" element={<BillingPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/settings" element={<ProfileSettings />} />
 
-              {/* Attendee Specific Dashboard Pages */}
-              <Route path="/my-events" element={<MyEvents />} />
-              <Route path="/my-certificates" element={<CertificatesList />} />
-              <Route path="/my-certificates/:id" element={<CertificateDetail />} />
-              <Route path="/cpd" element={<CPDTracking />} />
+              {/* Organizer-specific pages (non-event) */}
+              <Route path="/organizer/dashboard" element={<OrganizerDashboard />} />
+              <Route path="/organizer/contacts" element={<ContactsPage />} />
+              <Route path="/organizer/reports" element={<ReportsPage />} />
+              <Route path="/organizer/certificates/templates" element={<CertificateTemplatesPage />} />
+              <Route path="/organizer/events/:uuid/manage" element={<EventManagement />} />
             </Route>
 
-            {/* Organizer Layout Group */}
-            <Route element={<DashboardLayout role="organizer" />}>
-              <Route path="/organizer/dashboard" element={<OrganizerDashboard />} />
-              <Route path="/organizer/events" element={<EventsList />} />
-              <Route path="/organizer/events/new" element={<CreateEvent />} />
-              <Route path="/organizer/events/:id" element={<EventManagement />} />
-              <Route path="/organizer/events/:id/edit" element={<CreateEvent />} />
-              <Route path="/organizer/contacts" element={
-                <div className="text-center py-10">Contacts Manager (Coming Soon)</div>
-              } />
-              <Route path="/organizer/reports" element={
-                <div className="text-center py-10">Reports (Coming Soon)</div>
-              } />
-              <Route path="/organizer/settings" element={<ProfileSettings />} />
-              <Route path="/organizer/notifications" element={<Notifications />} />
-            </Route>
+            {/* Redirects for old organizer event routes */}
+            <Route path="/organizer/events" element={<Navigate to="/events" replace />} />
+            <Route path="/organizer/events/new" element={<Navigate to="/events/create" replace />} />
+            <Route path="/organizer/events/:id" element={<Navigate to="/events/:id" replace />} />
+            <Route path="/organizer/events/:id/edit" element={<Navigate to="/events/:id/edit" replace />} />
+            <Route path="/organizer/settings" element={<Navigate to="/settings" replace />} />
+            <Route path="/organizer/notifications" element={<Navigate to="/notifications" replace />} />
 
           </Route>
 
           {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={
+            <PublicLayout>
+              <NotFoundPage />
+            </PublicLayout>
+          } />
         </Routes>
       </AuthProvider>
       <Toaster />
     </BrowserRouter >
   );
 }
+

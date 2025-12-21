@@ -70,7 +70,11 @@ export const EventsPage = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {events.map((event) => (
-                    <Link key={event.uuid} to={`/events/${event.uuid}`} className="group block">
+                    <Link
+                        key={event.uuid}
+                        to={isOrganizer ? `/organizer/events/${event.uuid}/manage` : `/events/${event.uuid}`}
+                        className="group block"
+                    >
                         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
                             <div className="h-48 bg-slate-100 relative">
                                 {/* Placeholder for event image if we had one */}

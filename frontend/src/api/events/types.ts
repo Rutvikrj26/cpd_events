@@ -10,23 +10,42 @@ export interface Event {
     starts_at: string;
     ends_at: string;
     timezone: string;
+    duration_minutes?: number;
 
     // Stats
     registration_count: number;
     attendee_count: number;
     waitlist_count: number;
-    certificate_count: number;
+    certificate_count?: number;
+    spots_remaining?: number | null;
 
     // Registration
     registration_enabled: boolean;
     registration_opens_at?: string;
     registration_closes_at?: string;
     max_attendees?: number;
+    capacity?: number; // Alias for max_attendees from backend
+    is_registration_open?: boolean;
+
+    // CPD (aliased fields from backend)
+    cpd_credits?: number | string;
+    cpd_type?: string;
+    cpd_enabled?: boolean;
+
+    // Certificates
+    certificates_enabled?: boolean;
+    auto_issue_certificates?: boolean;
+
+    // Branding
+    featured_image_url?: string;
+    cover_image_url?: string;
 
     // Misc
     is_public: boolean;
     owner_name?: string; // List view
+    organizer_name?: string; // Public list view
     owner?: { uuid: string; display_name: string }; // Detail view
+    organizer?: { uuid: string; display_name: string; logo_url?: string }; // Public detail view
     created_at: string;
     updated_at: string;
 }
@@ -73,6 +92,7 @@ export interface EventCreateRequest {
     // Zoom
     zoom_settings?: any;
 
+    is_public?: boolean;
     custom_fields?: any[];
 }
 

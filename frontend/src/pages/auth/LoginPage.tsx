@@ -46,10 +46,6 @@ export function LoginPage() {
     setIsLoading(true);
     try {
       await login({ email: values.email, password: values.password });
-      // Actually login takes object {email, password} in my implementation? 
-      // AuthContext.login takes "data: any". api.post('/accounts/token/', data). 
-      // So passing values directly is fine.
-      await login(values);
       toast.success("Logged in successfully");
       navigate("/dashboard");
     } catch (error) {

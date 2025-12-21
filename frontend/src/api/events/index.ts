@@ -49,11 +49,20 @@ export const getEventCustomFields = async (eventUuid: string): Promise<EventCust
 // -- Public Routes --
 
 export const getPublicEvents = async (): Promise<Event[]> => {
-    const response = await client.get<Event[]>('/public/events/');
-    return response.data;
+    const response = await client.get<any>('/public/events/');
+    return Array.isArray(response.data) ? response.data : response.data.results;
 };
 
 export const getPublicEvent = async (slug: string): Promise<Event> => {
     const response = await client.get<Event>(`/public/events/${slug}/`);
     return response.data;
 };
+
+// Get registrations for an event (organizer)
+export const getEventRegistrations = async (eventUuid: string): Promise<any[]> => {
+    const response = await client.get<any>(`/events/${eventUuid}/registrations/`);
+    return Array.isArray(response.data) ? response.data : response.data.results || [];
+};
+
+// Event actions
+export { publishEvent, cancelEvent, duplicateEvent } from './actions';

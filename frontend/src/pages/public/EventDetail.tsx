@@ -1,33 +1,95 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { 
-  Calendar, 
-  Clock, 
-  MapPin, 
-  User, 
-  Award, 
-  Share2, 
-  CheckCircle, 
+import {
+  Calendar,
+  Clock,
+  MapPin,
+  User,
+  Award,
+  Share2,
+  CheckCircle,
   AlertCircle,
-  Video
+  Video,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mockEvents } from "@/lib/mock-data";
 import { StatusBadge } from "@/components/custom/StatusBadge";
-import { PageHeader } from "@/components/custom/PageHeader";
+import { getPublicEvent } from "@/api/events";
+import { Event } from "@/api/events/types";
 
 export function EventDetail() {
   const { id } = useParams<{ id: string }>();
-  const event = mockEvents.find(e => e.id === id) || mockEvents[0]; // Fallback to first event for demo
+  const [event, setEvent] = useState<Event | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock registration state
-  const isRegistered = event.isRegistered;
-  const isPast = new Date(event.startDate) < new Date();
+  useEffect(() => {
+    async function fetchEvent() {
+      if (!id) return;
+      try {
+        const data = await getPublicEvent(id);
+        setEvent(data);
+      } catch (e: any) {
+        console.error("Failed to fetch event", e);
+        setError(e?.response?.data?.detail || "Event not found");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchEvent();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (error || !event) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900">Event Not Found</h2>
+          <p className="text-gray-500 mt-2">{error || "The event you're looking for doesn't exist."}</p>
+          <Link to="/events/browse">
+            <Button className="mt-4">Browse Events</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Derive states from event data
+  const isPast = new Date(event.starts_at) < new Date();
+  const isRegistrationOpen = event.is_registration_open ?? event.registration_enabled;
+  const organizerName = event.organizer?.display_name || event.organizer_name || event.owner?.display_name || "Unknown Organizer";
+
+  // Calculate duration display
+  const getDurationDisplay = () => {
+    if (event.duration_minutes) {
+      const hours = Math.floor(event.duration_minutes / 60);
+      const mins = event.duration_minutes % 60;
+      if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
+      if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
+      return `${mins} minutes`;
+    }
+    if (event.ends_at) {
+      const start = new Date(event.starts_at);
+      const end = new Date(event.ends_at);
+      const diffMs = end.getTime() - start.getTime();
+      const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+      return `${diffHours} hour${diffHours > 1 ? 's' : ''}`;
+    }
+    return "TBD";
+  };
 
   return (
     <div className="bg-gray-50 min-h-screen pb-12">
@@ -37,60 +99,64 @@ export function EventDetail() {
           <div className="flex flex-col lg:flex-row gap-8 items-start">
             <div className="flex-1 space-y-4">
               <div className="flex flex-wrap gap-2 items-center">
-                <StatusBadge status={event.status} />
-                <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">
-                  {event.type}
+                <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50 capitalize">
+                  {event.event_type}
                 </Badge>
-                <Badge variant="outline" className="border-gray-300">
-                  {event.creditType} • {event.credits} Credits
-                </Badge>
+                {event.cpd_credits && Number(event.cpd_credits) > 0 && (
+                  <Badge variant="outline" className="border-gray-300">
+                    {event.cpd_type || 'CPD'} • {event.cpd_credits} Credits
+                  </Badge>
+                )}
               </div>
-              
+
               <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
                 {event.title}
               </h1>
-              
+
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 text-gray-500 pt-2">
                 <div className="flex items-center gap-2">
                   <Calendar className="h-5 w-5 text-gray-400" />
                   <span className="text-sm font-medium">
-                    {new Date(event.startDate).toLocaleDateString(undefined, { 
-                      weekday: 'long', 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
+                    {new Date(event.starts_at).toLocaleDateString(undefined, {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
                     })}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="h-5 w-5 text-gray-400" />
                   <span className="text-sm font-medium">
-                    {event.startTime} ({event.duration})
+                    {new Date(event.starts_at).toLocaleTimeString(undefined, {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })} ({getDurationDisplay()})
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <User className="h-5 w-5 text-gray-400" />
                   <span className="text-sm font-medium">
-                    by <span className="text-gray-900">{event.organizer}</span>
+                    by <span className="text-gray-900">{organizerName}</span>
                   </span>
                 </div>
               </div>
             </div>
-            
+
             <div className="flex gap-3">
               <Button variant="outline" size="icon">
                 <Share2 className="h-4 w-4" />
               </Button>
-              {isRegistered ? (
-                 <Button disabled className="bg-green-600 text-white opacity-100">
-                   <CheckCircle className="mr-2 h-4 w-4" /> Registered
-                 </Button>
-              ) : isPast ? (
-                 <Button disabled>Event Ended</Button>
+              {isPast ? (
+                <Button disabled>Event Ended</Button>
+              ) : isRegistrationOpen ? (
+                <Link to={`/events/${id}/register`}>
+                  <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
+                    Register Now
+                  </Button>
+                </Link>
               ) : (
-                <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
-                  Register Now
-                </Button>
+                <Button disabled>Registration Closed</Button>
               )}
             </div>
           </div>
@@ -101,96 +167,67 @@ export function EventDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
-            <div className="aspect-video w-full overflow-hidden rounded-xl border border-gray-200 shadow-sm">
-              <img 
-                src={event.image} 
-                alt={event.title} 
-                className="h-full w-full object-cover"
-              />
+            {/* Featured Image or Placeholder */}
+            <div className="aspect-video w-full overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-gray-100 flex items-center justify-center">
+              {event.featured_image_url || event.cover_image_url ? (
+                <img
+                  src={event.featured_image_url || event.cover_image_url}
+                  alt={event.title}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="text-gray-300">
+                  <Calendar className="h-16 w-16" />
+                </div>
+              )}
             </div>
 
             <Tabs defaultValue="about" className="w-full">
               <TabsList className="w-full justify-start border-b border-gray-200 bg-transparent p-0 h-auto rounded-none space-x-8">
-                <TabsTrigger 
-                  value="about" 
+                <TabsTrigger
+                  value="about"
                   className="rounded-none border-b-2 border-transparent px-0 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none"
                 >
                   About
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="schedule" 
+                <TabsTrigger
+                  value="schedule"
                   className="rounded-none border-b-2 border-transparent px-0 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none"
                 >
                   Schedule
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="speakers" 
-                  className="rounded-none border-b-2 border-transparent px-0 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none"
-                >
-                  Speakers
-                </TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="about" className="pt-6 space-y-6">
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-3">Event Description</h3>
                   <p className="text-gray-600 leading-relaxed whitespace-pre-line">
-                    {event.description}
-                  </p>
-                  <p className="text-gray-600 leading-relaxed mt-4">
-                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+                    {event.description || event.short_description || "No description available."}
                   </p>
                 </div>
 
-                <Separator />
-
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-4">What you'll learn</h3>
-                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {[1, 2, 3, 4].map((i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <CheckCircle className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
-                        <span className="text-gray-600 text-sm">Understand key concepts and methodologies in the field.</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                {event.cpd_credits && Number(event.cpd_credits) > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-4">CPD Credits</h3>
+                      <div className="flex items-center gap-3 bg-amber-50 p-4 rounded-lg border border-amber-100">
+                        <Award className="h-8 w-8 text-amber-600" />
+                        <div>
+                          <p className="font-medium text-gray-900">{event.cpd_credits} {event.cpd_type || 'CPD'} Credits</p>
+                          <p className="text-sm text-gray-600">Earn professional development credits upon completion</p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </TabsContent>
 
               <TabsContent value="schedule" className="pt-6">
-                 <div className="space-y-6">
-                    <div className="flex gap-4">
-                       <div className="w-24 shrink-0 text-sm font-bold text-gray-900 pt-1">09:00 AM</div>
-                       <div className="pb-6 border-l border-gray-200 pl-6 relative">
-                          <div className="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-blue-600" />
-                          <h4 className="font-semibold text-gray-900">Introduction & Keynote</h4>
-                          <p className="text-sm text-gray-500 mt-1">Dr. Sarah Johnson</p>
-                       </div>
-                    </div>
-                    <div className="flex gap-4">
-                       <div className="w-24 shrink-0 text-sm font-bold text-gray-900 pt-1">10:30 AM</div>
-                       <div className="pb-6 border-l border-gray-200 pl-6 relative">
-                          <div className="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-gray-300" />
-                          <h4 className="font-semibold text-gray-900">Deep Dive Session 1</h4>
-                          <p className="text-sm text-gray-500 mt-1">Technical Review Panel</p>
-                       </div>
-                    </div>
-                 </div>
-              </TabsContent>
-              
-              <TabsContent value="speakers" className="pt-6">
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg">
-                       <Avatar className="h-12 w-12">
-                          <AvatarImage src="https://github.com/shadcn.png" />
-                          <AvatarFallback>SJ</AvatarFallback>
-                       </Avatar>
-                       <div>
-                          <h4 className="font-semibold text-gray-900">Dr. Sarah Johnson</h4>
-                          <p className="text-sm text-gray-500">Chief of Medicine</p>
-                       </div>
-                    </div>
-                 </div>
+                <div className="text-center py-8 text-gray-500">
+                  <Clock className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                  <p>Detailed schedule will be available soon.</p>
+                </div>
               </TabsContent>
             </Tabs>
           </div>
@@ -203,36 +240,45 @@ export function EventDetail() {
                 <CardDescription>Secure your spot today.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <span className="text-gray-600">Price</span>
-                  <span className="font-bold text-xl text-gray-900">
-                    {event.price === "Free" ? "Free" : `$${event.price}`}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <span className="text-gray-600">Capacity</span>
-                  <span className="text-gray-900">{event.attendees} / {event.capacity} registered</span>
-                </div>
-                
-                {isRegistered ? (
-                  <div className="bg-green-50 p-4 rounded-lg border border-green-100 text-center space-y-2">
-                    <div className="flex justify-center">
-                       <CheckCircle className="h-8 w-8 text-green-600" />
-                    </div>
-                    <p className="font-medium text-green-800">You are registered!</p>
-                    <p className="text-sm text-green-700">
-                      Check your email for confirmation and join details.
-                    </p>
+                {(event.capacity || event.max_attendees) && (
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-gray-600">Capacity</span>
+                    <span className="text-gray-900">
+                      {event.registration_count} / {event.capacity || event.max_attendees} registered
+                    </span>
                   </div>
-                ) : (
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-lg py-6">
-                    Register Now
-                  </Button>
                 )}
-                
-                <p className="text-xs text-center text-gray-500">
-                  Registration closes {new Date(event.startDate).toLocaleDateString()}
-                </p>
+
+                {event.spots_remaining !== null && event.spots_remaining !== undefined && (
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-gray-600">Spots Remaining</span>
+                    <span className="text-gray-900 font-semibold">
+                      {event.spots_remaining}
+                    </span>
+                  </div>
+                )}
+
+                {isPast ? (
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-center">
+                    <p className="font-medium text-gray-600">This event has ended</p>
+                  </div>
+                ) : isRegistrationOpen ? (
+                  <Link to={`/events/${id}/register`}>
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-lg py-6">
+                      Register Now
+                    </Button>
+                  </Link>
+                ) : (
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-center">
+                    <p className="font-medium text-gray-600">Registration is closed</p>
+                  </div>
+                )}
+
+                {event.registration_closes_at && !isPast && (
+                  <p className="text-xs text-center text-gray-500">
+                    Registration closes {new Date(event.registration_closes_at).toLocaleDateString()}
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -243,29 +289,49 @@ export function EventDetail() {
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
-                    {event.organizer.charAt(0)}
+                    {organizerName.charAt(0)}
                   </div>
                   <div>
-                    <div className="font-medium text-gray-900">{event.organizer}</div>
-                    <div className="text-xs text-gray-500">View Profile</div>
+                    <div className="font-medium text-gray-900">{organizerName}</div>
+                    <div className="text-xs text-gray-500">Event Organizer</div>
                   </div>
                 </div>
                 <Button variant="outline" className="w-full text-xs h-8">Contact Organizer</Button>
               </CardContent>
             </Card>
 
-             <Card>
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">Location</CardTitle>
               </CardHeader>
               <CardContent>
-                 <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <Video className="h-4 w-4 shrink-0 mt-0.5" />
-                    <div>
-                       <p className="font-medium text-gray-900">Online Event</p>
-                       <p className="mt-1">Link provided upon registration</p>
-                    </div>
-                 </div>
+                <div className="flex items-start gap-2 text-sm text-gray-600">
+                  {event.format === 'online' ? (
+                    <>
+                      <Video className="h-4 w-4 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-gray-900">Online Event</p>
+                        <p className="mt-1">Link provided upon registration</p>
+                      </div>
+                    </>
+                  ) : event.format === 'hybrid' ? (
+                    <>
+                      <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-gray-900">Hybrid Event</p>
+                        <p className="mt-1">In-person + Online options available</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-gray-900">In-Person Event</p>
+                        <p className="mt-1">Location details upon registration</p>
+                      </div>
+                    </>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>

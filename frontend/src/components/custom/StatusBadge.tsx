@@ -2,13 +2,13 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "../ui/badge";
 
-export type StatusType = 
-  | "draft" 
-  | "published" 
-  | "live" 
-  | "completed" 
-  | "cancelled" 
-  | "issued" 
+export type StatusType =
+  | "draft"
+  | "published"
+  | "live"
+  | "completed"
+  | "cancelled"
+  | "issued"
   | "revoked"
   | "registered"
   | "attended";
@@ -31,11 +31,12 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const config = statusConfig[status.toLowerCase()] || { label: status, variant: "outline" };
-  
+  const statusKey = status?.toLowerCase() || 'draft';
+  const config = statusConfig[statusKey] || { label: status || 'Unknown', variant: "outline" as const };
+
   return (
-    <Badge 
-      variant={config.variant} 
+    <Badge
+      variant={config.variant}
       className={cn("font-medium shadow-none border", config.className, className)}
     >
       {config.label}

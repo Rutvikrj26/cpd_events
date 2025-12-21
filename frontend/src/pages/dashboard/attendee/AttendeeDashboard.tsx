@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DashboardStat } from "@/components/dashboard/DashboardStats";
+import { PageHeader } from "@/components/ui/page-header";
 import { getMyRegistrations } from "@/api/registrations";
 import { Registration } from "@/api/registrations/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,7 +19,6 @@ export function AttendeeDashboard() {
     async function fetchRegistrations() {
       try {
         const data = await getMyRegistrations();
-        // The API client now handles unwrapping the response
         setRegistrations(data);
       } catch (error) {
         console.error("Failed to fetch registrations", error);
@@ -33,7 +33,7 @@ export function AttendeeDashboard() {
     totalCredits: registrations.reduce((acc, r) => acc + (r.event.cpd_credit_value || 0), 0),
     certificates: registrations.filter(r => r.certificate_issued_at).length,
     upcomingEvents: registrations.filter(r => new Date(r.event.starts_at) > new Date()).length,
-    learningHours: registrations.reduce((acc, r) => acc + (r.event.cpd_credit_value || 0), 0), // Assuming 1 credit = 1 hour for now
+    learningHours: registrations.reduce((acc, r) => acc + (r.event.cpd_credit_value || 0), 0),
   };
 
   const upcomingRegistrations = registrations
@@ -46,24 +46,25 @@ export function AttendeeDashboard() {
     .slice(0, 3);
 
   if (loading) {
-    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-slate-500">Loading dashboard...</div>;
+    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-slate-500 animate-pulse">Loading dashboard...</div>;
   }
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Hero / Welcome Section */}
+
+      {/* Welcome Header */}
       <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-white shadow-lg">
         <div className="relative z-10">
           <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user?.first_name || 'Professional'}!</h1>
           <p className="mt-2 text-blue-100 max-w-xl">
-            You're making great progress. Here's what's happening with your professional development journey.
+            Track your professional development, manage upcoming events, and view your earned certificates.
           </p>
-          <div className="mt-6 flex gap-3">
-            <Button asChild variant="secondary" className="font-semibold">
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button asChild variant="secondary" className="font-semibold shadow-sm">
               <Link to="/events">Browse Events</Link>
             </Button>
-            <Button variant="outline" className="bg-transparent text-white border-white/30 hover:bg-white/10 hover:text-white">
-              View Profile
+            <Button asChild variant="outline" className="bg-transparent text-white border-white/30 hover:bg-white/10 hover:text-white hover:border-white/50">
+              <Link to="/profile">View Profile</Link>
             </Button>
           </div>
         </div>
@@ -105,7 +106,7 @@ export function AttendeeDashboard() {
         {/* Main Column: Upcoming Events */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold tracking-tight text-slate-900">Your Upcoming Events</h2>
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">Your Upcoming Events</h2>
             {upcomingRegistrations.length > 0 && (
               <Button variant="link" asChild className="text-primary p-0 h-auto font-medium">
                 <Link to="/my-registrations">View All</Link>
@@ -114,7 +115,7 @@ export function AttendeeDashboard() {
           </div>
 
           {upcomingRegistrations.length === 0 ? (
-            <Card className="border-dashed border-2 bg-slate-50/50 shadow-none">
+            <Card className="border-dashed border-2 bg-slate-50/50 shadow-none border-slate-200">
               <CardContent className="flex flex-col items-center justify-center p-12 text-center">
                 <div className="p-4 bg-white rounded-full shadow-sm mb-4">
                   <Calendar className="h-8 w-8 text-slate-400" />
@@ -131,17 +132,17 @@ export function AttendeeDashboard() {
           ) : (
             <div className="space-y-4">
               {upcomingRegistrations.map((reg) => (
-                <div key={reg.uuid} className="group relative overflow-hidden rounded-lg border bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-200">
+                <div key={reg.uuid} className="group relative overflow-hidden rounded-xl border border-border/60 bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-200">
                   <div className="flex flex-col sm:flex-row gap-5">
                     {/* Date Badge */}
-                    <div className="flex flex-col items-center justify-center rounded-lg bg-blue-50 p-3 min-w-[80px] text-center border border-blue-100">
-                      <span className="text-xs font-semibold uppercase text-blue-600">
+                    <div className="flex flex-col items-center justify-center rounded-lg bg-blue-50 p-3 min-w-[80px] text-center border border-blue-100/50">
+                      <span className="text-xs font-bold uppercase text-blue-600">
                         {new Date(reg.event.starts_at).toLocaleString('default', { month: 'short' })}
                       </span>
                       <span className="text-2xl font-bold text-blue-700">
                         {new Date(reg.event.starts_at).getDate()}
                       </span>
-                      <span className="text-xs text-blue-600/80 mt-1">
+                      <span className="text-xs text-blue-600/80 mt-1 font-medium">
                         {new Date(reg.event.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
@@ -150,31 +151,34 @@ export function AttendeeDashboard() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between">
                         <div>
-                          <h3 className="text-lg font-semibold text-slate-900 group-hover:text-blue-700 transition-colors line-clamp-1">
+                          <h3 className="text-lg font-bold text-slate-900 group-hover:text-blue-700 transition-colors line-clamp-1">
                             <Link to={`/events/${reg.event.uuid}`}>
                               <span className="absolute inset-0" aria-hidden="true" />
                               {reg.event.title}
                             </Link>
                           </h3>
-                          <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs font-normal bg-slate-50">
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            <Badge variant="secondary" className="text-xs font-medium">
                               {reg.event.event_type}
                             </Badge>
-                            <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                            <span>{reg.event.cpd_credit_value} CPD Credits</span>
-                          </p>
+                            <span className="text-slate-300 text-xs">•</span>
+                            <span className="text-xs font-medium text-slate-500 flex items-center">
+                              <Award className="h-3 w-3 mr-1 text-amber-500" />
+                              {reg.event.cpd_credit_value} CPD Credits
+                            </span>
+                          </div>
                         </div>
-                        <Button variant="outline" size="icon" className="shrink-0 z-10 relative bg-white hover:bg-slate-50">
+                        <Button variant="ghost" size="icon" className="shrink-0 z-10 relative text-slate-400 hover:text-primary hover:bg-blue-50">
                           <ExternalLink className="h-4 w-4" />
                         </Button>
                       </div>
 
                       {/* Action Area */}
                       <div className="mt-4 flex items-center gap-3 relative z-10">
-                        <Button size="sm" className="h-8">
+                        <Button size="sm" className="h-8 shadow-sm">
                           Join Session
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-8 text-slate-500 hover:text-slate-900" asChild>
+                        <Button variant="outline" size="sm" className="h-8" asChild>
                           <Link to={`/events/${reg.event.uuid}`}>View Details</Link>
                         </Button>
                       </div>
@@ -189,7 +193,7 @@ export function AttendeeDashboard() {
         {/* Side Column: Certificates & Upsell */}
         <div className="space-y-6">
           {/* Recent Certificates */}
-          <Card>
+          <Card className="border-border/60 shadow-sm">
             <CardHeader className="pb-3 border-b border-slate-50">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <Award className="h-4 w-4 text-amber-500" />
@@ -205,45 +209,45 @@ export function AttendeeDashboard() {
                 <ul className="space-y-4">
                   {recentCertificates.map(reg => (
                     <li key={reg.uuid} className="flex gap-3 items-start pb-3 border-b border-slate-50 last:border-0 last:pb-0">
-                      <div className="mt-0.5 bg-amber-100 p-1.5 rounded-md text-amber-600 shrink-0">
-                        <Award size={14} />
+                      <div className="mt-0.5 bg-amber-50 p-2 rounded-md text-amber-600 shrink-0 border border-amber-100">
+                        <Award size={16} />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-slate-900 line-clamp-1">{reg.event.title}</p>
+                        <p className="text-sm font-semibold text-slate-900 line-clamp-1">{reg.event.title}</p>
                         <p className="text-xs text-slate-500 mt-0.5">
                           Issued {new Date(reg.certificate_issued_at!).toLocaleDateString()}
                         </p>
-                        <Button variant="link" size="sm" className="h-auto p-0 text-xs mt-1 text-blue-600">
-                          Download
+                        <Button variant="link" size="sm" className="h-auto p-0 text-xs mt-1 text-blue-600 font-medium">
+                          Download PDF
                         </Button>
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
-              <Button variant="outline" className="w-full mt-4 text-xs h-8" asChild>
-                <Link to="/my-certificates">View All Certificates</Link>
+              <Button variant="ghost" className="w-full mt-4 text-xs h-8 text-slate-500 hover:text-slate-900" asChild>
+                <Link to="/my-certificates">View All Certificates <ArrowRight className="h-3 w-3 ml-1" /></Link>
               </Button>
             </CardContent>
           </Card>
 
           {/* Organizer Upsell */}
-          <Card className="bg-slate-900 text-white border-none overflow-hidden relative">
+          <Card className="bg-slate-900 text-white border-none overflow-hidden relative shadow-lg">
             <div className="absolute top-0 right-0 p-4 opacity-10">
               <Users size={100} />
             </div>
-            <CardHeader>
-              <CardTitle className="text-lg relative z-10">Host Your Own Events</CardTitle>
-              <CardDescription className="text-slate-300 relative z-10">
+            <CardHeader className="relative z-10">
+              <CardTitle className="text-lg">Host Your Own Events</CardTitle>
+              <CardDescription className="text-slate-300">
                 Ready to share your knowledge?
               </CardDescription>
             </CardHeader>
             <CardContent className="relative z-10">
-              <p className="text-sm text-slate-300 mb-4">
+              <p className="text-sm text-slate-300 mb-4 font-medium">
                 Upgrade to an Organizer account to create events, issue certificates, and track attendance automatically.
               </p>
-              <Button className="w-full bg-white text-slate-900 hover:bg-slate-100 font-semibold" size="sm">
-                Learn More
+              <Button className="w-full bg-white text-slate-900 hover:bg-slate-100 font-bold border-0" size="sm">
+                Become an Organizer
               </Button>
             </CardContent>
           </Card>

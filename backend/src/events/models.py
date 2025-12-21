@@ -83,6 +83,10 @@ class Event(SoftDeleteModel):
         max_length=20, choices=EventFormat.choices, default=EventFormat.ONLINE, help_text="Event format"
     )
 
+    is_multi_session = models.BooleanField(
+        default=False, help_text="Is this a multi-session event?"
+    )
+
     class MultiSessionCompletionCriteria(models.TextChoices):
         ALL_SESSIONS = 'all_sessions', 'All Sessions'
         PERCENTAGE_OF_SESSIONS = 'percentage_of_sessions', 'Percentage of Sessions'

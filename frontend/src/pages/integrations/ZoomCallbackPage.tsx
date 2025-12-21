@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { completeZoomOAuth } from '@/api/integrations';
 import { toast } from '@/components/ui/use-toast';
@@ -6,8 +6,16 @@ import { toast } from '@/components/ui/use-toast';
 export const ZoomCallbackPage = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    // Prevent double-invocation in React 18 strict mode from causing duplicate OAuth calls
+    const hasProcessedRef = useRef(false);
 
     useEffect(() => {
+        // OAuth codes can only be used once - prevent duplicate processing
+        if (hasProcessedRef.current) {
+            return;
+        }
+        hasProcessedRef.current = true;
+
         const code = searchParams.get('code');
         const error = searchParams.get('error');
 

@@ -22,10 +22,11 @@ class CertificateTemplateListSerializer(SoftDeleteModelSerializer):
         fields = [
             'uuid',
             'name',
+            'description',
             'version',
             'is_default',
             'is_latest_version',
-            'use_count',
+            'usage_count',
             'created_at',
         ]
         read_only_fields = fields
@@ -42,13 +43,14 @@ class CertificateTemplateDetailSerializer(SoftDeleteModelSerializer):
             'description',
             'version',
             'file_url',
-            'preview_url',
+            'file_type',
             'field_positions',
-            'dimensions',
+            'width_px',
+            'height_px',
             'orientation',
             'is_default',
             'is_latest_version',
-            'use_count',
+            'usage_count',
             'original_template',
             'created_at',
             'updated_at',
@@ -57,7 +59,7 @@ class CertificateTemplateDetailSerializer(SoftDeleteModelSerializer):
             'uuid',
             'version',
             'is_latest_version',
-            'use_count',
+            'usage_count',
             'original_template',
             'created_at',
             'updated_at',
@@ -70,15 +72,24 @@ class CertificateTemplateCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CertificateTemplate
         fields = [
+            'uuid',
             'name',
             'description',
             'file_url',
-            'preview_url',
+            'file_type',
             'field_positions',
-            'dimensions',
+            'width_px',
+            'height_px',
             'orientation',
             'is_default',
+            'version',
+            'usage_count',
+            'created_at',
         ]
+        read_only_fields = ['uuid', 'version', 'usage_count', 'created_at']
+        extra_kwargs = {
+            'file_url': {'required': False, 'default': ''},
+        }
 
 
 class CertificateTemplateUpdateSerializer(serializers.ModelSerializer):
@@ -94,16 +105,17 @@ class CertificateTemplateUpdateSerializer(serializers.ModelSerializer):
             'name',
             'description',
             'file_url',
-            'preview_url',
+            'file_type',
             'field_positions',
-            'dimensions',
+            'width_px',
+            'height_px',
             'orientation',
             'is_default',
         ]
 
     def update(self, instance, validated_data):
         # Check if template has been used
-        if instance.use_count > 0:
+        if instance.usage_count > 0:
             # Create new version instead of updating
             new_template = instance.create_new_version()
 

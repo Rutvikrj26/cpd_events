@@ -265,18 +265,21 @@ class PublicRegistrationView(generics.CreateAPIView):
             email = user.email
             full_name = full_name or user.full_name
 
-        # Check for existing registration
-        if Registration.objects.filter(event=event, user=request.user, deleted_at__isnull=True).exists():
-            return error_response('Already registered for this event.', code='ALREADY_REGISTERED', status_code=status.HTTP_400_BAD_REQUEST)
+        # Check for existing registration (by user if authenticated, by email if guest)
+        if user:
+            if Registration.objects.filter(event=event, user=user, deleted_at__isnull=True).exists():
+                return error_response('Already registered for this event.', code='ALREADY_REGISTERED', status_code=status.HTTP_400_BAD_REQUEST)
+        else:
+            if Registration.objects.filter(event=event, email__iexact=email, deleted_at__isnull=True).exists():
+                return error_response('Already registered for this event.', code='ALREADY_REGISTERED', status_code=status.HTTP_400_BAD_REQUEST)
 
         # Check capacity
-        if event.capacity:
+        if event.max_attendees:
             confirmed_count = event.registrations.filter(status='confirmed').count()
-            if confirmed_count >= event.capacity:
+            if confirmed_count >= event.max_attendees:
                 if event.waitlist_enabled:
                     return self._add_to_waitlist(event, user, email, full_name, serializer.validated_data)
-                if not event.has_capacity:
-                    return error_response('Event is at capacity.', code='EVENT_FULL')
+                return error_response('Event is at capacity.', code='EVENT_FULL')
 
         # Create registration
         registration = Registration.objects.create(

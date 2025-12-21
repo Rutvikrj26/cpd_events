@@ -1,115 +1,54 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { createEvent } from '@/api/events';
-import { EventCreateRequest } from '@/api/events/types';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/use-toast';
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { PageHeader } from '@/components/ui/page-header';
+import { EventWizard } from '@/components/events/wizard/EventWizard';
+import { getEvent } from '@/api/events';
+import { toast } from 'sonner';
 
-export const EventCreatePage = () => {
-    const navigate = useNavigate();
-    const { toast } = useToast();
-    const [loading, setLoading] = useState(false);
-    const [formData, setFormData] = useState<EventCreateRequest>({
-        title: '',
-        description: '',
-        start_date: '',
-        end_date: '',
-        timezone: 'UTC',
-        format: 'online', // Default
-    });
+export function EventCreatePage() {
+    const { uuid } = useParams<{ uuid: string }>();
+    const isEditMode = !!uuid;
+    const [eventData, setEventData] = useState<any>(null);
+    const [loading, setLoading] = useState(isEditMode);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        try {
-            await createEvent(formData);
-            toast({ title: 'Success', description: 'Event created successfully' });
-            navigate('/events');
-        } catch (error) {
-            console.error(error);
-            toast({ variant: 'destructive', title: 'Error', description: 'Failed to create event' });
-        } finally {
-            setLoading(false);
+    useEffect(() => {
+        async function fetchEvent() {
+            if (!uuid) return;
+            try {
+                const data = await getEvent(uuid);
+                // Map API response fields to form field names
+                setEventData({
+                    ...data,
+                    // Map aliased fields back to form field names
+                    cpd_credit_value: data.cpd_credits,
+                    cpd_credit_type: data.cpd_type,
+                    cover_image_url: data.featured_image_url,
+                });
+            } catch (e) {
+                console.error("Failed to fetch event", e);
+                toast.error("Failed to load event details");
+            } finally {
+                setLoading(false);
+            }
         }
-    };
+        fetchEvent();
+    }, [uuid]);
+
+    if (loading) {
+        return <div className="p-8">Loading event...</div>;
+    }
 
     return (
-        <div className="max-w-2xl mx-auto py-8">
-            <h1 className="text-2xl font-bold mb-6">Create New Event</h1>
-            <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl border shadow-sm space-y-6">
+        <div className="space-y-6">
+            <PageHeader
+                title={isEditMode ? "Edit Event" : "Create New Event"}
+                description={isEditMode
+                    ? "Update your event details, schedule, and settings."
+                    : "Follow the steps to set up your event, schedule, and settings."
+                }
+            />
 
-                <div className="space-y-2">
-                    <label className="text-sm font-medium">Event Title</label>
-                    <Input
-                        required
-                        value={formData.title}
-                        onChange={e => setFormData({ ...formData, title: e.target.value })}
-                        placeholder="e.g. Annual CPD Conference 2024"
-                    />
-                </div>
-
-                <div className="space-y-2">
-                    <label className="text-sm font-medium">Description</label>
-                    <textarea
-                        className="w-full min-h-[100px] border rounded-md p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                        required
-                        value={formData.description}
-                        onChange={e => setFormData({ ...formData, description: e.target.value })}
-                    />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Start Date & Time</label>
-                        <Input
-                            type="datetime-local"
-                            required
-                            value={formData.start_date}
-                            onChange={e => setFormData({ ...formData, start_date: e.target.value })}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">End Date & Time</label>
-                        <Input
-                            type="datetime-local"
-                            required
-                            value={formData.end_date}
-                            onChange={e => setFormData({ ...formData, end_date: e.target.value })}
-                        />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Format</label>
-                        <select
-                            className="w-full border rounded-md h-10 px-3 text-sm"
-                            value={formData.format}
-                            onChange={e => setFormData({ ...formData, format: e.target.value as any })}
-                        >
-                            <option value="online">Online</option>
-                            <option value="in-person">In Person</option>
-                            <option value="hybrid">Hybrid</option>
-                        </select>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Timezone</label>
-                        <Input
-                            value={formData.timezone}
-                            onChange={e => setFormData({ ...formData, timezone: e.target.value })}
-                        />
-                    </div>
-                </div>
-
-                <div className="pt-4 flex justify-end gap-3">
-                    <Button type="button" variant="ghost" onClick={() => navigate('/events')}>Cancel</Button>
-                    <Button type="submit" disabled={loading}>
-                        {loading ? 'Creating...' : 'Create Event'}
-                    </Button>
-                </div>
-
-            </form>
+            <EventWizard initialData={eventData} isEditMode={isEditMode} />
         </div>
     );
-};
+}

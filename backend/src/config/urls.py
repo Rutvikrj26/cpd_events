@@ -32,6 +32,10 @@ urlpatterns = [
     path('api/v1/integrations/', include('integrations.urls')),
     path('api/v1/', include('billing.urls')),
     path('api/v1/', include('learning.urls')),
+    # Public registration (needs to be at root, not under /registrations/)
+    path('api/v1/public/events/<uuid:event_uuid>/register/', 
+         __import__('registrations.views', fromlist=['PublicRegistrationView']).PublicRegistrationView.as_view(), 
+         name='public_event_register'),
     # Webhooks
     path('webhooks/stripe/', StripeWebhookView.as_view(), name='stripe_webhook'),
     # Internal & Common

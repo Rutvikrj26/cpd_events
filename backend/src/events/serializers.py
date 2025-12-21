@@ -96,8 +96,14 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
 
     owner = serializers.SerializerMethodField()
     custom_fields = EventCustomFieldSerializer(many=True, read_only=True)
-    duration_display = serializers.CharField(source='duration_display', read_only=True)
     status_transitions = serializers.SerializerMethodField()
+    # Field aliases to match API contract with model field names
+    capacity = serializers.IntegerField(source='max_attendees', read_only=True)
+    zoom_passcode = serializers.CharField(source='zoom_password', read_only=True)
+    cpd_credits = serializers.DecimalField(source='cpd_credit_value', max_digits=5, decimal_places=2, read_only=True)
+    cpd_type = serializers.CharField(source='cpd_credit_type', read_only=True)
+    featured_image_url = serializers.URLField(source='cover_image_url', read_only=True)
+    attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
 
     class Meta:
         model = Event
@@ -109,12 +115,12 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'description',
             'status',
             'event_type',
+            'format',
             # Scheduling
             'starts_at',
             'ends_at',
             'timezone',
             'duration_minutes',
-            'duration_display',
             # Multi-session fields (H2)
             'is_multi_session',
             'minimum_attendance_percent',
@@ -125,23 +131,20 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'registration_closes_at',
             'capacity',
             'waitlist_enabled',
-            'waitlist_auto_promote',  # M3 fix
+            'waitlist_auto_promote',
             # Zoom
             'zoom_meeting_id',
             'zoom_join_url',
-            'zoom_passcode',  # Only for owners
+            'zoom_passcode',
             # CPD
             'cpd_credits',
             'cpd_type',
-            'cpd_type_display',
             # Certificates
             'certificates_enabled',
             'certificate_template',
             'auto_issue_certificates',
-            'certificate_expiration_months',
             # Branding
             'featured_image_url',
-            'is_featured',
             'is_public',
             # Counts
             'registration_count',
@@ -156,8 +159,6 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             # Timestamps
             'created_at',
             'updated_at',
-            'published_at',
-            'completed_at',
         ]
         read_only_fields = [
             'uuid',
@@ -170,8 +171,6 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'waitlist_count',
             'created_at',
             'updated_at',
-            'published_at',
-            'completed_at',
         ]
 
     def get_owner(self, obj):
@@ -265,6 +264,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             'title',
             'short_description',
             'description',
+            'format',
             # Scheduling
             'starts_at',
             'duration_minutes',
@@ -273,21 +273,18 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             'registration_enabled',
             'registration_opens_at',
             'registration_closes_at',
-            'capacity',
+            'max_attendees',
             'waitlist_enabled',
-            'waitlist_auto_promote',  # M3 fix
+            'waitlist_auto_promote',
             # CPD
-            'cpd_credits',
-            'cpd_type',
-            'cpd_type_display',
+            'cpd_credit_value',
+            'cpd_credit_type',
             # Certificates
             'certificates_enabled',
             'certificate_template',
             'auto_issue_certificates',
-            'certificate_expiration_months',
             # Branding
-            'featured_image_url',
-            'is_featured',
+            'cover_image_url',
             'is_public',
             # Multi-session (H2)
             'is_multi_session',
@@ -313,6 +310,10 @@ class PublicEventListSerializer(serializers.ModelSerializer):
 
     organizer_name = serializers.SerializerMethodField()
     is_registration_open = serializers.SerializerMethodField()
+    # Field aliases to match API contract with model field names
+    cpd_credits = serializers.DecimalField(source='cpd_credit_value', max_digits=5, decimal_places=2, read_only=True)
+    featured_image_url = serializers.URLField(source='cover_image_url', read_only=True)
+    capacity = serializers.IntegerField(source='max_attendees', read_only=True)
 
     class Meta:
         model = Event
@@ -322,11 +323,11 @@ class PublicEventListSerializer(serializers.ModelSerializer):
             'title',
             'short_description',
             'event_type',
+            'format',
             'starts_at',
             'ends_at',
             'timezone',
             'cpd_credits',
-            'cpd_type_display',
             'organizer_name',
             'featured_image_url',
             'is_registration_open',
@@ -371,9 +372,9 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
         }
 
     def get_spots_remaining(self, obj):
-        if not obj.capacity:
+        if not obj.max_attendees:
             return None
-        return max(0, obj.capacity - obj.registration_count)
+        return max(0, obj.max_attendees - obj.registration_count)
 
 
 class EventStatusHistorySerializer(BaseModelSerializer):

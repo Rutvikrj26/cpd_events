@@ -4,6 +4,7 @@ export interface MinimalEvent {
     slug: string;
     starts_at: string;
     status: string;
+    event_type?: string;
     cpd_credit_value: number;
     cpd_credit_type: string;
 }
@@ -29,8 +30,12 @@ export interface Registration {
 }
 
 export interface RegistrationCreateRequest {
-    users?: { email: string; first_name: string; last_name: string }[];
-    custom_answers?: Record<string, any>;
+    email: string;
+    full_name: string;
+    professional_title?: string;
+    organization_name?: string;
+    custom_field_responses?: Record<string, any>;
+    allow_public_verification?: boolean;
 }
 
 export interface LinkRegistrationRequest {
