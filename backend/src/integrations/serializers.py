@@ -219,3 +219,22 @@ class EmailLogSerializer(BaseModelSerializer):
             'created_at',
         ]
         read_only_fields = fields
+
+
+# =============================================================================
+# Zoom Meeting List Serializer (for Zoom Management page)
+# =============================================================================
+
+
+class ZoomMeetingListSerializer(serializers.Serializer):
+    """Event with Zoom meeting details for organizer management page."""
+
+    uuid = serializers.UUIDField(source='event_uuid')
+    title = serializers.CharField(source='event_title')
+    status = serializers.CharField(source='event_status')
+    starts_at = serializers.DateTimeField()
+    zoom_meeting_id = serializers.CharField()
+    zoom_join_url = serializers.URLField()
+    zoom_password = serializers.CharField()
+    created_at = serializers.DateTimeField(source='event_created_at')
+

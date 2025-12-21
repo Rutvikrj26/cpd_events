@@ -50,6 +50,7 @@ import { ContactsPage } from './pages/dashboard/organizer/ContactsPage';
 import { ReportsPage } from './pages/dashboard/organizer/ReportsPage';
 import { EventManagement } from './pages/dashboard/organizer/EventManagement';
 import { CertificateTemplatesPage } from './pages/dashboard/organizer/CertificateTemplatesPage';
+import { ZoomManagement } from './pages/dashboard/organizer/ZoomManagement';
 
 // Integrations
 import { ZoomCallbackPage } from './pages/integrations/ZoomCallbackPage';
@@ -156,6 +157,7 @@ export default function App() {
                 <Route path="/organizer/reports" element={<ReportsPage />} />
                 <Route path="/organizer/certificates/templates" element={<CertificateTemplatesPage />} />
                 <Route path="/organizer/events/:uuid/manage" element={<EventManagement />} />
+                <Route path="/organizer/zoom" element={<ZoomManagement />} />
               </Route>
 
               {/* Redirects for old organizer event routes */}

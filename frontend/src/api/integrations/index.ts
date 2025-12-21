@@ -25,3 +25,20 @@ export const initiateZoomOAuth = async (): Promise<string> => {
     const response = await client.get<{ url: string }>(`${BASE_URL}/initiate/`);
     return response.data.url;
 };
+
+// Get all events with Zoom meetings for the current user
+export const getZoomMeetings = async (): Promise<ZoomMeeting[]> => {
+    const response = await client.get<ZoomMeeting[]>(`${BASE_URL}/meetings/`);
+    return response.data;
+};
+
+export interface ZoomMeeting {
+    uuid: string;
+    title: string;
+    status: string;
+    starts_at: string;
+    zoom_meeting_id: string;
+    zoom_join_url: string;
+    zoom_password: string;
+    created_at: string;
+}

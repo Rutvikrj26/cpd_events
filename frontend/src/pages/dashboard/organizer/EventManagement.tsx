@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
    Users,
    CheckCircle,
@@ -10,7 +10,12 @@ import {
    MoreVertical,
    QrCode,
    Award,
-   Filter
+   Filter,
+   Video,
+   Copy,
+   ExternalLink,
+   RefreshCw,
+   Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,8 +34,19 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { StatusBadge } from "@/components/custom/StatusBadge";
 import { toast } from "sonner";
-import { getEvent, publishEvent, getEventRegistrations, checkInAttendee } from "@/api/events";
+import { getEvent, publishEvent, getEventRegistrations, checkInAttendee, deleteEvent } from "@/api/events";
 import { issueCertificates } from "@/api/certificates";
+import {
+   AlertDialog,
+   AlertDialogAction,
+   AlertDialogCancel,
+   AlertDialogContent,
+   AlertDialogDescription,
+   AlertDialogFooter,
+   AlertDialogHeader,
+   AlertDialogTitle,
+   AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 
 
@@ -38,8 +54,10 @@ import { EditAttendanceDialog } from "@/components/events/EditAttendanceDialog";
 
 export function EventManagement() {
    const { uuid } = useParams<{ uuid: string }>();
+   const navigate = useNavigate();
    const [event, setEvent] = useState<any | null>(null);
    const [loading, setLoading] = useState(true);
+   const [deleting, setDeleting] = useState(false);
 
    // Dialog State
    const [editAttendanceOpen, setEditAttendanceOpen] = useState(false);
@@ -178,6 +196,19 @@ export function EventManagement() {
       }
    };
 
+   const handleDelete = async () => {
+      if (!uuid) return;
+      setDeleting(true);
+      try {
+         await deleteEvent(uuid);
+         toast.success(`"${event.title}" has been deleted.`);
+         navigate('/events');
+      } catch (error: any) {
+         toast.error(error?.response?.data?.message || "Failed to delete event");
+         setDeleting(false);
+      }
+   };
+
    const filteredAttendees = attendees.filter(a =>
       (a.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (a.email || '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -211,6 +242,32 @@ export function EventManagement() {
                   <Link to={`/events/${event.slug}`}>
                      <Button className="bg-blue-600 hover:bg-blue-700">View Public Page</Button>
                   </Link>
+                  <AlertDialog>
+                     <AlertDialogTrigger asChild>
+                        <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700">
+                           <Trash2 className="h-4 w-4 mr-2" />
+                           Delete
+                        </Button>
+                     </AlertDialogTrigger>
+                     <AlertDialogContent>
+                        <AlertDialogHeader>
+                           <AlertDialogTitle>Delete Event</AlertDialogTitle>
+                           <AlertDialogDescription>
+                              Are you sure you want to delete "{event.title}"? This action cannot be undone.
+                           </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                           <AlertDialogCancel>Cancel</AlertDialogCancel>
+                           <AlertDialogAction
+                              onClick={handleDelete}
+                              disabled={deleting}
+                              className="bg-red-600 hover:bg-red-700"
+                           >
+                              {deleting ? 'Deleting...' : 'Delete Event'}
+                           </AlertDialogAction>
+                        </AlertDialogFooter>
+                     </AlertDialogContent>
+                  </AlertDialog>
                </div>
             }
          >
@@ -260,6 +317,111 @@ export function EventManagement() {
                </CardContent>
             </Card>
          </div>
+
+         {/* Zoom Meeting Details Card */}
+         {event.zoom_settings?.enabled && (
+            <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-900">
+               <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                     <div className="flex items-center gap-2">
+                        <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+                           <Video className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                           <CardTitle className="text-base">Zoom Meeting</CardTitle>
+                           <CardDescription className="text-xs">
+                              {event.zoom_meeting_id ? 'Meeting created and ready' : 'Meeting pending creation'}
+                           </CardDescription>
+                        </div>
+                     </div>
+                     {!event.zoom_meeting_id && (
+                        <Button variant="outline" size="sm" className="gap-2">
+                           <RefreshCw className="h-4 w-4" />
+                           Retry Creation
+                        </Button>
+                     )}
+                  </div>
+               </CardHeader>
+               {event.zoom_meeting_id && (
+                  <CardContent className="pt-0">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Meeting ID */}
+                        <div className="space-y-1">
+                           <label className="text-xs font-medium text-muted-foreground">Meeting ID</label>
+                           <div className="flex items-center gap-2">
+                              <code className="flex-1 px-3 py-2 text-sm bg-background border rounded-md font-mono">
+                                 {event.zoom_meeting_id}
+                              </code>
+                              <Button
+                                 variant="ghost"
+                                 size="icon"
+                                 className="h-9 w-9"
+                                 onClick={() => {
+                                    navigator.clipboard.writeText(event.zoom_meeting_id);
+                                    toast.success('Meeting ID copied');
+                                 }}
+                              >
+                                 <Copy className="h-4 w-4" />
+                              </Button>
+                           </div>
+                        </div>
+
+                        {/* Password */}
+                        <div className="space-y-1">
+                           <label className="text-xs font-medium text-muted-foreground">Password</label>
+                           <div className="flex items-center gap-2">
+                              <code className="flex-1 px-3 py-2 text-sm bg-background border rounded-md font-mono">
+                                 {event.zoom_passcode || '—'}
+                              </code>
+                              {event.zoom_passcode && (
+                                 <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9"
+                                    onClick={() => {
+                                       navigator.clipboard.writeText(event.zoom_passcode);
+                                       toast.success('Password copied');
+                                    }}
+                                 >
+                                    <Copy className="h-4 w-4" />
+                                 </Button>
+                              )}
+                           </div>
+                        </div>
+
+                        {/* Join URL */}
+                        <div className="space-y-1 md:col-span-2">
+                           <label className="text-xs font-medium text-muted-foreground">Attendee Join URL</label>
+                           <div className="flex items-center gap-2">
+                              <code className="flex-1 px-3 py-2 text-sm bg-background border rounded-md font-mono truncate">
+                                 {event.zoom_join_url}
+                              </code>
+                              <Button
+                                 variant="ghost"
+                                 size="icon"
+                                 className="h-9 w-9"
+                                 onClick={() => {
+                                    navigator.clipboard.writeText(event.zoom_join_url);
+                                    toast.success('Join URL copied');
+                                 }}
+                              >
+                                 <Copy className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                 variant="ghost"
+                                 size="icon"
+                                 className="h-9 w-9"
+                                 onClick={() => window.open(event.zoom_join_url, '_blank')}
+                              >
+                                 <ExternalLink className="h-4 w-4" />
+                              </Button>
+                           </div>
+                        </div>
+                     </div>
+                  </CardContent>
+               )}
+            </Card>
+         )}
 
          <Tabs defaultValue="registrations" className="w-full">
             <TabsList className="w-full justify-start border-b border-border bg-transparent p-0 h-auto rounded-none mb-6">

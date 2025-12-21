@@ -12,7 +12,8 @@ import {
     ChevronLeft,
     ChevronRight,
     Settings,
-    FileText
+    FileText,
+    Video
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ export const Sidebar = () => {
         { to: '/registrations', icon: BookOpen, label: 'My Registrations', show: !isOrganizer },
         { to: '/certificates', icon: Award, label: 'Certificates', show: !isOrganizer },
         { to: '/organizer/certificates/templates', icon: FileText, label: 'Cert. Templates', show: isOrganizer },
+        { to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', show: isOrganizer },
         { to: '/billing', icon: CreditCard, label: 'Billing' },
         { to: '/profile', icon: UserCircle, label: 'Profile' },
         { to: '/settings', icon: Settings, label: 'Settings', show: false }, // Placeholder

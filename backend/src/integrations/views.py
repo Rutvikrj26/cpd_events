@@ -390,3 +390,57 @@ class ZoomDisconnectView(generics.GenericAPIView):
             return Response({'status': 'disconnected'})
         
         return error_response('Failed to disconnect Zoom', code='DISCONNECT_FAILED')
+
+
+class ZoomMeetingsListView(generics.ListAPIView):
+    """
+    GET /api/v1/integrations/zoom/meetings/
+
+    List all events with Zoom meetings for the current user.
+    """
+
+    permission_classes = [IsAuthenticated, IsOrganizer]
+    serializer_class = serializers.ZoomMeetingListSerializer
+
+    def get_queryset(self):
+        from events.models import Event
+
+        return (
+            Event.objects.filter(
+                owner=self.request.user,
+                zoom_meeting_id__isnull=False,
+                deleted_at__isnull=True,
+            )
+            .exclude(zoom_meeting_id='')
+            .order_by('-starts_at')
+            .values(
+                'uuid',
+                'title',
+                'status',
+                'starts_at',
+                'zoom_meeting_id',
+                'zoom_join_url',
+                'zoom_password',
+                'created_at',
+            )
+        )
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        # Transform to match serializer's expected field names
+        data = [
+            {
+                'event_uuid': item['uuid'],
+                'event_title': item['title'],
+                'event_status': item['status'],
+                'starts_at': item['starts_at'],
+                'zoom_meeting_id': item['zoom_meeting_id'],
+                'zoom_join_url': item['zoom_join_url'],
+                'zoom_password': item['zoom_password'],
+                'event_created_at': item['created_at'],
+            }
+            for item in queryset
+        ]
+        serializer = self.get_serializer(data, many=True)
+        return Response(serializer.data)
+

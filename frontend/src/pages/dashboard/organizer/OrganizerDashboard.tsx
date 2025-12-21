@@ -183,7 +183,7 @@ export function OrganizerDashboard() {
                       {recentEvents.map((event) => (
                         <tr key={event.uuid} className="group hover:bg-muted/30/50 transition-colors">
                           <td className="px-6 py-4 font-medium text-foreground">
-                            <Link to={`/events/${event.uuid}`} className="hover:text-primary transition-colors block truncate max-w-[200px] sm:max-w-xs">
+                            <Link to={`/organizer/events/${event.uuid}/manage`} className="hover:text-primary transition-colors block truncate max-w-[200px] sm:max-w-xs">
                               {event.title}
                             </Link>
                           </td>
@@ -208,13 +208,11 @@ export function OrganizerDashboard() {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                 <DropdownMenuItem asChild>
-                                  <Link to={`/events/${event.uuid}`}>View Details</Link>
+                                  <Link to={`/organizer/events/${event.uuid}/manage`}>Manage Event</Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem asChild>
                                   <Link to={`/events/${event.uuid}/edit`}>Edit Event</Link>
                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </td>
