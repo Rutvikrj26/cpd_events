@@ -119,7 +119,9 @@ export const EventDetailPage = () => {
                                         <div>
                                             <h4 className="font-bold">{session.title}</h4>
                                             <p className="text-sm text-muted-foreground">
-                                                {new Date(session.start_time).toLocaleTimeString()} - {new Date(session.end_time).toLocaleTimeString()}
+                                                {new Date(session.starts_at).toLocaleTimeString()} - {session.ends_at
+                                                    ? new Date(session.ends_at).toLocaleTimeString()
+                                                    : new Date(new Date(session.starts_at).getTime() + session.duration_minutes * 60000).toLocaleTimeString()}
                                             </p>
                                         </div>
                                     </div>

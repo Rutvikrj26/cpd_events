@@ -17,6 +17,9 @@ from .models import Certificate, CertificateStatusHistory, CertificateTemplate
 class CertificateTemplateListSerializer(SoftDeleteModelSerializer):
     """Lightweight template for list views."""
 
+    organization_name = serializers.CharField(source='organization.name', read_only=True, allow_null=True)
+    is_org_template = serializers.SerializerMethodField()
+
     class Meta:
         model = CertificateTemplate
         fields = [
@@ -28,15 +31,23 @@ class CertificateTemplateListSerializer(SoftDeleteModelSerializer):
             'field_positions',
             'version',
             'is_default',
+            'is_shared',
             'is_latest_version',
             'usage_count',
+            'organization_name',
+            'is_org_template',
             'created_at',
         ]
         read_only_fields = fields
 
+    def get_is_org_template(self, obj):
+        return obj.organization_id is not None
+
 
 class CertificateTemplateDetailSerializer(SoftDeleteModelSerializer):
     """Full template detail."""
+
+    organization_name = serializers.CharField(source='organization.name', read_only=True, allow_null=True)
 
     class Meta:
         model = CertificateTemplate
@@ -52,8 +63,10 @@ class CertificateTemplateDetailSerializer(SoftDeleteModelSerializer):
             'height_px',
             'orientation',
             'is_default',
+            'is_shared',
             'is_latest_version',
             'usage_count',
+            'organization_name',
             'original_template',
             'created_at',
             'updated_at',
@@ -63,6 +76,7 @@ class CertificateTemplateDetailSerializer(SoftDeleteModelSerializer):
             'version',
             'is_latest_version',
             'usage_count',
+            'organization_name',
             'original_template',
             'created_at',
             'updated_at',
@@ -328,12 +342,23 @@ class MyCertificateSerializer(SoftDeleteModelSerializer):
         return f"{settings.SITE_URL}/verify/{obj.short_code}"
 
     def get_event(self, obj):
-        return {
-            'uuid': str(obj.event.uuid),
-            'title': obj.event.title,
-            'cpd_credits': str(obj.event.cpd_credit_value) if obj.event.cpd_credit_value else None,
-            'cpd_type': obj.event.cpd_credit_type,
-        }
+        if obj.registration:
+            return {
+                'uuid': str(obj.event.uuid),
+                'title': obj.event.title,
+                'cpd_credits': str(obj.event.cpd_credit_value) if obj.event.cpd_credit_value else None,
+                'cpd_type': obj.event.cpd_credit_type,
+                'event_type': obj.event.event_type, # Ensure this exists on event model or helper
+            }
+        if obj.course_enrollment:
+            return {
+                'uuid': str(obj.course_enrollment.course.uuid),
+                'title': obj.course_enrollment.course.title,
+                'cpd_credits': str(obj.course_enrollment.course.cpd_credits),
+                'cpd_type': obj.course_enrollment.course.cpd_type,
+                'event_type': 'course',
+            }
+        return None
 
     def get_download_url(self, obj):
         if obj.status == 'active' and obj.file_url:

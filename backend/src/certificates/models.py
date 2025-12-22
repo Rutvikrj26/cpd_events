@@ -44,6 +44,14 @@ class CertificateTemplate(SoftDeleteModel):
         related_name='certificate_templates',
         help_text="Organizer who owns this template",
     )
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='certificate_templates',
+        help_text="Organization that owns this template (null for individual organizers)",
+    )
 
     # =========================================
     # Basic Info
@@ -97,6 +105,10 @@ class CertificateTemplate(SoftDeleteModel):
     # =========================================
     is_default = models.BooleanField(default=False, help_text="Default template for new events")
     is_active = models.BooleanField(default=True, help_text="Available for selection (not archived)")
+    is_shared = models.BooleanField(
+        default=False,
+        help_text="If True, this org template is available to all org members for their events"
+    )
 
     # =========================================
     # Stats (denormalized)
@@ -110,6 +122,7 @@ class CertificateTemplate(SoftDeleteModel):
         indexes = [
             models.Index(fields=['owner']),
             models.Index(fields=['owner', 'is_active']),
+            models.Index(fields=['organization', 'is_shared']),
             models.Index(fields=['uuid']),
         ]
         verbose_name = 'Certificate Template'
@@ -211,8 +224,18 @@ class Certificate(SoftDeleteModel):
     registration = models.OneToOneField(
         'registrations.Registration',
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name='certificate',
         help_text="Registration this certificate was issued for",
+    )
+    course_enrollment = models.OneToOneField(
+        'learning.CourseEnrollment',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='certificate',
+        help_text="Course enrollment this certificate was issued for",
     )
     template = models.ForeignKey(
         CertificateTemplate,
@@ -293,17 +316,45 @@ class Certificate(SoftDeleteModel):
         verbose_name_plural = 'Certificates'
 
     def __str__(self):
-        return f"Certificate: {self.registration.full_name}"
+        if self.registration:
+            return f"Certificate: {self.registration.full_name}"
+        if self.course_enrollment:
+            return f"Certificate: {self.course_enrollment.user.display_name} (Course)"
+        return f"Certificate: {self.pk}"
+
+    @property
+    def recipient_name(self):
+        """Get recipient name."""
+        if self.registration:
+            return self.registration.full_name
+        if self.course_enrollment:
+            return self.course_enrollment.user.display_name
+        return "Unknown"
+
+    @property
+    def context_title(self):
+        """Get event or course title."""
+        if self.registration:
+            return self.registration.event.title
+        if self.course_enrollment:
+            return self.course_enrollment.course.title
+        return "Unknown"
 
     @property
     def event(self):
-        """Shortcut to event."""
-        return self.registration.event
+        """Shortcut to event (for legacy compatibility)."""
+        if self.registration:
+            return self.registration.event
+        return None
 
     @property
     def attendee_name(self):
         """Get attendee name from snapshot."""
-        return self.certificate_data.get('attendee_name', self.registration.full_name)
+        if self.registration:
+            return self.certificate_data.get('attendee_name', self.registration.full_name)
+        if self.course_enrollment:
+            return self.certificate_data.get('attendee_name', self.course_enrollment.user.display_name)
+        return self.certificate_data.get('attendee_name', '')
 
     @property
     def is_valid(self):
@@ -360,29 +411,49 @@ class Certificate(SoftDeleteModel):
         Certificate.objects.filter(pk=self.pk).update(**updates)
 
     def build_certificate_data(self):
-        """Build certificate data snapshot from registration."""
-        reg = self.registration
-        event = reg.event
-
-        self.certificate_data = {
-            'attendee_name': reg.full_name,
-            'attendee_email': reg.email,
-            'attendee_title': reg.professional_title,
-            'attendee_organization': reg.organization_name,
-            'event_title': event.title,
-            'event_date': event.starts_at.date().isoformat(),
-            'event_datetime': event.starts_at.isoformat(),
-            'event_duration_minutes': event.duration_minutes,
-            'cpd_type': event.cpd_credit_type if event.cpd_enabled else '',
-            'cpd_credits': str(event.cpd_credit_value) if event.cpd_enabled else '',
-            'cpd_accreditation': event.cpd_accreditation_note,
-            'organizer_name': event.owner.display_name,
-            'organizer_email': event.owner.email,
-            'attendance_minutes': reg.total_attendance_minutes,
-            'attendance_percent': reg.attendance_percent,
-            'issued_date': timezone.now().date().isoformat(),
-            'issued_datetime': timezone.now().isoformat(),
-        }
+        """Build certificate data snapshot."""
+        if self.registration:
+            reg = self.registration
+            event = reg.event
+            self.certificate_data = {
+                'attendee_name': reg.full_name,
+                'attendee_email': reg.email,
+                'attendee_title': reg.professional_title,
+                'attendee_organization': reg.organization_name,
+                'event_title': event.title,
+                'event_date': event.starts_at.date().isoformat() if event.starts_at else '',
+                'event_datetime': event.starts_at.isoformat() if event.starts_at else '',
+                'event_duration_minutes': event.duration_minutes,
+                'cpd_type': event.cpd_credit_type if event.cpd_enabled else '',
+                'cpd_credits': str(event.cpd_credit_value) if event.cpd_enabled else '',
+                'cpd_accreditation': event.cpd_accreditation_note,
+                'organizer_name': event.owner.display_name,
+                'organizer_email': event.owner.email,
+                'attendance_minutes': reg.total_attendance_minutes,
+                'attendance_percent': reg.attendance_percent,
+                'issued_date': timezone.now().date().isoformat(),
+                'issued_datetime': timezone.now().isoformat(),
+                'type': 'event',
+            }
+        elif self.course_enrollment:
+            enrollment = self.course_enrollment
+            course = enrollment.course
+            user = enrollment.user
+            self.certificate_data = {
+                'attendee_name': user.display_name,
+                'attendee_email': user.email,
+                # 'attendee_title': user.profile.professional_title, # Assuming profile exists or similar
+                'event_title': course.title, # Using event_title key for template compatibility
+                'course_title': course.title,
+                'event_date': enrollment.completed_at.date().isoformat() if enrollment.completed_at else timezone.now().date().isoformat(),
+                'completion_date': enrollment.completed_at.date().isoformat() if enrollment.completed_at else timezone.now().date().isoformat(),
+                'cpd_type': course.cpd_type,
+                'cpd_credits': str(course.cpd_credits),
+                'organizer_name': course.organization.name, # Course is owned by org
+                'issued_date': timezone.now().date().isoformat(),
+                'issued_datetime': timezone.now().isoformat(),
+                'type': 'course',
+            }
 
 
 class CertificateStatusHistory(BaseModel):

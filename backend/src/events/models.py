@@ -62,6 +62,14 @@ class Event(SoftDeleteModel):
     owner = models.ForeignKey(
         'accounts.User', on_delete=models.PROTECT, related_name='events', help_text="Organizer who owns this event"
     )
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='events',
+        help_text="Organization that owns this event (null for individual organizers)",
+    )
 
     # =========================================
     # Basic Info
@@ -227,6 +235,7 @@ class Event(SoftDeleteModel):
         ordering = ['-starts_at']
         indexes = [
             models.Index(fields=['owner', 'status']),
+            models.Index(fields=['organization', 'status']),
             models.Index(fields=['status', '-starts_at']),
             models.Index(fields=['starts_at']),
             models.Index(fields=['uuid']),
@@ -256,6 +265,11 @@ class Event(SoftDeleteModel):
     def is_past(self):
         """Check if event end time has passed."""
         return self.ends_at < timezone.now()
+
+    @property
+    def owning_entity(self):
+        """Return the organization or owner of this event."""
+        return self.organization or self.owner
 
     @property
     def is_full(self):

@@ -3,7 +3,8 @@ Learning API views.
 """
 
 from django.shortcuts import get_object_or_404
-from rest_framework import permissions, status, views, viewsets
+from django.db import models
+from rest_framework import permissions, status, views, viewsets, parsers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from common.utils import error_response
@@ -15,6 +16,9 @@ from .models import (
     Assignment,
     AssignmentSubmission,
     ContentProgress,
+    Course,
+    CourseEnrollment,
+    CourseModule,
     EventModule,
     ModuleContent,
     ModuleProgress,
@@ -27,6 +31,11 @@ from .serializers import (
     AssignmentSubmissionSerializer,
     ContentProgressSerializer,
     ContentProgressUpdateSerializer,
+    CourseCreateSerializer,
+    CourseEnrollmentSerializer,
+    CourseListSerializer,
+    CourseModuleSerializer,
+    CourseSerializer,
     EventModuleCreateSerializer,
     EventModuleListSerializer,
     EventModuleSerializer,
@@ -423,3 +432,218 @@ class ContentProgressView(views.APIView):
         module_prog.update_from_content()
 
         return Response(ContentProgressSerializer(progress).data)
+
+class CourseViewSet(viewsets.ModelViewSet):
+    """
+    Course management for organizations.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
+
+    def get_queryset(self):
+        queryset = Course.objects.all()
+        
+        # Filter by organization
+        org_slug = self.request.query_params.get('org')
+        if org_slug:
+            queryset = queryset.filter(organization__slug=org_slug)
+            
+        # Filter by slug (for public view)
+        slug = self.request.query_params.get('slug')
+        if slug:
+            queryset = queryset.filter(slug=slug)
+
+        # Public visibility logic for non-authenticated users
+        if not self.request.user.is_authenticated:
+            queryset = queryset.filter(is_public=True)
+            
+        return queryset
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+        else:
+            permission_classes = [permissions.IsAuthenticated]
+        return [permission() for permission in permission_classes]
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return CourseListSerializer
+        if self.action in ['create', 'update', 'partial_update']:
+            return CourseCreateSerializer
+        return CourseSerializer
+
+    def perform_create(self, serializer):
+        from organizations.models import Organization
+        
+        org_slug = self.request.data.get('organization_slug')
+        if not org_slug:
+            # Fallback or error
+            pass
+            
+        try:
+            org = Organization.objects.get(slug=org_slug)
+            serializer.save(organization=org, created_by=self.request.user)
+        except Organization.DoesNotExist:
+            pass # Validation should handle this
+
+    @action(detail=True, methods=['post'])
+    def publish(self, request, uuid=None):
+        course = self.get_object()
+        course.publish()
+        return Response(CourseSerializer(course).data)
+
+
+class CourseEnrollmentViewSet(viewsets.ModelViewSet):
+    """
+    User enrollments in courses.
+    """
+    
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = CourseEnrollmentSerializer
+    lookup_field = 'uuid'
+
+    def get_queryset(self):
+        return CourseEnrollment.objects.filter(user=self.request.user).select_related('course')
+
+    def perform_create(self, serializer):
+        course_uuid = self.request.data.get('course_uuid')
+        course = get_object_or_404(Course, uuid=course_uuid)
+        serializer.save(user=self.request.user, course=course)
+
+
+class CourseModuleViewSet(viewsets.ModelViewSet):
+    """
+    Manage modules within a course.
+    
+    Acts as a wrapper around EventModule creation but links to a Course.
+    
+    GET /courses/{course_uuid}/modules/
+    POST /courses/{course_uuid}/modules/
+    """
+    
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
+    
+    def get_queryset(self):
+        course_uuid = self.kwargs.get('course_uuid')
+        # Return CourseModules, but user might expect EventModule data structure?
+        # The design is: Course -> CourseModule -> EventModule
+        # Let's return the nested EventModule structure via serializer
+        return CourseModule.objects.filter(course__uuid=course_uuid, course__organization__memberships__user=self.request.user).select_related('module').order_by('order')
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+             # Use EventModuleCreateSerializer effectively, but we need to handle the linking
+             return EventModuleCreateSerializer
+        return CourseModuleSerializer
+
+    def perform_create(self, serializer):
+        from events.models import Event
+        
+        course_uuid = self.kwargs.get('course_uuid')
+        course = get_object_or_404(Course, uuid=course_uuid)
+        
+        # Verify permissions (basic check, ideally use proper permission class)
+        if not course.organization.memberships.filter(user=self.request.user).exists():
+             raise permissions.PermissionDenied("You do not have access to this course.")
+
+        # Create the EventModule (orphan)
+        module = serializer.save(event=None)
+        
+        # Create the Link
+        # Get next order
+        last_item = CourseModule.objects.filter(course=course).order_by('-order').first()
+        order = (last_item.order + 1) if last_item else 0
+        
+        CourseModule.objects.create(course=course, module=module, order=order)
+
+    def perform_update(self, serializer):
+        # We are updating the underlying EventModule
+        # The viewset looks up CourseModule, but we want to update the linked module?
+        # Actually standard ModelViewSet updates the queryset object (CourseModule).
+        # We need to intercept this if we want to update the module title/desc.
+        
+        # BETTER APPROACH:
+        # The frontend likely expects to edit module details.
+        # If we return CourseModuleSerializer, it nests module.
+        # So we should probably override get_object to return the EventModule?
+        # OR, make CourseModuleSerializer writable?
+        
+        # Simpler: This viewset manages the LINKS (order, required status).
+        # To edit content, use /modules/{uuid} directly?
+        # But we want /courses/{uuid}/modules/{module_uuid} to feel like native editing.
+        pass
+
+    @action(detail=True, methods=['patch'])
+    def update_content(self, request, course_uuid=None, uuid=None):
+        """Update the underlying module content (title, desc, etc)."""
+        course_link = self.get_object() # This is CourseModule
+        module = course_link.module
+        
+        serializer = EventModuleCreateSerializer(module, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        
+        return Response(CourseModuleSerializer(course_link).data)
+
+
+class CourseModuleContentViewSet(viewsets.ModelViewSet):
+    """
+    Content management for course modules.
+    
+    GET /courses/{course_uuid}/modules/{module_uuid}/contents/
+    POST /courses/{course_uuid}/modules/{module_uuid}/contents/
+    """
+    
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
+    lookup_field = 'uuid'
+    
+    def get_queryset(self):
+        course_uuid = self.kwargs.get('course_uuid')
+        module_uuid = self.kwargs.get('module_uuid')
+        
+        course_uuid = self.kwargs.get('course_uuid')
+        module_uuid = self.kwargs.get('module_uuid')
+        
+        print(f"DEBUG: CourseModuleContentViewSet.get_queryset course={course_uuid} module={module_uuid} user={self.request.user}")
+
+        # Ensure user has access to the course organization
+        return ModuleContent.objects.filter(
+            module__uuid=module_uuid,
+            module__course_links__course__uuid=course_uuid,
+            module__course_links__course__organization__memberships__user=self.request.user
+        ).order_by('order')
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return ModuleContentCreateSerializer
+        return ModuleContentSerializer
+
+    def perform_create(self, serializer):
+        course_uuid = self.kwargs.get('course_uuid')
+        module_uuid = self.kwargs.get('module_uuid')
+        
+        # Verify access
+        course = get_object_or_404(Course, uuid=course_uuid)
+        if not course.organization.memberships.filter(user=self.request.user).exists():
+             raise permissions.PermissionDenied("You do not have access to this course.")
+             
+        module = get_object_or_404(EventModule, uuid=module_uuid)
+        # Ensure module links to this course to prevent cross-linking attacks
+        # Ensure module links to this course to prevent cross-linking attacks
+        if not CourseModule.objects.filter(course=course, module=module).exists():
+            raise serializers.ValidationError("Module does not belong to this course.")
+
+        # Auto-calculate order if we are colliding or it's default 0
+        current_data_order = serializer.validated_data.get('order', 0)
+        
+        # If order is 0 or exists, find the max and append
+        if current_data_order == 0 or ModuleContent.objects.filter(module=module, order=current_data_order).exists():
+            max_order = ModuleContent.objects.filter(module=module).aggregate(models.Max('order'))['order__max']
+            next_order = (max_order or 0) + 1
+            serializer.save(module=module, order=next_order)
+        else:
+            serializer.save(module=module)

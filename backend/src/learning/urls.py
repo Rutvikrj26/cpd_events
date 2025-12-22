@@ -9,10 +9,14 @@ from .views import (
     AssignmentViewSet,
     AttendeeSubmissionViewSet,
     ContentProgressView,
+    CourseEnrollmentViewSet,
+    CourseViewSet,
     EventModuleViewSet,
     ModuleContentViewSet,
     MyLearningViewSet,
     OrganizerSubmissionsViewSet,
+    CourseModuleViewSet,
+    CourseModuleContentViewSet,
 )
 
 # Main router
@@ -20,10 +24,22 @@ router = DefaultRouter()
 router.register(r'submissions', AttendeeSubmissionViewSet, basename='my-submission')
 router.register(r'organizer/submissions', OrganizerSubmissionsViewSet, basename='organizer-submission')
 router.register(r'learning', MyLearningViewSet, basename='my-learning')
+router.register(r'courses', CourseViewSet, basename='course')
+router.register(r'enrollments', CourseEnrollmentViewSet, basename='course-enrollment')
 
 urlpatterns = [
     # Learning routes
     path('', include(router.urls)),
+    # Course Modules (Custom implementation since it's a wrapper)
+    path('courses/<uuid:course_uuid>/modules/', CourseModuleViewSet.as_view({'get': 'list', 'post': 'create'}), name='course-module-list'),
+    path('courses/<uuid:course_uuid>/modules/<uuid:uuid>/', CourseModuleViewSet.as_view({'get': 'retrieve', 'delete': 'destroy', 'patch': 'update_content'}), name='course-module-detail'),
+    
+    # Reuse valid content routes but mapped under course structure for consistency?
+    # Actually, we can reuse the ViewSets if they are generic enough.
+    # ModuleContentViewSet expects 'module_uuid'.
+    path('courses/<uuid:course_uuid>/modules/<uuid:module_uuid>/contents/', CourseModuleContentViewSet.as_view({'get': 'list', 'post': 'create'}), name='course-module-content-list'),
+    path('courses/<uuid:course_uuid>/modules/<uuid:module_uuid>/contents/<uuid:uuid>/', CourseModuleContentViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='course-module-content-detail'),
+
     # Progress update
     path('learning/progress/content/<uuid:content_uuid>/', ContentProgressView.as_view(), name='content-progress'),
 ]

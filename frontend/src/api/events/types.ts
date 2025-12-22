@@ -12,6 +12,9 @@ export interface Event {
     timezone: string;
     duration_minutes?: number;
 
+    // Multi-session
+    is_multi_session?: boolean;
+
     // Stats
     registration_count: number;
     attendee_count: number;
@@ -40,6 +43,12 @@ export interface Event {
 
     // Branding
     featured_image_url?: string;
+
+    // Location
+    location?: string;
+
+    // Sessions (for multi-session events)
+    sessions?: EventSession[];
 
     // Misc
     is_public: boolean;
@@ -109,6 +118,10 @@ export interface EventCreateRequest {
     _imageFile?: File;
     _isImageRemoved?: boolean;
     uuid?: string;
+
+    // Multi-session wizard state
+    is_multi_session?: boolean;
+    _sessions?: SessionFormData[];  // Frontend-only: sessions to save after event creation
 }
 
 export interface EventUpdateRequest extends Partial<EventCreateRequest> {
@@ -116,13 +129,55 @@ export interface EventUpdateRequest extends Partial<EventCreateRequest> {
 }
 
 export interface EventSession {
-    uuid: string;
+    uuid?: string;
     title: string;
-    start_time: string;
-    end_time: string;
     description?: string;
-    location?: string;
     speaker_names?: string;
+    order: number;
+
+    // Timing
+    starts_at: string;
+    ends_at?: string;  // Read-only, calculated
+    duration_minutes: number;
+    timezone?: string;
+
+    // Session type
+    session_type: 'live' | 'recorded' | 'hybrid';
+
+    // Zoom (per-session)
+    has_separate_zoom: boolean;
+    zoom_meeting_id?: string;
+    zoom_join_url?: string;
+
+    // CPD
+    cpd_credits?: number;
+
+    // Attendance
+    minimum_attendance_percent?: number;
+
+    // Status
+    is_mandatory: boolean;
+    is_published: boolean;
+    is_past?: boolean;
+
+    // Timestamps
+    created_at?: string;
+    updated_at?: string;
+}
+
+// For wizard form state - allows partial data before save
+export interface SessionFormData {
+    uuid?: string;
+    title: string;
+    description?: string;
+    speaker_names?: string;
+    order: number;
+    starts_at: string;
+    duration_minutes: number;
+    session_type: 'live' | 'recorded' | 'hybrid';
+    has_separate_zoom: boolean;
+    is_mandatory: boolean;
+    is_published: boolean;
 }
 
 export interface EventCustomField {

@@ -10,6 +10,9 @@ export interface CertificateTemplate {
     field_positions?: Record<string, any>;
     is_default: boolean;
     is_active?: boolean;
+    is_shared?: boolean;
+    is_org_template?: boolean;
+    organization_name?: string | null;
     version: number;
     usage_count: number;
     created_at: string;
@@ -50,6 +53,7 @@ export interface Certificate {
         title: string;
         cpd_credits?: string;
         cpd_type?: string;
+        event_type?: string;
     };
     is_valid?: boolean;
 }

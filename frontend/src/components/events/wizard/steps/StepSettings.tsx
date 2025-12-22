@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getCertificateTemplates, CertificateTemplate } from '@/api/certificates';
+import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
 import { toast } from 'sonner';
 
 export const StepSettings = () => {
@@ -18,8 +18,8 @@ export const StepSettings = () => {
             if (formData.certificates_enabled) {
                 setLoadingTemplates(true);
                 try {
-                    const data = await getCertificateTemplates();
-                    setTemplates(data);
+                    const response = await getAvailableCertificateTemplates();
+                    setTemplates(response.templates);
                 } catch (error) {
                     console.error("Failed to fetch templates", error);
                     toast.error("Failed to load certificate templates.");
@@ -137,6 +137,7 @@ export const StepSettings = () => {
                                     {templates.map((tpl) => (
                                         <SelectItem key={tpl.uuid} value={tpl.uuid}>
                                             {tpl.name}
+                                            {tpl.is_org_template && ` (${tpl.organization_name || 'Shared'})`}
                                         </SelectItem>
                                     ))}
                                     {templates.length === 0 && !loadingTemplates && (

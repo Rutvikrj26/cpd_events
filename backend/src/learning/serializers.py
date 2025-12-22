@@ -8,6 +8,9 @@ from .models import (
     Assignment,
     AssignmentSubmission,
     ContentProgress,
+    Course,
+    CourseEnrollment,
+    CourseModule,
     EventModule,
     ModuleContent,
     ModuleProgress,
@@ -33,6 +36,7 @@ class ModuleContentSerializer(serializers.ModelSerializer):
             'content_data',
             'is_required',
             'is_published',
+            'file',
             'created_at',
             'updated_at',
         ]
@@ -51,9 +55,14 @@ class ModuleContentCreateSerializer(serializers.ModelSerializer):
             'order',
             'duration_minutes',
             'content_data',
-            'is_required',
+            'file',
             'is_published',
+            'module',
         ]
+        read_only_fields = ['module']
+        # We manually handle uniqueness in create/update to avoid DRF implicit lookup errors
+        # triggered by unique_together when module is read-only or inferred
+        validators = []
 
 
 class AssignmentSerializer(serializers.ModelSerializer):
@@ -339,3 +348,140 @@ class AttendeeLearningDashboardSerializer(serializers.Serializer):
     assignments_pending = serializers.IntegerField()
     cpd_credits_earned = serializers.DecimalField(max_digits=5, decimal_places=2)
     modules = ModuleProgressSerializer(many=True)
+
+class CourseModuleSerializer(serializers.ModelSerializer):
+    """Course module link with nested module details."""
+    
+    module = EventModuleSerializer(read_only=True)
+    
+    class Meta:
+        model = CourseModule
+        fields = ['uuid', 'module', 'order', 'is_required', 'created_at', 'updated_at']
+
+
+class CourseSerializer(serializers.ModelSerializer):
+    """Full course details."""
+    
+    modules = CourseModuleSerializer(many=True, read_only=True)
+    organization_name = serializers.CharField(source='organization.name', read_only=True)
+    organization_slug = serializers.CharField(source='organization.slug', read_only=True)
+    
+    class Meta:
+        model = Course
+        fields = [
+            'uuid',
+            'organization',
+            'organization_name',
+            'organization_slug',
+            'title',
+            'slug',
+            'description',
+            'short_description',
+            'featured_image',
+            'featured_image_url',
+            'cpd_credits',
+            'cpd_type',
+            'status',
+            'is_public',
+            'is_free',
+            'price_cents',
+            'currency',
+            'enrollment_open',
+            'max_enrollments',
+            'enrollment_requires_approval',
+            'estimated_hours',
+            'passing_score',
+            'certificates_enabled',
+            'certificate_template',
+            'auto_issue_certificates',
+            'enrollment_count',
+            'completion_count',
+            'module_count',
+            'modules',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'uuid', 'organization', 'enrollment_count', 
+            'completion_count', 'module_count', 'created_at', 'updated_at'
+        ]
+
+
+class CourseListSerializer(serializers.ModelSerializer):
+    """List view for courses."""
+    
+    organization_name = serializers.CharField(source='organization.name', read_only=True)
+    organization_slug = serializers.CharField(source='organization.slug', read_only=True)
+    
+    class Meta:
+        model = Course
+        fields = [
+            'uuid',
+            'organization',
+            'organization_name',
+            'organization_slug',
+            'title',
+            'slug',
+            'short_description',
+            'featured_image',
+            'featured_image_url',
+            'cpd_credits',
+            'cpd_type',
+            'status',
+            'is_public',
+            'enrollment_count',
+            'module_count',
+            'estimated_hours',
+            'created_at',
+        ]
+
+
+
+class CourseCreateSerializer(serializers.ModelSerializer):
+    """Create/update course."""
+    
+    class Meta:
+        model = Course
+        fields = [
+            'title',
+            'slug',
+            'description',
+            'short_description',
+            'featured_image',
+            'featured_image_url',
+            'cpd_credits',
+            'cpd_type',
+            'status',
+            'is_public',
+            'is_free',
+            'price_cents',
+            'enrollment_open',
+            'max_enrollments',
+            'estimated_hours',
+            'passing_score',
+            'certificates_enabled',
+            'certificate_template',
+        ]
+
+
+class CourseEnrollmentSerializer(serializers.ModelSerializer):
+    """Enrollment details."""
+    
+    course = CourseListSerializer(read_only=True)
+    
+    class Meta:
+        model = CourseEnrollment
+        fields = [
+            'uuid',
+            'course',
+            'status',
+            'enrolled_at',
+            'started_at',
+            'completed_at',
+            'progress_percent',
+            'modules_completed',
+            'current_score',
+            'certificate_issued',
+            'certificate_issued_at',
+        ]
+        read_only_fields = fields

@@ -8,6 +8,9 @@ from .models import (
     Assignment,
     AssignmentSubmission,
     ContentProgress,
+    Course,
+    CourseEnrollment,
+    CourseModule,
     EventModule,
     ModuleContent,
     ModuleProgress,
@@ -120,3 +123,74 @@ class ModuleProgressAdmin(admin.ModelAdmin):
         return obj.registration.user.email
 
     get_user.short_description = 'User'
+
+
+# =============================================================================
+# Course Admin
+# =============================================================================
+
+
+class CourseModuleInline(admin.TabularInline):
+    """Inline for course modules."""
+
+    model = CourseModule
+    extra = 0
+    fields = ['module', 'order', 'is_required']
+    raw_id_fields = ['module']
+
+
+@admin.register(Course)
+class CourseAdmin(admin.ModelAdmin):
+    """Admin for Course model."""
+
+    list_display = ['title', 'organization', 'status', 'enrollment_count', 'completion_count', 'cpd_credits', 'created_at']
+    list_filter = ['status', 'is_public', 'is_free', 'organization']
+    search_fields = ['title', 'organization__name', 'description']
+    ordering = ['-created_at']
+    readonly_fields = ['uuid', 'created_at', 'updated_at', 'enrollment_count', 'completion_count', 'module_count']
+    prepopulated_fields = {'slug': ('title',)}
+    raw_id_fields = ['organization', 'created_by', 'certificate_template']
+    inlines = [CourseModuleInline]
+
+    fieldsets = (
+        ('Basic Info', {'fields': ('organization', 'title', 'slug', 'description', 'short_description')}),
+        ('Media', {'fields': ('featured_image', 'featured_image_url')}),
+        ('CPD', {'fields': ('cpd_credits', 'cpd_type')}),
+        ('Status', {'fields': ('status', 'is_public')}),
+        ('Pricing', {'fields': ('is_free', 'price_cents', 'currency')}),
+        ('Enrollment', {'fields': ('enrollment_open', 'max_enrollments', 'enrollment_requires_approval')}),
+        ('Duration', {'fields': ('estimated_hours', 'passing_score')}),
+        ('Certificates', {'fields': ('certificates_enabled', 'certificate_template', 'auto_issue_certificates')}),
+        ('Stats', {'fields': ('enrollment_count', 'completion_count', 'module_count'), 'classes': ['collapse']}),
+        ('Metadata', {'fields': ('created_by', 'uuid', 'created_at', 'updated_at'), 'classes': ['collapse']}),
+    )
+
+
+@admin.register(CourseModule)
+class CourseModuleAdmin(admin.ModelAdmin):
+    """Admin for CourseModule model."""
+
+    list_display = ['course', 'module', 'order', 'is_required']
+    list_filter = ['is_required', 'course']
+    search_fields = ['course__title', 'module__title']
+    raw_id_fields = ['course', 'module']
+
+
+@admin.register(CourseEnrollment)
+class CourseEnrollmentAdmin(admin.ModelAdmin):
+    """Admin for CourseEnrollment model."""
+
+    list_display = ['user', 'course', 'status', 'progress_percent', 'enrolled_at', 'completed_at']
+    list_filter = ['status', 'certificate_issued', 'course']
+    search_fields = ['user__email', 'course__title']
+    readonly_fields = ['uuid', 'created_at', 'updated_at', 'enrolled_at']
+    raw_id_fields = ['course', 'user']
+
+    fieldsets = (
+        ('Enrollment', {'fields': ('course', 'user', 'status')}),
+        ('Timestamps', {'fields': ('enrolled_at', 'started_at', 'completed_at', 'expires_at')}),
+        ('Progress', {'fields': ('progress_percent', 'modules_completed', 'time_spent_minutes', 'current_score')}),
+        ('Certificate', {'fields': ('certificate_issued', 'certificate_issued_at')}),
+        ('Metadata', {'fields': ('uuid', 'created_at', 'updated_at'), 'classes': ['collapse']}),
+    )
+

@@ -9,7 +9,16 @@ import { StepSchedule } from './steps/StepSchedule';
 import { StepDetails } from './steps/StepDetails';
 import { StepSettings } from './steps/StepSettings';
 import { StepReview } from './steps/StepReview';
-import { createEvent, updateEvent, uploadEventImage, deleteEventImage } from '@/api/events';
+import {
+    createEvent,
+    updateEvent,
+    uploadEventImage,
+    deleteEventImage,
+    createEventSession,
+    updateEventSession,
+    getEventSessions,
+    deleteEventSession
+} from '@/api/events';
 import { EventCreateRequest } from '@/api/events/types';
 import { toast } from 'sonner';
 
@@ -30,8 +39,8 @@ const WizardContent = () => {
     const handleFinish = async () => {
         setIsSubmitting(true);
         try {
-            // Extract image file from form data (if any)
-            const { _imageFile, ...eventData } = formData;
+            // Extract frontend-only fields from form data
+            const { _imageFile, _sessions, _isImageRemoved, ...eventData } = formData;
 
             let savedEvent;
             if (isEditMode && formData.uuid) {
@@ -56,13 +65,50 @@ const WizardContent = () => {
                     console.error('Image upload failed:', imgError);
                     toast.warning('Event saved but image upload failed. You can try again later.');
                 }
-            } else if (formData._isImageRemoved && targetUuid) {
+            } else if (_isImageRemoved && targetUuid) {
                 // If explicit removal was requested and no new file replaced it
                 try {
                     await deleteEventImage(targetUuid);
                     toast.info('Cover image removed.');
                 } catch (delError) {
                     console.error('Image deletion failed:', delError);
+                }
+            }
+
+            // Save sessions if multi-session is enabled
+            if (formData.is_multi_session && _sessions && _sessions.length > 0 && targetUuid) {
+                try {
+                    // If editing, we need to handle existing sessions
+                    if (isEditMode) {
+                        const existingSessions = await getEventSessions(targetUuid);
+                        const existingUuids = new Set(existingSessions.map(s => s.uuid));
+                        const newSessionUuids = new Set(_sessions.filter(s => s.uuid).map(s => s.uuid));
+
+                        // Delete sessions that were removed
+                        for (const existing of existingSessions) {
+                            if (!newSessionUuids.has(existing.uuid)) {
+                                await deleteEventSession(targetUuid, existing.uuid!);
+                            }
+                        }
+
+                        // Create or update sessions
+                        for (const session of _sessions) {
+                            if (session.uuid && existingUuids.has(session.uuid)) {
+                                await updateEventSession(targetUuid, session.uuid, session);
+                            } else {
+                                await createEventSession(targetUuid, session);
+                            }
+                        }
+                    } else {
+                        // Create all sessions for new event
+                        for (const session of _sessions) {
+                            await createEventSession(targetUuid, session);
+                        }
+                    }
+                    toast.success(`${_sessions.length} session(s) saved!`);
+                } catch (sessionError) {
+                    console.error('Session save failed:', sessionError);
+                    toast.warning('Event saved but some sessions could not be saved.');
                 }
             }
 

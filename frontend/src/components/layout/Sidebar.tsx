@@ -13,26 +13,41 @@ import {
     ChevronRight,
     Settings,
     FileText,
-    Video
+    Video,
+    Building2
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
+import { OrganizationSwitcher } from "@/components/organizations/OrganizationSwitcher";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 export const Sidebar = () => {
     const { user, logout, hasRoute, hasFeature, manifest } = useAuth();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const isOrganizer = user?.account_type === 'organizer' || user?.account_type === 'admin';
 
+    const { currentOrg } = useOrganization();
+
     // Define nav items with route keys matching backend ROUTE_REGISTRY
     const navItems = [
         { routeKey: 'dashboard', to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
         { routeKey: 'events', to: '/events', icon: Calendar, label: 'Events' },
+        // Dynamic Org Courses Link - visible only when context is set (handled in filter)
+        {
+            routeKey: 'org_courses',
+            to: currentOrg ? `/org/${currentOrg.slug}/courses` : '/courses',
+            icon: BookOpen,
+            label: 'Courses',
+            organizerOnly: true,
+            requiresOrg: true
+        },
         { routeKey: 'registrations', to: '/registrations', icon: BookOpen, label: 'My Registrations', attendeeOnly: true },
         { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'My Certificates', attendeeOnly: true },
         { routeKey: 'org_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', organizerOnly: true },
         { routeKey: 'cert_templates', to: '/organizer/certificates/templates', icon: FileText, label: 'Cert. Templates', organizerOnly: true },
         { routeKey: 'zoom', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', organizerOnly: true },
+        { routeKey: 'organizations', to: '/organizations', icon: Building2, label: 'Organizations', organizerOnly: true },
         { routeKey: 'billing', to: '/billing', icon: CreditCard, label: 'Billing', organizerOnly: true },
         { routeKey: 'profile', to: '/profile', icon: UserCircle, label: 'Profile' },
     ];
@@ -49,6 +64,11 @@ export const Sidebar = () => {
             return false;
         }
 
+        // Hide items requiring org context if none selected
+        if (item.requiresOrg && !currentOrg) {
+            return false;
+        }
+
         // SECOND: If manifest is loaded, use it for additional fine-grained control
         if (manifest && manifest.routes.length > 0) {
             // Items always visible (not in RBAC registry)
@@ -56,7 +76,7 @@ export const Sidebar = () => {
                 return true;
             }
             // Organizer items not in manifest (frontend-only routes)
-            if (['org_certificates', 'cert_templates', 'zoom', 'billing'].includes(item.routeKey)) {
+            if (['org_certificates', 'cert_templates', 'zoom', 'billing', 'organizations'].includes(item.routeKey)) {
                 return isOrganizer;
             }
             // Use feature flag for certificates since it's not a distinct backend view
@@ -105,16 +125,26 @@ export const Sidebar = () => {
             )}
         >
             {/* Header */}
-            <div className={cn("p-6 border-b border-border flex items-center", isCollapsed ? "justify-center p-4" : "justify-between")}>
-                {!isCollapsed && (
-                    <div className="overflow-hidden">
-                        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-teal-400 text-transparent bg-clip-text whitespace-nowrap">
-                            CPD Events
-                        </h1>
-                        <p className="text-xs text-muted-foreground mt-1 truncate">{isOrganizer ? 'Organizer Portal' : 'Attendee Portal'}</p>
-                    </div>
+            <div className={cn("p-6 border-b border-border flex flex-col gap-3", isCollapsed ? "p-4 items-center" : "")}>
+                <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
+                    {!isCollapsed && (
+                        <div className="overflow-hidden">
+                            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-teal-400 text-transparent bg-clip-text whitespace-nowrap">
+                                CPD Events
+                            </h1>
+                            <p className="text-xs text-muted-foreground mt-1 truncate">{isOrganizer ? 'Organizer Portal' : 'Attendee Portal'}</p>
+                        </div>
+                    )}
+                    {isCollapsed && <span className="font-bold text-primary text-xl">CPD</span>}
+                </div>
+
+                {/* Organization Switcher - Only for organizers */}
+                {isOrganizer && !isCollapsed && (
+                    <OrganizationSwitcher />
                 )}
-                {isCollapsed && <span className="font-bold text-primary text-xl">CPD</span>}
+                {isOrganizer && isCollapsed && (
+                    <OrganizationSwitcher variant="compact" />
+                )}
             </div>
 
             {/* Toggle Button - Absolute positioned overlapping the border */}

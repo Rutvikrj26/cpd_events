@@ -39,6 +39,15 @@ export const createEventSession = async (eventUuid: string, data: Partial<EventS
     return response.data;
 };
 
+export const updateEventSession = async (eventUuid: string, sessionUuid: string, data: Partial<EventSession>): Promise<EventSession> => {
+    const response = await client.patch<EventSession>(`/events/${eventUuid}/sessions/${sessionUuid}/`, data);
+    return response.data;
+};
+
+export const deleteEventSession = async (eventUuid: string, sessionUuid: string): Promise<void> => {
+    await client.delete(`/events/${eventUuid}/sessions/${sessionUuid}/`);
+};
+
 // -- Nested: Custom Fields --
 
 export const getEventCustomFields = async (eventUuid: string): Promise<EventCustomField[]> => {

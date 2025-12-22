@@ -5,21 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/custom/PageHeader";
-import { getMyRegistrations } from "@/api/registrations";
-import { Registration } from "@/api/registrations/types";
+import { getMyCertificates } from "@/api/certificates";
+import { Certificate } from "@/api/certificates/types";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 
 export function CertificatesList() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const data = await getMyRegistrations();
-        setRegistrations(data);
+        const data = await getMyCertificates();
+        setCertificates(data);
       } catch (error) {
         toast.error("Failed to load certificates");
         console.error(error);
@@ -30,11 +30,8 @@ export function CertificatesList() {
     fetchData();
   }, []);
 
-  // Filter for ONLY issued certificates
-  const issuedCertificates = registrations.filter(r => r.certificate_issued);
-
-  const filteredCerts = issuedCertificates.filter(c =>
-    c.event.title.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCerts = certificates.filter(c =>
+    c.event?.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) {
@@ -52,7 +49,7 @@ export function CertificatesList() {
         <div className="relative w-full sm:w-96">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
           <Input
-            placeholder="Search by event..."
+            placeholder="Search by event or course..."
             className="pl-9"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -81,7 +78,7 @@ export function CertificatesList() {
           </div>
           <h3 className="text-lg font-medium text-foreground mb-1">No certificates found</h3>
           <p className="text-muted-foreground text-center max-w-sm">
-            Complete events to earn certificates. They will appear here once issued by the organizer.
+            Complete events or courses to earn certificates. They will appear here once issued.
           </p>
         </div>
       )}
@@ -89,7 +86,11 @@ export function CertificatesList() {
   );
 }
 
-function CertificateCard({ cert }: { cert: Registration }) {
+function CertificateCard({ cert }: { cert: Certificate }) {
+  const eventLink = cert.event?.event_type === 'course'
+    ? `/courses/${cert.event?.uuid}` // We might want slug here but UUID is guaranteed
+    : `/events/${cert.event?.uuid}`;
+
   return (
     <Card className="flex flex-col h-full hover:shadow-md transition-shadow group">
       <div className="relative aspect-[1.414/1] bg-card border-b border-gray-100 p-6 flex flex-col items-center justify-center text-center overflow-hidden">
@@ -99,11 +100,11 @@ function CertificateCard({ cert }: { cert: Registration }) {
 
         <ShieldCheck className="h-8 w-8 text-blue-600 mb-2 opacity-80" />
         <h3 className="font-serif font-bold text-foreground text-sm line-clamp-2 px-2 leading-tight mb-1">
-          {cert.event.title}
+          {cert.event?.title || 'Certificate'}
         </h3>
         <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Certificate of Completion</p>
         <div className="mt-3 text-xs font-bold text-gray-400 font-mono">
-          {cert.certificate_issued_at ? new Date(cert.certificate_issued_at).toLocaleDateString() : 'Pending'}
+          {cert.issued_at ? new Date(cert.issued_at).toLocaleDateString() : 'Pending'}
         </div>
       </div>
 
@@ -112,27 +113,32 @@ function CertificateCard({ cert }: { cert: Registration }) {
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Credits</span>
             <span className="font-medium">
-              {Number(cert.event.cpd_credit_value)} <Badge variant="outline" className="text-[10px] h-5 ml-1">{cert.event.cpd_credit_type}</Badge>
+              {cert.event?.cpd_credits && Number(cert.event.cpd_credits) > 0 ? (
+                <>
+                  {Number(cert.event.cpd_credits)} <Badge variant="outline" className="text-[10px] h-5 ml-1">{cert.event.cpd_type}</Badge>
+                </>
+              ) : (
+                <span className="text-xs text-muted-foreground">No credits</span>
+              )}
             </span>
           </div>
           <div className="flex justify-between text-sm">
-            {/* Organizer info is not currently in MinimalEvent, so we check event type instead */}
             <span className="text-muted-foreground">Type</span>
-            <span className="font-medium truncate max-w-[140px]">{cert.event.event_type || 'Event'}</span>
+            <span className="font-medium truncate max-w-[140px] capitalize">{cert.event?.event_type || 'Event'}</span>
           </div>
         </div>
       </CardContent>
 
       <CardFooter className="pt-2 gap-2">
-        <Link to={`/events/${cert.event.slug || cert.event.uuid}`} className="w-full">
-          <Button variant="outline" className="w-full h-8 text-xs">View Event</Button>
+        <Link to={eventLink} className="w-full">
+          <Button variant="outline" className="w-full h-8 text-xs">View {cert.event?.event_type === 'course' ? 'Course' : 'Event'}</Button>
         </Link>
         <Button
           variant="ghost"
           size="icon"
           className="h-8 w-8 shrink-0"
-          disabled={!cert.certificate_url}
-          onClick={() => cert.certificate_url && window.open(cert.certificate_url, '_blank')}
+          disabled={!cert.download_url}
+          onClick={() => cert.download_url && window.open(cert.download_url, '_blank')}
         >
           <Download className="h-4 w-4" />
         </Button>

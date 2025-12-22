@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { ProtectedRoute } from "@/features/auth";
 
 
@@ -19,6 +20,7 @@ import { EventRegistration } from './pages/public/EventRegistration';
 import { PricingPage } from './pages/public/PricingPage';
 import { ContactPage } from './pages/public/ContactPage';
 import { NotFoundPage } from './pages/public/NotFoundPage';
+import { PublicCourseDetailPage } from './pages/courses/PublicCourseDetailPage';
 
 // Auth Pages
 import { LoginPage } from './pages/auth/LoginPage';
@@ -44,6 +46,7 @@ import { MyEvents } from './pages/dashboard/attendee/MyEvents';
 import { CertificateDetail } from './pages/dashboard/attendee/CertificateDetail';
 import { CertificatesList } from './pages/dashboard/attendee/CertificatesList';
 import { CPDTracking } from './pages/dashboard/attendee/CPDTracking';
+import { MyCoursesPage } from './pages/courses/MyCoursesPage';
 
 // Dashboard Pages - Organizer (non-duplicate pages only)
 import { OrganizerDashboard } from './pages/dashboard/organizer/OrganizerDashboard';
@@ -53,6 +56,10 @@ import { EventManagement } from './pages/dashboard/organizer/EventManagement';
 import { CertificateTemplatesPage } from './pages/dashboard/organizer/CertificateTemplatesPage';
 import { ZoomManagement } from './pages/dashboard/organizer/ZoomManagement';
 import { OrganizerCertificatesPage } from './pages/dashboard/organizer/OrganizerCertificatesPage';
+
+// Organization Pages
+import { OrganizationsListPage, CreateOrganizationPage, OrganizationDashboard, TeamManagementPage, OrganizationSettingsPage, OrgCoursesPage, CreateCoursePage } from './pages/organizations';
+import { CourseManagementPage } from './pages/organizations/courses/CourseManagementPage';
 
 // Integrations
 import { ZoomCallbackPage } from './pages/integrations/ZoomCallbackPage';
@@ -65,124 +72,144 @@ export default function App() {
       <BrowserRouter>
         <ScrollToTop />
         <AuthProvider>
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={
-              <PublicLayout>
-                <LandingPage />
-              </PublicLayout>
-            } />
+          <OrganizationProvider>
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/" element={
+                <PublicLayout>
+                  <LandingPage />
+                </PublicLayout>
+              } />
 
-            <Route path="/events/browse" element={
-              <PublicLayout>
-                <EventDiscovery />
-              </PublicLayout>
-            } />
+              <Route path="/events/browse" element={
+                <PublicLayout>
+                  <EventDiscovery />
+                </PublicLayout>
+              } />
 
-            <Route path="/events/:id" element={
-              <PublicLayout>
-                <EventDetail />
-              </PublicLayout>
-            } />
+              <Route path="/events/:id" element={
+                <PublicLayout>
+                  <EventDetail />
+                </PublicLayout>
+              } />
 
-            <Route path="/events/:id/register" element={
-              <PublicLayout>
-                <EventRegistration />
-              </PublicLayout>
-            } />
+              <Route path="/events/:id/register" element={
+                <PublicLayout>
+                  <EventRegistration />
+                </PublicLayout>
+              } />
 
-            <Route path="/pricing" element={
-              <PublicLayout>
-                <PricingPage />
-              </PublicLayout>
-            } />
+              <Route path="/pricing" element={
+                <PublicLayout>
+                  <PricingPage />
+                </PublicLayout>
+              } />
 
-            <Route path="/contact" element={
-              <PublicLayout>
-                <ContactPage />
-              </PublicLayout>
-            } />
+              <Route path="/contact" element={
+                <PublicLayout>
+                  <ContactPage />
+                </PublicLayout>
+              } />
 
-            {/* Public Certificate Verification */}
-            <Route path="/verify/:code" element={<CertificateVerify />} />
+              {/* Public Certificate Verification */}
+              <Route path="/verify/:code" element={<CertificateVerify />} />
 
-            <Route path="/forgot-password" element={
-              <AuthLayout>
-                <ForgotPasswordPage />
-              </AuthLayout>
-            } />
+              {/* Public Courses */}
+              <Route path="/courses/:slug" element={
+                <PublicLayout>
+                  <PublicCourseDetailPage />
+                </PublicLayout>
+              } />
 
-            {/* Auth Routes */}
-            <Route path="/login" element={
-              <AuthLayout>
-                <LoginPage />
-              </AuthLayout>
-            } />
+              <Route path="/forgot-password" element={
+                <AuthLayout>
+                  <ForgotPasswordPage />
+                </AuthLayout>
+              } />
 
-            <Route path="/signup" element={
-              <AuthLayout>
-                <SignupPage />
-              </AuthLayout>
-            } />
+              {/* Auth Routes */}
+              <Route path="/login" element={
+                <AuthLayout>
+                  <LoginPage />
+                </AuthLayout>
+              } />
 
-            {/* Protected Routes - Unified Dashboard */}
-            <Route element={<ProtectedRoute />}>
+              <Route path="/signup" element={
+                <AuthLayout>
+                  <SignupPage />
+                </AuthLayout>
+              } />
 
-              {/* Integrations */}
-              <Route path="/zoom/callback" element={<ZoomCallbackPage />} />
+              {/* Protected Routes - Unified Dashboard */}
+              <Route element={<ProtectedRoute />}>
 
-              {/* Main Dashboard Layout - all authenticated users */}
-              <Route element={<DashboardLayout />}>
-                {/* Dashboard - shows role-appropriate content */}
-                <Route path="/dashboard" element={<DashboardPage />} />
+                {/* Integrations */}
+                <Route path="/zoom/callback" element={<ZoomCallbackPage />} />
 
-                {/* Events - unified routes for both roles */}
-                <Route path="/events" element={<EventsPage />} />
-                <Route path="/events/create" element={<EventCreatePage />} />
-                <Route path="/events/:uuid" element={<EventDetailPage />} />
-                <Route path="/events/:uuid/edit" element={<EventCreatePage />} />
+                {/* Main Dashboard Layout - all authenticated users */}
+                <Route element={<DashboardLayout />}>
+                  {/* Dashboard - shows role-appropriate content */}
+                  <Route path="/dashboard" element={<DashboardPage />} />
 
-                {/* Attendee-specific pages */}
-                <Route path="/registrations" element={<MyRegistrationsPage />} />
-                <Route path="/certificates" element={<CertificatesPage />} />
-                <Route path="/my-events" element={<MyEvents />} />
-                <Route path="/my-certificates" element={<CertificatesList />} />
-                <Route path="/my-certificates/:id" element={<CertificateDetail />} />
-                <Route path="/cpd" element={<CPDTracking />} />
+                  {/* Events - unified routes for both roles */}
+                  <Route path="/events" element={<EventsPage />} />
+                  <Route path="/events/create" element={<EventCreatePage />} />
+                  <Route path="/events/:uuid" element={<EventDetailPage />} />
+                  <Route path="/events/:uuid/edit" element={<EventCreatePage />} />
 
-                {/* Shared pages */}
-                <Route path="/billing" element={<BillingPage />} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/notifications" element={<Notifications />} />
-                <Route path="/settings" element={<ProfileSettings />} />
+                  {/* Attendee-specific pages */}
+                  <Route path="/registrations" element={<MyRegistrationsPage />} />
+                  <Route path="/certificates" element={<CertificatesPage />} />
+                  <Route path="/my-events" element={<MyEvents />} />
+                  <Route path="/my-courses" element={<MyCoursesPage />} />
+                  <Route path="/my-certificates" element={<CertificatesList />} />
+                  <Route path="/my-certificates/:id" element={<CertificateDetail />} />
+                  <Route path="/cpd" element={<CPDTracking />} />
 
-                {/* Organizer-specific pages (non-event) */}
-                <Route path="/organizer/dashboard" element={<OrganizerDashboard />} />
-                <Route path="/organizer/contacts" element={<ContactsPage />} />
-                <Route path="/organizer/reports" element={<ReportsPage />} />
-                <Route path="/organizer/certificates/templates" element={<CertificateTemplatesPage />} />
-                <Route path="/organizer/certificates" element={<OrganizerCertificatesPage />} />
-                <Route path="/organizer/events/:uuid/manage" element={<EventManagement />} />
-                <Route path="/organizer/zoom" element={<ZoomManagement />} />
+                  {/* Shared pages */}
+                  <Route path="/billing" element={<BillingPage />} />
+                  <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/notifications" element={<Notifications />} />
+                  <Route path="/settings" element={<ProfileSettings />} />
+
+                  {/* Organizer-specific pages (non-event) */}
+                  <Route path="/organizer/dashboard" element={<OrganizerDashboard />} />
+                  <Route path="/organizer/contacts" element={<ContactsPage />} />
+                  <Route path="/organizer/reports" element={<ReportsPage />} />
+                  <Route path="/organizer/certificates/templates" element={<CertificateTemplatesPage />} />
+                  <Route path="/organizer/certificates" element={<OrganizerCertificatesPage />} />
+                  <Route path="/organizer/events/:uuid/manage" element={<EventManagement />} />
+                  <Route path="/organizer/zoom" element={<ZoomManagement />} />
+
+                  {/* Organization Routes */}
+                  <Route path="/organizations" element={<OrganizationsListPage />} />
+                  <Route path="/organizations/new" element={<CreateOrganizationPage />} />
+                  <Route path="/org/:slug" element={<OrganizationDashboard />} />
+                  <Route path="/org/:slug/team" element={<TeamManagementPage />} />
+                  <Route path="/org/:slug/settings" element={<OrganizationSettingsPage />} />
+                  <Route path="/org/:slug/courses" element={<OrgCoursesPage />} />
+                  <Route path="/org/:slug/courses/new" element={<CreateCoursePage />} />
+                  <Route path="/org/:slug/courses/:courseSlug" element={<CourseManagementPage />} />
+                </Route>
+
+                {/* Redirects for old organizer event routes */}
+                <Route path="/organizer/events" element={<Navigate to="/events" replace />} />
+                <Route path="/organizer/events/new" element={<Navigate to="/events/create" replace />} />
+                <Route path="/organizer/events/:id" element={<Navigate to="/events/:id" replace />} />
+                <Route path="/organizer/events/:id/edit" element={<Navigate to="/events/:id/edit" replace />} />
+                <Route path="/organizer/settings" element={<Navigate to="/settings" replace />} />
+                <Route path="/organizer/notifications" element={<Navigate to="/notifications" replace />} />
+
               </Route>
 
-              {/* Redirects for old organizer event routes */}
-              <Route path="/organizer/events" element={<Navigate to="/events" replace />} />
-              <Route path="/organizer/events/new" element={<Navigate to="/events/create" replace />} />
-              <Route path="/organizer/events/:id" element={<Navigate to="/events/:id" replace />} />
-              <Route path="/organizer/events/:id/edit" element={<Navigate to="/events/:id/edit" replace />} />
-              <Route path="/organizer/settings" element={<Navigate to="/settings" replace />} />
-              <Route path="/organizer/notifications" element={<Navigate to="/notifications" replace />} />
-
-            </Route>
-
-            {/* Fallback */}
-            <Route path="*" element={
-              <PublicLayout>
-                <NotFoundPage />
-              </PublicLayout>
-            } />
-          </Routes>
+              {/* Fallback */}
+              <Route path="*" element={
+                <PublicLayout>
+                  <NotFoundPage />
+                </PublicLayout>
+              } />
+            </Routes>
+          </OrganizationProvider>
         </AuthProvider>
         <Toaster />
       </BrowserRouter>

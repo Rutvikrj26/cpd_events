@@ -38,6 +38,7 @@ LOCAL_APPS = [
     'integrations',
     'billing',
     'learning',
+    'organizations',
 ]
 
 THIRD_PARTY_APPS = [

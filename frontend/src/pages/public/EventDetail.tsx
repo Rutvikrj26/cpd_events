@@ -326,9 +326,140 @@ export function EventDetail() {
               </TabsContent>
 
               <TabsContent value="schedule" className="pt-6">
-                <div className="text-center py-8 text-muted-foreground">
-                  <Clock className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                  <p>Detailed schedule will be available soon.</p>
+                <div className="space-y-6">
+                  <h3 className="text-xl font-semibold text-foreground">Event Schedule</h3>
+
+                  {/* Event Date & Time Overview */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 p-6 rounded-xl border border-blue-100 dark:border-blue-900">
+                    <div className="flex flex-col md:flex-row md:items-center gap-6">
+                      {/* Date Block */}
+                      <div className="flex items-center gap-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm text-center min-w-[80px]">
+                          <div className="text-3xl font-bold text-blue-600">
+                            {new Date(event.starts_at).getDate()}
+                          </div>
+                          <div className="text-sm text-muted-foreground uppercase">
+                            {new Date(event.starts_at).toLocaleDateString(undefined, { month: 'short' })}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(event.starts_at).getFullYear()}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-semibold text-foreground">
+                            {new Date(event.starts_at).toLocaleDateString(undefined, { weekday: 'long' })}
+                          </div>
+                          <div className="flex items-center gap-2 text-muted-foreground mt-1">
+                            <Clock className="h-4 w-4" />
+                            <span>
+                              {new Date(event.starts_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                              {' - '}
+                              {new Date(event.ends_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          {event.timezone && (
+                            <div className="text-sm text-muted-foreground mt-1">
+                              {event.timezone}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Duration & Format */}
+                      <div className="md:ml-auto flex flex-wrap gap-4">
+                        {event.duration_minutes && (
+                          <div className="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-sm">
+                            <div className="text-xs text-muted-foreground uppercase">Duration</div>
+                            <div className="font-semibold text-foreground">
+                              {event.duration_minutes >= 60
+                                ? `${Math.floor(event.duration_minutes / 60)}h ${event.duration_minutes % 60 > 0 ? `${event.duration_minutes % 60}m` : ''}`
+                                : `${event.duration_minutes}m`}
+                            </div>
+                          </div>
+                        )}
+                        <div className="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-sm">
+                          <div className="text-xs text-muted-foreground uppercase">Format</div>
+                          <div className="font-semibold text-foreground capitalize flex items-center gap-1">
+                            {event.format === 'online' && <Video className="h-4 w-4 text-blue-600" />}
+                            {event.format === 'in-person' && <MapPin className="h-4 w-4 text-green-600" />}
+                            {event.format === 'hybrid' && <><Video className="h-4 w-4 text-blue-600" /><span>+</span><MapPin className="h-4 w-4 text-green-600" /></>}
+                            {event.format}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Location if available */}
+                    {event.location && (
+                      <div className="mt-4 pt-4 border-t border-blue-100 dark:border-blue-900">
+                        <div className="flex items-start gap-2 text-muted-foreground">
+                          <MapPin className="h-4 w-4 mt-0.5 text-green-600" />
+                          <span>{event.location}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Sessions (if multi-session event) */}
+                  {event.is_multi_session && event.sessions && event.sessions.length > 0 && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-lg font-medium text-foreground">Agenda</h4>
+                        <Badge variant="outline">{event.sessions.length} session{event.sessions.length > 1 ? 's' : ''}</Badge>
+                      </div>
+
+                      <div className="space-y-3">
+                        {event.sessions.map((session, index) => {
+                          const startTime = new Date(session.starts_at);
+                          const endTime = session.ends_at ? new Date(session.ends_at) : new Date(startTime.getTime() + (session.duration_minutes * 60000));
+                          const timeFormat: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
+
+                          return (
+                            <div key={session.uuid || index} className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-md transition-shadow">
+                              <div className="flex">
+                                {/* Time sidebar */}
+                                <div className="w-24 shrink-0 bg-muted/50 p-4 flex flex-col items-center justify-center text-center border-r border-border">
+                                  <div className="text-lg font-bold text-foreground">
+                                    {startTime.toLocaleTimeString(undefined, timeFormat)}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {session.duration_minutes >= 60
+                                      ? `${Math.floor(session.duration_minutes / 60)}h${session.duration_minutes % 60 > 0 ? ` ${session.duration_minutes % 60}m` : ''}`
+                                      : `${session.duration_minutes}m`}
+                                  </div>
+                                </div>
+
+                                {/* Main content */}
+                                <div className="flex-1 p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex-1 min-w-0">
+                                      <h5 className="font-semibold text-foreground">{session.title}</h5>
+                                      {session.speaker_names && (
+                                        <p className="text-sm text-blue-600 mt-1">{session.speaker_names}</p>
+                                      )}
+                                      {session.description && (
+                                        <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{session.description}</p>
+                                      )}
+                                    </div>
+                                    {session.is_mandatory && (
+                                      <Badge className="shrink-0 bg-amber-100 text-amber-700 hover:bg-amber-100">Required</Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hide single session block for multi-session events */}
+                  {!event.is_multi_session && (
+                    <div className="text-center py-6 text-muted-foreground">
+                      <p className="text-sm">This is a single-session event. See event times above.</p>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>

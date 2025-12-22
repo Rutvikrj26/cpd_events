@@ -263,11 +263,12 @@ class EventCreateSerializer(serializers.ModelSerializer):
             # Attendance
             'minimum_attendance_percent',
             'minimum_attendance_minutes',
-            # Custom fields
             'custom_fields',
             'zoom_settings',
             # Location
             'location',
+            # Multi-session
+            'is_multi_session',
         ]
         read_only_fields = ['uuid', 'slug']
 
@@ -335,6 +336,8 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             'zoom_settings',
             # Location
             'location',
+            # Multi-session
+            'is_multi_session',
         ]
 
     def validate(self, attrs):
@@ -359,6 +362,28 @@ class EventStatusChangeSerializer(serializers.Serializer):
 # =============================================================================
 
 
+class PublicSessionSerializer(serializers.ModelSerializer):
+    """Session info for public event display (agenda view)."""
+
+    ends_at = serializers.DateTimeField(read_only=True)
+
+    class Meta:
+        model = EventSession
+        fields = [
+            'uuid',
+            'title',
+            'description',
+            'speaker_names',
+            'order',
+            'starts_at',
+            'ends_at',
+            'duration_minutes',
+            'session_type',
+            'is_mandatory',
+        ]
+        read_only_fields = fields
+
+
 class PublicEventListSerializer(serializers.ModelSerializer):
     """Public event list for discovery."""
 
@@ -380,6 +405,7 @@ class PublicEventListSerializer(serializers.ModelSerializer):
             'format',
             'starts_at',
             'ends_at',
+            'duration_minutes',
             'timezone',
             'cpd_credits',
             'organizer_name',
@@ -416,6 +442,7 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
     custom_fields = EventCustomFieldSerializer(many=True, read_only=True)
     organizer = serializers.SerializerMethodField()
     spots_remaining = serializers.SerializerMethodField()
+    sessions = serializers.SerializerMethodField()
 
     class Meta(PublicEventListSerializer.Meta):
         fields = PublicEventListSerializer.Meta.fields + [
@@ -425,6 +452,9 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
             'certificates_enabled',
             'waitlist_enabled',
             'spots_remaining',
+            'is_multi_session',
+            'sessions',
+            'location',
         ]
 
     def get_organizer(self, obj):
@@ -438,6 +468,13 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
         if not obj.max_attendees:
             return None
         return max(0, obj.max_attendees - obj.registration_count)
+
+    def get_sessions(self, obj):
+        """Return published sessions for multi-session events."""
+        if not obj.is_multi_session:
+            return []
+        sessions = obj.sessions.filter(is_published=True).order_by('order', 'starts_at')
+        return PublicSessionSerializer(sessions, many=True).data
 
 
 class EventStatusHistorySerializer(BaseModelSerializer):

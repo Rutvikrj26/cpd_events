@@ -70,6 +70,62 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
         return Response(serializers.CertificateTemplateDetailSerializer(template).data)
 
     @swagger_auto_schema(
+        operation_summary="List available templates",
+        operation_description="Get all templates available to the user: their own templates plus shared organization templates.",
+        responses={200: serializers.CertificateTemplateListSerializer(many=True)},
+    )
+    @action(detail=False, methods=['get'], url_path='available')
+    def available_templates(self, request):
+        """
+        Get all templates available to the current user.
+        
+        Returns:
+        - User's own templates
+        - Shared templates from organizations the user belongs to
+        
+        User access logic:
+        - Individual organizers: see only their own templates
+        - Org members: see own templates + org shared templates
+        """
+        user = request.user
+        
+        # Start with user's own templates
+        own_templates = CertificateTemplate.objects.filter(
+            owner=user,
+            is_active=True,
+            deleted_at__isnull=True
+        )
+        
+        # Get shared templates from user's organizations
+        from organizations.models import OrganizationMembership
+        
+        # Find orgs where user is an active member
+        user_org_ids = OrganizationMembership.objects.filter(
+            user=user,
+            is_active=True
+        ).values_list('organization_id', flat=True)
+        
+        # Get shared templates from those orgs (excluding user's own)
+        org_shared_templates = CertificateTemplate.objects.filter(
+            organization_id__in=user_org_ids,
+            is_shared=True,
+            is_active=True,
+            deleted_at__isnull=True
+        ).exclude(owner=user)
+        
+        # Combine and serialize
+        all_templates = list(own_templates) + list(org_shared_templates)
+        
+        # Add source info
+        serializer = serializers.CertificateTemplateListSerializer(all_templates, many=True)
+        
+        return Response({
+            'own_count': own_templates.count(),
+            'shared_count': org_shared_templates.count(),
+            'templates': serializer.data
+        })
+
+    @swagger_auto_schema(
         operation_summary="Upload template PDF",
         operation_description="Upload a PDF file to use as the certificate background.",
     )

@@ -30,6 +30,17 @@ export const getCertificateTemplates = async (): Promise<CertificateTemplate[]> 
     return Array.isArray(response.data) ? response.data : response.data.results || [];
 };
 
+export interface AvailableTemplatesResponse {
+    own_count: number;
+    shared_count: number;
+    templates: CertificateTemplate[];
+}
+
+export const getAvailableCertificateTemplates = async (): Promise<AvailableTemplatesResponse> => {
+    const response = await client.get<AvailableTemplatesResponse>('/certificate-templates/available/');
+    return response.data;
+};
+
 export const getCertificateTemplate = async (uuid: string): Promise<CertificateTemplate> => {
     const response = await client.get<CertificateTemplate>(`/certificate-templates/${uuid}/`);
     return response.data;

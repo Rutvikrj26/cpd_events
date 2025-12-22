@@ -49,6 +49,9 @@ const initialFormData: Partial<EventCreateRequest> = {
     minimum_attendance_minutes: 0,
     minimum_attendance_percent: 80,
     zoom_settings: {},
+    // Multi-session support
+    is_multi_session: false,
+    _sessions: [],
 };
 
 interface EventWizardProviderProps {
