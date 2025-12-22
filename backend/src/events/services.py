@@ -59,7 +59,7 @@ class ZoomMeetingService:
                     'join_before_host': meeting_settings.get('join_before_host', False),
                     'mute_upon_entry': meeting_settings.get('mute_upon_entry', True),
                     'auto_recording': meeting_settings.get('auto_recording', 'cloud'),
-                    'approval_type': 2,  # No registration required
+                    'approval_type': 0,  # Automatically Approve (Registration Required)
                     'registration_type': 1,  # Attendees register once
                 },
             }
@@ -120,6 +120,8 @@ class ZoomMeetingService:
                     'waiting_room': meeting_settings.get('waiting_room', True),
                     'join_before_host': meeting_settings.get('join_before_host', False),
                     'mute_upon_entry': meeting_settings.get('mute_upon_entry', True),
+                    'approval_type': 0,  # Automatically Approve (Registration Required)
+                    'registration_type': 1,  # Attendees register once
                 },
             }
 

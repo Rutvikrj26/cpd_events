@@ -250,7 +250,7 @@ class Registration(SoftDeleteModel):
             # Physical check-in implies eligibility (unless overridden)
             if self.check_in_time is not None:
                 self.attendance_eligible = True
-            elif self.event.event_type == Event.EventType.COURSE:  # Assuming 'COURSE' implies multi-session, adjust as needed
+            elif self.event.is_multi_session:  # Check multi-session flag
                 # Multi-session event logic
                 session_progress_records = self.session_attendance.all()
                 total_sessions = self.event.sessions.filter(is_published=True).count()

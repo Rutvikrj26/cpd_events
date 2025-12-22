@@ -32,16 +32,22 @@ def validate_field_positions_schema(value):
         'first_name',
         'last_name',
         'attendee_name',
+        'attendee_email',
+        'attendee_title',
+        'attendee_organization',
         'event_title',
         'event_date',
-        'cpd_hours',  # Matches frontend
-        'cpd_credits', # Legacy/Backend
+        'event_datetime',
+        'cpd_hours',  # Legacy frontend naming
+        'cpd_credits',
         'cpd_type',
-        'certificate_code', # Matches preview sample data
+        'certificate_code',
         'certificate_id',
         'organizer_name',
+        'organizer_email',
         'signature',
         'issue_date',
+        'issued_date',  # Backend uses this key
         'qr_code',
     }
     valid_alignments = {'left', 'center', 'right'}

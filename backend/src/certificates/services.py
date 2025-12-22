@@ -54,30 +54,41 @@ class CertificateService:
 
     def _render_pdf(self, template, data: dict) -> bytes:
         """
-        Render certificate as PDF.
+        Render certificate as PDF by overlaying text on the template.
 
-        Uses reportlab for PDF generation.
+        Uses PyPDF2 to merge text overlay onto the template PDF.
         """
         try:
             from io import BytesIO
 
             from reportlab.lib.pagesizes import A4
             from reportlab.pdfgen import canvas
+            from reportlab.lib.colors import black
 
-            buffer = BytesIO()
+            # Try to get template PDF for overlay
+            template_bytes = self._download_template(template)
+            
+            if template_bytes:
+                # Use PyPDF2 to overlay text on template
+                from PyPDF2 import PdfReader, PdfWriter
 
-            # Use A4 or letter based on template settings
-            page_size = A4
-            c = canvas.Canvas(buffer, pagesize=page_size)
-            width, height = page_size
+                template_reader = PdfReader(BytesIO(template_bytes))
+                if len(template_reader.pages) == 0:
+                    logger.error("Template PDF has no pages")
+                    return b''
 
-            # Draw background if template has one
-            if template.background_image_url:
-                try:
-                    # In production, download and cache the image
-                    pass
-                except Exception:
-                    pass
+                template_page = template_reader.pages[0]
+                page_width = float(template_page.mediabox.width)
+                page_height = float(template_page.mediabox.height)
+            else:
+                # Fallback to blank A4 page
+                logger.warning("No template PDF, generating on blank canvas")
+                page_width, page_height = A4
+                template_page = None
+
+            # Create overlay with text
+            overlay_buffer = BytesIO()
+            c = canvas.Canvas(overlay_buffer, pagesize=(page_width, page_height))
 
             # Get field positions from template
             positions = template.field_positions or {}
@@ -89,19 +100,40 @@ class CertificateService:
                     continue
 
                 x = field_data.get('x', 100)
-                y = height - field_data.get('y', 100)  # Convert to PDF coords
-                font_size = field_data.get('font_size', 12)
-                font = field_data.get('font', 'Helvetica')
+                y = page_height - field_data.get('y', 100)  # Convert from top-left to PDF coords
+                font_size = field_data.get('fontSize', field_data.get('font_size', 12))
+                font_family = field_data.get('fontFamily', field_data.get('font', 'Helvetica'))
 
-                c.setFont(font, font_size)
+                try:
+                    c.setFont(font_family, font_size)
+                except KeyError:
+                    c.setFont('Helvetica', font_size)
+
+                c.setFillColor(black)
                 c.drawString(x, y, str(text))
 
             c.save()
+            overlay_buffer.seek(0)
 
-            return buffer.getvalue()
+            if template_page:
+                # Merge template with overlay
+                overlay_reader = PdfReader(overlay_buffer)
+                overlay_page = overlay_reader.pages[0]
+                template_page.merge_page(overlay_page)
 
-        except ImportError:
-            logger.error("reportlab not installed")
+                # Write result
+                writer = PdfWriter()
+                writer.add_page(template_page)
+
+                output = BytesIO()
+                writer.write(output)
+                return output.getvalue()
+            else:
+                # Return blank canvas with text
+                return overlay_buffer.getvalue()
+
+        except ImportError as e:
+            logger.error(f"PDF library not installed: {e}")
             return b''
         except Exception as e:
             logger.error(f"PDF rendering failed: {e}")
@@ -339,7 +371,13 @@ class CertificateService:
             path = '/'.join(file_url.split('/')[3:])
             return gcs_storage.get_signed_url(path, expiration_minutes)
 
-        # Already a public URL or local path
+        # For local paths, construct absolute URL
+        if file_url.startswith('/'):
+            from django.conf import settings
+            base_url = getattr(settings, 'SITE_URL', 'http://localhost:8000')
+            return f"{base_url.rstrip('/')}{file_url}"
+
+        # Already a public URL
         return file_url
 
     def issue_certificate(self, registration, template=None, issued_by=None) -> dict[str, Any]:
@@ -377,8 +415,7 @@ class CertificateService:
                 registration=registration,
                 template=template,
                 status='pending',
-                cpd_type=event.cpd_type,
-                cpd_credits=event.cpd_credits,
+                issued_by=issued_by,
             )
 
             # Build and save certificate data snapshot
@@ -392,7 +429,7 @@ class CertificateService:
                 self.upload_pdf(certificate, pdf_bytes)
 
             # Mark as issued
-            certificate.status = 'issued'
+            certificate.status = 'active'
             certificate.issued_at = timezone.now()
             certificate.issued_by = issued_by
             certificate.save()

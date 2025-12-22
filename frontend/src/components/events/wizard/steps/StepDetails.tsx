@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete';
-import { MapPin, Video, Upload, Image as ImageIcon, X } from 'lucide-react';
+import { MapPin, Upload, Image as ImageIcon, X } from 'lucide-react';
 
 export const StepDetails = () => {
     const { formData, updateFormData } = useEventWizard();
@@ -98,21 +98,7 @@ export const StepDetails = () => {
                 </div>
             )}
 
-            {/* Online Meeting Info - Only shown for online/hybrid events */}
-            {hasOnlineComponent && (
-                <div className="space-y-2 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
-                    <Label className="flex items-center gap-2">
-                        <Video className="h-4 w-4 text-blue-600" />
-                        Online Meeting
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                        {formData.zoom_settings?.enabled
-                            ? "A Zoom meeting will be created automatically when you publish the event."
-                            : "Enable Zoom integration in Settings, or manually add meeting details after creating the event."
-                        }
-                    </p>
-                </div>
-            )}
+
 
             {/* Cover Image Section */}
             <div className="space-y-3">

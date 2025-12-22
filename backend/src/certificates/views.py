@@ -194,14 +194,18 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
         # Get field positions from request or use template's saved positions
         field_positions = request.data.get('field_positions', template.field_positions)
         
-        # Sample data for preview
+        # Sample data for preview - keys must match Certificate.build_certificate_data()
         sample_data = {
-            'first_name': 'First Name',
-            'last_name': 'Last Name',
-            'cpd_hours': 'Cr.H',
+            'attendee_name': 'John Doe',
             'event_title': 'Sample Event Title',
-            'event_date': 'December 20, 2025',
-            'certificate_code': 'ABC12345',
+            'event_date': '2025-12-20',
+            'cpd_credits': '2.0',
+            'organizer_name': 'Sample Organizer',
+            'issued_date': '2025-12-22',
+            'cpd_type': 'CME',
+            'attendee_email': 'john.doe@example.com',
+            'attendee_title': 'Dr.',
+            'attendee_organization': 'Sample Hospital',
         }
         
         try:
@@ -325,28 +329,19 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
                 skipped.append(str(reg.uuid))
                 continue
 
-            # Create certificate
-            cert = Certificate.objects.create(
+            # Issue certificate using service
+            from .services import certificate_service
+            
+            result = certificate_service.issue_certificate(
                 registration=reg,
-                template=event.certificate_template,
-                status='issued',
-                issued_by=request.user,
-                certificate_data={
-                    'recipient_name': reg.full_name,
-                    'event_title': event.title,
-                    'event_date': event.starts_at.strftime('%B %d, %Y') if event.starts_at else '',
-                    'cpd_credits': str(event.cpd_credit_value) if event.cpd_credit_value else '',
-                    'cpd_type': event.cpd_credit_type,
-                    'organizer_name': event.owner.display_name,
-                },
+                issued_by=request.user
             )
 
-            # Mark registration
-            reg.certificate_issued = True
-            reg.certificate_issued_at = timezone.now()
-            reg.save(update_fields=['certificate_issued', 'certificate_issued_at', 'updated_at'])
-
-            issued.append(str(cert.uuid))
+            if result['success']:
+                issued.append(str(result['certificate'].uuid))
+            else:
+                skipped.append(str(reg.uuid))
+                # logger.warning(f"Failed to issue certificate for {reg.uuid}: {result.get('error')}")
 
         return Response(
             {

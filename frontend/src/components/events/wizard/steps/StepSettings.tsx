@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Video } from 'lucide-react';
 import { useEventWizard } from '../EventWizardContext';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -192,6 +193,19 @@ export const StepSettings = () => {
                     <Separator />
 
                     <div className="space-y-4">
+                        <div className="space-y-2 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+                            <Label className="flex items-center gap-2">
+                                <Video className="h-4 w-4 text-blue-600" />
+                                Online Meeting
+                            </Label>
+                            <p className="text-sm text-muted-foreground">
+                                {formData.zoom_settings?.enabled
+                                    ? "A Zoom meeting will be created automatically when you publish the event."
+                                    : "Enable Zoom integration below, or manually add meeting details after creating the event."
+                                }
+                            </p>
+                        </div>
+
                         <div className="flex items-center justify-between">
                             <div className="space-y-0.5">
                                 <Label className="text-base">Zoom Integration</Label>

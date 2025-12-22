@@ -194,8 +194,8 @@ class WebhookProcessor:
 
         except Exception as e:
             logger.error(f"Zoom webhook processing failed: {e}")
-            log.processing_error = str(e)
-            log.save(update_fields=['processing_error', 'updated_at'])
+            log.error_message = str(e)
+            log.save(update_fields=['error_message', 'updated_at'])
             return False
 
     def _get_zoom_handler(self, event_type: str):
@@ -210,27 +210,103 @@ class WebhookProcessor:
 
     def _handle_participant_joined(self, payload: dict) -> bool:
         """Handle participant join event."""
+        from events.models import Event
+        from registrations.models import AttendanceRecord, Registration
+        from django.utils.dateparse import parse_datetime
+
         # Extract data
-        meeting_id = payload.get('object', {}).get('id')
+        meeting_id = str(payload.get('object', {}).get('id', ''))
         participant = payload.get('object', {}).get('participant', {})
-        participant.get('join_time')
-        user_email = participant.get('email')
+        
+        zoom_user_id = participant.get('user_id', '')
+        user_name = participant.get('user_name', '')
+        user_email = participant.get('email', '')
+        participant_uuid = participant.get('id', '') # Unique for this session
+        join_time_str = participant.get('join_time')
+        
+        join_time = parse_datetime(join_time_str) if join_time_str else None
 
         logger.info(f"Participant joined meeting {meeting_id}: {user_email}")
 
-        # TODO: Match to registration and update attendance
+        if not meeting_id or not join_time:
+            logger.warning("Missing meeting_id or join_time in payload")
+            return False
+
+        # Find Event
+        try:
+            event = Event.objects.get(zoom_meeting_id=meeting_id)
+        except Event.DoesNotExist:
+            logger.warning(f"Event not found for Zoom meeting ID: {meeting_id}")
+            return True # Return True to acknowledge webhook receipt
+
+        # Find Registration (if any)
+        registration = None
+        if user_email:
+            registration = Registration.objects.filter(
+                event=event, 
+                email__iexact=user_email,
+                deleted_at__isnull=True
+            ).first()
+
+        # Create Attendance Record
+        # We use get_or_create to handle potential duplicate webhooks
+        AttendanceRecord.objects.get_or_create(
+            event=event,
+            zoom_participant_id=participant_uuid,
+            join_time=join_time,
+            defaults={
+                'registration': registration,
+                'zoom_user_id': zoom_user_id,
+                'zoom_user_email': user_email,
+                'zoom_user_name': user_name,
+                'is_matched': registration is not None,
+                'matched_at': timezone.now() if registration else None
+            }
+        )
+
+        # Update registration summary immediately if matched
+        if registration:
+            registration.update_attendance_summary()
+            
         return True
 
     def _handle_participant_left(self, payload: dict) -> bool:
         """Handle participant leave event."""
-        meeting_id = payload.get('object', {}).get('id')
+        from events.models import Event
+        from registrations.models import AttendanceRecord
+        from django.utils.dateparse import parse_datetime
+
+        meeting_id = str(payload.get('object', {}).get('id', ''))
         participant = payload.get('object', {}).get('participant', {})
-        participant.get('leave_time')
-        user_email = participant.get('email')
+        
+        participant_uuid = participant.get('id', '')
+        leave_time_str = participant.get('leave_time')
+        
+        leave_time = parse_datetime(leave_time_str) if leave_time_str else None
 
-        logger.info(f"Participant left meeting {meeting_id}: {user_email}")
+        logger.info(f"Participant left meeting {meeting_id}")
+        
+        if not meeting_id or not participant_uuid or not leave_time:
+             return False
 
-        # TODO: Update attendance record
+        try:
+            event = Event.objects.get(zoom_meeting_id=meeting_id)
+        except Event.DoesNotExist:
+            return True
+
+        # Find the specific open record
+        record = AttendanceRecord.objects.filter(
+            event=event,
+            zoom_participant_id=participant_uuid,
+            leave_time__isnull=True
+        ).order_by('-join_time').first()
+
+        if record:
+            record.participant_left(leave_time=leave_time)
+            logger.info(f"Closed attendance record for {record}")
+        else:
+            logger.warning(f"No open attendance record found for participant {participant_uuid} in meeting {meeting_id}")
+
         return True
 
     def _handle_meeting_ended(self, payload: dict) -> bool:

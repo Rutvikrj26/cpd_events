@@ -36,9 +36,13 @@ interface FieldPositionEditorProps {
 }
 
 const DEFAULT_FIELDS: DraggableField[] = [
-    { id: "first_name", label: "First Name", x: 100, y: 100, fontSize: 24 },
-    { id: "last_name", label: "Last Name", x: 300, y: 100, fontSize: 24 },
-    { id: "cpd_hours", label: "Cr.H", x: 100, y: 200, fontSize: 18 },
+    // These IDs must match keys from backend's Certificate.build_certificate_data()
+    { id: "attendee_name", label: "Attendee Name", x: 100, y: 100, fontSize: 24 },
+    { id: "event_title", label: "Event Title", x: 100, y: 150, fontSize: 20 },
+    { id: "event_date", label: "Event Date", x: 100, y: 200, fontSize: 16 },
+    { id: "cpd_credits", label: "CPD Credits", x: 100, y: 250, fontSize: 16 },
+    { id: "organizer_name", label: "Organizer", x: 100, y: 300, fontSize: 14 },
+    { id: "issued_date", label: "Issue Date", x: 100, y: 350, fontSize: 12 },
 ];
 
 export function FieldPositionEditor({

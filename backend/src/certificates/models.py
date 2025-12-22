@@ -455,6 +455,8 @@ class Certificate(SoftDeleteModel):
                 'type': 'course',
             }
 
+        return self.certificate_data
+
 
 class CertificateStatusHistory(BaseModel):
     """
