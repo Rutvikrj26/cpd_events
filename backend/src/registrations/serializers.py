@@ -54,7 +54,7 @@ class AttendanceOverrideSerializer(serializers.Serializer):
     """Override attendance eligibility."""
 
     eligible = serializers.BooleanField()
-    reason = serializers.CharField(max_length=500)
+    reason = serializers.CharField(max_length=500, required=False, allow_blank=True)
 
 
 # =============================================================================
@@ -94,6 +94,8 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
     event_title = serializers.CharField(source='event.title', read_only=True)
     attendance_percent = serializers.IntegerField(read_only=True)
 
+    certificate_uuid = serializers.UUIDField(source='certificate.uuid', read_only=True, allow_null=True)
+
     class Meta:
         model = Registration
         fields = [
@@ -110,6 +112,7 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
             'attendance_percent',
             'attendance_override',
             'certificate_issued',
+            'certificate_uuid',
             'waitlist_position',
             'created_at',
         ]

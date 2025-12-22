@@ -143,9 +143,7 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
                 instance.check_in_time = timezone.now()
         else:
             instance.attended = False
-            # Optional: Clear check_in_time if unchecked? Usually better to keep history or minimal change. 
-            # User wants audit log. If unchecked, maybe we keep the time or clear it? 
-            # For now, let's just specific logic: if attended becomes True, set time.
+            instance.check_in_time = None  # Clear check-in time when marked absent
         
         if 'attendance_eligible' in serializer.validated_data:
             instance.attendance_eligible = serializer.validated_data['attendance_eligible']

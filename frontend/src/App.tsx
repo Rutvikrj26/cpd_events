@@ -30,6 +30,7 @@ import { EventCreatePage } from './pages/events/EventCreatePage';
 import { EventDetailPage } from './pages/events/EventDetailPage';
 import { MyRegistrationsPage } from './pages/registrations/MyRegistrationsPage';
 import { CertificatesPage } from './pages/certificates/CertificatesPage';
+import { CertificateVerify } from './pages/certificates/CertificateVerify';
 import { BillingPage } from './pages/billing/BillingPage';
 import { ProfilePage } from './pages/profile/ProfilePage';
 
@@ -100,6 +101,9 @@ export default function App() {
                 <ContactPage />
               </PublicLayout>
             } />
+
+            {/* Public Certificate Verification */}
+            <Route path="/verify/:code" element={<CertificateVerify />} />
 
             <Route path="/forgot-password" element={
               <AuthLayout>

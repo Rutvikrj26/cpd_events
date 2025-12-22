@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
 
 export const Sidebar = () => {
-    const { user, logout, hasRoute, manifest } = useAuth();
+    const { user, logout, hasRoute, hasFeature, manifest } = useAuth();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const isOrganizer = user?.account_type === 'organizer' || user?.account_type === 'admin';
 
@@ -41,8 +41,16 @@ export const Sidebar = () => {
         // If manifest is loaded, use it (except for items not in registry like dashboard/profile)
         if (manifest && manifest.routes.length > 0) {
             // Items always visible (not in RBAC registry)
-            if (['dashboard', 'profile', 'billing'].includes(item.routeKey)) {
+            if (['dashboard', 'profile'].includes(item.routeKey)) {
                 return true;
+            }
+            // Billing only for organizers
+            if (item.routeKey === 'billing') {
+                return isOrganizer;
+            }
+            // Use feature flag for certificates since it's not a distinct backend view
+            if (item.routeKey === 'certificates') {
+                return hasFeature('view_own_certificates');
             }
             return hasRoute(item.routeKey);
         }
@@ -52,6 +60,7 @@ export const Sidebar = () => {
             case 'events':
             case 'cert_templates':
             case 'zoom':
+            case 'billing':
                 return isOrganizer;
             case 'registrations':
             case 'certificates':

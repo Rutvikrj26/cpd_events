@@ -168,6 +168,7 @@ export function EventManagement() {
       try {
          await issueCertificates(uuid, { registration_uuids: [registrationUuid] });
          toast.success("Certificate issued successfully");
+         fetchRegistrations();
       } catch (error: any) {
          toast.error(error?.response?.data?.detail || "Failed to issue certificate");
       }
@@ -178,6 +179,7 @@ export function EventManagement() {
       try {
          const result = await issueCertificates(uuid, {});
          toast.success(`Issued ${result.issued} certificates (${result.skipped} skipped)`);
+         fetchRegistrations();
       } catch (error: any) {
          toast.error(error?.response?.data?.detail || "Failed to issue certificates");
       }
@@ -239,6 +241,7 @@ export function EventManagement() {
       registered: attendees.filter(a => a.status !== "cancelled").length,
       checkedIn: attendees.filter(a => a.attended).length,
       cancelled: attendees.filter(a => a.status === "cancelled").length,
+      issued: attendees.filter(a => a.certificate_uuid).length,
    };
 
    return (
@@ -345,9 +348,9 @@ export function EventManagement() {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Certificates Issued</CardTitle>
                </CardHeader>
                <CardContent>
-                  <div className="text-2xl font-bold">0</div>
+                  <div className="text-2xl font-bold">{stats.issued}</div>
                   <p className="text-xs text-muted-foreground mt-1">
-                     Pending event completion
+                     {stats.checkedIn > 0 ? (stats.issued / stats.checkedIn * 100).toFixed(0) : 0}% of attendees
                   </p>
                </CardContent>
             </Card>
@@ -583,11 +586,6 @@ export function EventManagement() {
                               ? 'Track in-person check-ins and online participation.'
                               : 'Mark attendance manually or use the QR scanner app.'}
                      </div>
-                     {event.format !== 'online' && (
-                        <Button size="sm" variant="outline" className="gap-2">
-                           <QrCode className="h-4 w-4" /> Launch Scanner
-                        </Button>
-                     )}
                   </div>
                   <div className="overflow-x-auto">
                      <table className="min-w-full divide-y divide-border">
@@ -608,6 +606,7 @@ export function EventManagement() {
                               {event.format !== 'in-person' && (
                                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Attendance Minutes</th>
                               )}
+                              <th className="px-6 py-3 relative"><span className="sr-only">Actions</span></th>
                            </tr>
                         </thead>
                         <tbody className="bg-card divide-y divide-border">
@@ -642,6 +641,23 @@ export function EventManagement() {
                                        {attendee.total_attendance_minutes != null ? `${attendee.total_attendance_minutes} min` : "-"}
                                     </td>
                                  )}
+                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <DropdownMenu>
+                                       <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" className="h-8 w-8 p-0">
+                                             <MoreVertical className="h-4 w-4" />
+                                          </Button>
+                                       </DropdownMenuTrigger>
+                                       <DropdownMenuContent align="end">
+                                          <DropdownMenuItem onClick={() => {
+                                             setSelectedAttendee(attendee);
+                                             setEditAttendanceOpen(true);
+                                          }}>
+                                             Edit Attendance
+                                          </DropdownMenuItem>
+                                       </DropdownMenuContent>
+                                    </DropdownMenu>
+                                 </td>
                               </tr>
                            ))}
                         </tbody>
@@ -687,10 +703,10 @@ export function EventManagement() {
                                     <div className="text-sm font-medium text-foreground">{attendee.full_name}</div>
                                  </td>
                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    {attendee.attended ? (
+                                    {attendee.attendance_eligible ? (
                                        <Badge variant="outline" className="text-green-600 bg-green-500/10 border-green-200">Eligible</Badge>
                                     ) : (
-                                       <Badge variant="outline" className="text-muted-foreground bg-muted border-border">Not Attended</Badge>
+                                       <Badge variant="outline" className="text-muted-foreground bg-muted border-border">Not Eligible</Badge>
                                     )}
                                  </td>
                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
@@ -700,7 +716,7 @@ export function EventManagement() {
                                     <Button
                                        size="sm"
                                        variant="outline"
-                                       disabled={!attendee.attended || attendee.certificate_uuid}
+                                       disabled={!attendee.attendance_eligible || !!attendee.certificate_uuid}
                                        onClick={() => handleIssueCertificate(attendee.uuid)}
                                     >
                                        {attendee.certificate_uuid ? 'Issued' : 'Issue'}

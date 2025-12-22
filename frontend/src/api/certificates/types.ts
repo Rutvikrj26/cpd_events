@@ -40,6 +40,18 @@ export interface Certificate {
     view_count: number;
     download_count: number;
     created_at: string;
+    // URLs from backend
+    download_url?: string;
+    share_url?: string;
+    verification_url?: string;
+    // Event info for attendee view
+    event?: {
+        uuid: string;
+        title: string;
+        cpd_credits?: string;
+        cpd_type?: string;
+    };
+    is_valid?: boolean;
 }
 
 export interface CertificateIssueRequest {

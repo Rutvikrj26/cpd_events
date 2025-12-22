@@ -151,7 +151,7 @@ class CertificateListSerializer(SoftDeleteModelSerializer):
             'registrant_name',
             'status',
             'short_code',
-            'issued_at',
+            'short_code',
             'created_at',
         ]
         read_only_fields = fields
@@ -175,10 +175,9 @@ class CertificateDetailSerializer(SoftDeleteModelSerializer):
             'verification_code',
             'short_code',
             'certificate_data',
-            'pdf_url',
+            'file_url',
             'public_url',
-            'issued_at',
-            'expires_at',
+            'created_at',
             'revocation_reason',
             'revoked_at',
             'revoked_by',
@@ -252,16 +251,15 @@ class PublicCertificateVerificationSerializer(serializers.ModelSerializer):
             'registrant',
             'organizer',
             'certificate_data',
-            'issued_at',
-            'expires_at',
+            'created_at',
         ]
 
     def get_event(self, obj):
         return {
             'title': obj.event.title,
             'date': obj.event.starts_at.strftime('%B %d, %Y') if obj.event.starts_at else None,
-            'cpd_credits': str(obj.event.cpd_credits) if obj.event.cpd_credits else None,
-            'cpd_type': obj.event.cpd_type_display,
+            'cpd_credits': str(obj.event.cpd_credit_value) if obj.event.cpd_credit_value else None,
+            'cpd_type': obj.event.cpd_credit_type,
         }
 
     def get_registrant(self, obj):
@@ -278,9 +276,8 @@ class PublicCertificateVerificationSerializer(serializers.ModelSerializer):
         }
 
     def get_is_valid(self, obj):
-        if obj.status != 'issued':
-            return False
-        return not (obj.expires_at and obj.expires_at < timezone.now())
+        # Certificate is valid unless explicitly revoked
+        return obj.status != 'revoked'
 
 
 class CertificateStatusHistorySerializer(BaseModelSerializer):
@@ -303,7 +300,9 @@ class MyCertificateSerializer(SoftDeleteModelSerializer):
     event = serializers.SerializerMethodField()
     download_url = serializers.SerializerMethodField()
     share_url = serializers.SerializerMethodField()
+    verification_url = serializers.SerializerMethodField()
     is_valid = serializers.SerializerMethodField()
+    issued_at = serializers.DateTimeField(source='created_at', read_only=True)
 
     class Meta:
         model = Certificate
@@ -313,25 +312,31 @@ class MyCertificateSerializer(SoftDeleteModelSerializer):
             'status',
             'short_code',
             'issued_at',
-            'expires_at',
+            'created_at',
             'is_valid',
             'download_url',
             'share_url',
+            'verification_url',
             'view_count',
             'download_count',
         ]
         read_only_fields = fields
 
+    def get_verification_url(self, obj):
+        from django.conf import settings
+
+        return f"{settings.SITE_URL}/verify/{obj.short_code}"
+
     def get_event(self, obj):
         return {
             'uuid': str(obj.event.uuid),
             'title': obj.event.title,
-            'cpd_credits': str(obj.event.cpd_credits) if obj.event.cpd_credits else None,
-            'cpd_type': obj.event.cpd_type_display,
+            'cpd_credits': str(obj.event.cpd_credit_value) if obj.event.cpd_credit_value else None,
+            'cpd_type': obj.event.cpd_credit_type,
         }
 
     def get_download_url(self, obj):
-        if obj.status == 'issued' and obj.pdf_url:
+        if obj.status == 'active' and obj.file_url:
             # M7: Return signed URL instead of direct URL
             from .services import certificate_service
 
@@ -344,6 +349,5 @@ class MyCertificateSerializer(SoftDeleteModelSerializer):
         return f"{settings.SITE_URL}/verify/{obj.short_code}"
 
     def get_is_valid(self, obj):
-        if obj.status != 'issued':
-            return False
-        return not (obj.expires_at and obj.expires_at < timezone.now())
+        # Certificate is valid unless explicitly revoked
+        return obj.status != 'revoked'

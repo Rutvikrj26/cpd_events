@@ -1,105 +1,140 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Search, Download, ExternalLink, ShieldCheck, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/custom/PageHeader";
-import { mockCertificates } from "@/lib/mock-data";
+import { getMyRegistrations } from "@/api/registrations";
+import { Registration } from "@/api/registrations/types";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 
 export function CertificatesList() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredCerts = mockCertificates.filter(c => 
-    c.eventTitle.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.organizer.toLowerCase().includes(searchTerm.toLowerCase())
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const data = await getMyRegistrations();
+        setRegistrations(data);
+      } catch (error) {
+        toast.error("Failed to load certificates");
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  // Filter for ONLY issued certificates
+  const issuedCertificates = registrations.filter(r => r.certificate_issued);
+
+  const filteredCerts = issuedCertificates.filter(c =>
+    c.event.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (loading) {
+    return <div className="p-8">Loading certificates...</div>;
+  }
 
   return (
     <div className="space-y-8">
-      <PageHeader 
-        title="My Certificates" 
+      <PageHeader
+        title="My Certificates"
         description="Access and manage your professional credentials."
       />
 
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="relative w-full sm:w-96">
-           <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-           <Input 
-             placeholder="Search by event or organizer..." 
-             className="pl-9"
-             value={searchTerm}
-             onChange={(e) => setSearchTerm(e.target.value)}
-           />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder="Search by event..."
+            className="pl-9"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-           <Button variant="outline" className="w-full sm:w-auto">
-             <Filter className="mr-2 h-4 w-4" /> Filter Year
-           </Button>
-           <Button variant="outline" className="w-full sm:w-auto">
-             <Download className="mr-2 h-4 w-4" /> Export All
-           </Button>
+          <Button variant="outline" className="w-full sm:w-auto">
+            <Filter className="mr-2 h-4 w-4" /> Filter Year
+          </Button>
+          <Button variant="outline" className="w-full sm:w-auto">
+            <Download className="mr-2 h-4 w-4" /> Export All
+          </Button>
         </div>
       </div>
 
       {filteredCerts.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredCerts.map((cert) => (
-            <CertificateCard key={cert.id} cert={cert} />
+            <CertificateCard key={cert.uuid} cert={cert} />
           ))}
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-lg border border-dashed border-border">
-           <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4 text-gray-400">
-              <ShieldCheck className="h-8 w-8" />
-           </div>
-           <h3 className="text-lg font-medium text-foreground mb-1">No certificates found</h3>
-           <p className="text-muted-foreground text-center max-w-sm">
-              Complete events to earn certificates. They will appear here once issued by the organizer.
-           </p>
+          <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4 text-gray-400">
+            <ShieldCheck className="h-8 w-8" />
+          </div>
+          <h3 className="text-lg font-medium text-foreground mb-1">No certificates found</h3>
+          <p className="text-muted-foreground text-center max-w-sm">
+            Complete events to earn certificates. They will appear here once issued by the organizer.
+          </p>
         </div>
       )}
     </div>
   );
 }
 
-function CertificateCard({ cert }: { cert: typeof mockCertificates[0] }) {
+function CertificateCard({ cert }: { cert: Registration }) {
   return (
     <Card className="flex flex-col h-full hover:shadow-md transition-shadow group">
       <div className="relative aspect-[1.414/1] bg-card border-b border-gray-100 p-6 flex flex-col items-center justify-center text-center overflow-hidden">
-         {/* Mini Certificate Preview */}
-         <div className="absolute inset-0 bg-gray-50 opacity-0 group-hover:opacity-10 transition-opacity"></div>
-         <div className="border-4 border-double border-gray-100 absolute inset-3 pointer-events-none"></div>
-         
-         <ShieldCheck className="h-8 w-8 text-blue-600 mb-2 opacity-80" />
-         <h3 className="font-serif font-bold text-foreground text-sm line-clamp-2 px-2 leading-tight mb-1">
-            {cert.eventTitle}
-         </h3>
-         <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Certificate of Completion</p>
-         <div className="mt-3 text-xs font-bold text-gray-400 font-mono">
-            {new Date(cert.issueDate).toLocaleDateString()}
-         </div>
+        {/* Mini Certificate Preview */}
+        <div className="absolute inset-0 bg-gray-50 opacity-0 group-hover:opacity-10 transition-opacity"></div>
+        <div className="border-4 border-double border-gray-100 absolute inset-3 pointer-events-none"></div>
+
+        <ShieldCheck className="h-8 w-8 text-blue-600 mb-2 opacity-80" />
+        <h3 className="font-serif font-bold text-foreground text-sm line-clamp-2 px-2 leading-tight mb-1">
+          {cert.event.title}
+        </h3>
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Certificate of Completion</p>
+        <div className="mt-3 text-xs font-bold text-gray-400 font-mono">
+          {cert.certificate_issued_at ? new Date(cert.certificate_issued_at).toLocaleDateString() : 'Pending'}
+        </div>
       </div>
-      
+
       <CardContent className="pt-4 pb-2 flex-grow">
         <div className="space-y-2">
-           <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Credits</span>
-              <span className="font-medium">{cert.credits} {cert.creditType}</span>
-           </div>
-           <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Organizer</span>
-              <span className="font-medium truncate max-w-[140px]" title={cert.organizer}>{cert.organizer}</span>
-           </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Credits</span>
+            <span className="font-medium">
+              {Number(cert.event.cpd_credit_value)} <Badge variant="outline" className="text-[10px] h-5 ml-1">{cert.event.cpd_credit_type}</Badge>
+            </span>
+          </div>
+          <div className="flex justify-between text-sm">
+            {/* Organizer info is not currently in MinimalEvent, so we check event type instead */}
+            <span className="text-muted-foreground">Type</span>
+            <span className="font-medium truncate max-w-[140px]">{cert.event.event_type || 'Event'}</span>
+          </div>
         </div>
       </CardContent>
-      
+
       <CardFooter className="pt-2 gap-2">
-        <Link to={`/certificates/${cert.id}`} className="w-full">
-           <Button variant="outline" className="w-full h-8 text-xs">View Details</Button>
+        <Link to={`/events/${cert.event.slug || cert.event.uuid}`} className="w-full">
+          <Button variant="outline" className="w-full h-8 text-xs">View Event</Button>
         </Link>
-        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-           <Download className="h-4 w-4" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          disabled={!cert.certificate_url}
+          onClick={() => cert.certificate_url && window.open(cert.certificate_url, '_blank')}
+        >
+          <Download className="h-4 w-4" />
         </Button>
       </CardFooter>
     </Card>

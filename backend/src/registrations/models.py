@@ -158,7 +158,7 @@ class Registration(SoftDeleteModel):
             return False
         if self.status != self.Status.CONFIRMED:
             return False
-        return not (not self.attendance_eligible and not self.attendance_override)
+        return self.attendance_eligible
 
     @property
     def attendance_percent(self):
@@ -232,7 +232,9 @@ class Registration(SoftDeleteModel):
 
         total_minutes = sum(r.duration_minutes for r in records)
         self.total_attendance_minutes = total_minutes
-        self.attended = total_minutes > 0
+        
+        # Attended if joined Zoom OR checked in physically (Hybrid support)
+        self.attended = (total_minutes > 0) or (self.check_in_time is not None)
 
         if records.exists():
             first_join = min(r.join_time for r in records)
@@ -245,7 +247,10 @@ class Registration(SoftDeleteModel):
 
         # Determine attendance eligibility based on event type
         if not self.attendance_override:
-            if self.event.event_type == Event.EventType.COURSE:  # Assuming 'COURSE' implies multi-session, adjust as needed
+            # Physical check-in implies eligibility (unless overridden)
+            if self.check_in_time is not None:
+                self.attendance_eligible = True
+            elif self.event.event_type == Event.EventType.COURSE:  # Assuming 'COURSE' implies multi-session, adjust as needed
                 # Multi-session event logic
                 session_progress_records = self.session_attendance.all()
                 total_sessions = self.event.sessions.filter(is_published=True).count()

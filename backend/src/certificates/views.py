@@ -209,8 +209,10 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
         return Certificate.objects.filter(
-            event__uuid=event_uuid, event__owner=self.request.user, deleted_at__isnull=True
-        ).select_related('registration', 'event', 'template')
+            registration__event__uuid=event_uuid,
+            registration__event__owner=self.request.user,
+            deleted_at__isnull=True
+        ).select_related('registration', 'registration__event', 'template')
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -269,17 +271,16 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
 
             # Create certificate
             cert = Certificate.objects.create(
-                event=event,
                 registration=reg,
                 template=event.certificate_template,
                 status='issued',
-                issued_at=timezone.now(),
+                issued_by=request.user,
                 certificate_data={
                     'recipient_name': reg.full_name,
                     'event_title': event.title,
                     'event_date': event.starts_at.strftime('%B %d, %Y') if event.starts_at else '',
-                    'cpd_credits': str(event.cpd_credits) if event.cpd_credits else '',
-                    'cpd_type': event.cpd_type_display,
+                    'cpd_credits': str(event.cpd_credit_value) if event.cpd_credit_value else '',
+                    'cpd_type': event.cpd_credit_type,
                     'organizer_name': event.owner.display_name,
                 },
             )
@@ -357,15 +358,20 @@ class CertificateVerificationView(generics.RetrieveAPIView):
     lookup_url_kwarg = 'code'
 
     def get_queryset(self):
-        return Certificate.objects.filter(deleted_at__isnull=True).select_related('event', 'event__owner', 'registration')
+        return Certificate.objects.filter(deleted_at__isnull=True).select_related(
+            'registration', 'registration__event', 'registration__event__owner'
+        )
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        # Track view
+        # Track view - only set first_viewed_at on first view
         instance.view_count = (instance.view_count or 0) + 1
-        instance.last_viewed_at = timezone.now()
-        instance.save(update_fields=['view_count', 'last_viewed_at'])
+        update_fields = ['view_count']
+        if not instance.first_viewed_at:
+            instance.first_viewed_at = timezone.now()
+            update_fields.append('first_viewed_at')
+        instance.save(update_fields=update_fields)
 
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
@@ -389,7 +395,7 @@ class MyCertificateViewSet(ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return Certificate.objects.filter(registration__user=self.request.user, deleted_at__isnull=True).select_related(
-            'event', 'registration'
+            'registration__event', 'registration'
         )
 
     @swagger_auto_schema(
