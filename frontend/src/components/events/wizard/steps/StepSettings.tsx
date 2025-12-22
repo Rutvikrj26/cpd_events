@@ -212,6 +212,30 @@ export const StepSettings = () => {
                     </div>
                 </>
             )}
+
+            <Separator />
+
+            {/* Event Visibility */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                        <Label className="text-base">Public Event</Label>
+                        <p className="text-sm text-muted-foreground">Show this event in the public events catalog.</p>
+                    </div>
+                    <Switch
+                        checked={formData.is_public !== false}
+                        onCheckedChange={(checked) => updateFormData({ is_public: checked })}
+                    />
+                </div>
+
+                {formData.is_public === false && (
+                    <div className="pl-6 border-l-2 border-amber-200 ml-2 bg-amber-50/50 p-3 rounded-r-md">
+                        <p className="text-sm text-amber-800">
+                            Private events are not listed publicly. Attendees can only register via direct link.
+                        </p>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

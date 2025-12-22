@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Calendar, MapPin, Users } from 'lucide-react';
-import { getEvents } from '@/api/events';
+import { getEvents, getPublicEvents } from '@/api/events';
 import { Event } from '@/api/events/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -15,30 +15,13 @@ export const EventsPage = () => {
     useEffect(() => {
         const fetchEvents = async () => {
             try {
-                // Attendees see public events, Organizers see their own events?
-                // Actually getEvents api might return different things based on auth. 
-                // Admin/Organizer -> /events/ (list their events). 
-                // Attendee -> ?? They usually use /public/events/.
-                // Let's assume dashboard shows "My Managed Events" for organizers
-                // and "All Available Events" or "My Registered Events" for attendees?
-                // Nav item says "Events". For organizer: Manage Events.
-                // For attendee: Browse Events.
-
                 let data: Event[] = [];
                 if (isOrganizer) {
+                    // Organizers see their own events for management
                     data = await getEvents();
                 } else {
-                    // For attendee, maybe we show public events here?
-                    // Or maybe they want to see events they are registered for?
-                    // "My Registrations" is separate. 
-                    // "Events" likely implies discovery.
-                    //  import { getPublicEvents } from '@/api/events';
-                    // data = await getPublicEvents();
-                    // For now let's just use getEvents() and assume backend filters or simple view
-                    // Actually, sticking to 1:1, getEvents calls /events/. 
-                    // If attendee calls /events/, it might be 403 or empty list if they own nothing.
-                    // We'll address this by conditionally calling public for non-organizers or just showing empty.
-                    data = await getEvents();
+                    // Attendees see public events catalog for discovery
+                    data = await getPublicEvents();
                 }
                 setEvents(data);
             } catch (error) {
@@ -56,8 +39,12 @@ export const EventsPage = () => {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-foreground">Events</h1>
-                    <p className="text-muted-foreground">Manage your CPD events</p>
+                    <h1 className="text-3xl font-bold text-foreground">
+                        {isOrganizer ? 'My Events' : 'Browse Events'}
+                    </h1>
+                    <p className="text-muted-foreground">
+                        {isOrganizer ? 'Manage your CPD events' : 'Discover upcoming CPD events'}
+                    </p>
                 </div>
                 {isOrganizer && (
                     <Link to="/events/create">
@@ -120,7 +107,10 @@ export const EventsPage = () => {
                 ))}
                 {events.length === 0 && (
                     <div className="col-span-full py-12 text-center text-muted-foreground bg-card rounded-xl border border-dashed border-slate-300">
-                        No events found. {isOrganizer && "Create your first one!"}
+                        {isOrganizer
+                            ? "No events found. Create your first one!"
+                            : "No upcoming events available. Check back later!"
+                        }
                     </div>
                 )}
             </div>

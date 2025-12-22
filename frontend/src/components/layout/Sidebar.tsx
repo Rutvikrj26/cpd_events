@@ -28,24 +28,35 @@ export const Sidebar = () => {
     const navItems = [
         { routeKey: 'dashboard', to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
         { routeKey: 'events', to: '/events', icon: Calendar, label: 'Events' },
-        { routeKey: 'registrations', to: '/registrations', icon: BookOpen, label: 'My Registrations' },
-        { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'Certificates' },
-        { routeKey: 'cert_templates', to: '/organizer/certificates/templates', icon: FileText, label: 'Cert. Templates' },
-        { routeKey: 'zoom', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings' },
-        { routeKey: 'billing', to: '/billing', icon: CreditCard, label: 'Billing' },
+        { routeKey: 'registrations', to: '/registrations', icon: BookOpen, label: 'My Registrations', attendeeOnly: true },
+        { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'My Certificates', attendeeOnly: true },
+        { routeKey: 'org_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', organizerOnly: true },
+        { routeKey: 'cert_templates', to: '/organizer/certificates/templates', icon: FileText, label: 'Cert. Templates', organizerOnly: true },
+        { routeKey: 'zoom', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', organizerOnly: true },
+        { routeKey: 'billing', to: '/billing', icon: CreditCard, label: 'Billing', organizerOnly: true },
         { routeKey: 'profile', to: '/profile', icon: UserCircle, label: 'Profile' },
     ];
 
-    // Filter items: use manifest if available, otherwise fall back to role-based logic
+    // Filter items based on role first, then optionally use manifest for fine-grained control
     const visibleItems = navItems.filter(item => {
-        // If manifest is loaded, use it (except for items not in registry like dashboard/profile)
+        // FIRST: Apply role-based filtering - this always takes precedence
+        // Hide attendee-only items for organizers
+        if (item.attendeeOnly && isOrganizer) {
+            return false;
+        }
+        // Hide organizer-only items for attendees
+        if (item.organizerOnly && !isOrganizer) {
+            return false;
+        }
+
+        // SECOND: If manifest is loaded, use it for additional fine-grained control
         if (manifest && manifest.routes.length > 0) {
             // Items always visible (not in RBAC registry)
             if (['dashboard', 'profile'].includes(item.routeKey)) {
                 return true;
             }
-            // Billing only for organizers
-            if (item.routeKey === 'billing') {
+            // Organizer items not in manifest (frontend-only routes)
+            if (['org_certificates', 'cert_templates', 'zoom', 'billing'].includes(item.routeKey)) {
                 return isOrganizer;
             }
             // Use feature flag for certificates since it's not a distinct backend view
@@ -55,19 +66,8 @@ export const Sidebar = () => {
             return hasRoute(item.routeKey);
         }
 
-        // Fallback: use role-based logic until manifest loads
-        switch (item.routeKey) {
-            case 'events':
-            case 'cert_templates':
-            case 'zoom':
-            case 'billing':
-                return isOrganizer;
-            case 'registrations':
-            case 'certificates':
-                return !isOrganizer;
-            default:
-                return true;
-        }
+        // Fallback: no manifest loaded, default to true (role filtering already applied)
+        return true;
     });
 
     const toggleSidebar = () => setIsCollapsed(!isCollapsed);

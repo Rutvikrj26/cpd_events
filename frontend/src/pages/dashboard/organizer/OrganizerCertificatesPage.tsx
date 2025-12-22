@@ -1,0 +1,220 @@
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Award, Eye, Calendar, Search, Filter } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { getEvents } from '@/api/events';
+import { getEventCertificates } from '@/api/certificates';
+import { Certificate } from '@/api/certificates/types';
+import { Event } from '@/api/events/types';
+import { toast } from 'sonner';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+
+interface CertificateWithEvent extends Certificate {
+    eventTitle?: string;
+}
+
+export const OrganizerCertificatesPage = () => {
+    const [certificates, setCertificates] = useState<CertificateWithEvent[]>([]);
+    const [events, setEvents] = useState<Event[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedEvent, setSelectedEvent] = useState<string>('all');
+    const [searchTerm, setSearchTerm] = useState('');
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                // Get all organizer's events
+                const eventsData = await getEvents();
+                setEvents(eventsData);
+
+                // Fetch certificates from all events
+                const allCerts: CertificateWithEvent[] = [];
+                for (const event of eventsData) {
+                    try {
+                        const certs = await getEventCertificates(event.uuid);
+                        certs.forEach(cert => {
+                            allCerts.push({
+                                ...cert,
+                                eventTitle: event.title,
+                            });
+                        });
+                    } catch {
+                        // Skip events with no certificates or errors
+                    }
+                }
+                setCertificates(allCerts);
+            } catch (error) {
+                console.error("Failed to load data", error);
+                toast.error("Failed to load certificates");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    // Filter certificates
+    const filteredCertificates = certificates.filter(cert => {
+        const matchesEvent = selectedEvent === 'all' || cert.event?.uuid === selectedEvent;
+        const matchesSearch = searchTerm === '' ||
+            (cert.certificate_data?.recipient_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            cert.short_code?.toLowerCase().includes(searchTerm.toLowerCase());
+        return matchesEvent && matchesSearch;
+    });
+
+    if (loading) {
+        return (
+            <div className="p-8 flex items-center justify-center">
+                <div className="animate-pulse text-muted-foreground">Loading certificates...</div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold text-foreground">Issued Certificates</h1>
+                    <p className="text-muted-foreground mt-1">Certificates issued across all your events</p>
+                </div>
+                {certificates.length > 0 && (
+                    <Badge variant="secondary" className="text-sm">
+                        {certificates.length} certificate{certificates.length !== 1 ? 's' : ''}
+                    </Badge>
+                )}
+            </div>
+
+            {/* Filters */}
+            {certificates.length > 0 && (
+                <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search by name or ID..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-9"
+                        />
+                    </div>
+                    <Select value={selectedEvent} onValueChange={setSelectedEvent}>
+                        <SelectTrigger className="w-[200px]">
+                            <SelectValue placeholder="All Events" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Events</SelectItem>
+                            {events.map(event => (
+                                <SelectItem key={event.uuid} value={event.uuid}>
+                                    {event.title}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+
+            {filteredCertificates.length > 0 ? (
+                <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="bg-muted/50">
+                                <TableHead>Recipient</TableHead>
+                                <TableHead>Event</TableHead>
+                                <TableHead>Certificate ID</TableHead>
+                                <TableHead>Issued</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredCertificates.map(cert => (
+                                <TableRow key={cert.uuid} className="hover:bg-muted/30">
+                                    <TableCell>
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-8 w-8 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center shrink-0">
+                                                <Award size={14} />
+                                            </div>
+                                            <span className="font-medium">
+                                                {cert.certificate_data?.recipient_name || 'Unknown'}
+                                            </span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <span className="text-sm text-muted-foreground">
+                                            {cert.eventTitle || cert.event?.title || '-'}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <code className="text-sm bg-muted px-2 py-1 rounded font-mono">
+                                            {cert.short_code}
+                                        </code>
+                                    </TableCell>
+                                    <TableCell>
+                                        <span className="text-sm">
+                                            {new Date(cert.created_at).toLocaleDateString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                year: 'numeric'
+                                            })}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        {cert.status === 'revoked' ? (
+                                            <Badge variant="destructive">Revoked</Badge>
+                                        ) : (
+                                            <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                                                Active
+                                            </Badge>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8"
+                                            onClick={() => window.open(`/verify/${cert.short_code}`, '_blank')}
+                                        >
+                                            <Eye size={14} className="mr-1" />
+                                            View
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
+            ) : (
+                <div className="flex flex-col items-center justify-center py-20 bg-muted/30 rounded-lg border border-dashed">
+                    <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4 text-muted-foreground">
+                        <Award size={32} />
+                    </div>
+                    <h3 className="text-lg font-medium text-foreground mb-1">No certificates issued yet</h3>
+                    <p className="text-muted-foreground text-center max-w-sm">
+                        Certificates will appear here once you issue them to event attendees.
+                    </p>
+                    <Link to="/events" className="mt-4">
+                        <Button variant="outline">
+                            <Calendar size={16} className="mr-2" />
+                            Go to Events
+                        </Button>
+                    </Link>
+                </div>
+            )}
+        </div>
+    );
+};

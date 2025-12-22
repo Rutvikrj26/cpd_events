@@ -245,7 +245,7 @@ class CertificateService:
 
     def upload_pdf(self, certificate, pdf_bytes: bytes) -> str | None:
         """
-        Upload PDF to cloud storage.
+        Upload PDF to cloud storage or local media storage as fallback.
 
         Args:
             certificate: Certificate to upload PDF for
@@ -254,11 +254,14 @@ class CertificateService:
         Returns:
             URL of uploaded PDF or None
         """
+        import os
+        from django.conf import settings
         from django.utils import timezone
 
-        from common.storage import gcs_storage
-
         try:
+            # Try GCS first if configured
+            from common.storage import gcs_storage
+            
             # Generate path
             path = f"certificates/{certificate.uuid}.pdf"
 
@@ -280,12 +283,37 @@ class CertificateService:
                 certificate.file_url = url
                 certificate.file_generated_at = timezone.now()
                 certificate.save(update_fields=['file_url', 'file_generated_at', 'updated_at'])
-                logger.info(f"Certificate PDF uploaded: {path}")
+                logger.info(f"Certificate PDF uploaded to GCS: {path}")
+                return url
 
+        except Exception as e:
+            logger.warning(f"GCS upload failed, falling back to local storage: {e}")
+
+        # Fallback to local media storage
+        try:
+            # Create certificates directory if it doesn't exist
+            cert_dir = os.path.join(settings.MEDIA_ROOT, 'certificates')
+            os.makedirs(cert_dir, exist_ok=True)
+
+            # Save file locally
+            filename = f"{certificate.uuid}.pdf"
+            filepath = os.path.join(cert_dir, filename)
+            
+            with open(filepath, 'wb') as f:
+                f.write(pdf_bytes)
+
+            # Build URL using MEDIA_URL
+            media_url = getattr(settings, 'MEDIA_URL', '/media/')
+            url = f"{media_url}certificates/{filename}"
+            
+            certificate.file_url = url
+            certificate.file_generated_at = timezone.now()
+            certificate.save(update_fields=['file_url', 'file_generated_at', 'updated_at'])
+            logger.info(f"Certificate PDF saved locally: {filepath}")
             return url
 
         except Exception as e:
-            logger.error(f"Certificate PDF upload failed: {e}")
+            logger.error(f"Certificate PDF local save failed: {e}")
             return None
 
     def get_pdf_url(self, certificate, expiration_minutes: int = 60) -> str | None:
