@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { DateTimePicker } from '@/components/ui/date-time-picker';
@@ -92,12 +94,12 @@ export const SessionEditor = ({
                     {/* Description */}
                     <div className="space-y-2">
                         <Label htmlFor="description">Description</Label>
-                        <Textarea
-                            id="description"
+                        <ReactQuill
+                            theme="snow"
                             value={formData.description || ''}
-                            onChange={(e) => handleChange('description', e.target.value)}
+                            onChange={(content: string) => handleChange('description', content)}
                             placeholder="Brief description of this session..."
-                            rows={2}
+                            className="bg-white mb-4"
                         />
                     </div>
 

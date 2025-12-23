@@ -76,7 +76,7 @@ export function CreateEvent() {
         description: values.description || '',
         short_description: values.description?.substring(0, 450) || '',
 
-        event_type: values.type.toLowerCase(),
+        event_type: values.type.toLowerCase() as any,
         format: 'online', // Defaulting to online based on form context
 
         timezone: 'UTC', // Default for now

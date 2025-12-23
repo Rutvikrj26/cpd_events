@@ -17,6 +17,7 @@ import {
     Upload,
     CreditCard,
     AlertTriangle,
+    BookOpen,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -406,14 +407,15 @@ const OrganizationSettingsPage: React.FC = () => {
                                             <p className="text-xl font-bold">
                                                 {org.subscription.active_organizer_seats} / {org.subscription.total_seats}
                                             </p>
+                                            <p className="text-xl font-bold">{org.subscription.events_created_this_period || 0}</p>
                                         </div>
-                                        <div className="p-4 rounded-lg border text-center">
-                                            <p className="text-sm text-muted-foreground">Events This Month</p>
-                                            <p className="text-xl font-bold">{org.subscription.events_this_period || 0}</p>
-                                        </div>
-                                        <div className="p-4 rounded-lg border text-center">
-                                            <p className="text-sm text-muted-foreground">Courses</p>
-                                            <p className="text-xl font-bold">{org.subscription.courses_this_period || 0}</p>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <BookOpen className="h-4 w-4 text-muted-foreground" />
+                                        <div>
+                                            <p className="text-sm font-medium leading-none">Courses</p>
+                                            <p className="text-muted-foreground text-xs">Cycles monthly</p>
+                                            <p className="text-xl font-bold">{org.subscription.courses_created_this_period || 0}</p>
                                         </div>
                                     </div>
 

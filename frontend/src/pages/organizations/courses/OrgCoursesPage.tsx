@@ -116,7 +116,7 @@ const OrgCoursesPage = () => {
                     <p className="text-muted-foreground">Manage your self-paced learning content.</p>
                 </div>
 
-                {isManager && (
+                {isManager() && (
                     <Button onClick={() => navigate(`/org/${slug}/courses/new`)}>
                         <Plus className="mr-2 h-4 w-4" />
                         Create Course

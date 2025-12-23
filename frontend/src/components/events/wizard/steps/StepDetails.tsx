@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete';
 import { MapPin, Upload, Image as ImageIcon, X } from 'lucide-react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 export const StepDetails = () => {
     const { formData, updateFormData } = useEventWizard();
@@ -72,11 +74,12 @@ export const StepDetails = () => {
 
             <div className="space-y-2">
                 <Label>Description</Label>
-                <Textarea
+                <ReactQuill
+                    theme="snow"
                     placeholder="What will attendees learn? Who are the speakers?"
-                    className="min-h-[150px] text-base"
                     value={formData.description || ''}
-                    onChange={(e) => updateFormData({ description: e.target.value })}
+                    onChange={(value) => updateFormData({ description: value })}
+                    className="mb-4"
                 />
             </div>
 

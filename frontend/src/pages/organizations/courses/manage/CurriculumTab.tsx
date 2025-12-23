@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { Plus, GripVertical, Trash2, Edit2, Video, FileText, File, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, GripVertical, Trash2, Edit2, FileText, File, ChevronRight, ChevronDown, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { getCourseModules, createCourseModule, deleteCourseModule, createModuleContent, updateModuleContent, CreateModuleRequest } from "@/api/courses/modules";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getCourseModules, createCourseModule, deleteCourseModule, createModuleContent, updateModuleContent } from "@/api/courses/modules";
 import { CourseModule } from "@/api/courses/types";
+import { QuizBuilder, QuizData } from "@/components/custom/QuizBuilder";
 
 import client from "@/api/client";
 import {
@@ -21,6 +23,10 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+// Import React Quill dynamically or standard import if environment supports it
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 interface CurriculumTabProps {
     courseUuid: string;
@@ -36,12 +42,20 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
     const [isAddContentOpen, setIsAddContentOpen] = useState(false);
     const [selectedModuleUuid, setSelectedModuleUuid] = useState<string | null>(null);
     const [editingContentUuid, setEditingContentUuid] = useState<string | null>(null);
+
+    // Joint state
+    const [contentType, setContentType] = useState<'lesson' | 'quiz'>('lesson');
     const [newContentTitle, setNewContentTitle] = useState("");
+
+    // Lesson state
     const [newVideoUrl, setNewVideoUrl] = useState("");
     const [newTextBody, setNewTextBody] = useState("");
     const [newFile, setNewFile] = useState<File | null>(null);
-    const [existingFile, setExistingFile] = useState<{ name: string, url: string } | null>(null);
+    const [existingFile, setExistingFile] = useState<{ name: string, url: string } | string | null>(null);
     const [removeFile, setRemoveFile] = useState(false);
+
+    // Quiz state
+    const [quizData, setQuizData] = useState<QuizData>({ questions: [], passing_score: 70 });
 
     // Deletion state
     const [itemToDelete, setItemToDelete] = useState<{ type: 'module' | 'content', uuid: string } | null>(null);
@@ -90,19 +104,16 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
     };
 
     const handleDeleteContent = async (contentUuid: string) => {
-        // Need parent module UUID. 
-        // We can find it from modules list or pass it. 
-        // For simplicity, let's look it up.
         const module = modules.find(m => m.module?.contents?.some((c: any) => c.uuid === contentUuid));
         if (!module) return;
 
         try {
             await client.delete(`/courses/${courseUuid}/modules/${module.module.uuid}/contents/${contentUuid}/`);
-            toast.success("Lesson deleted");
+            toast.success("Content deleted");
             fetchModules();
         } catch (error) {
             console.error(error);
-            toast.error("Failed to delete lesson");
+            toast.error("Failed to delete content");
         } finally {
             setItemToDelete(null);
         }
@@ -115,57 +126,70 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
         try {
             const formData = new FormData();
             formData.append('title', newContentTitle);
-            formData.append('content_type', 'lesson');
+            formData.append('content_type', contentType);
+
             if (!editingContentUuid) {
-                formData.append('order', '0');
+                formData.append('order', '0'); // Backend should handle auto-ordering ideally
             }
 
             // Construct content_data JSON
-            const contentData = {
-                video: newVideoUrl ? { url: newVideoUrl } : undefined,
-                text: newTextBody ? { body: newTextBody } : undefined
-            };
+            let contentData: any = {};
+
+            if (contentType === 'lesson') {
+                contentData = {
+                    video: newVideoUrl ? { url: newVideoUrl } : undefined,
+                    text: newTextBody ? { body: newTextBody } : undefined
+                };
+            } else if (contentType === 'quiz') {
+                contentData = {
+                    questions: quizData.questions,
+                    passing_score: quizData.passing_score
+                };
+            }
+
             formData.append('content_data', JSON.stringify(contentData));
 
-            if (newFile) {
-                formData.append('file', newFile);
-            } else if (removeFile) {
-                formData.append('remove_file', 'true');
+            if (contentType === 'lesson') {
+                if (newFile) {
+                    formData.append('file', newFile);
+                } else if (removeFile) {
+                    formData.append('remove_file', 'true');
+                }
             }
 
             if (editingContentUuid) {
                 await updateModuleContent(courseUuid, selectedModuleUuid, editingContentUuid, formData);
-                toast.success("Lesson updated");
+                toast.success(`${contentType === 'quiz' ? 'Quiz' : 'Lesson'} updated`);
             } else {
                 await createModuleContent(courseUuid, selectedModuleUuid, formData);
-                toast.success("Lesson added");
+                toast.success(`${contentType === 'quiz' ? 'Quiz' : 'Lesson'} added`);
             }
 
             // Reset form
-            setNewContentTitle("");
-            setNewVideoUrl("");
-            setNewTextBody("");
-            setNewFile(null);
-            setExistingFile(null);
-            setRemoveFile(false);
-            setEditingContentUuid(null);
+            resetContentForm();
             setIsAddContentOpen(false);
             fetchModules();
         } catch (error) {
-            toast.error(editingContentUuid ? "Failed to update lesson" : "Failed to add lesson");
+            toast.error(editingContentUuid ? "Failed to update content" : "Failed to add content");
             console.error(error);
         }
     };
 
-    const openAddContentDialog = (moduleUuid: string) => {
-        setSelectedModuleUuid(moduleUuid);
-        setEditingContentUuid(null);
+    const resetContentForm = () => {
         setNewContentTitle("");
+        setContentType('lesson');
         setNewVideoUrl("");
         setNewTextBody("");
         setNewFile(null);
         setExistingFile(null);
         setRemoveFile(false);
+        setQuizData({ questions: [], passing_score: 70 });
+        setEditingContentUuid(null);
+    };
+
+    const openAddContentDialog = (moduleUuid: string) => {
+        resetContentForm();
+        setSelectedModuleUuid(moduleUuid);
         setIsAddContentOpen(true);
     };
 
@@ -174,8 +198,12 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
         setEditingContentUuid(content.uuid);
         setNewContentTitle(content.title);
 
+        // Determine type
+        const type = content.content_type === 'quiz' ? 'quiz' : 'lesson';
+        setContentType(type);
+
         // Parse content_data safely
-        let data = {};
+        let data: any = {};
         try {
             data = typeof content.content_data === 'string'
                 ? JSON.parse(content.content_data)
@@ -184,15 +212,18 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
             console.error("Error parsing content data", e);
         }
 
-        // @ts-ignore
-        setNewVideoUrl(data.video?.url || "");
-        // @ts-ignore
-        setNewTextBody(data.text?.body || "");
-
-        // Handle file
-        setExistingFile(content.file);
-        setNewFile(null);
-        setRemoveFile(false);
+        if (type === 'lesson') {
+            setNewVideoUrl(data.video?.url || "");
+            setNewTextBody(data.text?.body || "");
+            setExistingFile(content.file);
+            setNewFile(null);
+            setRemoveFile(false);
+        } else {
+            setQuizData({
+                questions: data.questions || [],
+                passing_score: data.passing_score || 70
+            });
+        }
 
         setIsAddContentOpen(true);
     };
@@ -204,12 +235,28 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
 
     if (loading) return <div>Loading curriculum...</div>;
 
+    const quillModules = {
+        toolbar: [
+            [{ 'header': [1, 2, 3, false] }],
+            ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+            ['link', 'clean']
+        ],
+    };
+
+    const quillFormats = [
+        'header',
+        'bold', 'italic', 'underline', 'strike', 'blockquote',
+        'list', 'bullet',
+        'link'
+    ];
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-xl font-semibold">Course Curriculum</h2>
-                    <p className="text-muted-foreground text-sm">Organize your course into modules and lessons.</p>
+                    <p className="text-muted-foreground text-sm">Organize your course into modules, lessons, and quizzes.</p>
                 </div>
                 <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                     <DialogTrigger asChild>
@@ -241,88 +288,122 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                 </Dialog>
 
                 {/* Add/Edit Content Dialog */}
-                <Dialog open={isAddContentOpen} onOpenChange={setIsAddContentOpen}>
-                    <DialogContent>
+                <Dialog open={isAddContentOpen} onOpenChange={(open) => {
+                    if (!open) setIsAddContentOpen(false);
+                }}>
+                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
-                            <DialogTitle>{editingContentUuid ? "Edit Lesson" : "Add Lesson"}</DialogTitle>
+                            <DialogTitle>{editingContentUuid ? `Edit ${contentType === 'quiz' ? 'Quiz' : 'Lesson'}` : "Add Content"}</DialogTitle>
                             <DialogDescription>
-                                {editingContentUuid ? "Update the lesson content." : "Create a comprehensive lesson with video, text, and resources."}
+                                {editingContentUuid
+                                    ? `Update the ${contentType} content.`
+                                    : "Create a new lesson or quiz for this module."}
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="content-title">Lesson Title</Label>
-                                <Input
-                                    id="content-title"
-                                    placeholder="e.g., Introduction to the Course"
-                                    value={newContentTitle}
-                                    onChange={(e) => setNewContentTitle(e.target.value)}
-                                />
+                        <div className="space-y-6 py-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="content-type">Content Type</Label>
+                                    <Select
+                                        value={contentType}
+                                        onValueChange={(val: 'lesson' | 'quiz') => setContentType(val)}
+                                        disabled={!!editingContentUuid} // Cannot change type when editing
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="lesson">Lesson (Video/Text)</SelectItem>
+                                            <SelectItem value="quiz">Quiz</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="content-title">Title</Label>
+                                    <Input
+                                        id="content-title"
+                                        placeholder={`e.g., ${contentType === 'quiz' ? 'Module 1 Quiz' : 'Introduction Lesson'}`}
+                                        value={newContentTitle}
+                                        onChange={(e) => setNewContentTitle(e.target.value)}
+                                    />
+                                </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="video-url">Video URL (Optional)</Label>
-                                <Input
-                                    id="video-url"
-                                    placeholder="https://vimeo.com/..."
-                                    value={newVideoUrl}
-                                    onChange={(e) => setNewVideoUrl(e.target.value)}
-                                />
-                                <p className="text-xs text-muted-foreground">Supports Vimeo, YouTube, or direct MP4 links.</p>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="text-body">Lesson Content (Optional)</Label>
-                                <textarea
-                                    id="text-body"
-                                    className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    placeholder="Enter text content, instructions, or reading material..."
-                                    value={newTextBody}
-                                    onChange={(e) => setNewTextBody(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="file-upload">Attachment (Optional)</Label>
-                                {existingFile && !removeFile ? (
-                                    <div className="flex items-center justify-between p-2 border rounded-md bg-muted/20">
-                                        <div className="flex items-center gap-2 overflow-hidden">
-                                            <File className="h-4 w-4 flex-shrink-0 text-blue-500" />
-                                            <span className="text-sm truncate max-w-[200px]">
-                                                {typeof existingFile === 'string' ? existingFile.split('/').pop() : 'Attached File'}
-                                            </span>
-                                        </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 text-xs text-red-500 hover:text-red-700 hover:bg-red-50"
-                                            onClick={() => setRemoveFile(true)}
-                                        >
-                                            <Trash2 className="h-3 w-3 mr-1" /> Remove
-                                        </Button>
-                                    </div>
-                                ) : (
-                                    <>
+                            {contentType === 'lesson' ? (
+                                <>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="video-url">Video URL (Optional)</Label>
                                         <Input
-                                            id="file-upload"
-                                            type="file"
-                                            onChange={(e) => {
-                                                setNewFile(e.target.files ? e.target.files[0] : null);
-                                                setRemoveFile(false); // If they upload new, implicit replacement, not removal
-                                            }}
+                                            id="video-url"
+                                            placeholder="https://vimeo.com/..."
+                                            value={newVideoUrl}
+                                            onChange={(e) => setNewVideoUrl(e.target.value)}
                                         />
-                                        <p className="text-xs text-muted-foreground">
-                                            {editingContentUuid ? "Upload new file to replace existing" : "Upload a PDF, document, or supplementary file."}
-                                            {removeFile && <span className="text-red-500 ml-2">(Existing file will be removed)</span>}
-                                        </p>
-                                    </>
-                                )}
-                            </div>
+                                        <p className="text-xs text-muted-foreground">Supports Vimeo, YouTube, or direct MP4 links.</p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Lesson Content</Label>
+                                        <div className="bg-white rounded-md">
+                                            <ReactQuill
+                                                theme="snow"
+                                                value={newTextBody}
+                                                onChange={setNewTextBody}
+                                                modules={quillModules}
+                                                formats={quillFormats}
+                                                className="h-64 mb-12"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="file-upload">Attachment (Optional)</Label>
+                                        {existingFile && !removeFile ? (
+                                            <div className="flex items-center justify-between p-2 border rounded-md bg-muted/20">
+                                                <div className="flex items-center gap-2 overflow-hidden">
+                                                    <File className="h-4 w-4 flex-shrink-0 text-blue-500" />
+                                                    <span className="text-sm truncate max-w-[200px]">
+                                                        {typeof existingFile === 'string' ? existingFile.split('/').pop() : 'Attached File'}
+                                                    </span>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 text-xs text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                    onClick={() => setRemoveFile(true)}
+                                                >
+                                                    <Trash2 className="h-3 w-3 mr-1" /> Remove
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <Input
+                                                    id="file-upload"
+                                                    type="file"
+                                                    onChange={(e) => {
+                                                        setNewFile(e.target.files ? e.target.files[0] : null);
+                                                        setRemoveFile(false);
+                                                    }}
+                                                />
+                                                <p className="text-xs text-muted-foreground">
+                                                    {editingContentUuid ? "Upload new file to replace existing" : "Upload a PDF, document, or supplementary file."}
+                                                    {removeFile && <span className="text-red-500 ml-2">(Existing file will be removed)</span>}
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                <QuizBuilder
+                                    initialData={quizData}
+                                    onChange={setQuizData}
+                                />
+                            )}
                         </div>
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setIsAddContentOpen(false)}>Cancel</Button>
                             <Button onClick={handleSaveContent} disabled={!newContentTitle.trim()}>
-                                {editingContentUuid ? "Update Lesson" : "Add Lesson"}
+                                {editingContentUuid ? "Update Item" : "Add Item"}
                             </Button>
                         </DialogFooter>
                     </DialogContent>
@@ -333,6 +414,9 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                     <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>{previewContent?.title}</DialogTitle>
+                            <Badge variant="outline" className="w-fit mt-1">
+                                {previewContent?.content_type === 'quiz' ? 'Quiz' : 'Lesson'}
+                            </Badge>
                         </DialogHeader>
                         <div className="space-y-6 py-4">
                             {/* Parse content data safely */}
@@ -341,6 +425,40 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                 const data = typeof previewContent.content_data === 'string'
                                     ? JSON.parse(previewContent.content_data)
                                     : previewContent.content_data || {};
+
+                                if (previewContent.content_type === 'quiz') {
+                                    return (
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                                                <span className="font-medium">Passing Score: {data.passing_score}%</span>
+                                                <span className="text-muted-foreground">{data.questions?.length || 0} Questions</span>
+                                            </div>
+                                            <div className="space-y-4">
+                                                {data.questions?.map((q: any, idx: number) => (
+                                                    <div key={idx} className="border p-4 rounded-md">
+                                                        <div className="flex gap-2">
+                                                            <span className="font-bold text-gray-500">{idx + 1}.</span>
+                                                            <div className="flex-1">
+                                                                <p className="font-medium mb-2">{q.text}</p>
+                                                                <div className="space-y-1 pl-2">
+                                                                    {q.options?.map((opt: any, oIdx: number) => (
+                                                                        <div key={oIdx} className="flex items-center gap-2 text-sm">
+                                                                            <div className={`h-2 w-2 rounded-full ${opt.isCorrect ? 'bg-green-50' : 'bg-gray-300'}`} />
+                                                                            <span className={opt.isCorrect ? 'font-medium text-green-700' : ''}>{opt.text}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                            <Badge variant="secondary" className="h-fit">
+                                                                {q.type}
+                                                            </Badge>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                }
 
                                 return (
                                     <>
@@ -356,9 +474,10 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                         )}
 
                                         {data.text?.body && (
-                                            <div className="prose prose-sm max-w-none p-4 bg-gray-50 rounded-lg whitespace-pre-wrap">
-                                                {data.text.body}
-                                            </div>
+                                            <div
+                                                className="prose prose-sm max-w-none p-4 bg-gray-50 rounded-lg"
+                                                dangerouslySetInnerHTML={{ __html: data.text.body }}
+                                            />
                                         )}
 
                                         {previewContent.file && (
@@ -366,10 +485,6 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                                 <File className="h-4 w-4 text-blue-500" />
                                                 <span className="text-sm font-medium">Attached File (Available for download)</span>
                                             </div>
-                                        )}
-
-                                        {!data.video?.url && !data.text?.body && !previewContent.file && (
-                                            <p className="text-center text-gray-400 italic">No content details available.</p>
                                         )}
                                     </>
                                 );
@@ -390,18 +505,17 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
                             This action cannot be undone. This will permanently delete the
-                            {itemToDelete?.type === 'module' ? ' module and all its lessons' : ' lesson'}.
+                            {itemToDelete?.type === 'module' ? ' module and all its contents' : ' content'}.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel onClick={() => setItemToDelete(null)}>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={(e) => {
-                                e.preventDefault(); // Prevent closing immediately if async
+                                e.preventDefault();
                                 if (itemToDelete?.type === 'module') {
                                     handleDeleteModule(itemToDelete.uuid);
                                 } else if (itemToDelete?.type === 'content') {
-                                    // Need to implement content deletion handler
                                     handleDeleteContent(itemToDelete.uuid);
                                 }
                             }}
@@ -463,7 +577,6 @@ function ModuleItem({
 }) {
 
     const [isExpanded, setIsExpanded] = useState(false);
-    // Real implementation would fetch contents here or pass them down if nested
     const contents = module.module?.contents || [];
 
     return (
@@ -478,7 +591,7 @@ function ModuleItem({
                         {module.is_required && <Badge variant="secondary" className="text-[10px] h-5">Required</Badge>}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        {contents.length} lessons • {module.module?.cpd_credits || 0} credits
+                        {contents.length} items • {module.module?.cpd_credits || 0} credits
                     </p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -499,7 +612,7 @@ function ModuleItem({
                                 No content in this module yet.
                                 <div className="mt-2">
                                     <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onAddContent(module.module.uuid)}>
-                                        <Plus className="mr-1 h-3 w-3" /> Add Lesson
+                                        <Plus className="mr-1 h-3 w-3" /> Add Content
                                     </Button>
                                 </div>
                             </div>
@@ -507,9 +620,9 @@ function ModuleItem({
                             contents.map((content: any) => (
                                 <div key={content.uuid} className="flex items-center p-3 pl-12 hover:bg-gray-50 group cursor-pointer" onClick={() => onPreviewContent(content)}>
                                     <div className="mr-3 text-gray-400">
-                                        <FileText className="h-4 w-4" />
+                                        {content.content_type === 'quiz' ? <HelpCircle className="h-4 w-4 text-purple-500" /> : <FileText className="h-4 w-4" />}
                                     </div>
-                                    <span className="text-sm flex-1">{content.title} <span className="text-xs text-muted-foreground ml-2">({content.content_type === 'lesson' ? 'Mixed' : content.content_type})</span></span>
+                                    <span className="text-sm flex-1">{content.title} <span className="text-xs text-muted-foreground ml-2">({content.content_type})</span></span>
                                     <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                                         <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); onPreviewContent(content); }}>
                                             Preview
@@ -526,7 +639,7 @@ function ModuleItem({
                         )}
                         <div className="p-2 pl-12 bg-gray-50/30">
                             <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-primary" onClick={() => onAddContent(module.module.uuid)}>
-                                <Plus className="mr-1 h-3 w-3" /> Add Lesson
+                                <Plus className="mr-1 h-3 w-3" /> Add Content
                             </Button>
                         </div>
                     </div>

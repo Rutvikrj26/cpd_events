@@ -27,13 +27,17 @@ export interface Certificate {
     verification_code: string;
     short_code: string;
     certificate_data: {
-        attendee_name: string;
+        attendee_name: string; // From build_certificate_data in model
+        recipient_name?: string; // Legacy/frontend alias
         event_title: string;
         event_date: string;
         cpd_credits?: string;
         cpd_type?: string;
         organizer_name?: string;
     };
+    // Fields from CertificateListSerializer
+    registrant_name?: string;
+    event_title?: string;
     pdf_file_url?: string;
     issued_by_name?: string;
     issued_at: string;

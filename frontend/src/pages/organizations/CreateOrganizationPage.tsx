@@ -10,6 +10,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Building2, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -171,13 +173,12 @@ const CreateOrganizationPage: React.FC = () => {
                             <>
                                 <div className="space-y-2">
                                     <Label htmlFor="description">Description</Label>
-                                    <Textarea
-                                        id="description"
-                                        name="description"
+                                    <ReactQuill
+                                        theme="snow"
                                         value={formData.description}
-                                        onChange={handleChange}
+                                        onChange={(content) => setFormData(prev => ({ ...prev, description: content }))}
                                         placeholder="Brief description of your organization..."
-                                        rows={3}
+                                        className="bg-white mb-4"
                                     />
                                 </div>
 

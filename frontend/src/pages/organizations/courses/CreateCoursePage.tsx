@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { ArrowLeft, Loader2, Save } from 'lucide-react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -205,10 +207,11 @@ const CreateCoursePage = () => {
                                     <FormItem>
                                         <FormLabel>Full Description</FormLabel>
                                         <FormControl>
-                                            <Textarea
-                                                placeholder="Detailed course description..."
-                                                className="min-h-[120px]"
+                                            <ReactQuill
+                                                theme="snow"
+                                                className="bg-white mb-4"
                                                 {...field}
+                                                onChange={(content) => field.onChange(content)}
                                             />
                                         </FormControl>
                                         <FormMessage />

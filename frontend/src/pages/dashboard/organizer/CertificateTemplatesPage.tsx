@@ -13,6 +13,8 @@ import {
     Settings,
     CheckCircle
 } from "lucide-react";
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -362,12 +364,12 @@ export function CertificateTemplatesPage() {
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="description">Description</Label>
-                                <Textarea
-                                    id="description"
-                                    placeholder="Describe when this template should be used..."
+                                <ReactQuill
+                                    theme="snow"
                                     value={formData.description}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    rows={3}
+                                    onChange={(content) => setFormData({ ...formData, description: content })}
+                                    placeholder="Describe when this template should be used..."
+                                    className="bg-white mb-4"
                                 />
                             </div>
                         </div>

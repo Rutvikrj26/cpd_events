@@ -6,6 +6,11 @@ export interface User {
     is_active: boolean;
     date_joined: string;
     profile_image?: string;
+    // Organizer profile fields (from UserSerializer)
+    organization_name?: string;
+    organizer_website?: string;
+    organizer_logo_url?: string;
+    organizer_bio?: string;
 }
 
 

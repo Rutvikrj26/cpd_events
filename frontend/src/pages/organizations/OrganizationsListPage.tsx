@@ -21,7 +21,7 @@ const OrganizationsListPage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { organizations, isLoading, refreshOrganizations } = useOrganization();
-    const [linkableData, setLinkableData] = useState<{ events_count: number; templates_count: number } | null>(null);
+    const [linkableData, setLinkableData] = useState<{ events_count: number; templates_count: number; has_linkable_data: boolean } | null>(null);
 
     useEffect(() => {
         refreshOrganizations();
