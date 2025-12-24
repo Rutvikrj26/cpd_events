@@ -21,6 +21,9 @@ import { PricingPage } from './pages/public/PricingPage';
 import { ContactPage } from './pages/public/ContactPage';
 import { NotFoundPage } from './pages/public/NotFoundPage';
 import { PublicCourseDetailPage } from './pages/courses/PublicCourseDetailPage';
+import { FeaturesPage } from './pages/public/FeaturesPage';
+import { FAQPage } from './pages/public/FAQPage';
+import { AboutPage } from './pages/public/AboutPage';
 
 // Auth Pages
 import { LoginPage } from './pages/auth/LoginPage';
@@ -108,6 +111,31 @@ export default function App() {
               <Route path="/contact" element={
                 <PublicLayout>
                   <ContactPage />
+                </PublicLayout>
+              } />
+
+              {/* New Feature Pages */}
+              <Route path="/features" element={
+                <PublicLayout>
+                  <FeaturesPage />
+                </PublicLayout>
+              } />
+
+              <Route path="/features/:feature" element={
+                <PublicLayout>
+                  <FeaturesPage />
+                </PublicLayout>
+              } />
+
+              <Route path="/faq" element={
+                <PublicLayout>
+                  <FAQPage />
+                </PublicLayout>
+              } />
+
+              <Route path="/about" element={
+                <PublicLayout>
+                  <AboutPage />
                 </PublicLayout>
               } />
 

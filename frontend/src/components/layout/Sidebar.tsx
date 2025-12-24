@@ -129,7 +129,7 @@ export const Sidebar = () => {
                 <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
                     {!isCollapsed && (
                         <div className="overflow-hidden">
-                            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-teal-400 text-transparent bg-clip-text whitespace-nowrap">
+                            <h1 className="text-xl font-bold gradient-text whitespace-nowrap">
                                 CPD Events
                             </h1>
                             <p className="text-xs text-muted-foreground mt-1 truncate">{isOrganizer ? 'Organizer Portal' : 'Attendee Portal'}</p>

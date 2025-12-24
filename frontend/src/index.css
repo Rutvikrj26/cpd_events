@@ -4,71 +4,263 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    /* Elegant Sage Green + Warm White - Subtle & Sophisticated */
+
+    --background: 60 20% 98%;
+    /* Warm white */
+    --foreground: 150 10% 18%;
+    /* Soft charcoal with green undertone */
+
+    --card: 60 15% 99%;
+    /* Slightly warm white */
+    --card-foreground: 150 10% 18%;
+
+    --popover: 60 15% 99%;
+    --popover-foreground: 150 10% 18%;
+
+    /* Primary: Elegant muted sage - sophisticated, not loud */
+    --primary: 155 25% 38%;
+    /* Muted sage green */
+    --primary-foreground: 60 20% 98%;
+
+    /* Secondary: Warm cream/stone */
+    --secondary: 45 15% 93%;
+    /* Warm stone gray */
+    --secondary-foreground: 150 15% 25%;
+
+    /* Accent: Soft eucalyptus - very subtle */
+    --accent: 160 18% 48%;
+    /* Muted eucalyptus */
+    --accent-foreground: 60 20% 98%;
+
+    --muted: 50 10% 92%;
+    --muted-foreground: 150 5% 50%;
+
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Semantic Colors */
+    --success: 155 45% 42%;
+    /* Richer green for success */
+    --success-foreground: 0 0% 100%;
+    --warning: 40 90% 50%;
+    /* Warm amber */
+    --warning-foreground: 150 10% 18%;
+
+    --border: 50 10% 88%;
+    --input: 50 10% 88%;
+    --ring: 155 25% 38%;
+
+    --radius: 0.625rem;
+
+    /* Elegant shadow tones */
+    --shadow-color: 150 10% 25%;
+
+    /* Chart colors */
+    --chart-1: 155 45% 42%;
+    --chart-2: 160 40% 50%;
+    --chart-3: 145 35% 35%;
+    --chart-4: 40 90% 50%;
+    --chart-5: 0 65% 50%;
   }
- 
+
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --background: 150 12% 8%;
+    /* Deep forest night */
+    --foreground: 50 15% 92%;
+    /* Warm off-white */
+
+    --card: 150 10% 11%;
+    --card-foreground: 50 15% 92%;
+
+    --popover: 150 10% 11%;
+    --popover-foreground: 50 15% 92%;
+
+    /* Primary: Lighter sage for dark mode */
+    --primary: 155 30% 50%;
+    --primary-foreground: 150 12% 8%;
+
+    --secondary: 150 8% 16%;
+    --secondary-foreground: 50 10% 80%;
+
+    --accent: 160 22% 42%;
+    --accent-foreground: 50 15% 92%;
+
+    --muted: 150 8% 18%;
+    --muted-foreground: 50 5% 55%;
+
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 155 40% 48%;
+    --success-foreground: 0 0% 100%;
+    --warning: 40 90% 50%;
+    --warning-foreground: 0 0% 0%;
+
+    --border: 150 8% 20%;
+    --input: 150 8% 20%;
+    --ring: 155 30% 50%;
+
+    /* Chart colors */
+    --chart-1: 155 45% 50%;
+    --chart-2: 160 40% 55%;
+    --chart-3: 145 35% 45%;
+    --chart-4: 40 90% 55%;
+    --chart-5: 0 65% 55%;
   }
 }
- 
+
 @layer base {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-/* Custom Utility Classes */
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-  
+
+  /* Glassmorphism - elegant blur */
   .glass {
-    @apply bg-white/70 backdrop-blur-md border border-white/20;
+    @apply bg-card/75 backdrop-blur-lg border border-border/40;
   }
-  
+
   .glass-dark {
-    @apply bg-slate-900/70 backdrop-blur-md border border-slate-700/50;
+    @apply bg-card/65 backdrop-blur-xl border border-border/25;
   }
+
+  /* Gradient Text - subtle sage gradient */
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent;
+    background-size: 200% auto;
+  }
+
+  /* Gradient Backgrounds */
+  .gradient-primary {
+    @apply bg-gradient-to-br from-primary to-accent;
+  }
+
+  .gradient-subtle {
+    @apply bg-gradient-to-br from-secondary/50 via-background to-secondary/50;
+  }
+
+  /* Button Glow - subtle and elegant */
+  .glow-primary {
+    box-shadow: 0 0 24px -8px hsl(var(--primary) / 0.25);
+  }
+
+  .glow-primary:hover {
+    box-shadow: 0 0 32px -8px hsl(var(--primary) / 0.35);
+  }
+
+  /* Elegant Shadows - very soft */
+  .shadow-soft {
+    box-shadow:
+      0 1px 3px 0 hsl(var(--shadow-color) / 0.04),
+      0 4px 12px -2px hsl(var(--shadow-color) / 0.03);
+  }
+
+  .shadow-elevated {
+    box-shadow:
+      0 2px 8px -2px hsl(var(--shadow-color) / 0.06),
+      0 8px 20px -4px hsl(var(--shadow-color) / 0.05),
+      0 16px 40px -8px hsl(var(--shadow-color) / 0.03);
+  }
+}
+
+@layer utilities {
+
+  /* Animation Keyframes */
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-in-down {
+    from {
+      opacity: 0;
+      transform: translateY(-12px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes float {
+
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-5px);
+    }
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  @keyframes pulse-subtle {
+
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.8;
+    }
+  }
+
+  /* Animation Classes */
+  .animate-fade-in-up {
+    animation: fade-in-up 0.6s ease-out forwards;
+  }
+
+  .animate-fade-in-down {
+    animation: fade-in-down 0.6s ease-out forwards;
+  }
+
+  .animate-float {
+    animation: float 5s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2.5s linear infinite;
+    background-size: 200% 100%;
+  }
+
+  .animate-pulse-subtle {
+    animation: pulse-subtle 2.5s ease-in-out infinite;
+  }
+}
+
+/* Smooth page transitions */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Focus styles for accessibility */
+*:focus-visible {
+  @apply outline-none ring-2 ring-primary/50 ring-offset-2 ring-offset-background;
 }
