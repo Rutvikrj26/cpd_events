@@ -21,14 +21,15 @@ def process_zoom_webhook(log_id: int):
 
     try:
         log = ZoomWebhookLog.objects.get(id=log_id)
-        log.processing_started_at = timezone.now()
-        log.save(update_fields=['processing_started_at', 'updated_at'])
+        log.start_processing()
 
         success = webhook_processor.process_zoom_webhook(log)
 
-        log.processed_at = timezone.now()
-        log.processing_successful = success
-        log.save(update_fields=['processed_at', 'processing_successful', 'updated_at'])
+        if success:
+            log.mark_completed()
+        else:
+            if not log.error_message:
+                log.mark_failed("Unknown error during processing")
 
         return success
 

@@ -183,7 +183,11 @@ class WebhookProcessor:
         """
         try:
             event_type = log.event_type
-            payload = log.payload
+            event_type = log.event_type
+            # log.payload is the full request data
+            # The actual event data is inside the 'payload' key
+            # { "event": "...", "payload": { "object": { ... } } }
+            payload = log.payload.get('payload', {})
 
             handler = self._get_zoom_handler(event_type)
             if handler:

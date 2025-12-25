@@ -19,6 +19,7 @@ from common.viewsets import ReadOnlyModelViewSet
 from common.utils import error_response
 
 from . import serializers
+from .tasks import process_zoom_webhook
 from .models import EmailLog, RecordingView, ZoomRecording, ZoomRecordingFile, ZoomWebhookLog
 
 # =============================================================================
@@ -227,16 +228,26 @@ class ZoomWebhookView(generics.GenericAPIView):
         if ZoomWebhookLog.objects.filter(webhook_id=webhook_id).exists():
             return Response({'status': 'duplicate'})
 
-        ZoomWebhookLog.objects.create(
+        # Extract timestamp
+        event_ts = request.data.get('event_ts')
+        if event_ts:
+            import datetime
+            # Zoom sends timestamp in milliseconds
+            event_timestamp = datetime.datetime.fromtimestamp(event_ts / 1000.0, tz=datetime.timezone.utc)
+        else:
+            event_timestamp = timezone.now()
+
+        log = ZoomWebhookLog.objects.create(
             webhook_id=webhook_id,
             event_type=event_type,
             zoom_meeting_id=str(meeting_id),
+            event_timestamp=event_timestamp,
             payload=request.data,
             processing_status='pending',
         )
 
         # Process asynchronously (in production use Celery)
-        # process_zoom_webhook.delay(log.id)
+        process_zoom_webhook.delay(log.id)
 
         return Response({'status': 'received'})
 
