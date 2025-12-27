@@ -20,7 +20,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
     Dialog,
     DialogContent,
@@ -46,21 +45,19 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { PageHeader } from "@/components/custom/PageHeader";
 import {
     getCertificateTemplates,
     createCertificateTemplate,
     updateCertificateTemplate,
     deleteCertificateTemplate,
     setDefaultTemplate,
-    uploadTemplateFile,
-    FieldPositions
+    uploadTemplateFile
 } from "@/api/certificates";
 import { CertificateTemplate } from "@/api/certificates/types";
 import { toast } from "sonner";
 import { FieldPositionEditor } from "@/components/certificates/FieldPositionEditor";
 
-export function CertificateTemplatesPage() {
+export function CertificateTemplatesList() {
     const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -76,7 +73,6 @@ export function CertificateTemplatesPage() {
     const [createStep, setCreateStep] = useState(1);
     const [newTemplateUuid, setNewTemplateUuid] = useState<string | null>(null);
     const [pendingFile, setPendingFile] = useState<File | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         fetchTemplates();
@@ -200,15 +196,14 @@ export function CertificateTemplatesPage() {
 
     return (
         <div className="space-y-6">
-            <PageHeader
-                title="Certificate Templates"
-                description="Create and manage certificate templates for your events."
-                actions={
-                    <Button onClick={() => setShowCreateDialog(true)}>
-                        <Plus className="mr-2 h-4 w-4" /> New Template
-                    </Button>
-                }
-            />
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    {/* Header removed as it will be handled by the parent page/tab context or we can add it back if needed */}
+                </div>
+                <Button onClick={() => setShowCreateDialog(true)}>
+                    <Plus className="mr-2 h-4 w-4" /> New Template
+                </Button>
+            </div>
 
             {templates.length === 0 ? (
                 <Card>
@@ -301,7 +296,7 @@ export function CertificateTemplatesPage() {
                             </CardHeader>
                             <CardContent>
                                 <p className="text-sm text-muted-foreground line-clamp-2">
-                                    {template.description || "No description"}
+                                    <div dangerouslySetInnerHTML={{ __html: template.description || "No description" }} />
                                 </p>
                                 <div className="mt-4 flex items-center justify-between text-xs text-gray-400">
                                     <div className="flex items-center gap-2">

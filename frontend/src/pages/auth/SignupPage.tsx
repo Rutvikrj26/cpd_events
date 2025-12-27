@@ -81,7 +81,7 @@ export function SignupPage() {
         </h1>
         <p className="text-sm text-muted-foreground">
           Already have an account?{" "}
-          <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500">
+          <Link to="/login" className="font-medium text-primary hover:text-primary/80">
             Sign in
           </Link>
         </p>
@@ -148,11 +148,11 @@ export function SignupPage() {
                 <div className="space-y-1 leading-none">
                   <FormLabel className="font-normal text-foreground">
                     I agree to the{" "}
-                    <Link to="/terms" className="text-blue-600 hover:text-blue-500">
+                    <Link to="/terms" className="text-primary hover:text-primary/80">
                       Terms of Service
                     </Link>{" "}
                     and{" "}
-                    <Link to="/privacy" className="text-blue-600 hover:text-blue-500">
+                    <Link to="/privacy" className="text-primary hover:text-primary/80">
                       Privacy Policy
                     </Link>
                   </FormLabel>
@@ -162,7 +162,7 @@ export function SignupPage() {
             )}
           />
 
-          <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
+          <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Create account
           </Button>

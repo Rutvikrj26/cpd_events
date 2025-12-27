@@ -135,6 +135,9 @@ class Event(SoftDeleteModel):
     # =========================================
     # Registration Settings
     # =========================================
+    currency = models.CharField(max_length=3, default='usd', help_text="Currency code (iso 4217)")
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Ticket price (0.00 for free)")
+
     registration_enabled = models.BooleanField(default=True, help_text="Accept new registrations")
     max_attendees = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum attendees (null = unlimited)")
     registration_deadline = models.DateTimeField(null=True, blank=True, help_text="Registration cutoff time") # Deprecated in favor of closes_at? Keeping for back-compat or replacing.
@@ -270,6 +273,11 @@ class Event(SoftDeleteModel):
     def owning_entity(self):
         """Return the organization or owner of this event."""
         return self.organization or self.owner
+
+    @property
+    def is_free(self):
+        """Check if event is free."""
+        return self.price == 0
 
     @property
     def is_full(self):

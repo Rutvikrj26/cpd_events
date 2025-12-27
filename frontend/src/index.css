@@ -65,29 +65,32 @@
   }
 
   .dark {
-    --background: 150 12% 8%;
-    /* Deep forest night */
-    --foreground: 50 15% 92%;
-    /* Warm off-white */
+    /* Deep Forest Theme */
+    --background: 160 20% 8%;
+    /* Deep Jungle Green */
+    --foreground: 90 20% 94%;
+    /* Pale Mist */
 
-    --card: 150 10% 11%;
-    --card-foreground: 50 15% 92%;
+    --card: 160 20% 10%;
+    --card-foreground: 90 20% 94%;
 
-    --popover: 150 10% 11%;
-    --popover-foreground: 50 15% 92%;
+    --popover: 160 20% 10%;
+    --popover-foreground: 90 20% 94%;
 
     /* Primary: Lighter sage for dark mode */
     --primary: 155 30% 50%;
     --primary-foreground: 150 12% 8%;
 
-    --secondary: 150 8% 16%;
-    --secondary-foreground: 50 10% 80%;
+    /* Secondary: Dark Moss */
+    --secondary: 150 15% 15%;
+    --secondary-foreground: 90 20% 80%;
 
-    --accent: 160 22% 42%;
-    --accent-foreground: 50 15% 92%;
+    /* Accent: Muted Lime */
+    --accent: 90 25% 20%;
+    --accent-foreground: 90 20% 94%;
 
-    --muted: 150 8% 18%;
-    --muted-foreground: 50 5% 55%;
+    --muted: 150 15% 18%;
+    --muted-foreground: 90 10% 60%;
 
     --destructive: 0 65% 50%;
     --destructive-foreground: 0 0% 100%;
@@ -97,8 +100,8 @@
     --warning: 40 90% 50%;
     --warning-foreground: 0 0% 0%;
 
-    --border: 150 8% 20%;
-    --input: 150 8% 20%;
+    --border: 150 15% 20%;
+    --input: 150 15% 20%;
     --ring: 155 30% 50%;
 
     /* Chart colors */

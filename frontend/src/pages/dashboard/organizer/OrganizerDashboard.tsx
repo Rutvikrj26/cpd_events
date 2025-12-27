@@ -85,11 +85,11 @@ export function OrganizerDashboard() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'published': return 'bg-blue-100 text-blue-700 hover:bg-blue-100/80 border-blue-200';
-      case 'live': return 'bg-green-100 text-green-700 hover:bg-green-100/80 border-green-200';
-      case 'draft': return 'bg-muted text-slate-700 hover:bg-muted/80 border-border';
-      case 'completed': return 'bg-purple-100 text-purple-700 hover:bg-purple-100/80 border-purple-200';
-      default: return 'bg-muted text-gray-700 hover:bg-muted/80 border-border';
+      case 'published': return 'bg-primary/10 text-primary hover:bg-primary/20 border-primary/20';
+      case 'live': return 'bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20 animate-pulse';
+      case 'draft': return 'bg-muted text-muted-foreground hover:bg-muted/80 border-border';
+      case 'completed': return 'bg-secondary text-secondary-foreground hover:bg-secondary/80 border-secondary-foreground/20';
+      default: return 'bg-muted text-muted-foreground hover:bg-muted/80 border-border';
     }
   };
 
@@ -245,46 +245,48 @@ export function OrganizerDashboard() {
                   </div>
                 </Link>
               </Button>
-              <Button variant="outline" className="justify-start h-auto py-3 px-4 border-border hover:bg-muted/30 hover:text-blue-600 transition-all group">
-                <div className="bg-blue-100 p-2 rounded-md mr-3 group-hover:bg-blue-200 transition-colors">
-                  <Users className="h-4 w-4 text-blue-600" />
-                </div>
-                <div className="text-left">
-                  <span className="font-semibold block text-foreground group-hover:text-blue-600">Attendees</span>
-                  <span className="text-xs text-muted-foreground font-normal">View registered users</span>
-                </div>
+              <Button variant="outline" className="justify-start h-auto py-3 px-4 border-border hover:bg-muted/30 hover:text-primary transition-all group" asChild>
+                <Link to="/organizer/contacts">
+                  <div className="bg-primary/10 p-2 rounded-md mr-3 group-hover:bg-primary/20 transition-colors">
+                    <Users className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="text-left">
+                    <span className="font-semibold block text-foreground group-hover:text-primary">Attendees</span>
+                    <span className="text-xs text-muted-foreground font-normal">View registered users</span>
+                  </div>
+                </Link>
               </Button>
             </CardContent>
           </Card>
 
           {/* Zoom Status */}
-          <Card className={`border shadow-sm transition-all ${zoomStatus?.is_connected ? 'bg-slate-900 border-slate-800 text-white' : 'bg-card border-border'}`}>
+          <Card className={`border shadow-sm transition-all ${zoomStatus?.is_connected ? 'bg-card border-primary/20' : 'bg-card border-border'}`}>
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center justify-between">
                 <span>Zoom Integration</span>
                 <span className={`relative flex h-2.5 w-2.5`}>
-                  {zoomStatus?.is_connected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>}
-                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${zoomStatus?.is_connected ? 'bg-green-500' : 'bg-slate-300'}`}></span>
+                  {zoomStatus?.is_connected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/50 opacity-75"></span>}
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${zoomStatus?.is_connected ? 'bg-primary' : 'bg-muted-foreground'}`}></span>
                 </span>
               </CardTitle>
-              <CardDescription className={zoomStatus?.is_connected ? "text-slate-400" : "text-muted-foreground"}>
+              <CardDescription className={zoomStatus?.is_connected ? "text-primary/80" : "text-muted-foreground"}>
                 {zoomStatus?.is_connected ? 'Automated meeting creation active' : 'Connect for auto-meetings'}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {zoomStatus?.is_connected ? (
                 <>
-                  <div className="flex items-center gap-3 mb-6 p-3 rounded-lg bg-slate-800/50 border border-slate-700">
-                    <Video className="h-8 w-8 text-blue-400" />
+                  <div className="flex items-center gap-3 mb-6 p-3 rounded-lg bg-secondary/50 border border-border">
+                    <Video className="h-8 w-8 text-primary" />
                     <div className="overflow-hidden">
-                      <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Connected Account</p>
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Connected Account</p>
                       <p className="text-sm font-semibold truncate hover:text-clip" title={zoomStatus.zoom_email}>{zoomStatus.zoom_email}</p>
                     </div>
                   </div>
                   <Button
                     size="sm"
                     variant="destructive"
-                    className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-200 border border-red-500/20"
+                    className="w-full bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20"
                     onClick={handleDisconnectZoom}
                   >
                     Disconnect Integration
@@ -292,15 +294,15 @@ export function OrganizerDashboard() {
                 </>
               ) : (
                 <div className="text-center">
-                  <div className="h-12 w-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Video className="h-6 w-6 text-blue-600" />
+                  <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Video className="h-6 w-6 text-primary" />
                   </div>
                   <p className="text-sm text-muted-foreground mb-4">
                     Enable one-click Zoom meetings for your webinars and workshops.
                   </p>
                   <Button
                     size="sm"
-                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    className="w-full bg-primary hover:bg-primary/90"
                     onClick={handleConnectZoom}
                   >
                     Connect Zoom Account

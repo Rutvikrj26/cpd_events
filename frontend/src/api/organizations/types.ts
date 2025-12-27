@@ -63,6 +63,9 @@ export interface Organization {
     created_by_name: string;
     created_at: string;
     updated_at: string;
+    stripe_connect_id?: string;
+    stripe_account_status?: string;
+    stripe_charges_enabled?: boolean;
 }
 
 export interface OrganizationCreateRequest {
@@ -140,4 +143,24 @@ export interface LinkResult {
     detail: string;
     events_transferred: number;
     templates_transferred: number;
+}
+
+// ============================================================================
+// Stripe Connect Types
+// ============================================================================
+
+export interface StripeConnectResponse {
+    url: string;
+}
+
+export interface StripeStatusResponse {
+    details_submitted: boolean;
+    charges_enabled: boolean;
+    payouts_enabled: boolean;
+    default_currency: string;
+    requirements: {
+        currently_due: string[];
+        past_due: string[];
+        eventually_due: string[];
+    };
 }

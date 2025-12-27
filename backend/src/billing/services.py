@@ -320,3 +320,175 @@ class StripeService:
 
 # Singleton instance
 stripe_service = StripeService()
+
+
+class StripeConnectService:
+    """
+    Service for Stripe Connect integration.
+
+    Handles:
+    - Connected Account creation (Express/Standard)
+    - Onboarding links
+    - Account status checks
+    """
+
+    def __init__(self):
+        self._stripe = stripe_service.stripe
+
+    @property
+    def is_configured(self) -> bool:
+        return stripe_service.is_configured
+
+    def create_account(self, email: str, country: str = 'US') -> str | None:
+        """
+        Create a Stripe Connect account (Express).
+
+        Args:
+            email: Account owner email
+            country: Two-letter country code
+
+        Returns:
+            Account ID
+        """
+        if not self.is_configured:
+            return None
+
+        try:
+            account = self._stripe.Account.create(
+                type='express',
+                country=country,
+                email=email,
+                capabilities={
+                    'card_payments': {'requested': True},
+                    'transfers': {'requested': True},
+                },
+                settings={
+                    'payouts': {'schedule': {'interval': 'manual'}}, # Platform controls payouts? Or let them manage.
+                }
+            )
+            return account.id
+        except Exception as e:
+            logger.error(f"Failed to create Connect account: {e}")
+            return None
+
+    def create_account_link(self, account_id: str, refresh_url: str, return_url: str) -> str | None:
+        """
+        Generate an account onboarding link.
+        """
+        if not self.is_configured:
+            return None
+
+        try:
+            account_link = self._stripe.AccountLink.create(
+                account=account_id,
+                refresh_url=refresh_url,
+                return_url=return_url,
+                type='account_onboarding',
+            )
+            return account_link.url
+        except Exception as e:
+            logger.error(f"Failed to create account link: {e}")
+            return None
+
+    def get_account_status(self, account_id: str) -> dict:
+        """
+        Check account status.
+
+        Returns:
+            Dict with status info
+        """
+        if not self.is_configured:
+            return {'charges_enabled': False, 'details_submitted': False}
+
+        try:
+            account = self._stripe.Account.retrieve(account_id)
+            return {
+                'charges_enabled': account.charges_enabled,
+                'details_submitted': account.details_submitted,
+                'payouts_enabled': account.payouts_enabled,
+                'requirements': account.requirements,
+            }
+        except Exception as e:
+            logger.error(f"Failed to get account status: {e}")
+            return {'error': str(e)}
+
+
+class StripePaymentService:
+    """
+    Service for processing payments via Stripe Connect.
+    """
+
+    def __init__(self):
+        self._stripe = stripe_service.stripe
+
+    @property
+    def is_configured(self) -> bool:
+        return stripe_service.is_configured
+
+    def create_payment_intent(self, registration) -> dict[str, Any]:
+        """
+        Create a PaymentIntent for a registration.
+
+        Uses Destination Charges (on_behalf_of) or Transfer logic.
+        Destination Charges: Platform is responsible.
+        Direct Charges: Connected account is responsible.
+
+        We will use Destination Charges with `transfer_data`.
+        """
+        if not self.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        event = registration.event
+        
+        # Determine payee
+        payee_account_id = None
+        if event.organization and event.organization.stripe_connect_id:
+            payee_account_id = event.organization.stripe_connect_id
+        elif event.owner.stripe_connect_id:
+            payee_account_id = event.owner.stripe_connect_id
+        
+        if not payee_account_id:
+            return {'success': False, 'error': 'Event organizer is not connected to Stripe'}
+
+        try:
+            # Calculate amount in cents
+            amount_cents = int(event.price * 100)
+            
+            # Application fee (optional, set to 0 for now)
+            application_fee_cents = 0 
+
+            intent = self._stripe.PaymentIntent.create(
+                amount=amount_cents,
+                currency=event.currency,
+                payment_method_types=['card'],
+                transfer_data={
+                    'destination': payee_account_id,
+                },
+                application_fee_amount=application_fee_cents,
+                metadata={
+                    'registration_id': str(registration.uuid),
+                    'event_id': str(event.uuid),
+                    'event_title': event.title,
+                }
+            )
+
+            return {
+                'success': True,
+                'client_secret': intent.client_secret,
+                'payment_intent_id': intent.id,
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to create payment intent: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def retrieve_payment_intent(self, payment_intent_id: str):
+        """Retrieve a payment intent."""
+        if not self.is_configured:
+            return None
+        return self._stripe.PaymentIntent.retrieve(payment_intent_id)
+
+# Singleton instances
+stripe_connect_service = StripeConnectService()
+stripe_payment_service = StripePaymentService()
+

@@ -65,7 +65,7 @@ export function ContactPage() {
                             Get in Touch
                         </h1>
                         <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                            Have questions about CPD Events? We'd love to hear from you. Send us a message and we'll respond within 24 hours.
+                            Have questions about Accredit? We'd love to hear from you. Send us a message and we'll respond within 24 hours.
                         </p>
                     </div>
                 </div>
@@ -78,7 +78,7 @@ export function ContactPage() {
                         <ContactCard
                             icon={Mail}
                             title="Email Us"
-                            description="support@cpdevents.com"
+                            description="support@accredit.com"
                             subtext="We'll respond within 24 hours"
                         />
                         <ContactCard

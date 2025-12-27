@@ -1,12 +1,15 @@
-import React, { useState } from "react";
+
+
+import React, { useState, useEffect } from "react";
 import {
     Search,
     Download,
     Mail,
     MoreHorizontal,
-    ArrowUpDown,
     Filter,
-    Users
+    Users,
+    Plus,
+    Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,44 +34,66 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-
-// Mock Data
-interface Contact {
-    id: string;
-    name: string;
-    email: string;
-    company: string;
-    role: string;
-    eventsAttended: number;
-    lastActive: string;
-    status: "active" | "inactive";
-}
-
-const MOCK_CONTACTS: Contact[] = [
-    { id: "1", name: "Alice Johnson", email: "alice@example.com", company: "TechCorp", role: "Developer", eventsAttended: 5, lastActive: "2024-03-10", status: "active" },
-    { id: "2", name: "Bob Smith", email: "bob@example.com", company: "Innovate Inc", role: "Manager", eventsAttended: 3, lastActive: "2024-02-28", status: "inactive" },
-    { id: "3", name: "Charlie Brown", email: "charlie@example.com", company: "EduLearn", role: "Designer", eventsAttended: 8, lastActive: "2024-03-15", status: "active" },
-    { id: "4", name: "Diana Prince", email: "diana@example.com", company: "Amazonia", role: "Director", eventsAttended: 12, lastActive: "2024-03-20", status: "active" },
-    { id: "5", name: "Evan Wright", email: "evan@example.com", company: "Wright Designs", role: "Freelancer", eventsAttended: 1, lastActive: "2024-01-15", status: "inactive" },
-];
+import { getContactLists, getContacts, Contact, ContactList } from "@/api/contacts";
 
 export function ContactsPage() {
     const [searchTerm, setSearchTerm] = useState("");
-    const [contacts, setContacts] = useState(MOCK_CONTACTS);
+    const [contacts, setContacts] = useState<Contact[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [currentList, setCurrentList] = useState<ContactList | null>(null);
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            // 1. Get Lists
+            const lists = await getContactLists();
+            if (lists.results.length > 0) {
+                // Use default or first list
+                const defaultList = lists.results.find(l => l.is_default) || lists.results[0];
+                setCurrentList(defaultList);
+
+                // 2. Get Contacts for this list
+                await fetchContacts(defaultList.uuid);
+            } else {
+                setContacts([]);
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error("Failed to fetch contacts data", error);
+            toast.error("Failed to load contacts.");
+            setLoading(false);
+        }
+    };
+
+    const fetchContacts = async (listUuid: string, search?: string) => {
+        setLoading(true);
+        try {
+            const params: any = {};
+            if (search) params.search = search;
+
+            const response = await getContacts(listUuid, params);
+            setContacts(response.results);
+        } catch (error) {
+            console.error("Failed to fetch contacts", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleSearch = (term: string) => {
         setSearchTerm(term);
-        const filtered = MOCK_CONTACTS.filter(contact =>
-            contact.name.toLowerCase().includes(term.toLowerCase()) ||
-            contact.email.toLowerCase().includes(term.toLowerCase()) ||
-            contact.company.toLowerCase().includes(term.toLowerCase())
-        );
-        setContacts(filtered);
+        if (currentList) {
+            // Debounce could be added here
+            fetchContacts(currentList.uuid, term);
+        }
     };
 
     const handleExport = () => {
-        toast.success("Exporting contacts to CSV...");
-        // Simulate export
+        toast.success("Export functionality coming soon");
     };
 
     const handleEmail = (email: string) => {
@@ -79,22 +104,27 @@ export function ContactsPage() {
         <div className="space-y-6">
             <PageHeader
                 title="Contacts Manager"
-                description="Manage your attendee database and view interaction history."
+                description={currentList ? `Managing list: ${currentList.name}` : "Manage your attendee database and view interaction history."}
                 actions={
-                    <Button onClick={handleExport} variant="outline" className="flex items-center gap-2">
-                        <Download className="h-4 w-4" /> Export CSV
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={fetchData} title="Refresh">
+                            Refresh
+                        </Button>
+                        <Button onClick={handleExport} variant="outline" className="flex items-center gap-2">
+                            <Download className="h-4 w-4" /> Export CSV
+                        </Button>
+                    </div>
                 }
             />
 
             <Card>
                 <CardContent className="p-0">
-                    <div className="p-4 border-b flex flex-col sm:flex-row gap-4 items-center justify-between bg-zinc-50/50">
+                    <div className="p-4 border-b flex flex-col sm:flex-row gap-4 items-center justify-between bg-muted/30">
                         <div className="relative w-full sm:w-96">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input
                                 placeholder="Search contacts..."
-                                className="pl-9 bg-card"
+                                className="pl-9 bg-background"
                                 value={searchTerm}
                                 onChange={(e) => handleSearch(e.target.value)}
                             />
@@ -106,41 +136,51 @@ export function ContactsPage() {
                         </div>
                     </div>
 
-                    <div className="relative w-full overflow-auto">
-                        {contacts.length > 0 ? (
+                    <div className="relative w-full overflow-auto min-h-[400px]">
+                        {loading ? (
+                            <div className="flex items-center justify-center h-64">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
+                        ) : contacts.length > 0 ? (
                             <Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead className="w-[250px]">Name</TableHead>
-                                        <TableHead>Role / Company</TableHead>
+                                        <TableHead>Organization</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead className="text-right">Events Attended</TableHead>
-                                        <TableHead className="text-right">Last Active</TableHead>
+                                        <TableHead className="text-right">Last Atended</TableHead>
                                         <TableHead className="w-[50px]"></TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {contacts.map((contact) => (
-                                        <TableRow key={contact.id}>
+                                        <TableRow key={contact.uuid}>
                                             <TableCell className="font-medium">
                                                 <div className="flex flex-col">
-                                                    <span className="text-foreground">{contact.name}</span>
+                                                    <span className="text-foreground">{contact.full_name}</span>
                                                     <span className="text-xs text-muted-foreground">{contact.email}</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex flex-col">
-                                                    <span className="text-foreground text-sm">{contact.role}</span>
-                                                    <span className="text-xs text-muted-foreground">{contact.company}</span>
+                                                    <span className="text-foreground text-sm">{contact.professional_title || '-'}</span>
+                                                    <span className="text-xs text-muted-foreground">{contact.organization_name || '-'}</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant={contact.status === 'active' ? 'default' : 'secondary'} className="capitalize">
-                                                    {contact.status}
-                                                </Badge>
+                                                {contact.email_bounced ? (
+                                                    <Badge variant="destructive">Bounced</Badge>
+                                                ) : contact.email_opted_out ? (
+                                                    <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">Opted Out</Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-primary border-primary/20 bg-primary/5">Active</Badge>
+                                                )}
                                             </TableCell>
-                                            <TableCell className="text-right font-medium">{contact.eventsAttended}</TableCell>
-                                            <TableCell className="text-right text-muted-foreground text-sm">{contact.lastActive}</TableCell>
+                                            <TableCell className="text-right font-medium">{contact.events_attended_count}</TableCell>
+                                            <TableCell className="text-right text-muted-foreground text-sm">
+                                                {contact.last_attended_at ? new Date(contact.last_attended_at).toLocaleDateString() : '-'}
+                                            </TableCell>
                                             <TableCell>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -155,7 +195,7 @@ export function ContactsPage() {
                                                         <DropdownMenuItem onClick={() => handleEmail(contact.email)}>
                                                             <Mail className="mr-2 h-4 w-4" /> Email Contact
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem>View Profile</DropdownMenuItem>
+                                                        {/* Details view could be added later */}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
@@ -168,7 +208,12 @@ export function ContactsPage() {
                                 <EmptyState
                                     icon={Users}
                                     title="No contacts found"
-                                    description={searchTerm ? `No results for "${searchTerm}"` : "You haven't had any attendees yet."}
+                                    description={searchTerm ? `No results for "${searchTerm}"` : "You haven't added any contacts yet."}
+                                    action={
+                                        <Button variant="outline">
+                                            <Plus className="mr-2 h-4 w-4" /> Import Contacts
+                                        </Button>
+                                    }
                                 />
                             </div>
                         )}

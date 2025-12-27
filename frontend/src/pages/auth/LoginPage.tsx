@@ -63,7 +63,7 @@ export function LoginPage() {
         </h1>
         <p className="text-sm text-muted-foreground">
           Or{" "}
-          <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-500">
+          <Link to="/signup" className="font-medium text-primary hover:text-primary/80">
             create a new account
           </Link>
         </p>
@@ -94,7 +94,7 @@ export function LoginPage() {
                   <FormLabel>Password</FormLabel>
                   <Link
                     to="/forgot-password"
-                    className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                    className="text-sm font-medium text-primary hover:text-primary/80"
                   >
                     Forgot password?
                   </Link>
@@ -127,7 +127,7 @@ export function LoginPage() {
             )}
           />
 
-          <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
+          <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Sign in
           </Button>
@@ -144,9 +144,26 @@ export function LoginPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3">
-        <Button variant="outline" type="button" disabled={isLoading} className="w-full">
+        <Button
+          variant="outline"
+          type="button"
+          disabled={isLoading}
+          className="w-full"
+          onClick={async () => {
+            try {
+              // Fetch the Zoom Auth URL from our backend
+              const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/v1/auth/zoom/login/`);
+              const data = await response.json();
+              if (data.url) {
+                window.location.href = data.url;
+              }
+            } catch (error) {
+              toast.error("Failed to initiate Zoom login");
+            }
+          }}
+        >
           {/* Zoom Icon Placeholder */}
-          <svg className="mr-2 h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <svg className="mr-2 h-4 w-4 text-[#2D8CFF]" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path d="M7.108 8.04H2.433c-.768 0-1.391.685-1.391 1.531v9.09c0 .845.623 1.531 1.391 1.531H15.9c.768 0 1.391-.685 1.391-1.53v-2.028l5.96 4.39c.27.199.648.22.94.053.292-.167.472-.499.472-.87V8.041c0-.372-.18-.703-.472-.87-.292-.167-.67-.146-.94.053l-5.96 4.39V9.57c0-.845-.623-1.531-1.39-1.531z" />
           </svg>
           Sign in with Zoom

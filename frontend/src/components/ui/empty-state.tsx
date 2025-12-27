@@ -7,7 +7,7 @@ interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
     icon?: LucideIcon;
     title: string;
     description: string;
-    action?: {
+    action?: React.ReactNode | {
         label: string;
         onClick: () => void;
         variant?: "default" | "secondary" | "outline" | "ghost" | "link";
@@ -39,9 +39,16 @@ export function EmptyState({
             <p className="mt-1 text-sm text-muted-foreground max-w-sm">{description}</p>
             {action && (
                 <div className="mt-6">
-                    <Button onClick={action.onClick} variant={action.variant || "default"}>
-                        {action.label}
-                    </Button>
+                    {React.isValidElement(action) ? (
+                        action
+                    ) : (
+                        <Button
+                            onClick={(action as any).onClick}
+                            variant={(action as any).variant || "default"}
+                        >
+                            {(action as any).label}
+                        </Button>
+                    )}
                 </div>
             )}
         </div>

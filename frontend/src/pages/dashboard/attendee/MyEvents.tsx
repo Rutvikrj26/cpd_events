@@ -70,7 +70,7 @@ export function MyEvents() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -173,7 +173,7 @@ function RegistrationCard({ registration, isPast = false }: { registration: Regi
 
   return (
     <Card className="overflow-hidden hover:shadow-md transition-shadow">
-      <div className="h-32 bg-gradient-to-br from-blue-50 to-slate-100 relative flex items-center justify-center">
+      <div className="h-32 bg-gradient-to-br from-primary/5 to-slate-100 relative flex items-center justify-center">
         <Calendar className="h-8 w-8 text-slate-300" />
         <div className="absolute top-3 right-3">
           <Badge variant={registration.status === 'confirmed' ? 'default' : 'secondary'} className="capitalize">
@@ -209,7 +209,7 @@ function RegistrationCard({ registration, isPast = false }: { registration: Regi
           </Link>
           {registration.can_join && registration.zoom_join_url && (
             <a href={registration.zoom_join_url} target="_blank" rel="noopener noreferrer">
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+              <Button size="sm" className="bg-primary hover:bg-primary/90">
                 <ExternalLink className="h-3 w-3 mr-1" /> Join
               </Button>
             </a>

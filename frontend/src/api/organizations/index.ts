@@ -147,6 +147,28 @@ export const linkOrganizerToOrg = async (orgUuid: string, data?: LinkOrganizerRe
 };
 
 // ============================================================================
+// Stripe Connect
+// ============================================================================
+
+import { StripeConnectResponse, StripeStatusResponse } from './types';
+
+/**
+ * Initiate Stripe Connect onboarding.
+ */
+export const connectStripe = async (orgUuid: string): Promise<StripeConnectResponse> => {
+    const response = await client.post<StripeConnectResponse>(`${BASE_URL}/${orgUuid}/stripe/connect/`);
+    return response.data;
+};
+
+/**
+ * Get Stripe Connect account status.
+ */
+export const getStripeStatus = async (orgUuid: string): Promise<StripeStatusResponse> => {
+    const response = await client.get<StripeStatusResponse>(`${BASE_URL}/${orgUuid}/stripe/status/`);
+    return response.data;
+};
+
+// ============================================================================
 // Re-export types
 // ============================================================================
 

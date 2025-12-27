@@ -26,9 +26,10 @@ import { FAQPage } from './pages/public/FAQPage';
 import { AboutPage } from './pages/public/AboutPage';
 
 // Auth Pages
-import { LoginPage } from './pages/auth/LoginPage';
-import { SignupPage } from './pages/auth/SignupPage';
-import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
+import { LoginPage } from "@/pages/auth/LoginPage";
+import { SignupPage } from "@/pages/auth/SignupPage";
+import { AuthCallback } from "@/pages/auth/AuthCallback";
+import { ForgotPasswordPage } from "@/pages/auth/ForgotPasswordPage";
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { EventsPage } from './pages/events/EventsPage';
 import { EventCreatePage } from './pages/events/EventCreatePage';
@@ -56,7 +57,6 @@ import { OrganizerDashboard } from './pages/dashboard/organizer/OrganizerDashboa
 import { ContactsPage } from './pages/dashboard/organizer/ContactsPage';
 import { ReportsPage } from './pages/dashboard/organizer/ReportsPage';
 import { EventManagement } from './pages/dashboard/organizer/EventManagement';
-import { CertificateTemplatesPage } from './pages/dashboard/organizer/CertificateTemplatesPage';
 import { ZoomManagement } from './pages/dashboard/organizer/ZoomManagement';
 import { OrganizerCertificatesPage } from './pages/dashboard/organizer/OrganizerCertificatesPage';
 
@@ -149,11 +149,6 @@ export default function App() {
                 </PublicLayout>
               } />
 
-              <Route path="/forgot-password" element={
-                <AuthLayout>
-                  <ForgotPasswordPage />
-                </AuthLayout>
-              } />
 
               {/* Auth Routes */}
               <Route path="/login" element={
@@ -167,6 +162,8 @@ export default function App() {
                   <SignupPage />
                 </AuthLayout>
               } />
+
+              <Route path="/auth/callback" element={<AuthCallback />} />
 
               {/* Protected Routes - Unified Dashboard */}
               <Route element={<ProtectedRoute />}>
@@ -195,6 +192,10 @@ export default function App() {
                   <Route path="/cpd" element={<CPDTracking />} />
 
                   {/* Shared pages */}
+                  <Route path="login" element={<LoginPage />} />
+                  <Route path="signup" element={<SignupPage />} />
+                  <Route path="auth/callback" element={<AuthCallback />} />
+                  <Route path="forgot-password" element={<ForgotPasswordPage />} />
                   <Route path="/billing" element={<BillingPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/notifications" element={<Notifications />} />
@@ -204,7 +205,7 @@ export default function App() {
                   <Route path="/organizer/dashboard" element={<OrganizerDashboard />} />
                   <Route path="/organizer/contacts" element={<ContactsPage />} />
                   <Route path="/organizer/reports" element={<ReportsPage />} />
-                  <Route path="/organizer/certificates/templates" element={<CertificateTemplatesPage />} />
+
                   <Route path="/organizer/certificates" element={<OrganizerCertificatesPage />} />
                   <Route path="/organizer/events/:uuid/manage" element={<EventManagement />} />
                   <Route path="/organizer/zoom" element={<ZoomManagement />} />

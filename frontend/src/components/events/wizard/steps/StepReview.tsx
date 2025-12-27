@@ -58,6 +58,11 @@ export const StepReview = () => {
                                     <span>Max {formData.max_attendees} Attendees</span>
                                 </div>
                             )}
+                            <div className="flex items-center gap-2 text-slate-700">
+                                <Tag className="h-4 w-4 text-primary" />
+                                <span>{formData.is_free ? 'Free Event' : `${formData.price} ${formData.currency}`}</span>
+                            </div>
+
                         </div>
                     </CardContent>
                 </Card>

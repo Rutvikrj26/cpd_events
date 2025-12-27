@@ -78,17 +78,11 @@ export interface EventCreateRequest {
     max_attendees?: number; // capacity
 
     // Pricing
-    price?: number; // Backend doesn't have price field in Event model? 
-    // Wait, checked Event model in Step 162. It DOES NOT have 'price'!
-    // It has cpd_credit_value.
-    // It seems price is missing from backend entirely? 
-    // Or maybe it's managed via 'Ticket' model which I haven't seen?
-    // User asked me originally to audit Zoom, but now I see a Price gap?
-    // 'Registrations' usually link to 'TicketTypes' or similar if paid?
-    // Registration model (viewed in Step 24 context mentions 'Registration' model).
-    // I can't fix proper paid events now. I'll omit price from backend payload or send it as custom field?
-    // The previous form had price.
-    // I will comment it out or leave it optional but note it won't persist.
+    price?: number;
+    currency?: string;
+    is_free?: boolean;
+
+
 
     // CPD
     cpd_credit_value?: number;
@@ -104,6 +98,7 @@ export interface EventCreateRequest {
 
     // Zoom
     zoom_settings?: any;
+
 
     // Location (for in-person/hybrid events)
     location?: string;

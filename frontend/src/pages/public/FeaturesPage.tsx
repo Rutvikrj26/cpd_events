@@ -36,7 +36,7 @@ export function FeaturesPage() {
                         </Badge>
                         <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground mb-6">
                             Everything You Need to{" "}
-                            <span className="gradient-text">Manage CPD Events</span>
+                            <span className="gradient-text">Manage Professional Development</span>
                         </h1>
                         <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
                             A comprehensive platform for hosting professional development events, tracking attendance automatically, and issuing verifiable certificates.
@@ -54,12 +54,41 @@ export function FeaturesPage() {
                                 </Button>
                             </Link>
                         </div>
+
+                        {/* Feature Navigation Cards */}
+                        <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
+                            <a href="#event-management" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
+                                <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
+                                    <Calendar className="h-5 w-5" />
+                                </div>
+                                <h3 className="font-semibold text-sm">Event Management</h3>
+                            </a>
+                            <a href="#zoom-integration" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
+                                <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
+                                    <Video className="h-5 w-5" />
+                                </div>
+                                <h3 className="font-semibold text-sm">Zoom Integration</h3>
+                            </a>
+                            <a href="#certificates" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
+                                <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
+                                    <Award className="h-5 w-5" />
+                                </div>
+                                <h3 className="font-semibold text-sm">Certificates</h3>
+                            </a>
+                            <a href="#organizations" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
+                                <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
+                                    <Building2 className="h-5 w-5" />
+                                </div>
+                                <h3 className="font-semibold text-sm">Organizations</h3>
+                            </a>
+                        </div>
                     </div>
                 </div>
             </section>
 
             {/* Feature Highlight 1: Event Management */}
             <FeatureSection
+                id="event-management"
                 badge="Event Management"
                 title="Create and Manage Professional Events"
                 description="Build events of any format with our intuitive event creation wizard. Configure CPD credits, registration settings, and certificate requirements all in one place."
@@ -78,6 +107,7 @@ export function FeaturesPage() {
 
             {/* Feature Highlight 2: Zoom Integration */}
             <FeatureSection
+                id="zoom-integration"
                 badge="Zoom Integration"
                 title="Automatic Attendance Tracking"
                 description="Connect your Zoom account and let our platform handle attendance automatically. No more manual roll-calls or tracking spreadsheets."
@@ -96,6 +126,7 @@ export function FeaturesPage() {
 
             {/* Feature Highlight 3: Certificates */}
             <FeatureSection
+                id="certificates"
                 badge="Certificates"
                 title="Professional Certificates, Automatically Issued"
                 description="Generate beautiful PDF certificates for attendees who meet your requirements. Each certificate includes a unique verification code."
@@ -114,6 +145,7 @@ export function FeaturesPage() {
 
             {/* Feature Highlight 4: Team Management */}
             <FeatureSection
+                id="organizations"
                 badge="Organizations"
                 title="Manage Events as a Team"
                 description="Create organizations and invite team members with specific roles. Collaborate on events and share resources across your organization."
@@ -138,7 +170,7 @@ export function FeaturesPage() {
                             And Much More
                         </h2>
                         <p className="text-lg text-muted-foreground">
-                            Explore all the features that make CPD Events the complete platform for professional development
+                            Explore all the features that make Accredit the complete platform for professional development
                         </p>
                     </div>
 
@@ -165,7 +197,7 @@ export function FeaturesPage() {
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
                     <div className="max-w-3xl mx-auto text-center">
                         <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-6">
-                            Ready to Streamline Your CPD Events?
+                            Ready to Streamline Your Professional Development?
                         </h2>
                         <p className="text-white/80 max-w-2xl mx-auto mb-10 text-lg">
                             Start hosting professional development events and issuing verifiable certificates today.
@@ -192,6 +224,7 @@ export function FeaturesPage() {
 
 // Feature Section Component
 function FeatureSection({
+    id,
     badge,
     title,
     description,
@@ -201,6 +234,7 @@ function FeatureSection({
     ctaLink,
     ctaText
 }: {
+    id?: string;
     badge: string;
     title: string;
     description: string;
@@ -211,7 +245,7 @@ function FeatureSection({
     ctaText: string;
 }) {
     return (
-        <section className={`py-24 ${reversed ? 'bg-secondary/30' : 'bg-background'}`}>
+        <section id={id} className={`py-24 ${reversed ? 'bg-secondary/30' : 'bg-background'} scroll-mt-20`}>
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                 <div className={`grid lg:grid-cols-2 gap-12 lg:gap-16 items-center ${reversed ? 'lg:flex-row-reverse' : ''}`}>
                     <div className={reversed ? 'lg:order-2' : ''}>
@@ -307,8 +341,8 @@ function ZoomIntegrationVisual() {
         <div className="bg-card rounded-2xl border border-border shadow-elevated p-6">
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                        <Video className="h-5 w-5 text-blue-500" />
+                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Video className="h-5 w-5 text-primary" />
                     </div>
                     <div>
                         <h3 className="font-semibold text-foreground">Zoom Connected</h3>

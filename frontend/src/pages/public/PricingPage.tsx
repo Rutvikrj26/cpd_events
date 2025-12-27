@@ -282,7 +282,7 @@ export function PricingPage() {
                             Ready to Get Started?
                         </h2>
                         <p className="text-white/80 mb-8">
-                            Join organizations worldwide using CPD Events to streamline their professional development programs.
+                            Join organizations worldwide using Accredit to streamline their professional development programs.
                         </p>
                         <Link to="/signup">
                             <Button size="lg" className="bg-white text-primary hover:bg-white/90 h-14 px-8 text-lg font-semibold">

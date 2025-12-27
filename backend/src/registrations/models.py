@@ -76,7 +76,22 @@ class Registration(SoftDeleteModel):
     # =========================================
     # Registration Metadata
     # =========================================
+    class PaymentStatus(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        PAID = 'paid', 'Paid'
+        FAILED = 'failed', 'Failed'
+        REFUNDED = 'refunded', 'Refunded'
+        NA = 'na', 'N/A'  # For free events
+
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.CONFIRMED, db_index=True)
+    
+    # Payment Tracking
+    payment_status = models.CharField(
+        max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.NA, db_index=True
+    )
+    payment_intent_id = models.CharField(max_length=255, blank=True, db_index=True)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
     source = models.CharField(
         max_length=20, choices=Source.choices, default=Source.SELF, help_text="How this registration was created"
     )

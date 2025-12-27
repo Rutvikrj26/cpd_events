@@ -16,6 +16,8 @@ router.register(r'cpd-requirements', views.CPDRequirementViewSet, basename='cpd-
 urlpatterns = [
     # Authentication
     path('auth/signup/', views.SignupView.as_view(), name='signup'),
+    path('auth/zoom/login/', views.ZoomAuthView.as_view(), name='zoom_login'),
+    path('auth/zoom/callback/', views.ZoomCallbackView.as_view(), name='zoom_callback'),
     path('auth/token/', views.CustomTokenObtainPairView.as_view(), name='token_obtain'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/verify-email/', views.EmailVerificationView.as_view(), name='verify_email'),

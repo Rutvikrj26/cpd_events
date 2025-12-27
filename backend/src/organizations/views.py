@@ -268,6 +268,112 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         return Response({'detail': 'Link invitation sent.'}, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=['post'], url_path='stripe/connect')
+    def stripe_connect(self, request, pk=None):
+        """
+        Initiate Stripe Connect onboarding.
+        Returns account onboarding URL.
+        """
+        organization = self.get_object()
+
+        # Check admin permission
+        if not organization.memberships.filter(
+            user=request.user, role__in=['owner', 'admin'], is_active=True
+        ).exists():
+            return Response(
+                {'detail': 'You do not have permission to manage billing.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        from billing.services import stripe_connect_service
+
+        # 1. Ensure Organization has a Connect Account ID
+        if not organization.stripe_connect_id:
+            account_id = stripe_connect_service.create_account(
+                email=organization.contact_email or request.user.email,
+                country='US',  # Default to US for now, or make dynamic
+            )
+            if not account_id:
+                return Response(
+                    {'detail': 'Failed to create Stripe account.'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+            
+            organization.stripe_connect_id = account_id
+            organization.save(update_fields=['stripe_connect_id'])
+        
+        # 2. Generate Onboarding Link
+        # Redirect back to frontend organization settings -> payments
+        refresh_url = f"{settings.FRONTEND_URL}/organizer/organizations/{organization.slug}/settings/payments?refresh=true"
+        return_url = f"{settings.FRONTEND_URL}/organizer/organizations/{organization.slug}/settings/payments?success=true"
+
+        onboarding_url = stripe_connect_service.create_account_link(
+            account_id=organization.stripe_connect_id,
+            refresh_url=refresh_url,
+            return_url=return_url,
+        )
+
+        if not onboarding_url:
+            return Response(
+                {'detail': 'Failed to generate onboarding link.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response({'url': onboarding_url})
+
+    @action(detail=True, methods=['get'], url_path='stripe/status')
+    def stripe_status(self, request, pk=None):
+        """
+        Check and sync Stripe Connect status.
+        """
+        organization = self.get_object()
+        
+        # Check admin permission
+        if not organization.memberships.filter(
+            user=request.user, role__in=['owner', 'admin'], is_active=True
+        ).exists():
+            return Response(
+                {'detail': 'You do not have permission to view billing status.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+            
+        if not organization.stripe_connect_id:
+             return Response({
+                'connected': False,
+                'status': 'not_connected',
+                'charges_enabled': False,
+            })
+
+        from billing.services import stripe_connect_service
+        
+        status_info = stripe_connect_service.get_account_status(organization.stripe_connect_id)
+        
+        if 'error' in status_info:
+             return Response(
+                {'detail': 'Failed to retrieve status from Stripe.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Update local state
+        organization.stripe_charges_enabled = status_info.get('charges_enabled', False)
+        # Use details_submitted or charges_enabled to determine 'active' status
+        if status_info.get('charges_enabled'):
+            organization.stripe_account_status = 'active'
+        elif status_info.get('details_submitted'):
+            organization.stripe_account_status = 'pending_verification'
+        else:
+            organization.stripe_account_status = 'restricted'
+            
+        organization.save(update_fields=['stripe_charges_enabled', 'stripe_account_status'])
+
+        return Response({
+            'connected': True,
+            'status': organization.stripe_account_status,
+            'charges_enabled': organization.stripe_charges_enabled,
+            'stripe_id': organization.stripe_connect_id,
+            'details': status_info,
+        })
+
 
 class AcceptInvitationView(APIView):
     """Accept an organization invitation."""

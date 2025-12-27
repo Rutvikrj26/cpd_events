@@ -5,6 +5,7 @@ import { getEvents, getPublicEvents } from '@/api/events';
 import { Event } from '@/api/events/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { EventDiscovery } from '../public/EventDiscovery';
 
 export const EventsPage = () => {
     const { user } = useAuth();
@@ -13,16 +14,12 @@ export const EventsPage = () => {
     const isOrganizer = user?.account_type === 'organizer' || user?.account_type === 'admin';
 
     useEffect(() => {
+        if (!isOrganizer) return; // Attendees use EventDiscovery component which handles its own fetching
+
         const fetchEvents = async () => {
             try {
-                let data: Event[] = [];
-                if (isOrganizer) {
-                    // Organizers see their own events for management
-                    data = await getEvents();
-                } else {
-                    // Attendees see public events catalog for discovery
-                    data = await getPublicEvents();
-                }
+                // Organizers see their own events for management
+                const data = await getEvents();
                 setEvents(data);
             } catch (error) {
                 console.error("Failed to load events", error);
@@ -32,6 +29,10 @@ export const EventsPage = () => {
         };
         fetchEvents();
     }, [isOrganizer]);
+
+    if (!isOrganizer) {
+        return <EventDiscovery />;
+    }
 
     if (loading) return <div className="p-8">Loading events...</div>;
 

@@ -19,9 +19,9 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
     return (
       <Card className="flex flex-col sm:flex-row overflow-hidden hover:shadow-md transition-shadow duration-200">
         <div className="w-full sm:w-48 h-32 sm:h-auto relative">
-          <img 
-            src={event.image} 
-            alt={event.title} 
+          <img
+            src={event.image}
+            alt={event.title}
             className="absolute inset-0 h-full w-full object-cover"
           />
         </div>
@@ -29,7 +29,7 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
           <div className="space-y-2">
             <div className="flex items-start justify-between gap-2">
               <div className="space-y-1">
-                <div className="flex items-center gap-2 text-xs text-blue-600 font-medium">
+                <div className="flex items-center gap-2 text-xs text-primary font-medium">
                   {event.type} • {event.creditType} {event.credits} Credits
                 </div>
                 <h3 className="font-semibold text-lg text-foreground line-clamp-1">{event.title}</h3>
@@ -68,9 +68,9 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
     <Card className="flex flex-col h-full overflow-hidden hover:shadow-md transition-shadow duration-200">
       <div className="relative">
         <AspectRatio ratio={16 / 9}>
-          <img 
-            src={event.image} 
-            alt={event.title} 
+          <img
+            src={event.image}
+            alt={event.title}
             className="h-full w-full object-cover"
           />
         </AspectRatio>
@@ -81,12 +81,12 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
           {showStatus && <StatusBadge status={event.status} className="shadow-sm backdrop-blur-sm" />}
         </div>
         <div className="absolute top-2 right-2">
-           <Badge className="bg-blue-600 text-white hover:bg-blue-700 font-medium shadow-sm border-0">
+          <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium shadow-sm border-0">
             {event.credits} {event.creditType}
           </Badge>
         </div>
       </div>
-      
+
       <CardHeader className="p-4 pb-2 space-y-2">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           {new Date(event.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' })}
@@ -95,7 +95,7 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
           {event.title}
         </h3>
       </CardHeader>
-      
+
       <CardContent className="p-4 py-2 flex-1">
         <div className="space-y-2 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
@@ -103,12 +103,12 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
             <span className="truncate">{event.organizer}</span>
           </div>
           <div className="flex items-center gap-2">
-             <Video className="h-4 w-4 shrink-0" />
-             <span>Online Event</span>
+            <Video className="h-4 w-4 shrink-0" />
+            <span>Online Event</span>
           </div>
         </div>
       </CardContent>
-      
+
       <CardFooter className="p-4 pt-2 flex items-center justify-between border-t border-gray-50 mt-auto">
         <span className="font-semibold text-foreground">
           {event.price === "Free" ? "Free" : `$${event.price}`}

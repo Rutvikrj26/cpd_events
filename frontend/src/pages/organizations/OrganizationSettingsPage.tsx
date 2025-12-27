@@ -30,6 +30,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getOrganizations, getOrganization, updateOrganization } from '@/api/organizations';
 import { Organization } from '@/api/organizations/types';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import StripeConnectSettings from '@/components/organizations/StripeConnectSettings';
 
 interface FormData {
     name: string;
@@ -187,6 +188,11 @@ const OrganizationSettingsPage: React.FC = () => {
                         <CreditCard className="h-4 w-4 mr-2" />
                         Billing
                     </TabsTrigger>
+                    <TabsTrigger value="payments">
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Payments & Payouts
+                    </TabsTrigger>
+
                 </TabsList>
 
                 {/* General Settings */}
@@ -439,6 +445,18 @@ const OrganizationSettingsPage: React.FC = () => {
                         </CardContent>
                     </Card>
                 </TabsContent>
+
+                {/* Payments & Payouts (Stripe Connect) */}
+                <TabsContent value="payments">
+                    <StripeConnectSettings
+                        organization={org}
+                        onUpdate={() => {
+                            loadOrganization();
+                            refreshOrganizations();
+                        }}
+                    />
+                </TabsContent>
+
             </Tabs>
         </div>
     );

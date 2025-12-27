@@ -298,10 +298,47 @@ class PublicRegistrationView(generics.CreateAPIView):
             full_name=full_name,
             professional_title=serializer.validated_data.get('professional_title', ''),
             organization_name=serializer.validated_data.get('organization_name', ''),
-            status='confirmed',
+            status='confirmed',  # Default to confirmed if free, update below if paid
             allow_public_verification=serializer.validated_data.get('allow_public_verification', True),
             source=Registration.Source.SELF,
         )
+
+        # Handle Payment if not free
+        client_secret = None
+        payment_intent_id = None
+        
+        if not event.is_free:
+            from billing.services import stripe_payment_service
+            
+            # Set status to pending payment
+            registration.status = 'pending' # Or remain confirmed but payment_status is pending?
+            # Actually, if payment fails, they shouldn't be fully registered. 
+            # But 'confirmed' usually means "spot reserved".
+            # Let's keep status='confirmed' but payment_status='pending' if we want to hold the spot.
+            # OR status='pending' until paid. 
+            # Given `Registration.Status` doesn't strictly have `pending_payment` (it has `pending` approval), 
+            # let's use `status='confirmed'` for now to reserve spot, and use `payment_status`.
+            registration.payment_status = Registration.PaymentStatus.PENDING
+            registration.save()
+
+            if stripe_payment_service.is_configured:
+                intent_data = stripe_payment_service.create_payment_intent(registration)
+                if intent_data['success']:
+                    client_secret = intent_data['client_secret']
+                    payment_intent_id = intent_data['payment_intent_id']
+                    
+                    registration.payment_intent_id = payment_intent_id
+                    registration.save(update_fields=['payment_intent_id'])
+                else:
+                    # Log error but don't fail registration yet? Or fail?
+                    # Ideally fail if we can't accept payment.
+                    # But for now let's return error.
+                    registration.delete() # Rollback
+                    return Response({'error': intent_data['error']}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                 # If Stripe not configured but event is paid -> Error
+                 registration.delete()
+                 return Response({'error': 'Payment system not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Save Custom Field Responses
         custom_responses = serializer.validated_data.get('custom_field_responses', {})
@@ -330,12 +367,19 @@ class PublicRegistrationView(generics.CreateAPIView):
         # Update event counts
         event.update_counts()
 
+        response_data = {
+            'registration_uuid': str(registration.uuid),
+            'status': registration.status,
+            'payment_status': registration.payment_status if hasattr(registration, 'payment_status') else 'na',
+            'message': 'Successfully registered!',
+        }
+        
+        if client_secret:
+            response_data['client_secret'] = client_secret
+            response_data['message'] = 'Payment required to complete registration.'
+
         return Response(
-            {
-                'registration_uuid': str(registration.uuid),
-                'status': registration.status,
-                'message': 'Successfully registered!',
-            },
+            response_data,
             status=status.HTTP_201_CREATED,
         )
 

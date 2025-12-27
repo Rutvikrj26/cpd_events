@@ -33,7 +33,7 @@ export function LandingPage() {
             <div className="max-w-2xl text-center lg:text-left mx-auto lg:mx-0">
               <Badge variant="secondary" className="mb-6 px-4 py-1.5 text-sm font-medium border-primary/20">
                 <span className="flex h-2 w-2 rounded-full bg-primary mr-2"></span>
-                CPD Event Management Platform
+                Accredit Platform
               </Badge>
 
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground mb-6 leading-tight">
@@ -263,7 +263,7 @@ export function LandingPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="max-w-3xl mx-auto text-center">
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-6">
-              Ready to Streamline Your CPD Events?
+              Ready to Streamline Your Professional Development?
             </h2>
             <p className="text-white/80 max-w-2xl mx-auto mb-10 text-lg">
               Start hosting professional development events and issuing verifiable certificates today. Free to get started.
@@ -302,7 +302,7 @@ function HeroDashboardMockup() {
             </div>
             <div>
               <p className="font-semibold text-foreground text-sm">Event Dashboard</p>
-              <p className="text-xs text-muted-foreground">CPD Events Platform</p>
+              <p className="text-xs text-muted-foreground">Accredit Platform</p>
             </div>
           </div>
           <Badge variant="secondary" className="text-xs">Live</Badge>

@@ -74,6 +74,13 @@ class Organization(SoftDeleteModel):
         help_text="User who created this organization",
     )
 
+    # =========================================
+    # Stripe Connect
+    # =========================================
+    stripe_connect_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe Connect Account ID")
+    stripe_account_status = models.CharField(max_length=50, default='pending', help_text="Connect account status")
+    stripe_charges_enabled = models.BooleanField(default=False, help_text="Whether account can accept payments")
+
     # Denormalized counts (updated via signals/methods)
     members_count = models.PositiveIntegerField(default=0, help_text="Number of active members")
     events_count = models.PositiveIntegerField(default=0, help_text="Number of events")

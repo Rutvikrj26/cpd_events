@@ -435,10 +435,133 @@ class ManifestView(generics.GenericAPIView):
 
         user = request.user
 
-        return Response({
-            'role': user.account_type,
-            'is_admin': user.is_staff,
-            'routes': get_allowed_routes_for_user(user),
-            'features': get_features_for_user(user),
-        })
+
+# =============================================================================
+# Zoom SSO Views
+# =============================================================================
+
+
+class ZoomAuthView(generics.GenericAPIView):
+    """
+    GET /api/v1/auth/zoom/login/
+
+    Redirects the user to Zoom's OAuth authorization page.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [AuthThrottle]
+
+    def get(self, request):
+        from .oauth import get_zoom_auth_url
+
+        url = get_zoom_auth_url()
+        return Response({'url': url})
+
+
+class ZoomCallbackView(generics.GenericAPIView):
+    """
+    GET /api/v1/auth/zoom/callback/
+
+    Handles the OAuth callback from Zoom.
+    Exchanges code for token, gets user info, logs in or creates user.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [AuthThrottle]
+
+    def get(self, request):
+        code = request.query_params.get('code')
+        error = request.query_params.get('error')
+
+        if error:
+            return error_response(f"Zoom OAuth error: {error}", code='ZOOM_AUTH_ERROR')
+
+        if not code:
+            return error_response("Authorization code missing.", code='MISSING_CODE')
+
+        from django.conf import settings
+        from django.db import transaction
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        from .models import User, ZoomConnection
+        from .oauth import exchange_code_for_token, get_zoom_user_info
+
+        # 1. Exchange code for tokens
+        token_data = exchange_code_for_token(code)
+        if not token_data:
+            return error_response("Failed to exchange code for token.", code='TOKEN_EXCHANGE_FAILED')
+
+        access_token = token_data.get('access_token')
+        refresh_token = token_data.get('refresh_token')
+        expires_in = token_data.get('expires_in', 3600)
+
+        # 2. Get user info
+        user_info = get_zoom_user_info(access_token)
+        if not user_info:
+            return error_response("Failed to fetch user info from Zoom.", code='USER_INFO_FAILED')
+
+        zoom_user_id = user_info.get('id')
+        email = user_info.get('email').lower()
+        first_name = user_info.get('first_name', '')
+        last_name = user_info.get('last_name', '')
+        full_name = f"{first_name} {last_name}".strip()
+
+        if not email:
+            return error_response("Zoom account must have an email address.", code='MISSING_EMAIL')
+
+        # 3. Find or create user
+        with transaction.atomic():
+            # Try to match by ZoomConnection first
+            zoom_conn = ZoomConnection.objects.filter(zoom_user_id=zoom_user_id).select_related('user').first()
+
+            if zoom_conn:
+                user = zoom_conn.user
+            else:
+                # Try to match by email
+                user = User.objects.filter(email=email).first()
+
+                if not user:
+                    # Create new user
+                    user = User.objects.create_user(
+                        email=email,
+                        full_name=full_name or email.split('@')[0],
+                        email_verified=True,  # Zoom emails are verified
+                        password=None,  # Unusable password
+                    )
+
+            # 4. Update/Create ZoomConnection
+            # Even for attendees, we store this to separate Zoom ID from Email
+            if not hasattr(user, 'zoom_connection'):
+                ZoomConnection.objects.create(
+                    user=user,
+                    zoom_user_id=zoom_user_id,
+                    zoom_account_id=user_info.get('account_id', ''),
+                    zoom_email=email,
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    token_expires_at=timezone.now() + timezone.timedelta(seconds=expires_in),
+                )
+            else:
+                # Update tokens
+                conn = user.zoom_connection
+                conn.zoom_user_id = zoom_user_id  # Ensure consistent
+                conn.zoom_email = email
+                conn.update_tokens(access_token, refresh_token, expires_in)
+
+            # Ensure user is active
+            if not user.is_active:
+                 return error_response("Account is disabled.", code='ACCOUNT_DISABLED')
+
+            # Record login
+            user.record_login()
+
+            # 5. Generate JWT
+            refresh = RefreshToken.for_user(user)
+
+            # 6. Redirect to frontend
+            frontend_url = settings.CORS_ALLOWED_ORIGINS[0]  # Assuming first one is main frontend
+            redirect_url = f"{frontend_url}/auth/callback?access={str(refresh.access_token)}&refresh={str(refresh)}"
+
+            from django.http import HttpResponseRedirect
+            return HttpResponseRedirect(redirect_url)
 
