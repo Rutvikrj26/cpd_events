@@ -57,3 +57,16 @@ export const getEnrollments = async (): Promise<any[]> => {
     const response = await client.get<any[]>('/enrollments/');
     return Array.isArray(response.data) ? response.data : (response.data as any).results || [];
 };
+
+// ============================================
+// Public Courses (Browse/Catalog)
+// ============================================
+
+export const getPublicCourses = async (filters?: { search?: string; org?: string }): Promise<Course[]> => {
+    const response = await client.get<any>('/courses/', {
+        params: {
+            ...filters,
+        }
+    });
+    return Array.isArray(response.data) ? response.data : response.data.results || [];
+};

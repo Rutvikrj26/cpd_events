@@ -190,7 +190,7 @@ export function FAQPage() {
             {/* FAQ Content */}
             <section className="py-16 bg-secondary/30">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="grid lg:grid-cols-4 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                         {/* Category Sidebar */}
                         <div className="lg:col-span-1">
                             <div className="sticky top-24 space-y-2">

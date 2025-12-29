@@ -100,6 +100,16 @@ class Event(SoftDeleteModel):
         MIN_SESSIONS_COUNT = 'min_sessions_count', 'Minimum Number of Sessions'
         TOTAL_MINUTES = 'total_minutes', 'Total Attendance Minutes (across all sessions)'
 
+    # =========================================
+    # CPD & Educational Content
+    # =========================================
+    learning_objectives = models.JSONField(
+        default=list, blank=True, help_text="List of learning objectives (strings)"
+    )
+    speakers = models.ManyToManyField(
+        'Speaker', blank=True, related_name='events', help_text="Speakers for this event"
+    )
+
     multi_session_completion_criteria = models.CharField(
         max_length=50,
         choices=MultiSessionCompletionCriteria.choices,
@@ -193,6 +203,10 @@ class Event(SoftDeleteModel):
         help_text="Template for certificates",
     )
     auto_issue_certificates = models.BooleanField(default=False, help_text="Auto-issue when event completes")
+    require_feedback_for_certificate = models.BooleanField(
+        default=False,
+        help_text="Require attendees to submit feedback before downloading/accessing certificate"
+    )
 
     # =========================================
     # Media & Location
@@ -366,6 +380,10 @@ class Event(SoftDeleteModel):
         self.save(update_fields=['actual_end_at', 'updated_at'])
         self._change_status(self.Status.COMPLETED, user, 'Event completed')
 
+        # Auto-issue certificates if enabled
+        if self.auto_issue_certificates and self.certificates_enabled:
+            self._auto_issue_certificates()
+
     def close(self, user=None):
         """Close the event (no more changes)."""
         self._change_status(self.Status.CLOSED, user, 'Event closed')
@@ -396,6 +414,32 @@ class Event(SoftDeleteModel):
         self.certificate_count = registrations.filter(certificate_issued=True).count()
 
         self.save(update_fields=['registration_count', 'waitlist_count', 'attendance_count', 'certificate_count', 'updated_at'])
+
+    def _auto_issue_certificates(self):
+        """Auto-issue certificates to all eligible attendees."""
+        from registrations.models import Registration
+        from certificates.services import certificate_service
+
+        # Get all eligible registrations
+        eligible = Registration.objects.filter(
+            event=self,
+            status='confirmed',
+            deleted_at__isnull=True
+        ).filter(
+            models.Q(attendance_eligible=True) | models.Q(attendance_override=True)
+        ).exclude(certificate_issued=True)
+
+        issued_count = 0
+        for registration in eligible:
+            if registration.can_receive_certificate:
+                result = certificate_service.issue_certificate(
+                    registration=registration,
+                    issued_by=self.owner
+                )
+                if result.get('success'):
+                    issued_count += 1
+
+        return issued_count
 
     def duplicate(self, new_title=None, new_start=None):
         """
@@ -430,6 +474,7 @@ class Event(SoftDeleteModel):
             certificates_enabled=self.certificates_enabled,
             certificate_template=self.certificate_template,
             auto_issue_certificates=self.auto_issue_certificates,
+            require_feedback_for_certificate=self.require_feedback_for_certificate,
             recording_enabled=self.recording_enabled,
             is_public=self.is_public,
         )
@@ -505,3 +550,41 @@ class EventCustomField(BaseModel):
 
     def __str__(self):
         return f"{self.event.title} - {self.label}"
+
+
+class Speaker(BaseModel):
+    """
+    Speaker profile for events.
+    
+    Required for CPD compliance to demonstrate instructor qualifications.
+    """
+    owner = models.ForeignKey(
+        'accounts.User', on_delete=models.PROTECT, related_name='speakers', 
+        help_text="User who manages this speaker profile"
+    )
+    organization = models.ForeignKey(
+        'organizations.Organization', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True, 
+        related_name='speakers',
+        help_text="Organization that owns this speaker profile"
+    )
+    
+    name = models.CharField(max_length=200, help_text="Speaker full name")
+    bio = models.TextField(help_text="Speaker biography")
+    qualifications = models.TextField(help_text="Professional qualifications/credentials")
+    photo = models.ImageField(upload_to='speakers/photos/', null=True, blank=True)
+    email = models.EmailField(blank=True, help_text="Contact email (internal use)")
+    linkedin_url = models.URLField(blank=True, help_text="LinkedIn profile URL")
+    
+    is_active = models.BooleanField(default=True, help_text="Whether this speaker profile is active")
+
+    class Meta:
+        db_table = 'speakers'
+        ordering = ['name']
+        verbose_name = 'Speaker'
+        verbose_name_plural = 'Speakers'
+
+    def __str__(self):
+        return self.name

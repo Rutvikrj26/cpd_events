@@ -35,6 +35,20 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const isActive = (path: string) => location.pathname === path;
   const isActivePrefix = (prefix: string) => location.pathname.startsWith(prefix);
 
+  // Lock body scroll when mobile menu is open
+  React.useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isMobileMenuOpen]);
+
   return (
     <div className="min-h-screen flex flex-col bg-background font-sans antialiased">
       {/* Navigation */}
@@ -167,7 +181,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                         Log in
                       </Button>
                     </Link>
-                    <Link to="/signup">
+                    <Link to="/pricing">
                       <Button size="sm" className="font-medium shadow-sm hover:shadow-md transition-all duration-200 glow-primary">
                         Get Started
                         <ArrowRight className="ml-1 h-4 w-4" />
@@ -180,8 +194,10 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             {/* Mobile Menu Button */}
             <button
-              className="flex items-center justify-center h-10 w-10 rounded-lg text-muted-foreground md:hidden hover:bg-muted hover:text-foreground transition-colors"
+              className="flex items-center justify-center h-12 w-12 rounded-lg text-muted-foreground md:hidden hover:bg-muted hover:text-foreground transition-colors"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={isMobileMenuOpen}
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
@@ -241,7 +257,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     <Link to="/login" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
                       <Button variant="outline" className="w-full justify-center h-11">Log in</Button>
                     </Link>
-                    <Link to="/signup" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
+                    <Link to="/pricing" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
                       <Button className="w-full justify-center h-11">Get Started</Button>
                     </Link>
                   </>
@@ -311,9 +327,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             <div>
               <h3 className="text-sm font-semibold text-foreground mb-4">Legal</h3>
               <ul className="space-y-3">
-                <li><Link to="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy Policy</Link></li>
-                <li><Link to="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Terms of Service</Link></li>
-                <li><Link to="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Cookie Policy</Link></li>
+                <li><Link to="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy Policy</Link></li>
+                <li><Link to="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Terms of Service</Link></li>
+                <li><Link to="/cookies" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Cookie Policy</Link></li>
               </ul>
             </div>
           </div>
@@ -322,16 +338,16 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="mt-12 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} Accredit. All rights reserved.</p>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <Link to="#" className="hover:text-foreground transition-colors">Privacy</Link>
+              <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
               <span>·</span>
-              <Link to="#" className="hover:text-foreground transition-colors">Terms</Link>
+              <Link to="/terms" className="hover:text-foreground transition-colors">Terms</Link>
               <span>·</span>
-              <Link to="#" className="hover:text-foreground transition-colors">Cookies</Link>
+              <Link to="/cookies" className="hover:text-foreground transition-colors">Cookies</Link>
             </div>
           </div>
         </div>
-      </footer>
-    </div>
+      </footer >
+    </div >
   );
 }
 

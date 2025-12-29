@@ -39,6 +39,8 @@ LOCAL_APPS = [
     'billing',
     'learning',
     'organizations',
+    'feedback',
+    'promo_codes',
 ]
 
 THIRD_PARTY_APPS = [
@@ -60,9 +62,14 @@ GCP_QUEUE_NAME = os.environ.get('GCP_QUEUE_NAME', 'default')
 GCP_SA_EMAIL = os.environ.get('GCP_SA_EMAIL', 'service-account@example.com')
 GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', '')  # Required for production
 
+# GCP Emulators (for local development)
+CLOUD_TASKS_EMULATOR_HOST = os.environ.get('CLOUD_TASKS_EMULATOR_HOST', '')
+GCS_EMULATOR_HOST = os.environ.get('GCS_EMULATOR_HOST', '')
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -203,3 +210,52 @@ ZOOM_CLIENT_ID = os.environ.get('ZOOM_CLIENT_ID')
 ZOOM_CLIENT_SECRET = os.environ.get('ZOOM_CLIENT_SECRET')
 ZOOM_REDIRECT_URI = os.environ.get('ZOOM_REDIRECT_URI')
 ZOOM_WEBHOOK_SECRET = os.environ.get('ZOOM_WEBHOOK_SECRET')
+
+# =============================================================================
+# Billing & Subscription Settings
+# =============================================================================
+# Stripe API Keys
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
+STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+
+# Stripe Price IDs for each plan (set in Stripe Dashboard)
+STRIPE_PRICE_IDS = {
+    'starter': os.environ.get('STRIPE_PRICE_STARTER'),
+    'starter_annual': os.environ.get('STRIPE_PRICE_STARTER_ANNUAL'),
+    'professional': os.environ.get('STRIPE_PRICE_PROFESSIONAL'),
+    'professional_annual': os.environ.get('STRIPE_PRICE_PROFESSIONAL_ANNUAL'),
+    'premium': os.environ.get('STRIPE_PRICE_PREMIUM'),
+    'premium_annual': os.environ.get('STRIPE_PRICE_PREMIUM_ANNUAL'),
+    'team': os.environ.get('STRIPE_PRICE_TEAM'),
+    'team_annual': os.environ.get('STRIPE_PRICE_TEAM_ANNUAL'),
+    'enterprise': os.environ.get('STRIPE_PRICE_ENTERPRISE'),
+    # Legacy plans (backward compatibility)
+    'organizer': os.environ.get('STRIPE_PRICE_PROFESSIONAL'),  # Maps to professional
+    'organization': os.environ.get('STRIPE_PRICE_TEAM'),  # Maps to team
+}
+
+# Trial Configuration
+BILLING_TRIAL_DAYS = int(os.environ.get('BILLING_TRIAL_DAYS', 14))  # 14-day trial (was 30)
+BILLING_GRACE_PERIOD_DAYS = int(os.environ.get('BILLING_GRACE_PERIOD_DAYS', 30))  # Block access after this
+
+# Plan Pricing (in cents, for display purposes - actual pricing in Stripe)
+BILLING_PRICES = {
+    'attendee': 0,  # Free
+    'starter': 4900,  # $49/month
+    'starter_annual': 4100,  # $41/month (billed annually at $492)
+    'professional': 9900,  # $99/month
+    'professional_annual': 8300,  # $83/month (billed annually at $996)
+    'premium': 19900,  # $199/month
+    'premium_annual': 16600,  # $166/month (billed annually at $1,992)
+    'team': 29900,  # $299/month (base with 5 seats)
+    'team_annual': 24900,  # $249/month (billed annually at $2,988)
+    'enterprise': 0,  # Custom pricing
+    # Legacy plans
+    'organizer': 9900,  # Maps to professional
+    'organization': 29900,  # Maps to team
+}
+
+# Default plan for new organizers
+BILLING_DEFAULT_PLAN = os.environ.get('BILLING_DEFAULT_PLAN', 'attendee')
+

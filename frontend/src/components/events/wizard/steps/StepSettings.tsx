@@ -1,18 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { Video } from 'lucide-react';
+import { Video, AlertTriangle, ExternalLink } from 'lucide-react';
 import { useEventWizard } from '../EventWizardContext';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
 
 export const StepSettings = () => {
     const { formData, updateFormData } = useEventWizard();
+    const { currentOrg } = useOrganization();
     const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
+
+    // Check if Stripe is connected for paid events
+    const stripeConnected = currentOrg?.stripe_charges_enabled || false;
+    const isPaidEvent = !formData.is_free;
 
     useEffect(() => {
         const fetchTemplates = async () => {
@@ -88,6 +97,24 @@ export const StepSettings = () => {
 
                 {!formData.is_free && (
                     <div className="pl-6 border-l-2 border-slate-100 ml-2 space-y-4">
+                        {/* Stripe Connect Warning */}
+                        {!stripeConnected && (
+                            <Alert variant="destructive" className="border-amber-300 bg-amber-50 text-amber-800">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertDescription className="flex items-center justify-between">
+                                    <span>
+                                        Connect your Stripe account to accept payments for this event.
+                                    </span>
+                                    <Link to={`/organizations/${currentOrg?.slug}/settings`}>
+                                        <Button size="sm" variant="outline" className="ml-4">
+                                            <ExternalLink className="h-3 w-3 mr-1" />
+                                            Setup Stripe
+                                        </Button>
+                                    </Link>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
                         <div className="grid grid-cols-2 gap-4 max-w-sm">
                             <div className="space-y-2">
                                 <Label>Price</Label>

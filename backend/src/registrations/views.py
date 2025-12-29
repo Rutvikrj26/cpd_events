@@ -253,6 +253,7 @@ class PublicRegistrationView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
     def create(self, request, event_uuid=None):
+        from decimal import Decimal
         from events.models import Event
 
         try:
@@ -290,6 +291,31 @@ class PublicRegistrationView(generics.CreateAPIView):
                     return self._add_to_waitlist(event, user, email, full_name, serializer.validated_data)
                 return error_response('Event is at capacity.', code='EVENT_FULL')
 
+        # Handle promo code validation
+        promo_code_str = serializer.validated_data.get('promo_code', '').strip()
+        validated_promo_code = None
+        discount_amount = Decimal('0.00')
+        final_price = event.price
+
+        if promo_code_str and not event.is_free:
+            from promo_codes.services import promo_code_service, PromoCodeError
+
+            try:
+                promo_code = promo_code_service.find_code(promo_code_str, event)
+                if not promo_code:
+                    return error_response('Invalid promo code.', code='INVALID_PROMO_CODE', status_code=status.HTTP_400_BAD_REQUEST)
+
+                # Validate the code
+                promo_code_service.validate_code(promo_code, event, email, user)
+
+                # Calculate discount
+                discount_amount = promo_code.calculate_discount(event.price)
+                final_price = max(Decimal('0.00'), event.price - discount_amount)
+                validated_promo_code = promo_code
+
+            except PromoCodeError as e:
+                return error_response(str(e), code='PROMO_CODE_ERROR', status_code=status.HTTP_400_BAD_REQUEST)
+
         # Create registration
         registration = Registration.objects.create(
             event=event,
@@ -298,47 +324,45 @@ class PublicRegistrationView(generics.CreateAPIView):
             full_name=full_name,
             professional_title=serializer.validated_data.get('professional_title', ''),
             organization_name=serializer.validated_data.get('organization_name', ''),
-            status='confirmed',  # Default to confirmed if free, update below if paid
+            status='confirmed',  # Default to confirmed
             allow_public_verification=serializer.validated_data.get('allow_public_verification', True),
             source=Registration.Source.SELF,
+            amount_paid=final_price,
         )
 
-        # Handle Payment if not free
+        # Apply promo code if validated
+        if validated_promo_code:
+            from promo_codes.services import promo_code_service
+            promo_code_service.apply_code(validated_promo_code, registration, event.price)
+
+        # Handle Payment if final price > 0
         client_secret = None
         payment_intent_id = None
-        
-        if not event.is_free:
+
+        if final_price > 0:
             from billing.services import stripe_payment_service
-            
-            # Set status to pending payment
-            registration.status = 'pending' # Or remain confirmed but payment_status is pending?
-            # Actually, if payment fails, they shouldn't be fully registered. 
-            # But 'confirmed' usually means "spot reserved".
-            # Let's keep status='confirmed' but payment_status='pending' if we want to hold the spot.
-            # OR status='pending' until paid. 
-            # Given `Registration.Status` doesn't strictly have `pending_payment` (it has `pending` approval), 
-            # let's use `status='confirmed'` for now to reserve spot, and use `payment_status`.
+
             registration.payment_status = Registration.PaymentStatus.PENDING
             registration.save()
 
             if stripe_payment_service.is_configured:
-                intent_data = stripe_payment_service.create_payment_intent(registration)
+                intent_data = stripe_payment_service.create_payment_intent(registration, amount_cents=int(final_price * 100))
                 if intent_data['success']:
                     client_secret = intent_data['client_secret']
                     payment_intent_id = intent_data['payment_intent_id']
-                    
+
                     registration.payment_intent_id = payment_intent_id
                     registration.save(update_fields=['payment_intent_id'])
                 else:
-                    # Log error but don't fail registration yet? Or fail?
-                    # Ideally fail if we can't accept payment.
-                    # But for now let's return error.
-                    registration.delete() # Rollback
+                    registration.delete()
                     return Response({'error': intent_data['error']}, status=status.HTTP_400_BAD_REQUEST)
             else:
-                 # If Stripe not configured but event is paid -> Error
-                 registration.delete()
-                 return Response({'error': 'Payment system not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                registration.delete()
+                return Response({'error': 'Payment system not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        elif not event.is_free:
+            # Event has a price but final_price is 0 (100% discount)
+            registration.payment_status = Registration.PaymentStatus.NA
+            registration.save(update_fields=['payment_status'])
 
         # Save Custom Field Responses
         custom_responses = serializer.validated_data.get('custom_field_responses', {})
@@ -373,7 +397,14 @@ class PublicRegistrationView(generics.CreateAPIView):
             'payment_status': registration.payment_status if hasattr(registration, 'payment_status') else 'na',
             'message': 'Successfully registered!',
         }
-        
+
+        # Add discount info if promo code was applied
+        if validated_promo_code:
+            response_data['promo_code'] = validated_promo_code.code
+            response_data['original_price'] = str(event.price)
+            response_data['discount_amount'] = str(discount_amount)
+            response_data['final_price'] = str(final_price)
+
         if client_secret:
             response_data['client_secret'] = client_secret
             response_data['message'] = 'Payment required to complete registration.'

@@ -52,7 +52,7 @@ export const Sidebar = () => {
         { routeKey: 'zoom', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', organizerOnly: true },
         { routeKey: 'organizations', to: '/organizations', icon: Building2, label: 'Organizations', organizerOnly: true },
         { routeKey: 'billing', to: '/billing', icon: CreditCard, label: 'Billing', organizerOnly: true },
-        { routeKey: 'profile', to: '/profile', icon: UserCircle, label: 'Profile' },
+        { routeKey: 'profile', to: '/settings', icon: UserCircle, label: 'Profile' },
     ];
 
     // Filter items based on role first, then optionally use manifest for fine-grained control
@@ -145,11 +145,8 @@ export const Sidebar = () => {
                 </div>
 
                 {/* Organization Switcher - Only for organizers */}
-                {isOrganizer && !isCollapsed && (
-                    <OrganizationSwitcher />
-                )}
-                {isOrganizer && isCollapsed && (
-                    <OrganizationSwitcher variant="compact" />
+                {isOrganizer && (
+                    <OrganizationSwitcher variant={isCollapsed ? "compact" : "default"} />
                 )}
             </div>
 
@@ -157,6 +154,7 @@ export const Sidebar = () => {
             <button
                 onClick={toggleSidebar}
                 className="absolute -right-3 top-10 bg-card border border-border text-muted-foreground hover:text-foreground rounded-full p-1 shadow-md hover:bg-accent transition-colors z-50"
+                aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
                 {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
             </button>

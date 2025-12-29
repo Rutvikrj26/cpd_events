@@ -9,9 +9,20 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { Building2, User } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 export const StepBasicInfo = () => {
-    const { formData, updateFormData } = useEventWizard();
+    const { formData, updateFormData, isEditMode } = useEventWizard();
+    const { organizations, currentOrg } = useOrganization();
+
+    // Auto-select current organization on mount (only for new events, not edits)
+    React.useEffect(() => {
+        if (!isEditMode && currentOrg && !formData.organization) {
+            updateFormData({ organization: currentOrg.uuid });
+        }
+    }, [currentOrg, formData.organization, updateFormData, isEditMode]);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -31,6 +42,65 @@ export const StepBasicInfo = () => {
                         className="text-lg py-6"
                     />
                 </div>
+
+                {/* Organization Selector */}
+                {organizations.length > 0 && (
+                    <div className="space-y-2">
+                        <Label>Create Event For</Label>
+                        <Select
+                            value={formData.organization || ''}
+                            onValueChange={(value) => updateFormData({ organization: value || undefined })}
+                        >
+                            <SelectTrigger className="h-11">
+                                <SelectValue placeholder="Personal Account">
+                                    {formData.organization ? (
+                                        <div className="flex items-center gap-2">
+                                            <Building2 className="h-4 w-4 text-primary" />
+                                            <span>
+                                                {organizations.find(org => org.uuid === formData.organization)?.name || 'Organization'}
+                                            </span>
+                                            <Badge variant="secondary" className="ml-auto text-xs">
+                                                Organization
+                                            </Badge>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <User className="h-4 w-4 text-muted-foreground" />
+                                            <span>Personal Account</span>
+                                        </div>
+                                    )}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="">
+                                    <div className="flex items-center gap-2">
+                                        <User className="h-4 w-4" />
+                                        <span>Personal Account</span>
+                                    </div>
+                                </SelectItem>
+                                {organizations.map((org) => (
+                                    <SelectItem key={org.uuid} value={org.uuid}>
+                                        <div className="flex items-center gap-2">
+                                            <Building2 className="h-4 w-4" />
+                                            <span>{org.name}</span>
+                                            {org.user_role && (
+                                                <Badge variant="outline" className="ml-auto text-xs capitalize">
+                                                    {org.user_role}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {formData.organization && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Building2 className="h-3 w-3" />
+                                Creating as {organizations.find(org => org.uuid === formData.organization)?.name}
+                            </p>
+                        )}
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">

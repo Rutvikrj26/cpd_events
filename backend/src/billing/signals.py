@@ -8,15 +8,36 @@ from django.dispatch import receiver
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
-def create_free_subscription(sender, instance, created, **kwargs):
-    """Create a free subscription when a new organizer is created."""
+def create_subscription_for_organizer(sender, instance, created, **kwargs):
+    """
+    Create a subscription when a new organizer is created.
+    
+    Plans:
+    - 'attendee': Creates ATTENDEE plan (no events, for attendees only)
+    - 'organizer': Creates ORGANIZER plan with ACTIVE status (paid plan)
+    - 'organization': Enterprise plan (custom setup)
+    """
     from billing.models import Subscription
 
-    if created and instance.account_type == 'organizer':
+    if not created:
+        return
+        
+    if instance.account_type != 'organizer':
+        # Attendees get ATTENDEE plan
         Subscription.objects.get_or_create(
             user=instance,
             defaults={
-                'plan': Subscription.Plan.FREE,
+                'plan': Subscription.Plan.ATTENDEE,
                 'status': Subscription.Status.ACTIVE,
             },
         )
+        return
+
+    # Organizers get ORGANIZER plan
+    Subscription.objects.get_or_create(
+        user=instance,
+        defaults={
+            'plan': Subscription.Plan.ORGANIZER,
+            'status': Subscription.Status.ACTIVE,
+        },
+    )

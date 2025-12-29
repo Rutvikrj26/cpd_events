@@ -247,7 +247,7 @@ function FeatureSection({
     return (
         <section id={id} className={`py-24 ${reversed ? 'bg-secondary/30' : 'bg-background'} scroll-mt-20`}>
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                <div className={`grid lg:grid-cols-2 gap-12 lg:gap-16 items-center ${reversed ? 'lg:flex-row-reverse' : ''}`}>
+                <div className={`grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center ${reversed ? 'lg:flex-row-reverse' : ''}`}>
                     <div className={reversed ? 'lg:order-2' : ''}>
                         <Badge variant="secondary" className="mb-4 px-4 py-1 text-sm font-medium">
                             {badge}

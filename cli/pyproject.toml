@@ -1,18 +1,26 @@
-[project]
-name = "cpd-cli"
+[tool.poetry]
+name = "accredit"
 version = "0.1.0"
-description = "CLI for CPD Events local dev"
-authors = [
-    {name = "Rutvik Solanki",email = "rutvikrj26@gmail.com"}
-]
+description = "CLI tool for CPD Events platform management"
+authors = ["Rutvik Solanki <rutvikrj26@gmail.com>"]
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = [
-    "typer (>=0.20.0,<0.21.0)",
-    "rich (>=14.2.0,<15.0.0)"
-]
+packages = [{include = "accredit"}]
 
+[tool.poetry.dependencies]
+python = "^3.10"
+click = "^8.1.0"
+rich = "^13.0.0"
+requests = "^2.31.0"
+python-dotenv = "^1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+black = "^24.0.0"
+ruff = "^0.3.0"
+
+[tool.poetry.scripts]
+accredit = "accredit.main:main"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
+requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"

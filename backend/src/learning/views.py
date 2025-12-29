@@ -476,17 +476,32 @@ class CourseViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         from organizations.models import Organization
-        
+        from rest_framework.exceptions import ValidationError, PermissionDenied
+
         org_slug = self.request.data.get('organization_slug')
         if not org_slug:
-            # Fallback or error
-            pass
-            
+            raise ValidationError("Courses must belong to an organization. Please provide 'organization_slug'.")
+
         try:
             org = Organization.objects.get(slug=org_slug)
+
+            # Check organization subscription limits
+            if hasattr(org, 'subscription'):
+                org_subscription = org.subscription
+                if not org_subscription.check_course_limit():
+                    limit = org_subscription.config.get('courses_per_month')
+                    raise PermissionDenied(
+                        f"Organization has reached its course limit of {limit} courses this month. "
+                        f"Please upgrade your plan to create more courses."
+                    )
+
+                # Increment organization course counter
+                org_subscription.increment_courses()
+
             serializer.save(organization=org, created_by=self.request.user)
+
         except Organization.DoesNotExist:
-            pass # Validation should handle this
+            raise ValidationError(f"Organization with slug '{org_slug}' not found")
 
     @action(detail=True, methods=['post'])
     def publish(self, request, uuid=None):

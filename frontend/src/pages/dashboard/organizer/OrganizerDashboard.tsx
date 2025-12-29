@@ -9,8 +9,10 @@ import {
   MoreHorizontal,
   Activity,
   Video,
-  Settings
+  Settings,
+  Building2
 } from "lucide-react";
+import { OnboardingChecklist } from "@/components/onboarding";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -40,7 +42,7 @@ export function OrganizerDashboard() {
       try {
         const [eventsData, zoomData] = await Promise.all([
           getEvents(),
-          getZoomStatus()
+          getZoomStatus(),
         ]);
         setEvents(eventsData);
         setZoomStatus(zoomData);
@@ -111,6 +113,9 @@ export function OrganizerDashboard() {
           </Button>
         }
       />
+
+      {/* Onboarding Checklist */}
+      <OnboardingChecklist />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -183,9 +188,17 @@ export function OrganizerDashboard() {
                       {recentEvents.map((event) => (
                         <tr key={event.uuid} className="group hover:bg-muted/30/50 transition-colors">
                           <td className="px-6 py-4 font-medium text-foreground">
-                            <Link to={`/organizer/events/${event.uuid}/manage`} className="hover:text-primary transition-colors block truncate max-w-[200px] sm:max-w-xs">
-                              {event.title}
-                            </Link>
+                            <div className="flex flex-col gap-1">
+                              <Link to={`/organizer/events/${event.uuid}/manage`} className="hover:text-primary transition-colors block truncate max-w-[200px] sm:max-w-xs">
+                                {event.title}
+                              </Link>
+                              {event.organization_info && (
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Building2 className="h-3 w-3" />
+                                  <span>{event.organization_info.name}</span>
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 text-slate-600">
                             {new Date(event.starts_at).toLocaleDateString()}

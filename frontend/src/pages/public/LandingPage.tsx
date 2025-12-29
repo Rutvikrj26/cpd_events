@@ -27,7 +27,7 @@ export function LandingPage() {
       {/* Hero Section */}
       <section className="relative overflow-hidden pt-16 md:pt-24 lg:pt-32 pb-20 lg:pb-32 bg-background">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
 
             {/* Text Content */}
             <div className="max-w-2xl text-center lg:text-left mx-auto lg:mx-0">
@@ -49,15 +49,10 @@ export function LandingPage() {
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
-                <Link to="/signup">
+                <Link to="/signup?role=organizer">
                   <Button size="lg" className="h-12 px-8 text-base shadow-lg hover:shadow-xl transition-all duration-300 glow-primary">
                     Start for Free
                     <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link to="/contact">
-                  <Button variant="outline" size="lg" className="h-12 px-8 text-base">
-                    Request Demo
                   </Button>
                 </Link>
               </div>
@@ -173,7 +168,7 @@ export function LandingPage() {
       {/* Event Formats Section */}
       <section className="py-24 bg-secondary/30">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
             <div>
               <Badge variant="secondary" className="mb-4 px-4 py-1 text-sm font-medium">Flexible Events</Badge>
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-6">
@@ -203,7 +198,7 @@ export function LandingPage() {
               </div>
 
               <div className="mt-8">
-                <Link to="/signup">
+                <Link to="/signup?role=organizer">
                   <Button className="glow-primary">
                     Create Your First Event
                     <ChevronRight className="ml-2 h-4 w-4" />
@@ -269,7 +264,7 @@ export function LandingPage() {
               Start hosting professional development events and issuing verifiable certificates today. Free to get started.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/signup">
+              <Link to="/signup?role=organizer">
                 <Button size="lg" className="bg-white text-primary hover:bg-white/90 min-w-[180px] h-14 text-lg font-semibold shadow-lg">
                   Get Started Free
                   <ArrowRight className="ml-2 h-5 w-5" />

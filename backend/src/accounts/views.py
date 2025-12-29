@@ -49,6 +49,11 @@ class SignupView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
+        # Link any guest registrations to this new user account
+        from registrations.models import Registration
+
+        Registration.link_registrations_for_user(user)
+
         return Response(
             {
                 'message': 'Account created successfully.',
@@ -434,6 +439,17 @@ class ManifestView(generics.GenericAPIView):
         from common.rbac import get_allowed_routes_for_user, get_features_for_user
 
         user = request.user
+        
+        data = {
+            'routes': get_allowed_routes_for_user(user),
+            'features': get_features_for_user(user),
+            'user': {
+                'account_type': getattr(user, 'account_type', 'attendee'),
+                'is_staff': user.is_staff,
+            }
+        }
+        
+        return Response(data)
 
 
 # =============================================================================

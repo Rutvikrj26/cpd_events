@@ -1,5 +1,5 @@
 import client from '../client';
-import { Registration, RegistrationCreateRequest } from './types';
+import { Registration, RegistrationCreateRequest, RegistrationResponse } from './types';
 
 // My Registrations (Attendee)
 export const getMyRegistrations = async (): Promise<Registration[]> => {
@@ -20,8 +20,9 @@ export const linkRegistrations = async (): Promise<{ linked_count: number; messa
 };
 
 // Public Registration
-export const registerForEvent = async (eventUuid: string, data: RegistrationCreateRequest): Promise<Registration> => {
+// Returns RegistrationResponse which may include client_secret for paid events
+export const registerForEvent = async (eventUuid: string, data: RegistrationCreateRequest): Promise<RegistrationResponse> => {
     // path('public/events/<uuid:event_uuid>/register/', ...)
-    const response = await client.post<Registration>(`/public/events/${eventUuid}/register/`, data);
+    const response = await client.post<RegistrationResponse>(`/public/events/${eventUuid}/register/`, data);
     return response.data;
 };

@@ -1,0 +1,42 @@
+# GCP Project Configuration
+project_id  = "your-project-id"
+region      = "us-central1"
+environment = "dev"
+app_name    = "cpd-events"
+
+# Database Configuration
+db_tier              = "db-f1-micro"  # Smallest for dev
+db_name              = "cpd_events"
+db_user              = "cpd_user"
+db_disk_size         = 10
+db_high_availability = false  # Disabled for dev
+db_max_connections   = "100"
+
+# Networking
+vpc_cidr           = "10.0.0.0/24"
+vpc_connector_cidr = "10.8.0.0/28"
+
+# Cloud Run Configuration
+backend_image        = "gcr.io/your-project-id/cpd-backend:latest"
+cloud_run_cpu        = "1"
+cloud_run_memory     = "512Mi"
+cloud_run_concurrency = 80
+cloud_run_timeout    = 300
+
+# Auto-scaling
+min_instances = 0  # Scale to zero for dev
+max_instances = 10
+
+# Cloud Tasks
+task_queue_max_concurrent = 100
+task_queue_max_rate       = 10
+
+# CORS (for development)
+cors_origins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "https://dev.yourdomain.com"
+]
+
+# Note: Frontend deployment is managed by CLI (accredit cloud frontend deploy)
+# Configure frontend via: accredit setup init --firebase-project-id YOUR_PROJECT

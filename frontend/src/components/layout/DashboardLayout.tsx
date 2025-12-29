@@ -1,6 +1,10 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
+import { TrialStatusBanner } from '@/components/billing/TrialStatusBanner';
+import { useAuth } from '@/contexts/AuthContext';
+import { getSubscription } from '@/api/billing';
+import { Subscription } from '@/api/billing/types';
 
 interface DashboardLayoutProps {
   children?: ReactNode;
@@ -13,10 +17,36 @@ interface DashboardLayoutProps {
 }
 
 export const DashboardLayout = ({ children, role }: DashboardLayoutProps) => {
+  const { user } = useAuth();
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+
+  const isOrganizer = user?.account_type === 'organizer';
+
+  useEffect(() => {
+    if (isOrganizer) {
+      getSubscription()
+        .then(setSubscription)
+        .catch((error) => {
+          setSubscription(null);
+          // Silent fail is acceptable - banner just won't show
+          // User can still access billing page directly if needed
+          if (process.env.NODE_ENV === "development") {
+            console.warn("Failed to fetch subscription:", error);
+          }
+        });
+    }
+  }, [isOrganizer]);
+
   return (
     <div className="flex bg-muted/30 min-h-screen">
       <Sidebar />
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+        {/* Global trial/subscription banner for organizers */}
+        {isOrganizer && subscription && (
+          <div className="mb-6">
+            <TrialStatusBanner subscription={subscription} />
+          </div>
+        )}
         {children || <Outlet />}
       </main>
     </div>

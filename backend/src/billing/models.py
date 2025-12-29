@@ -7,6 +7,8 @@ Models:
 - PaymentMethod: Stored payment methods
 """
 
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -22,10 +24,13 @@ class Subscription(BaseModel):
     """
 
     class Plan(models.TextChoices):
-        FREE = 'free', 'Free'
-        STARTER = 'starter', 'Starter'
+        ATTENDEE = 'attendee', 'Attendee'
         PROFESSIONAL = 'professional', 'Professional'
-        ENTERPRISE = 'enterprise', 'Enterprise'
+        ORGANIZATION = 'organization', 'Organization'
+        # Legacy plans (kept for backward compatibility - auto-migrate to new tiers)
+        STARTER = 'starter', 'Starter'  # Maps to Professional
+        PREMIUM = 'premium', 'Premium'  # Maps to Organization
+        ORGANIZER = 'organizer', 'Organizer'  # Maps to Professional
 
     class Status(models.TextChoices):
         TRIALING = 'trialing', 'Trialing'
@@ -40,7 +45,7 @@ class Subscription(BaseModel):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='subscription')
 
     # Plan details
-    plan = models.CharField(max_length=20, choices=Plan.choices, default=Plan.FREE)
+    plan = models.CharField(max_length=20, choices=Plan.choices, default=Plan.ATTENDEE)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
 
     # Stripe integration
@@ -78,22 +83,39 @@ class Subscription(BaseModel):
 
     # Plan limits configuration
     PLAN_LIMITS = {
-        Plan.FREE: {
-            'events_per_month': 2,
-            'certificates_per_month': 100,
-            'max_attendees_per_event': 50,
-        },
-        Plan.STARTER: {
-            'events_per_month': 10,
-            'certificates_per_month': 500,
-            'max_attendees_per_event': 200,
+        Plan.ATTENDEE: {
+            'events_per_month': 0,  # Cannot create events
+            'certificates_per_month': 0,
+            'max_attendees_per_event': 0,
         },
         Plan.PROFESSIONAL: {
-            'events_per_month': 50,
-            'certificates_per_month': 5000,
-            'max_attendees_per_event': 1000,
+            'events_per_month': 30,  # Generous limit
+            'certificates_per_month': 500,  # Generous limit
+            'max_attendees_per_event': 500,
         },
-        Plan.ENTERPRISE: {
+        Plan.ORGANIZATION: {
+            'events_per_month': None,  # Unlimited
+            'certificates_per_month': None,  # Unlimited
+            'max_attendees_per_event': 2000,
+        },
+        # Legacy plan mappings (automatically converted)
+        Plan.STARTER: {  # Maps to Professional
+            'events_per_month': 30,
+            'certificates_per_month': 500,
+            'max_attendees_per_event': 500,
+        },
+        Plan.PREMIUM: {  # Maps to Organization
+            'events_per_month': None,
+            'certificates_per_month': None,
+            'max_attendees_per_event': 2000,
+        },
+        # Legacy plans (backward compatibility)
+        Plan.ORGANIZER: {
+            'events_per_month': 30,  # Same as Professional
+            'certificates_per_month': 500,
+            'max_attendees_per_event': 500,
+        },
+        Plan.ORGANIZATION: {
             'events_per_month': None,  # Unlimited
             'certificates_per_month': None,  # Unlimited
             'max_attendees_per_event': None,  # Unlimited
@@ -116,8 +138,22 @@ class Subscription(BaseModel):
 
     @property
     def limits(self):
-        """Get limits for current plan."""
-        return self.PLAN_LIMITS.get(self.plan, self.PLAN_LIMITS[self.Plan.FREE])
+        """
+        Get limits for current plan.
+        Reads from StripeProduct if available (database-driven),
+        otherwise falls back to PLAN_LIMITS (code fallback).
+        """
+        # Try to get limits from StripeProduct (database - source of truth)
+        try:
+            product = StripeProduct.objects.get(plan=self.plan, is_active=True)
+            return {
+                'events_per_month': product.events_per_month,
+                'certificates_per_month': product.certificates_per_month,
+                'max_attendees_per_event': product.max_attendees_per_event,
+            }
+        except StripeProduct.DoesNotExist:
+            # Fallback to hardcoded limits (backward compatibility)
+            return self.PLAN_LIMITS.get(self.plan, self.PLAN_LIMITS[self.Plan.ATTENDEE])
 
     def check_event_limit(self):
         """Check if user can create more events this period."""
@@ -183,7 +219,7 @@ class Subscription(BaseModel):
     def create_for_user(cls, user, plan=None):
         """Create a new subscription for a user."""
         if plan is None:
-            plan = cls.Plan.FREE
+            plan = cls.Plan.ATTENDEE
 
         subscription, created = cls.objects.get_or_create(
             user=user,
@@ -194,6 +230,106 @@ class Subscription(BaseModel):
             },
         )
         return subscription
+
+    @property
+    def is_trial_expired(self):
+        """Check if trial period has expired."""
+        if self.status != self.Status.TRIALING:
+            return False
+        if not self.trial_ends_at:
+            return False
+        return timezone.now() >= self.trial_ends_at
+
+    @property
+    def days_until_trial_ends(self):
+        """Get days remaining in trial. Returns None if not trialing."""
+        if not self.is_trialing:
+            return None
+        if not self.trial_ends_at:
+            return None
+        delta = self.trial_ends_at - timezone.now()
+        return max(0, delta.days)
+
+    @property
+    def is_in_grace_period(self):
+        """
+        Check if subscription is in grace period after trial.
+        Grace period = trial_ends_at + BILLING_GRACE_PERIOD_DAYS
+        During grace period: can't create events, but can still access dashboard
+        After grace period: complete access block
+        """
+        from django.conf import settings
+        
+        if self.status not in [self.Status.TRIALING, self.Status.PAST_DUE]:
+            return False
+        if not self.trial_ends_at:
+            return False
+            
+        grace_days = getattr(settings, 'BILLING_GRACE_PERIOD_DAYS', 30)
+        grace_end = self.trial_ends_at + timedelta(days=grace_days)
+        now = timezone.now()
+        
+        return self.trial_ends_at <= now < grace_end
+
+    @property
+    def is_access_blocked(self):
+        """
+        Check if access should be completely blocked.
+        This happens after trial + grace period with no payment.
+        """
+        from django.conf import settings
+        
+        # Active/paid subscriptions are never blocked
+        if self.status == self.Status.ACTIVE and not self.is_trial_expired:
+            return False
+        if self.stripe_subscription_id:
+            # Has a Stripe subscription - let Stripe status determine access
+            return self.status in [self.Status.CANCELED, self.Status.UNPAID]
+            
+        # For trials without payment
+        if not self.trial_ends_at:
+            return False
+            
+        grace_days = getattr(settings, 'BILLING_GRACE_PERIOD_DAYS', 30)
+        grace_end = self.trial_ends_at + timedelta(days=grace_days)
+        
+        return timezone.now() >= grace_end
+
+    @property
+    def can_create_events(self):
+        """
+        Check if user can create new events.
+        Returns False if:
+        - Trial expired (even during grace period)
+        - Access blocked
+        - Event limit reached (for free plans)
+        """
+        # Access completely blocked
+        if self.is_access_blocked:
+            return False
+            
+        # Trial expired - block event creation but allow dashboard access
+        if self.is_trial_expired:
+            return False
+            
+        # Check event limits for active subscriptions
+        if not self.check_event_limit():
+            return False
+            
+        return True
+
+    @property
+    def subscription_status_display(self):
+        """Get user-friendly status for frontend display."""
+        if self.is_access_blocked:
+            return 'blocked'
+        if self.is_in_grace_period:
+            return 'grace_period'
+        if self.is_trial_expired:
+            return 'trial_expired'
+        if self.is_trialing:
+            return 'trialing'
+        return self.status
 
 
 class Invoice(BaseModel):
@@ -309,3 +445,276 @@ class PaymentMethod(BaseModel):
 
         self.is_default = True
         self.save(update_fields=['is_default', 'updated_at'])
+
+
+class StripeProduct(BaseModel):
+    """
+    Represents a Stripe Product (e.g., "CPD Events - Professional").
+
+    Manages pricing products with auto-sync to Stripe.
+    This allows managing all pricing from Django Admin instead of manually in Stripe Dashboard.
+    """
+
+    name = models.CharField(
+        max_length=255,
+        help_text="Product name (shown to customers)"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Product description"
+    )
+    stripe_product_id = models.CharField(
+        max_length=255,
+        unique=True,
+        blank=True,
+        null=True,
+        help_text="Stripe product ID (prod_...)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether product is active"
+    )
+
+    # Plan association
+    plan = models.CharField(
+        max_length=50,
+        choices=Subscription.Plan.choices,
+        unique=True,
+        help_text="Which subscription plan this product represents"
+    )
+
+    # Trial period configuration (overrides global setting)
+    trial_period_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Trial period in days (null = use global default)"
+    )
+
+    # Contact Sales flag - hides pricing and shows "Contact Sales" button
+    show_contact_sales = models.BooleanField(
+        default=False,
+        help_text="If true, hides pricing and shows 'Contact Sales' button instead"
+    )
+
+    # Feature limits (null = unlimited, syncs with PLAN_LIMITS)
+    events_per_month = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Max events per month (null = unlimited)"
+    )
+    certificates_per_month = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Max certificates per month (null = unlimited)"
+    )
+    max_attendees_per_event = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Max attendees per event (null = unlimited)"
+    )
+
+    class Meta:
+        db_table = 'stripe_products'
+        ordering = ['plan']
+        verbose_name = 'Stripe Product'
+        verbose_name_plural = 'Stripe Products'
+
+    def __str__(self):
+        return f"{self.name} ({self.get_plan_display()})"
+
+    def sync_to_stripe(self):
+        """Create or update product in Stripe."""
+        from .services import stripe_service
+
+        if not stripe_service.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        try:
+            if self.stripe_product_id:
+                # Update existing product
+                product = stripe_service.stripe.Product.modify(
+                    self.stripe_product_id,
+                    name=self.name,
+                    description=self.description,
+                    active=self.is_active,
+                )
+            else:
+                # Create new product
+                product = stripe_service.stripe.Product.create(
+                    name=self.name,
+                    description=self.description,
+                    active=self.is_active,
+                )
+                self.stripe_product_id = product.id
+                self.save(update_fields=['stripe_product_id', 'updated_at'])
+
+            return {'success': True, 'product': product}
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to sync product to Stripe: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def get_trial_days(self):
+        """Get trial period days for this product."""
+        if self.trial_period_days is not None:
+            return self.trial_period_days
+        # Fallback to global setting
+        return getattr(settings, 'BILLING_TRIAL_DAYS', 14)
+
+    def get_feature_limits(self):
+        """Get feature limits for this product."""
+        return {
+            'events_per_month': self.events_per_month,
+            'certificates_per_month': self.certificates_per_month,
+            'max_attendees_per_event': self.max_attendees_per_event,
+        }
+
+    def get_features_list(self):
+        """
+        Generate a human-readable features list for this product.
+        Returns a list of strings describing the features.
+        """
+        features = []
+
+        # Events per month
+        if self.events_per_month is None:
+            features.append("Unlimited events")
+        elif self.events_per_month > 0:
+            features.append(f"{self.events_per_month} events per month")
+
+        # Attendees per event
+        if self.max_attendees_per_event is None:
+            features.append("Unlimited attendees per event")
+        elif self.max_attendees_per_event > 0:
+            features.append(f"{self.max_attendees_per_event:,} attendees per event")
+
+        # Certificates per month
+        if self.certificates_per_month is None:
+            features.append("Unlimited certificates")
+        elif self.certificates_per_month > 0:
+            features.append(f"{self.certificates_per_month:,} certificates/month")
+
+        # Add plan-specific features
+        if self.plan == 'professional':
+            features.extend([
+                "Zoom integration",
+                "Advanced analytics",
+                "Custom certificate templates",
+                "Priority email support",
+            ])
+        elif self.plan == 'organization':
+            features.extend([
+                "Multi-user team access",
+                "Advanced analytics & reporting",
+                "White-label options",
+                "API access",
+                "Priority support",
+                "Team collaboration",
+                "Shared templates",
+                "Dedicated account manager",
+            ])
+
+        return features
+
+
+class StripePrice(BaseModel):
+    """
+    Represents a Stripe Price (e.g., "$99/month" for Professional plan).
+
+    Each product can have multiple prices (monthly, annual).
+    Manages pricing with auto-sync to Stripe.
+    """
+
+    class BillingInterval(models.TextChoices):
+        MONTH = 'month', 'Monthly'
+        YEAR = 'year', 'Annual'
+
+    product = models.ForeignKey(
+        StripeProduct,
+        on_delete=models.CASCADE,
+        related_name='prices'
+    )
+
+    # Pricing details
+    amount_cents = models.PositiveIntegerField(
+        help_text="Price in cents (e.g., 9900 = $99.00)"
+    )
+    currency = models.CharField(
+        max_length=3,
+        default='usd'
+    )
+    billing_interval = models.CharField(
+        max_length=10,
+        choices=BillingInterval.choices,
+        default=BillingInterval.MONTH
+    )
+
+    # Stripe sync
+    stripe_price_id = models.CharField(
+        max_length=255,
+        unique=True,
+        blank=True,
+        null=True,
+        help_text="Stripe price ID (price_...)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether price is available for new subscriptions"
+    )
+
+    class Meta:
+        db_table = 'stripe_prices'
+        ordering = ['product', 'billing_interval']
+        unique_together = [['product', 'billing_interval']]
+        verbose_name = 'Stripe Price'
+        verbose_name_plural = 'Stripe Prices'
+
+    def __str__(self):
+        return f"${self.amount_display}/{self.billing_interval} - {self.product.name}"
+
+    @property
+    def amount_display(self):
+        """Format amount as dollars."""
+        return f"{self.amount_cents / 100:.2f}"
+
+    def sync_to_stripe(self):
+        """Create or update price in Stripe."""
+        from .services import stripe_service
+
+        if not stripe_service.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        if not self.product.stripe_product_id:
+            # Product must exist in Stripe first
+            result = self.product.sync_to_stripe()
+            if not result['success']:
+                return result
+
+        try:
+            if self.stripe_price_id:
+                # Update existing price (Stripe only allows updating 'active' status)
+                price = stripe_service.stripe.Price.modify(
+                    self.stripe_price_id,
+                    active=self.is_active,
+                )
+            else:
+                # Create new price
+                price = stripe_service.stripe.Price.create(
+                    product=self.product.stripe_product_id,
+                    unit_amount=self.amount_cents,
+                    currency=self.currency,
+                    recurring={'interval': self.billing_interval},
+                    active=self.is_active,
+                )
+                self.stripe_price_id = price.id
+                self.save(update_fields=['stripe_price_id', 'updated_at'])
+
+            return {'success': True, 'price': price}
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to sync price to Stripe: {e}")
+            return {'success': False, 'error': str(e)}

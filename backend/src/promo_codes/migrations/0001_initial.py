@@ -1,0 +1,96 @@
+# Generated migration for promo_codes
+
+from decimal import Decimal
+from django.conf import settings
+from django.db import migrations, models
+import django.db.models.deletion
+import django.core.validators
+import uuid
+
+
+class Migration(migrations.Migration):
+
+    initial = True
+
+    dependencies = [
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+        ('organizations', '0001_initial'),
+        ('events', '0001_initial'),
+        ('registrations', '0001_initial'),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name='PromoCode',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('created_at', models.DateTimeField(auto_now_add=True, help_text='When this record was created')),
+                ('updated_at', models.DateTimeField(auto_now=True, help_text='When this record was last modified')),
+                ('uuid', models.UUIDField(db_index=True, default=uuid.uuid4, editable=False, help_text='Public identifier for external use', unique=True)),
+                ('code', models.CharField(db_index=True, help_text='The promo code string (case-insensitive)', max_length=50)),
+                ('description', models.CharField(blank=True, help_text='Internal description/notes', max_length=255)),
+                ('discount_type', models.CharField(choices=[('percentage', 'Percentage'), ('fixed_amount', 'Fixed Amount')], default='percentage', max_length=20)),
+                ('discount_value', models.DecimalField(decimal_places=2, help_text='Discount amount (percentage 0-100 or fixed amount in currency)', max_digits=10, validators=[django.core.validators.MinValueValidator(Decimal('0.01'))])),
+                ('max_discount_amount', models.DecimalField(blank=True, decimal_places=2, help_text="Max discount amount for percentage codes (e.g., '20% off up to $50')", max_digits=10, null=True)),
+                ('is_active', models.BooleanField(default=True, help_text='Whether code can be used')),
+                ('valid_from', models.DateTimeField(blank=True, help_text='When code becomes valid (null = immediately)', null=True)),
+                ('valid_until', models.DateTimeField(blank=True, help_text='When code expires (null = never)', null=True)),
+                ('max_uses', models.PositiveIntegerField(blank=True, help_text='Maximum total uses (null = unlimited)', null=True)),
+                ('max_uses_per_user', models.PositiveIntegerField(default=1, help_text='Max uses per user/email')),
+                ('current_uses', models.PositiveIntegerField(default=0, help_text='Current usage count (denormalized)')),
+                ('minimum_order_amount', models.DecimalField(decimal_places=2, default=Decimal('0.00'), help_text='Minimum ticket price to use this code', max_digits=10)),
+                ('first_time_only', models.BooleanField(default=False, help_text="Only for users who haven't registered for any event before")),
+                ('owner', models.ForeignKey(help_text='Organizer who created this code', on_delete=django.db.models.deletion.CASCADE, related_name='promo_codes', to=settings.AUTH_USER_MODEL)),
+                ('organization', models.ForeignKey(blank=True, help_text='Organization that owns this code', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='promo_codes', to='organizations.organization')),
+                ('events', models.ManyToManyField(blank=True, help_text='Specific events this code applies to (empty = all organizer events)', related_name='promo_codes', to='events.event')),
+            ],
+            options={
+                'verbose_name': 'Promo Code',
+                'verbose_name_plural': 'Promo Codes',
+                'db_table': 'promo_codes',
+                'ordering': ['-created_at'],
+            },
+        ),
+        migrations.CreateModel(
+            name='PromoCodeUsage',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('created_at', models.DateTimeField(auto_now_add=True, help_text='When this record was created')),
+                ('updated_at', models.DateTimeField(auto_now=True, help_text='When this record was last modified')),
+                ('uuid', models.UUIDField(db_index=True, default=uuid.uuid4, editable=False, help_text='Public identifier for external use', unique=True)),
+                ('user_email', models.EmailField(db_index=True, help_text='Email used for registration', max_length=254)),
+                ('original_price', models.DecimalField(decimal_places=2, max_digits=10)),
+                ('discount_amount', models.DecimalField(decimal_places=2, max_digits=10)),
+                ('final_price', models.DecimalField(decimal_places=2, max_digits=10)),
+                ('promo_code', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='usages', to='promo_codes.promocode')),
+                ('registration', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='promo_code_usages', to='registrations.registration')),
+                ('user', models.ForeignKey(blank=True, help_text='User account if registered', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='promo_code_usages', to=settings.AUTH_USER_MODEL)),
+            ],
+            options={
+                'verbose_name': 'Promo Code Usage',
+                'verbose_name_plural': 'Promo Code Usages',
+                'db_table': 'promo_code_usages',
+                'ordering': ['-created_at'],
+            },
+        ),
+        migrations.AddIndex(
+            model_name='promocode',
+            index=models.Index(fields=['owner', 'is_active'], name='promo_codes_owner_i_c2b5d3_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='promocode',
+            index=models.Index(fields=['code'], name='promo_codes_code_e5a7b1_idx'),
+        ),
+        migrations.AlterUniqueTogether(
+            name='promocode',
+            unique_together={('owner', 'code')},
+        ),
+        migrations.AddIndex(
+            model_name='promocodeusage',
+            index=models.Index(fields=['promo_code', 'user_email'], name='promo_code__promo_c_a1c2d3_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='promocodeusage',
+            index=models.Index(fields=['registration'], name='promo_code__registr_b2c3d4_idx'),
+        ),
+    ]

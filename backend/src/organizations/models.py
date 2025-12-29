@@ -332,22 +332,22 @@ class OrganizationSubscription(BaseModel):
             'max_attendees_per_event': 50,
         },
         Plan.TEAM: {
-            'included_seats': 3,
-            'seat_price_cents': 1500,  # $15/seat
-            'events_per_month': 20,
-            'courses_per_month': 5,
-            'max_attendees_per_event': 200,
+            'included_seats': 5,  # Updated from 3 to 5
+            'seat_price_cents': 4900,  # $49/seat (updated from $15)
+            'events_per_month': None,  # Unlimited
+            'courses_per_month': None,  # Unlimited
+            'max_attendees_per_event': None,  # Unlimited
         },
         Plan.BUSINESS: {
-            'included_seats': 10,
-            'seat_price_cents': 1200,  # $12/seat
-            'events_per_month': 100,
-            'courses_per_month': 25,
-            'max_attendees_per_event': 1000,
+            'included_seats': 15,  # Updated from 10 to 15
+            'seat_price_cents': 4500,  # $45/seat (updated from $12)
+            'events_per_month': None,  # Unlimited
+            'courses_per_month': None,  # Unlimited
+            'max_attendees_per_event': None,  # Unlimited
         },
         Plan.ENTERPRISE: {
             'included_seats': 50,
-            'seat_price_cents': 900,  # $9/seat
+            'seat_price_cents': 4000,  # $40/seat (updated from $9)
             'events_per_month': None,  # Unlimited
             'courses_per_month': None,  # Unlimited
             'max_attendees_per_event': None,  # Unlimited

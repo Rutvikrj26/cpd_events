@@ -236,6 +236,10 @@ class Registration(SoftDeleteModel):
 
         self.event.update_counts()
 
+        # TODO: Send email notification to attendee
+        # from common.emails import send_waitlist_promotion_email
+        # send_waitlist_promotion_email.delay(registration_id=self.id)
+
     def update_attendance_summary(self):
         """
         Recalculate attendance summary from AttendanceRecords and SessionAttendance.

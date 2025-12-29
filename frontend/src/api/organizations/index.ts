@@ -169,6 +169,30 @@ export const getStripeStatus = async (orgUuid: string): Promise<StripeStatusResp
 };
 
 // ============================================================================
+// Invitation Management
+// ============================================================================
+
+/**
+ * Accept an organization invitation
+ */
+export const acceptOrganizationInvitation = async (token: string): Promise<{ detail: string; organization: OrganizationListItem }> => {
+    const response = await client.post<{ detail: string; organization: OrganizationListItem }>(`${BASE_URL}/accept-invite/${token}/`);
+    return response.data;
+};
+
+// ============================================================================
+// Public Organization Profiles
+// ============================================================================
+
+/**
+ * Get public organization profile by slug (no authentication required).
+ */
+export const getPublicOrganizationProfile = async (slug: string): Promise<Organization> => {
+    const response = await client.get<Organization>(`${BASE_URL}/public/${slug}/`);
+    return response.data;
+};
+
+// ============================================================================
 // Re-export types
 // ============================================================================
 

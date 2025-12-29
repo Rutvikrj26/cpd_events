@@ -19,7 +19,7 @@ from common.utils import error_response
 from common.viewsets import SoftDeleteModelViewSet
 
 from . import serializers
-from .models import Event, EventCustomField
+from .models import Event, EventCustomField, Speaker
 
 # =============================================================================
 # Filters
@@ -96,7 +96,65 @@ class EventViewSet(SoftDeleteModelViewSet):
         return serializers.EventDetailSerializer
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        # Check if event is for an organization or individual
+        organization_uuid = self.request.data.get('organization')
+
+        if organization_uuid:
+            # Creating event for organization - check org subscription
+            from organizations.models import Organization
+            try:
+                organization = Organization.objects.get(uuid=organization_uuid)
+
+                # Check organization subscription limits
+                if hasattr(organization, 'subscription'):
+                    org_subscription = organization.subscription
+                    if not org_subscription.check_event_limit():
+                        from rest_framework.exceptions import PermissionDenied
+                        limit = org_subscription.config.get('events_per_month')
+                        raise PermissionDenied(
+                            f"Organization has reached its event limit of {limit} events this month. "
+                            f"Please upgrade your plan to create more events."
+                        )
+
+                    # Increment organization event counter
+                    org_subscription.increment_events()
+
+                # Save with organization
+                serializer.save(owner=self.request.user, organization=organization)
+
+            except Organization.DoesNotExist:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError("Organization not found")
+        else:
+            # Creating personal event - check individual subscription
+            user = self.request.user
+            subscription = getattr(user, 'subscription', None)
+
+            if subscription:
+                # Check if can create events (trial expired, access blocked, or limit reached)
+                if not subscription.can_create_events:
+                    if subscription.is_access_blocked:
+                        from rest_framework.exceptions import PermissionDenied
+                        raise PermissionDenied(
+                            "Your subscription has expired. Please upgrade to continue creating events."
+                        )
+                    elif subscription.is_trial_expired:
+                        from rest_framework.exceptions import PermissionDenied
+                        raise PermissionDenied(
+                            "Your trial has ended. Please upgrade to a paid plan to create new events."
+                        )
+                    elif not subscription.check_event_limit():
+                        from rest_framework.exceptions import PermissionDenied
+                        raise PermissionDenied(
+                            f"You've reached your plan's limit of {subscription.limits['events_per_month']} events this month. "
+                            "Please upgrade your plan to create more events."
+                        )
+
+                # Increment event counter
+                subscription.increment_events()
+
+            # Save without organization (personal event)
+            serializer.save(owner=self.request.user)
 
     @swagger_auto_schema(
         operation_summary="Publish event",
@@ -546,3 +604,22 @@ class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         session_attendance.save()
 
         return Response(serializers.SessionAttendanceSerializer(session_attendance).data)
+
+
+@roles('organizer', 'admin', route_name='speakers')
+class SpeakerViewSet(SoftDeleteModelViewSet):
+    """
+    CRUD for speakers.
+    """
+    permission_classes = [IsAuthenticated, IsOrganizer]
+    queryset = Speaker.objects.all()
+    serializer_class = serializers.SpeakerSerializer
+    search_fields = ['name', 'bio']
+    ordering_fields = ['name', 'created_at']
+    ordering = ['name']
+
+    def get_queryset(self):
+        return Speaker.objects.filter(owner=self.request.user, deleted_at__isnull=True)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)

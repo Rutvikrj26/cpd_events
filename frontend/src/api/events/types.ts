@@ -41,6 +41,11 @@ export interface Event {
     minimum_attendance_minutes?: number;
     minimum_attendance_percent?: number;
 
+    // Pricing
+    price?: number;
+    currency?: string;
+    is_free?: boolean;
+
     // Branding
     featured_image_url?: string;
 
@@ -50,12 +55,24 @@ export interface Event {
     // Sessions (for multi-session events)
     sessions?: EventSession[];
 
+    // Custom registration fields
+    custom_fields?: EventCustomField[];
+
     // Misc
     is_public: boolean;
     owner_name?: string; // List view
     organizer_name?: string; // Public list view
     owner?: { uuid: string; display_name: string }; // Detail view
     organizer?: { uuid: string; display_name: string; logo_url?: string }; // Public detail view
+
+    // Organization (if event belongs to an organization)
+    organization_info?: {
+        uuid: string;
+        name: string;
+        slug: string;
+        logo_url: string | null;
+    };
+
     created_at: string;
     updated_at: string;
 }
@@ -82,7 +99,8 @@ export interface EventCreateRequest {
     currency?: string;
     is_free?: boolean;
 
-
+    // Organization (optional - for creating events under an organization)
+    organization?: string; // UUID
 
     // CPD
     cpd_credit_value?: number;

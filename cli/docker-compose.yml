@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: cpd_postgres
+    environment:
+      POSTGRES_DB: cpd_events
+      POSTGRES_USER: cpd_user
+      POSTGRES_PASSWORD: cpd_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cpd_user -d cpd_events"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # GCP Cloud Tasks Emulator (for local development)
+  cloud-tasks-emulator:
+    image: ghcr.io/aertje/cloud-tasks-emulator:latest
+    container_name: cpd_cloud_tasks
+    command: -host 0.0.0.0 -port 8123 -queue "projects/dev-project/locations/us-central1/queues/default"
+    ports:
+      - "8123:8123"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # GCP Cloud Storage Emulator (for local development)
+  gcs-emulator:
+    image: fsouza/fake-gcs-server:latest
+    container_name: cpd_gcs_emulator
+    command: -scheme http -port 4443 -external-url http://localhost:4443
+    ports:
+      - "4443:4443"
+    volumes:
+      - gcs_data:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "4443"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Django Application
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: cpd_backend
+    command: python src/manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ../backend:/app
+      - backend_static:/app/staticfiles
+      - backend_media:/app/mediafiles
+    ports:
+      - "8000:8000"
+    environment:
+      # Django settings
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DJANGO_SECRET_KEY: dev-secret-key-change-in-production
+      DEBUG: "True"
+
+      # Database
+      DB_NAME: cpd_events
+      DB_USER: cpd_user
+      DB_PASSWORD: cpd_password
+      DB_HOST: db
+      DB_PORT: 5432
+
+      # Site URL
+      SITE_URL: http://localhost:8000
+
+      # GCP (local emulators)
+      GCP_PROJECT_ID: dev-project
+      GCP_LOCATION: us-central1
+      GCP_QUEUE_NAME: default
+      CLOUD_TASKS_EMULATOR_HOST: cloud-tasks-emulator:8123
+      GCS_EMULATOR_HOST: http://gcs-emulator:4443
+      GCS_BUCKET_NAME: cpd-events-local
+
+      # Email (console backend for dev)
+      EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
+      DEFAULT_FROM_EMAIL: info@accredit.store
+
+      # Stripe (add your test keys)
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-pk_test_placeholder}
+
+      # Zoom (add your credentials)
+      ZOOM_CLIENT_ID: ${ZOOM_CLIENT_ID:-}
+      ZOOM_CLIENT_SECRET: ${ZOOM_CLIENT_SECRET:-}
+      ZOOM_REDIRECT_URI: ${ZOOM_REDIRECT_URI:-http://localhost:8000/api/integrations/zoom/callback/}
+      ZOOM_WEBHOOK_SECRET: ${ZOOM_WEBHOOK_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      cloud-tasks-emulator:
+        condition: service_healthy
+      gcs-emulator:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+
+  # Frontend React Application (optional - if you want to dockerize frontend too)
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: cpd_frontend
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   ports:
+  #     - "5173:5173"
+  #   environment:
+  #     VITE_API_URL: http://localhost:8000
+  #   command: npm run dev -- --host
+  #   depends_on:
+  #     - backend
+
+volumes:
+  postgres_data:
+  gcs_data:
+  backend_static:
+  backend_media:

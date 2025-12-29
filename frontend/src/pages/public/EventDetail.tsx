@@ -10,7 +10,11 @@ import {
   CheckCircle,
   AlertCircle,
   Video,
-  Loader2
+  Loader2,
+  Building2,
+  Globe,
+  Mail,
+  ArrowRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/custom/StatusBadge";
-import { getPublicEvent } from "@/api/events";
+import { getPublicEvent, getPublicEvents } from "@/api/events";
 import { getMyRegistrations } from "@/api/registrations";
 import { Event } from "@/api/events/types";
 import { Registration } from "@/api/registrations/types";
@@ -33,6 +37,8 @@ export function EventDetail() {
   const [error, setError] = useState<string | null>(null);
   const [userRegistration, setUserRegistration] = useState<Registration | null>(null);
   const [checkingRegistration, setCheckingRegistration] = useState(false);
+  const [relatedEvents, setRelatedEvents] = useState<Event[]>([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
 
   // Derived state
   const isAlreadyRegistered = userRegistration !== null;
@@ -73,6 +79,31 @@ export function EventDetail() {
     }
     checkRegistration();
   }, [isAuthenticated, event]);
+
+  // Fetch related events from same organization
+  useEffect(() => {
+    async function fetchRelatedEvents() {
+      if (!event?.organization_info?.slug) return;
+
+      setLoadingRelated(true);
+      try {
+        const allEvents = await getPublicEvents();
+        // Filter for same organization, exclude current event
+        const orgEvents = allEvents
+          .filter(e =>
+            e.organization_info?.slug === event.organization_info?.slug &&
+            e.uuid !== event.uuid
+          )
+          .slice(0, 3); // Show up to 3 related events
+        setRelatedEvents(orgEvents);
+      } catch (e) {
+        console.error("Failed to fetch related events", e);
+      } finally {
+        setLoadingRelated(false);
+      }
+    }
+    fetchRelatedEvents();
+  }, [event]);
 
   if (loading) {
     return (
@@ -509,19 +540,53 @@ export function EventDetail() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Organizer</CardTitle>
+                <CardTitle className="text-base">
+                  {event.organization_info ? 'Organized By' : 'Organizer'}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
-                    {organizerName.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="font-medium text-foreground">{organizerName}</div>
-                    <div className="text-xs text-muted-foreground">Event Organizer</div>
-                  </div>
-                </div>
-                <Button variant="outline" className="w-full text-xs h-8">Contact Organizer</Button>
+                {event.organization_info ? (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded bg-primary/10 flex items-center justify-center text-primary font-bold">
+                        {event.organization_info.logo_url ? (
+                          <img
+                            src={event.organization_info.logo_url}
+                            alt={event.organization_info.name}
+                            className="h-full w-full object-cover rounded"
+                          />
+                        ) : (
+                          <Building2 className="h-5 w-5" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-foreground">{event.organization_info.name}</div>
+                        <div className="text-xs text-muted-foreground">Organization</div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Link to={`/organizations/${event.organization_info.slug}/public`}>
+                        <Button variant="outline" className="w-full text-xs h-8">
+                          <Building2 className="h-3 w-3 mr-1" />
+                          View Profile
+                        </Button>
+                      </Link>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
+                        {organizerName.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="font-medium text-foreground">{organizerName}</div>
+                        <div className="text-xs text-muted-foreground">Event Organizer</div>
+                      </div>
+                    </div>
+                    <Button variant="outline" className="w-full text-xs h-8">Contact Organizer</Button>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -593,6 +658,84 @@ export function EventDetail() {
             </Card>
           </div>
         </div>
+
+        {/* More from Organization */}
+        {event.organization_info && relatedEvents.length > 0 && (
+          <div className="mt-16">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-foreground">
+                  More from {event.organization_info.name}
+                </h2>
+                <p className="text-muted-foreground mt-1">
+                  Explore other events from this organization
+                </p>
+              </div>
+              <Link to={`/organizations/${event.organization_info.slug}/public`}>
+                <Button variant="outline">
+                  View All
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {relatedEvents.map((relatedEvent) => (
+                <Card key={relatedEvent.uuid} className="group hover:shadow-lg transition-shadow">
+                  <CardContent className="p-0">
+                    <div className="aspect-video bg-muted rounded-t-lg overflow-hidden">
+                      {relatedEvent.featured_image_url ? (
+                        <img
+                          src={relatedEvent.featured_image_url}
+                          alt={relatedEvent.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
+                          <Calendar className="h-16 w-16 text-primary/30" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        <span>
+                          {new Date(relatedEvent.starts_at).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </span>
+                      </div>
+                      <h3 className="font-semibold text-foreground line-clamp-2 group-hover:text-primary transition-colors">
+                        {relatedEvent.title}
+                      </h3>
+                      {relatedEvent.short_description && (
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {relatedEvent.short_description}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between pt-2">
+                        {relatedEvent.cpd_credits && Number(relatedEvent.cpd_credits) > 0 && (
+                          <Badge variant="outline" className="text-xs">
+                            <Award className="h-3 w-3 mr-1" />
+                            {relatedEvent.cpd_credits} CPD
+                          </Badge>
+                        )}
+                        <Link to={`/events/${relatedEvent.slug || relatedEvent.uuid}`} className="ml-auto">
+                          <Button variant="ghost" size="sm" className="text-xs">
+                            View Details
+                            <ArrowRight className="ml-1 h-3 w-3" />
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

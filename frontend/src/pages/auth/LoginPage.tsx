@@ -14,7 +14,7 @@ import {
   FormLabel,
   FormMessage
 } from "@/components/ui/form";
-import { Loader2 } from "lucide-react";
+import { Loader2, Video } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -162,10 +162,7 @@ export function LoginPage() {
             }
           }}
         >
-          {/* Zoom Icon Placeholder */}
-          <svg className="mr-2 h-4 w-4 text-[#2D8CFF]" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M7.108 8.04H2.433c-.768 0-1.391.685-1.391 1.531v9.09c0 .845.623 1.531 1.391 1.531H15.9c.768 0 1.391-.685 1.391-1.53v-2.028l5.96 4.39c.27.199.648.22.94.053.292-.167.472-.499.472-.87V8.041c0-.372-.18-.703-.472-.87-.292-.167-.67-.146-.94.053l-5.96 4.39V9.57c0-.845-.623-1.531-1.39-1.531z" />
-          </svg>
+          <Video className="mr-2 h-4 w-4" />
           Sign in with Zoom
         </Button>
       </div>

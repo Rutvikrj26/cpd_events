@@ -317,6 +317,8 @@ class MyCertificateSerializer(SoftDeleteModelSerializer):
     verification_url = serializers.SerializerMethodField()
     is_valid = serializers.SerializerMethodField()
     issued_at = serializers.DateTimeField(source='created_at', read_only=True)
+    feedback_required = serializers.SerializerMethodField()
+    feedback_submitted = serializers.SerializerMethodField()
 
     class Meta:
         model = Certificate
@@ -333,6 +335,8 @@ class MyCertificateSerializer(SoftDeleteModelSerializer):
             'verification_url',
             'view_count',
             'download_count',
+            'feedback_required',
+            'feedback_submitted',
         ]
         read_only_fields = fields
 
@@ -376,3 +380,20 @@ class MyCertificateSerializer(SoftDeleteModelSerializer):
     def get_is_valid(self, obj):
         # Certificate is valid unless explicitly revoked
         return obj.status != 'revoked'
+
+    def get_feedback_required(self, obj):
+        """Check if feedback is required for this certificate."""
+        if obj.registration:
+            return obj.registration.event.require_feedback_for_certificate
+        return False
+
+    def get_feedback_submitted(self, obj):
+        """Check if feedback has been submitted for this certificate."""
+        if not obj.registration:
+            return True  # No feedback needed if no registration
+
+        from feedback.models import EventFeedback
+        return EventFeedback.objects.filter(
+            event=obj.registration.event,
+            registration=obj.registration
+        ).exists()

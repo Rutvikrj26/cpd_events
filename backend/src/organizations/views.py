@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -130,11 +130,24 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         # Check seat availability for organizer roles
         if role in ['owner', 'admin', 'manager']:
-            if hasattr(organization, 'subscription') and not organization.subscription.can_add_organizer():
-                return Response(
-                    {'detail': 'No available organizer seats. Please upgrade your plan.'},
-                    status=status.HTTP_402_PAYMENT_REQUIRED,
-                )
+            if hasattr(organization, 'subscription'):
+                subscription = organization.subscription
+                if not subscription.can_add_organizer():
+                    return Response(
+                        {
+                            'error': {
+                                'code': 'SEAT_LIMIT_REACHED',
+                                'message': f'No available seats. Your {subscription.get_plan_display()} plan includes {subscription.total_seats} organizer seat(s). Upgrade your plan or assign a "Member" role (free).',
+                                'details': {
+                                    'available_seats': subscription.available_seats,
+                                    'total_seats': subscription.total_seats,
+                                    'active_seats': subscription.active_organizer_seats,
+                                    'current_plan': subscription.plan,
+                                }
+                            }
+                        },
+                        status=status.HTTP_402_PAYMENT_REQUIRED,
+                    )
 
         # Create pending membership
         membership = OrganizationMembership.objects.create(
@@ -149,7 +162,23 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         )
         membership.generate_invitation_token()
 
-        # TODO: Send invitation email
+        # Send invitation email
+        from integrations.services import email_service
+        from django.conf import settings
+
+        invitation_url = f"{settings.SITE_URL}/accept-invite/{membership.invitation_token}"
+
+        email_service.send_email(
+            template='organization_invitation',
+            recipient=email,
+            context={
+                'invitee_email': email,
+                'organization_name': organization.name,
+                'inviter_name': request.user.full_name or request.user.email,
+                'role': role,
+                'invitation_url': invitation_url,
+            }
+        )
 
         return Response(
             {
@@ -373,6 +402,20 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             'stripe_id': organization.stripe_connect_id,
             'details': status_info,
         })
+
+    @action(detail=False, methods=['get'], url_path='public/(?P<slug>[^/.]+)', permission_classes=[AllowAny])
+    def public_profile(self, request, slug=None):
+        """
+        Get public profile for an organization by slug.
+        No authentication required.
+        """
+        organization = get_object_or_404(
+            Organization.objects.filter(is_active=True),
+            slug=slug
+        )
+
+        serializer = OrganizationDetailSerializer(organization, context={'request': request})
+        return Response(serializer.data)
 
 
 class AcceptInvitationView(APIView):

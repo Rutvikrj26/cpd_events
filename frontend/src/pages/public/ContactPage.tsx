@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Mail, MapPin, Phone, Send, MessageSquare, Clock, ArrowRight } from "lucide-react";
+import { Mail, MapPin, Send, MessageSquare, Clock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -74,18 +74,12 @@ export function ContactPage() {
             {/* Contact Cards */}
             <section className="py-12 bg-secondary/30">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                    <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
                         <ContactCard
                             icon={Mail}
                             title="Email Us"
-                            description="support@accredit.com"
+                            description="info@accredit.store"
                             subtext="We'll respond within 24 hours"
-                        />
-                        <ContactCard
-                            icon={Phone}
-                            title="Call Us"
-                            description="+1 (555) 123-4567"
-                            subtext="Mon-Fri, 9am - 6pm EST"
                         />
                         <ContactCard
                             icon={Clock}
@@ -100,7 +94,7 @@ export function ContactPage() {
             {/* Contact Form Section */}
             <section className="py-16 bg-background">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="grid lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
                         {/* Left Column: Info */}
                         <div className="space-y-8">
                             <div>
@@ -137,17 +131,6 @@ export function ContactPage() {
                                 </div>
                             </div>
 
-                            <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl p-6 border border-primary/20">
-                                <h3 className="font-semibold text-foreground mb-2">
-                                    Looking for a demo?
-                                </h3>
-                                <p className="text-sm text-muted-foreground mb-4">
-                                    We'd love to show you around. Schedule a personalized demo with our team.
-                                </p>
-                                <Button className="glow-primary" size="sm">
-                                    Schedule Demo
-                                </Button>
-                            </div>
                         </div>
 
                         {/* Right Column: Form */}

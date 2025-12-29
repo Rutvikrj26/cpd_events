@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { ProtectedRoute } from "@/features/auth";
@@ -20,16 +21,21 @@ import { EventRegistration } from './pages/public/EventRegistration';
 import { PricingPage } from './pages/public/PricingPage';
 import { ContactPage } from './pages/public/ContactPage';
 import { NotFoundPage } from './pages/public/NotFoundPage';
+import { OrganizationPublicProfilePage } from './pages/public/OrganizationPublicProfilePage';
 import { PublicCourseDetailPage } from './pages/courses/PublicCourseDetailPage';
 import { FeaturesPage } from './pages/public/FeaturesPage';
 import { FAQPage } from './pages/public/FAQPage';
 import { AboutPage } from './pages/public/AboutPage';
+import { TermsPage } from './pages/public/TermsPage';
+import { PrivacyPage } from './pages/public/PrivacyPage';
+import { CookiePolicyPage } from './pages/public/CookiePolicyPage';
 
 // Auth Pages
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { SignupPage } from "@/pages/auth/SignupPage";
 import { AuthCallback } from "@/pages/auth/AuthCallback";
 import { ForgotPasswordPage } from "@/pages/auth/ForgotPasswordPage";
+import { ResetPasswordPage } from "@/pages/auth/ResetPasswordPage";
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { EventsPage } from './pages/events/EventsPage';
 import { EventCreatePage } from './pages/events/EventCreatePage';
@@ -61,18 +67,27 @@ import { ZoomManagement } from './pages/dashboard/organizer/ZoomManagement';
 import { OrganizerCertificatesPage } from './pages/dashboard/organizer/OrganizerCertificatesPage';
 
 // Organization Pages
-import { OrganizationsListPage, CreateOrganizationPage, OrganizationDashboard, TeamManagementPage, OrganizationSettingsPage, OrgCoursesPage, CreateCoursePage } from './pages/organizations';
+import { OrganizationsListPage, CreateOrganizationPage, OrganizationDashboard, TeamManagementPage, OrganizationSettingsPage, OrgCoursesPage, CreateCoursePage, AcceptInvitationPage, OrganizationBillingPage } from './pages/organizations';
 import { CourseManagementPage } from './pages/organizations/courses/CourseManagementPage';
+
+// Course Pages
+import { CourseCatalogPage } from './pages/courses';
 
 // Integrations
 import { ZoomCallbackPage } from './pages/integrations/ZoomCallbackPage';
 
+// Onboarding
+import { OnboardingWizard } from './pages/onboarding';
+
 import { ThemeProvider } from "@/components/theme-provider";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 export default function App() {
   return (
-    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
-      <BrowserRouter>
+    <ErrorBoundary>
+      <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+        <BrowserRouter>
         <ScrollToTop />
         <AuthProvider>
           <OrganizationProvider>
@@ -87,6 +102,18 @@ export default function App() {
               <Route path="/events/browse" element={
                 <PublicLayout>
                   <EventDiscovery />
+                </PublicLayout>
+              } />
+
+              <Route path="/courses" element={
+                <PublicLayout>
+                  <CourseCatalogPage />
+                </PublicLayout>
+              } />
+
+              <Route path="/organizations/:slug/public" element={
+                <PublicLayout>
+                  <OrganizationPublicProfilePage />
                 </PublicLayout>
               } />
 
@@ -139,6 +166,24 @@ export default function App() {
                 </PublicLayout>
               } />
 
+              <Route path="/terms" element={
+                <PublicLayout>
+                  <TermsPage />
+                </PublicLayout>
+              } />
+
+              <Route path="/privacy" element={
+                <PublicLayout>
+                  <PrivacyPage />
+                </PublicLayout>
+              } />
+
+              <Route path="/cookies" element={
+                <PublicLayout>
+                  <CookiePolicyPage />
+                </PublicLayout>
+              } />
+
               {/* Public Certificate Verification */}
               <Route path="/verify/:code" element={<CertificateVerify />} />
 
@@ -165,11 +210,29 @@ export default function App() {
 
               <Route path="/auth/callback" element={<AuthCallback />} />
 
+              {/* Accept Organization Invitation - Public but requires auth */}
+              <Route path="/accept-invite/:token" element={<AcceptInvitationPage />} />
+
+              <Route path="/forgot-password" element={
+                <AuthLayout>
+                  <ForgotPasswordPage />
+                </AuthLayout>
+              } />
+
+              <Route path="/reset-password" element={
+                <AuthLayout>
+                  <ResetPasswordPage />
+                </AuthLayout>
+              } />
+
               {/* Protected Routes - Unified Dashboard */}
               <Route element={<ProtectedRoute />}>
 
                 {/* Integrations */}
                 <Route path="/zoom/callback" element={<ZoomCallbackPage />} />
+
+                {/* Onboarding Wizard - Full Screen */}
+                <Route path="/onboarding" element={<OnboardingWizard />} />
 
                 {/* Main Dashboard Layout - all authenticated users */}
                 <Route element={<DashboardLayout />}>
@@ -216,6 +279,7 @@ export default function App() {
                   <Route path="/org/:slug" element={<OrganizationDashboard />} />
                   <Route path="/org/:slug/team" element={<TeamManagementPage />} />
                   <Route path="/org/:slug/settings" element={<OrganizationSettingsPage />} />
+                  <Route path="/org/:slug/billing" element={<OrganizationBillingPage />} />
                   <Route path="/org/:slug/courses" element={<OrgCoursesPage />} />
                   <Route path="/org/:slug/courses/new" element={<CreateCoursePage />} />
                   <Route path="/org/:slug/courses/:courseSlug" element={<CourseManagementPage />} />
@@ -241,8 +305,11 @@ export default function App() {
           </OrganizationProvider>
         </AuthProvider>
         <Toaster />
-      </BrowserRouter>
-    </ThemeProvider>
+        <SonnerToaster position="top-right" richColors closeButton />
+        <InstallPrompt />
+        </BrowserRouter>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

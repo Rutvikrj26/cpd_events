@@ -396,6 +396,18 @@ class CertificateService:
 
         try:
             event = registration.event
+            owner = event.owner
+
+            # Check subscription certificate limit
+            subscription = getattr(owner, 'subscription', None)
+            if subscription:
+                if not subscription.check_certificate_limit():
+                    limit = subscription.limits.get('certificates_per_month')
+                    return {
+                        'success': False,
+                        'error': f"Certificate limit reached ({limit} per month). Please upgrade your plan to issue more certificates.",
+                        'limit_exceeded': True,
+                    }
 
             # Use event's template if not specified
             if not template:
@@ -438,6 +450,10 @@ class CertificateService:
             registration.certificate_issued = True
             registration.certificate_issued_at = timezone.now()
             registration.save(update_fields=['certificate_issued', 'certificate_issued_at', 'updated_at'])
+
+            # Increment certificate counter in subscription
+            if subscription:
+                subscription.increment_certificates()
 
             return {'success': True, 'certificate': certificate}
 

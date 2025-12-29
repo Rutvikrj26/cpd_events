@@ -6,7 +6,7 @@ from rest_framework import permissions, status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Invoice, PaymentMethod, Subscription
+from .models import Invoice, PaymentMethod, Subscription, StripeProduct
 from .serializers import (
     BillingPortalSerializer,
     CheckoutSessionSerializer,
@@ -15,8 +15,10 @@ from .serializers import (
     PaymentMethodCreateSerializer,
     PaymentMethodSerializer,
     SubscriptionCreateSerializer,
+    SubscriptionUpdateSerializer,
     SubscriptionSerializer,
     SubscriptionStatusSerializer,
+    StripeProductPublicSerializer,
 )
 from .services import stripe_service
 from common.utils import error_response
@@ -38,7 +40,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
     def get_object(self):
         """Get or create subscription for current user."""
-        subscription, _ = Subscription.objects.get_or_create(user=self.request.user, defaults={'plan': Subscription.Plan.FREE})
+        subscription, _ = Subscription.objects.get_or_create(user=self.request.user, defaults={'plan': Subscription.Plan.ATTENDEE})
         return subscription
 
     def list(self, request, *args, **kwargs):
@@ -62,6 +64,37 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             return Response(SubscriptionSerializer(result['subscription']).data, status=status.HTTP_201_CREATED)
         else:
             return error_response(result.get('error', 'Failed to create subscription'), code='SUBSCRIPTION_FAILED')
+
+    @swagger_auto_schema(
+        operation_summary="Update subscription plan",
+        operation_description="Update existing subscription to a new plan. Upgrades are immediate with proration. Downgrades can be immediate or at period end.",
+        request_body=SubscriptionUpdateSerializer,
+        responses={200: SubscriptionSerializer, 400: '{"error": "..."}'},
+    )
+    def update(self, request, *args, **kwargs):
+        """Update subscription plan."""
+        subscription = self.get_object()
+        serializer = SubscriptionUpdateSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+
+        new_plan = serializer.validated_data['plan']
+        immediate = serializer.validated_data.get('immediate', True)
+
+        result = stripe_service.update_subscription(
+            subscription=subscription,
+            new_plan=new_plan,
+            immediate=immediate,
+        )
+
+        if result['success']:
+            subscription.refresh_from_db()
+            return Response(SubscriptionSerializer(subscription).data)
+        else:
+            return error_response(result.get('error', 'Failed to update subscription'), code='UPDATE_FAILED')
+
+    def partial_update(self, request, *args, **kwargs):
+        """Same as update for subscription."""
+        return self.update(request, *args, **kwargs)
 
     @swagger_auto_schema(
         operation_summary="Subscription status",
@@ -241,3 +274,65 @@ class BillingPortalView(views.APIView):
             return Response({'url': result['url']})
         else:
             return error_response(result.get('error', 'Failed to create portal session'), code='PORTAL_FAILED')
+
+
+class SetupIntentView(views.APIView):
+    """
+    Create Stripe SetupIntent for collecting payment method via embedded Elements.
+
+    POST /billing/setup-intent/
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        result = stripe_service.create_setup_intent(user=request.user)
+
+        if result['success']:
+            return Response({
+                'client_secret': result['client_secret'],
+                'customer_id': result['customer_id'],
+                'trial_ends_at': result.get('trial_ends_at'),
+            })
+        else:
+            return error_response(result.get('error', 'Failed to create setup intent'), code='SETUP_INTENT_FAILED')
+
+
+class PublicPricingView(views.APIView):
+    """
+    Public API to fetch current pricing from database.
+
+    GET /api/public/pricing/
+
+    Returns all active products with their prices configured in Django Admin.
+    No authentication required - this is for displaying pricing on public pages.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    @swagger_auto_schema(
+        operation_summary="Get current pricing",
+        operation_description="Fetches all active pricing products and prices from database (configured via Django Admin)",
+        responses={200: StripeProductPublicSerializer(many=True)},
+    )
+    def get(self, request):
+        """Get all active pricing products."""
+        from django.db.models import Case, When, IntegerField
+
+        # Only return active products, ordered by price (low to high)
+        # Custom ordering: professional (lower price) first, then organization
+        # Exclude 'attendee' (free tier) and legacy plans
+        products = StripeProduct.objects.filter(
+            is_active=True,
+            plan__in=['professional', 'organization']
+        ).prefetch_related('prices').annotate(
+            plan_order=Case(
+                When(plan='professional', then=1),
+                When(plan='organization', then=2),
+                default=3,
+                output_field=IntegerField(),
+            )
+        ).order_by('plan_order')
+
+        serializer = StripeProductPublicSerializer(products, many=True)
+        return Response(serializer.data)

@@ -49,6 +49,8 @@ const ROLE_HIERARCHY: Record<OrganizationRole, number> = {
     member: 1,
 };
 
+const LOCAL_STORAGE_KEY = 'current_org_slug';
+
 export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
     const { user, isAuthenticated } = useAuth();
 
@@ -85,6 +87,15 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [isAuthenticated, user, refreshOrganizations]);
 
+    // Persist current org to localStorage
+    useEffect(() => {
+        if (currentOrg) {
+            localStorage.setItem(LOCAL_STORAGE_KEY, currentOrg.slug);
+        } else {
+            localStorage.removeItem(LOCAL_STORAGE_KEY);
+        }
+    }, [currentOrg]);
+
     // Select org by slug (e.g., from URL)
     const selectOrgBySlug = useCallback(async (slug: string) => {
         // First check if in quick list
@@ -103,6 +114,22 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
             setError('Organization not found');
         }
     }, [organizations]);
+
+    // Restore org from localStorage on mount
+    useEffect(() => {
+        if (organizations.length > 0) {
+            const savedSlug = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (savedSlug && !currentOrg) {
+                // Try to restore the saved organization
+                selectOrgBySlug(savedSlug).catch(() => {
+                    // If failed, clear the stale localStorage value
+                    localStorage.removeItem(LOCAL_STORAGE_KEY);
+                });
+            }
+        }
+    }, [organizations, currentOrg, selectOrgBySlug]);
+
+
 
     // Clear current org (back to personal account)
     const clearCurrentOrg = useCallback(() => {

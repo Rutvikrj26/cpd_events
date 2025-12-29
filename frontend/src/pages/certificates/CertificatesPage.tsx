@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Award, Download, Eye, Share2, Check, ShieldCheck, Search } from 'lucide-react';
+import { Award, Download, Eye, Share2, Check, ShieldCheck, Search, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Link } from 'react-router-dom';
-import { getMyCertificates } from '@/api/certificates';
+import { Link, useNavigate } from 'react-router-dom';
+import { getMyCertificates, downloadCertificate } from '@/api/certificates';
 import { Certificate } from '@/api/certificates/types';
 import { toast } from 'sonner';
 import {
@@ -17,10 +17,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 
 export const CertificatesPage = () => {
+    const navigate = useNavigate();
     const [certificates, setCertificates] = useState<Certificate[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(true);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchCerts = async () => {
@@ -49,11 +51,33 @@ export const CertificatesPage = () => {
         }
     };
 
-    const handleDownload = (cert: Certificate) => {
-        if (cert.download_url) {
-            window.open(cert.download_url, '_blank');
-        } else {
-            toast.error("PDF not available for this certificate");
+    const handleDownload = async (cert: Certificate) => {
+        setDownloadingId(cert.uuid);
+        try {
+            const { download_url } = await downloadCertificate(cert.uuid);
+            if (download_url) {
+                window.open(download_url, '_blank');
+                toast.success("Certificate downloaded!");
+            } else {
+                toast.error("PDF not available for this certificate");
+            }
+        } catch (error: any) {
+            // Check if it's a feedback required error
+            if (error?.response?.data?.error?.code === 'FEEDBACK_REQUIRED') {
+                toast.error(
+                    error?.response?.data?.error?.message || 'Please submit feedback before downloading',
+                    {
+                        action: {
+                            label: 'Give Feedback',
+                            onClick: () => navigate('/my-registrations')
+                        }
+                    }
+                );
+            } else {
+                toast.error("Failed to download certificate");
+            }
+        } finally {
+            setDownloadingId(null);
         }
     };
 
@@ -196,10 +220,10 @@ export const CertificatesPage = () => {
                                                     size="sm"
                                                     className="h-8 px-2"
                                                     onClick={() => handleDownload(cert)}
-                                                    disabled={!cert.download_url}
+                                                    disabled={downloadingId === cert.uuid}
                                                 >
                                                     <Download size={16} className="mr-1" />
-                                                    PDF
+                                                    {downloadingId === cert.uuid ? 'Downloading...' : 'PDF'}
                                                 </Button>
                                             </div>
                                         </TableCell>

@@ -7,12 +7,16 @@ export interface MinimalEvent {
     event_type?: string;
     cpd_credit_value: number;
     cpd_credit_type: string;
+    price?: number;
+    currency?: string;
+    is_free?: boolean;
 }
 
 export interface Registration {
     uuid: string;
     event: MinimalEvent;
     status: 'confirmed' | 'waitlisted' | 'cancelled';
+    payment_status: 'pending' | 'paid' | 'failed' | 'refunded' | 'na';
     email: string;
     full_name: string;
     attended: boolean;
@@ -36,6 +40,21 @@ export interface RegistrationCreateRequest {
     organization_name?: string;
     custom_field_responses?: Record<string, any>;
     allow_public_verification?: boolean;
+    promo_code?: string;
 }
 
-// LinkRegistrationRequest removed - backend uses authenticated user's email
+/**
+ * Response from public registration endpoint.
+ * For paid events, includes client_secret for Stripe payment.
+ */
+export interface RegistrationResponse extends Registration {
+    client_secret?: string;
+    amount?: number;
+    currency?: string;
+    requires_payment?: boolean;
+    // Promo code info
+    promo_code?: string;
+    original_price?: string;
+    discount_amount?: string;
+    final_price?: string;
+}

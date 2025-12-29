@@ -189,6 +189,7 @@ class RegistrationCreateSerializer(serializers.Serializer):
     organization_name = serializers.CharField(required=False, max_length=255, allow_blank=True)
     custom_field_responses = serializers.DictField(required=False)
     allow_public_verification = serializers.BooleanField(default=True)
+    promo_code = serializers.CharField(required=False, max_length=50, allow_blank=True)
 
     def validate(self, attrs):
         request = self.context.get('request')
