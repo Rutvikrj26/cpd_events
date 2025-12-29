@@ -85,7 +85,7 @@ export const OrganizationPublicProfilePage: React.FC = () => {
                             <Building2 className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
                             <h2 className="text-2xl font-bold mb-2">Organization Not Found</h2>
                             <p className="text-muted-foreground mb-6">
-                                {error || 'The organization you're looking for doesn't exist or is no longer active.'}
+                                {error || "The organization you're looking for doesn't exist or is no longer active."}
                             </p>
                             <Button asChild>
                                 <Link to="/">Go Home</Link>
