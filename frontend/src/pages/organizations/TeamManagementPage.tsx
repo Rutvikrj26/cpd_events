@@ -143,7 +143,11 @@ const TeamManagementPage: React.FC = () => {
             setInviteTitle('');
             await loadData();
         } catch (err: any) {
-            setInviteError(err.response?.data?.error?.message || 'Failed to send invitation');
+            setInviteError(
+                err.response?.data?.detail ||
+                err.response?.data?.error?.message ||
+                'Failed to send invitation'
+            );
         } finally {
             setIsInviting(false);
         }
@@ -303,6 +307,14 @@ const TeamManagementPage: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center gap-3">
+                                    {/* Link Status */}
+                                    {member.linked_from_individual && (
+                                        <Badge variant="secondary" className="text-xs">
+                                            Linked
+                                        </Badge>
+                                    )}
+
+                                    {/* Role Badge */}
                                     <Badge
                                         variant="outline"
                                         className={`capitalize ${getRoleBadgeColor(member.role)}`}
@@ -311,9 +323,10 @@ const TeamManagementPage: React.FC = () => {
                                         <span className="ml-1">{member.role}</span>
                                     </Badge>
 
-                                    {member.linked_from_individual && (
-                                        <Badge variant="secondary" className="text-xs">
-                                            Linked
+                                    {/* Pending/Active Status */}
+                                    {!member.is_active && !member.accepted_at && (
+                                        <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                                            Pending
                                         </Badge>
                                     )}
 
@@ -335,6 +348,25 @@ const TeamManagementPage: React.FC = () => {
                                                     <Edit className="h-4 w-4 mr-2" />
                                                     Change Role
                                                 </DropdownMenuItem>
+
+                                                {/* Re-invite option for pending members */}
+                                                {!member.is_active && !member.accepted_at && (
+                                                    <>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem
+                                                            onClick={() => {
+                                                                setInviteEmail(member.user_email);
+                                                                setInviteRole(member.role);
+                                                                setInviteTitle(member.title);
+                                                                setShowInviteDialog(true);
+                                                            }}
+                                                        >
+                                                            <Mail className="h-4 w-4 mr-2" />
+                                                            Resend Invite
+                                                        </DropdownMenuItem>
+                                                    </>
+                                                )}
+
                                                 {/* Only owners can remove members, and can't remove other owners */}
                                                 {isCurrentUserOwner && member.role !== 'owner' && (
                                                     <>

@@ -96,65 +96,22 @@ class EventViewSet(SoftDeleteModelViewSet):
         return serializers.EventDetailSerializer
 
     def perform_create(self, serializer):
-        # Check if event is for an organization or individual
+        from .services import event_service
+        from rest_framework.exceptions import ValidationError
+
         organization_uuid = self.request.data.get('organization')
 
-        if organization_uuid:
-            # Creating event for organization - check org subscription
-            from organizations.models import Organization
-            try:
-                organization = Organization.objects.get(uuid=organization_uuid)
-
-                # Check organization subscription limits
-                if hasattr(organization, 'subscription'):
-                    org_subscription = organization.subscription
-                    if not org_subscription.check_event_limit():
-                        from rest_framework.exceptions import PermissionDenied
-                        limit = org_subscription.config.get('events_per_month')
-                        raise PermissionDenied(
-                            f"Organization has reached its event limit of {limit} events this month. "
-                            f"Please upgrade your plan to create more events."
-                        )
-
-                    # Increment organization event counter
-                    org_subscription.increment_events()
-
-                # Save with organization
-                serializer.save(owner=self.request.user, organization=organization)
-
-            except Organization.DoesNotExist:
-                from rest_framework.exceptions import ValidationError
-                raise ValidationError("Organization not found")
-        else:
-            # Creating personal event - check individual subscription
-            user = self.request.user
-            subscription = getattr(user, 'subscription', None)
-
-            if subscription:
-                # Check if can create events (trial expired, access blocked, or limit reached)
-                if not subscription.can_create_events:
-                    if subscription.is_access_blocked:
-                        from rest_framework.exceptions import PermissionDenied
-                        raise PermissionDenied(
-                            "Your subscription has expired. Please upgrade to continue creating events."
-                        )
-                    elif subscription.is_trial_expired:
-                        from rest_framework.exceptions import PermissionDenied
-                        raise PermissionDenied(
-                            "Your trial has ended. Please upgrade to a paid plan to create new events."
-                        )
-                    elif not subscription.check_event_limit():
-                        from rest_framework.exceptions import PermissionDenied
-                        raise PermissionDenied(
-                            f"You've reached your plan's limit of {subscription.limits['events_per_month']} events this month. "
-                            "Please upgrade your plan to create more events."
-                        )
-
-                # Increment event counter
-                subscription.increment_events()
-
-            # Save without organization (personal event)
-            serializer.save(owner=self.request.user)
+        try:
+            event_service.create_event(
+                user=self.request.user,
+                data=serializer.validated_data,
+                organization_uuid=organization_uuid
+            )
+        except ValidationError as e:
+             raise e
+        except Exception as e:
+             # Re-raise known exceptions as is, wrap others if needed
+             raise e
 
     @swagger_auto_schema(
         operation_summary="Publish event",

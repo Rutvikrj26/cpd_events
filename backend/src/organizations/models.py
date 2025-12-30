@@ -236,20 +236,16 @@ class OrganizationMembership(BaseModel):
             self.invitation_token = ''
             self.is_active = True
             self.save(update_fields=['accepted_at', 'invitation_token', 'is_active', 'updated_at'])
-            # Update org member count
-            self.organization.update_counts()
 
     def deactivate(self):
         """Deactivate this membership."""
         self.is_active = False
         self.save(update_fields=['is_active', 'updated_at'])
-        self.organization.update_counts()
 
     def reactivate(self):
         """Reactivate this membership."""
         self.is_active = True
         self.save(update_fields=['is_active', 'updated_at'])
-        self.organization.update_counts()
 
 
 class OrganizationSubscription(BaseModel):

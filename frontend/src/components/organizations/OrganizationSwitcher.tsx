@@ -33,7 +33,7 @@ export const OrganizationSwitcher: React.FC<OrganizationSwitcherProps> = ({
 
     const handleSelectPersonal = () => {
         clearCurrentOrg();
-        navigate('/organizer');
+        navigate('/dashboard');
     };
 
     const handleSelectOrg = async (org: typeof organizations[0]) => {

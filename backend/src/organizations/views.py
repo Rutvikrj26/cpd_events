@@ -88,9 +88,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def members(self, request, pk=None):
-        """List organization members."""
+        """List organization members (active and pending)."""
         organization = self.get_object()
-        memberships = organization.memberships.filter(is_active=True).select_related('user', 'invited_by')
+        # Include active members and those with pending invitations
+        from django.db.models import Q
+        memberships = organization.memberships.filter(
+            Q(is_active=True) | Q(invitation_token__isnull=False, accepted_at__isnull=True)
+        ).select_related('user', 'invited_by')
         serializer = OrganizationMembershipListSerializer(memberships, many=True)
         return Response(serializer.data)
 
@@ -120,18 +124,25 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         try:
             user = User.objects.get(email__iexact=email)
-            if organization.memberships.filter(user=user).exists():
-                return Response(
-                    {'detail': 'User is already a member of this organization.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            existing_membership = organization.memberships.filter(user=user).first()
+            
+            if existing_membership:
+                if existing_membership.is_active:
+                    return Response(
+                        {'detail': 'User is already a member of this organization.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                # If pending or inactive, we can proceed to re-invite/reactivate
         except User.DoesNotExist:
             user = None
+            existing_membership = None
 
         # Check seat availability for organizer roles
         if role in ['owner', 'admin', 'manager']:
             if hasattr(organization, 'subscription'):
                 subscription = organization.subscription
+                # Only check limit if we are adding a NEW active organizer
+                # Reactivating an existing organizer also consumes a seat
                 if not subscription.can_add_organizer():
                     return Response(
                         {
@@ -149,18 +160,29 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_402_PAYMENT_REQUIRED,
                     )
 
-        # Create pending membership
-        membership = OrganizationMembership.objects.create(
-            organization=organization,
-            user=user,
-            role=role,
-            title=title,
-            invited_by=request.user,
-            invited_at=timezone.now(),
-            invitation_email=email,
-            is_active=False,  # Pending until accepted
-        )
-        membership.generate_invitation_token()
+        # Create or update membership
+        if existing_membership:
+            membership = existing_membership
+            membership.role = role
+            membership.title = title
+            membership.invited_by = request.user
+            membership.invited_at = timezone.now()
+            membership.invitation_email = email
+            membership.is_active = False # Keep inactive until accepted if it was pending/inactive
+            membership.save()
+            membership.generate_invitation_token()
+        else:
+            membership = OrganizationMembership.objects.create(
+                organization=organization,
+                user=user,
+                role=role,
+                title=title,
+                invited_by=request.user,
+                invited_at=timezone.now(),
+                invitation_email=email,
+                is_active=False,  # Pending until accepted
+            )
+            membership.generate_invitation_token()
 
         # Send invitation email
         from integrations.services import email_service

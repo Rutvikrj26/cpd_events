@@ -120,7 +120,8 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
             created.append(reg)
 
         # Update event counts
-        event.update_counts()
+        # Update event counts handled by signals
+
 
         return Response(
             {
@@ -253,222 +254,57 @@ class PublicRegistrationView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
     def create(self, request, event_uuid=None):
-        from decimal import Decimal
         from events.models import Event
+        from .services import registration_service
+        from rest_framework.exceptions import ValidationError
+        import logging
+
+        logger = logging.getLogger(__name__)
 
         try:
             event = Event.objects.get(uuid=event_uuid, status='published', registration_enabled=True, deleted_at__isnull=True)
         except Event.DoesNotExist:
             return error_response('Event not found or registration closed.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
 
-        if not event.is_open_for_registration:
-            return error_response('Event not found or registration closed.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
-
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         user = request.user if request.user.is_authenticated else None
-        email = serializer.validated_data.get('email', '').lower()
-        full_name = serializer.validated_data.get('full_name', '')
 
-        if user:
-            email = user.email
-            full_name = full_name or user.full_name
+        try:
+            result = registration_service.register_participant(
+                event=event, 
+                data=serializer.validated_data, 
+                user=user
+            )
 
-        # Check for existing registration (by user if authenticated, by email if guest)
-        if user:
-            if Registration.objects.filter(event=event, user=user, deleted_at__isnull=True).exists():
-                return error_response('Already registered for this event.', code='ALREADY_REGISTERED', status_code=status.HTTP_400_BAD_REQUEST)
-        else:
-            if Registration.objects.filter(event=event, email__iexact=email, deleted_at__isnull=True).exists():
-                return error_response('Already registered for this event.', code='ALREADY_REGISTERED', status_code=status.HTTP_400_BAD_REQUEST)
+            # Map service result to API response
+            reg = result['registration']
+            response_data = {
+                'registration_uuid': str(reg.uuid),
+                'status': result['status'],
+                'client_secret': result.get('client_secret'),
+                'waitlist_position': getattr(reg, 'waitlist_position', None),
+                'message': result.get('message', 'Registration successful.'),
+            }
+            return Response(response_data, status=status.HTTP_201_CREATED)
 
-        # Check capacity
-        if event.max_attendees:
-            confirmed_count = event.registrations.filter(status='confirmed').count()
-            if confirmed_count >= event.max_attendees:
-                if event.waitlist_enabled:
-                    return self._add_to_waitlist(event, user, email, full_name, serializer.validated_data)
-                return error_response('Event is at capacity.', code='EVENT_FULL')
-
-        # Handle promo code validation
-        promo_code_str = serializer.validated_data.get('promo_code', '').strip()
-        validated_promo_code = None
-        discount_amount = Decimal('0.00')
-        final_price = event.price
-
-        if promo_code_str and not event.is_free:
-            from promo_codes.services import promo_code_service, PromoCodeError
-
-            try:
-                promo_code = promo_code_service.find_code(promo_code_str, event)
-                if not promo_code:
-                    return error_response('Invalid promo code.', code='INVALID_PROMO_CODE', status_code=status.HTTP_400_BAD_REQUEST)
-
-                # Validate the code
-                promo_code_service.validate_code(promo_code, event, email, user)
-
-                # Calculate discount
-                discount_amount = promo_code.calculate_discount(event.price)
-                final_price = max(Decimal('0.00'), event.price - discount_amount)
-                validated_promo_code = promo_code
-
-            except PromoCodeError as e:
-                return error_response(str(e), code='PROMO_CODE_ERROR', status_code=status.HTTP_400_BAD_REQUEST)
-
-        # Create registration
-        registration = Registration.objects.create(
-            event=event,
-            user=user,
-            email=email,
-            full_name=full_name,
-            professional_title=serializer.validated_data.get('professional_title', ''),
-            organization_name=serializer.validated_data.get('organization_name', ''),
-            status='confirmed',  # Default to confirmed
-            allow_public_verification=serializer.validated_data.get('allow_public_verification', True),
-            source=Registration.Source.SELF,
-            amount_paid=final_price,
-        )
-
-        # Apply promo code if validated
-        if validated_promo_code:
-            from promo_codes.services import promo_code_service
-            promo_code_service.apply_code(validated_promo_code, registration, event.price)
-
-        # Handle Payment if final price > 0
-        client_secret = None
-        payment_intent_id = None
-
-        if final_price > 0:
-            from billing.services import stripe_payment_service
-
-            registration.payment_status = Registration.PaymentStatus.PENDING
-            registration.save()
-
-            if stripe_payment_service.is_configured:
-                intent_data = stripe_payment_service.create_payment_intent(registration, amount_cents=int(final_price * 100))
-                if intent_data['success']:
-                    client_secret = intent_data['client_secret']
-                    payment_intent_id = intent_data['payment_intent_id']
-
-                    registration.payment_intent_id = payment_intent_id
-                    registration.save(update_fields=['payment_intent_id'])
-                else:
-                    registration.delete()
-                    return Response({'error': intent_data['error']}, status=status.HTTP_400_BAD_REQUEST)
-            else:
-                registration.delete()
-                return Response({'error': 'Payment system not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        elif not event.is_free:
-            # Event has a price but final_price is 0 (100% discount)
-            registration.payment_status = Registration.PaymentStatus.NA
-            registration.save(update_fields=['payment_status'])
-
-        # Save Custom Field Responses
-        custom_responses = serializer.validated_data.get('custom_field_responses', {})
-        if custom_responses:
-            from registrations.models import CustomFieldResponse
-            import json
+        except ValidationError as e:
+            # Map validation errors to error codes
+            msg = str(e.detail[0]) if isinstance(e.detail, list) else str(e)
             
-            # Helper to safely serialize list/dict
-            def serialize_val(v):
-                if isinstance(v, (dict, list)):
-                    return json.dumps(v)
-                return str(v)
-
-            # Get valid field UUIDs for this event
-            valid_fields = {str(f.uuid): f for f in event.custom_fields.all()}
+            error_code = 'VALIDATION_ERROR'
+            if 'capacity' in msg.lower():
+                error_code = 'EVENT_FULL'
+            elif 'already registered' in msg.lower():
+                error_code = 'ALREADY_REGISTERED'
             
-            for field_uuid, value in custom_responses.items():
-                field_obj = valid_fields.get(field_uuid)
-                if field_obj:
-                    CustomFieldResponse.objects.create(
-                        registration=registration,
-                        field=field_obj,
-                        value=serialize_val(value)
-                    )
+            return error_response(msg, code=error_code, status_code=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.exception("Registration failed")
+            return error_response("An unexpected error occurred.", code='INTERNAL_ERROR', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # Update event counts
-        event.update_counts()
 
-        response_data = {
-            'registration_uuid': str(registration.uuid),
-            'status': registration.status,
-            'payment_status': registration.payment_status if hasattr(registration, 'payment_status') else 'na',
-            'message': 'Successfully registered!',
-        }
-
-        # Add discount info if promo code was applied
-        if validated_promo_code:
-            response_data['promo_code'] = validated_promo_code.code
-            response_data['original_price'] = str(event.price)
-            response_data['discount_amount'] = str(discount_amount)
-            response_data['final_price'] = str(final_price)
-
-        if client_secret:
-            response_data['client_secret'] = client_secret
-            response_data['message'] = 'Payment required to complete registration.'
-
-        return Response(
-            response_data,
-            status=status.HTTP_201_CREATED,
-        )
-
-    def _add_to_waitlist(self, event, user, email, full_name, data):
-        """Add to waitlist when event is full."""
-        max_position = (
-            Registration.objects.filter(event=event, status='waitlisted').aggregate(Max('waitlist_position'))[
-                'waitlist_position__max'
-            ]
-            or 0
-        )
-
-        registration = Registration.objects.create(
-            event=event,
-            user=user,
-            email=email,
-            full_name=full_name,
-            professional_title=data.get('professional_title', ''),
-            organization_name=data.get('organization_name', ''),
-            status='waitlisted',
-            waitlist_position=max_position + 1,
-            allow_public_verification=data.get('allow_public_verification', True),
-            source=Registration.Source.SELF,
-        )
-
-        # Save Custom Field Responses
-        custom_responses = data.get('custom_field_responses', {})
-        if custom_responses:
-            from registrations.models import CustomFieldResponse
-            import json
-            
-            # Helper to safely serialize list/dict
-            def serialize_val(v):
-                if isinstance(v, (dict, list)):
-                    return json.dumps(v)
-                return str(v)
-
-            # Get valid field UUIDs for this event
-            valid_fields = {str(f.uuid): f for f in event.custom_fields.all()}
-            
-            for field_uuid, value in custom_responses.items():
-                field_obj = valid_fields.get(field_uuid)
-                if field_obj:
-                    CustomFieldResponse.objects.create(
-                        registration=registration,
-                        field=field_obj,
-                        value=serialize_val(value)
-                    )
-
-        return Response(
-            {
-                'registration_uuid': str(registration.uuid),
-                'status': 'waitlisted',
-                'waitlist_position': registration.waitlist_position,
-                'message': 'Added to waitlist.',
-            },
-            status=status.HTTP_201_CREATED,
-        )
 
 
 # =============================================================================

@@ -204,7 +204,8 @@ class Registration(SoftDeleteModel):
         self.save(update_fields=['status', 'cancelled_at', 'cancellation_reason', 'updated_at'])
 
         # Update event counts
-        self.event.update_counts()
+        # Update event counts handled by signals
+
 
         # Promote from waitlist if applicable
         self._promote_next_from_waitlist()
@@ -234,7 +235,8 @@ class Registration(SoftDeleteModel):
         self.waitlist_position = None
         self.save(update_fields=['status', 'promoted_from_waitlist_at', 'waitlist_position', 'updated_at'])
 
-        self.event.update_counts()
+        # Update event counts handled by signals
+
 
         # TODO: Send email notification to attendee
         # from common.emails import send_waitlist_promotion_email
