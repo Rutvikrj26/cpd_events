@@ -63,7 +63,7 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
                 description: 'Add your organization name and details',
                 icon: User,
                 completed: hasProfile,
-                href: '/profile',
+                href: '/settings',
                 action: 'Complete Profile'
             });
 
@@ -76,7 +76,7 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
                     description: 'Enable automatic meeting creation',
                     icon: Video,
                     completed: zoomStatus.is_connected,
-                    href: '/settings',
+                    href: '/organizer/zoom',
                     action: 'Connect Zoom'
                 });
             } catch {
@@ -86,7 +86,7 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
                     description: 'Enable automatic meeting creation',
                     icon: Video,
                     completed: false,
-                    href: '/settings',
+                    href: '/organizer/zoom',
                     action: 'Connect Zoom'
                 });
             }

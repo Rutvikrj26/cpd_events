@@ -12,6 +12,7 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from common.permissions import IsOrganizer
+from common.rbac import roles
 from common.utils import error_response
 
 from . import cpd_serializers, serializers
@@ -37,6 +38,7 @@ class AuthThrottle(AnonRateThrottle):
 # =============================================================================
 
 
+@roles('public', route_name='signup')
 class SignupView(generics.CreateAPIView):
     """POST /api/v1/auth/signup/ - Create new user account."""
 
@@ -67,6 +69,7 @@ class SignupView(generics.CreateAPIView):
         )
 
 
+@roles('public', route_name='token_obtain')
 class CustomTokenObtainPairView(TokenObtainPairView):
     """POST /api/v1/auth/token/ - Obtain JWT token pair."""
 
@@ -74,6 +77,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [AuthThrottle]
 
 
+@roles('public', route_name='email_verification')
 class EmailVerificationView(generics.GenericAPIView):
     """POST /api/v1/auth/verify-email/ - Verify email with token."""
 
@@ -110,6 +114,7 @@ class EmailVerificationView(generics.GenericAPIView):
         return Response({'message': 'Email verified successfully.'})
 
 
+@roles('public', route_name='password_reset_request')
 class PasswordResetRequestView(generics.GenericAPIView):
     """POST /api/v1/auth/password-reset/ - Request password reset."""
 
@@ -133,6 +138,7 @@ class PasswordResetRequestView(generics.GenericAPIView):
         return Response({'message': 'If an account exists, a password reset email has been sent.'})
 
 
+@roles('public', route_name='password_reset_confirm')
 class PasswordResetConfirmView(generics.GenericAPIView):
     """POST /api/v1/auth/password-reset/confirm/ - Confirm password reset."""
 
@@ -160,6 +166,7 @@ class PasswordResetConfirmView(generics.GenericAPIView):
         return Response({'message': 'Password reset successfully.'})
 
 
+@roles('attendee', 'organizer', 'admin', route_name='password_change')
 class PasswordChangeView(generics.GenericAPIView):
     """POST /api/v1/auth/password-change/ - Change password."""
 
@@ -182,6 +189,7 @@ class PasswordChangeView(generics.GenericAPIView):
 # =============================================================================
 
 
+@roles('attendee', 'organizer', 'admin', route_name='current_user')
 class CurrentUserView(generics.RetrieveUpdateAPIView):
     """GET/PATCH /api/v1/users/me/ - Current user profile."""
 
@@ -196,6 +204,7 @@ class CurrentUserView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
+@roles('organizer', 'admin', route_name='organizer_profile')
 class OrganizerProfileView(generics.RetrieveUpdateAPIView):
     """GET/PATCH /api/v1/users/me/organizer-profile/ - Organizer profile."""
 
@@ -206,6 +215,7 @@ class OrganizerProfileView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
+@roles('attendee', 'organizer', 'admin', route_name='notification_preferences')
 class NotificationPreferencesView(generics.RetrieveUpdateAPIView):
     """GET/PATCH /api/v1/users/me/notifications/ - Notification preferences."""
 
@@ -216,6 +226,7 @@ class NotificationPreferencesView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
+@roles('public', route_name='public_organizer')
 class PublicOrganizerView(generics.RetrieveAPIView):
     """GET /api/v1/organizers/{uuid}/ - Public organizer profile."""
 
@@ -227,6 +238,7 @@ class PublicOrganizerView(generics.RetrieveAPIView):
         return User.objects.filter(account_type='organizer', is_organizer_profile_public=True, deleted_at__isnull=True)
 
 
+@roles('attendee', route_name='upgrade_to_organizer')
 class UpgradeToOrganizerView(generics.GenericAPIView):
     """POST /api/v1/users/me/upgrade/ - Upgrade to organizer."""
 
@@ -248,6 +260,7 @@ class UpgradeToOrganizerView(generics.GenericAPIView):
 # =============================================================================
 
 
+@roles('attendee', 'organizer', 'admin', route_name='delete_account')
 class DeleteAccountView(generics.GenericAPIView):
     """POST /api/v1/users/me/delete-account/ - Delete/anonymize account."""
 
@@ -272,6 +285,7 @@ class DeleteAccountView(generics.GenericAPIView):
 # =============================================================================
 
 
+@roles('attendee', 'organizer', 'admin', route_name='data_export')
 class DataExportView(generics.GenericAPIView):
     """POST /api/v1/users/me/export-data/ - Request GDPR data export."""
 
@@ -372,6 +386,7 @@ class DataExportView(generics.GenericAPIView):
 # =============================================================================
 
 
+@roles('attendee', 'organizer', 'admin', route_name='cpd_requirements')
 class CPDRequirementViewSet(viewsets.ModelViewSet):
     """
     CRUD for user CPD requirements.
@@ -421,6 +436,7 @@ class CPDRequirementViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
+@roles('attendee', 'organizer', 'admin', route_name='manifest')
 class ManifestView(generics.GenericAPIView):
     """
     GET /api/v1/auth/manifest/
@@ -457,6 +473,7 @@ class ManifestView(generics.GenericAPIView):
 # =============================================================================
 
 
+@roles('public', route_name='zoom_auth')
 class ZoomAuthView(generics.GenericAPIView):
     """
     GET /api/v1/auth/zoom/login/
@@ -474,6 +491,7 @@ class ZoomAuthView(generics.GenericAPIView):
         return Response({'url': url})
 
 
+@roles('public', route_name='zoom_callback')
 class ZoomCallbackView(generics.GenericAPIView):
     """
     GET /api/v1/auth/zoom/callback/
@@ -581,3 +599,104 @@ class ZoomCallbackView(generics.GenericAPIView):
             from django.http import HttpResponseRedirect
             return HttpResponseRedirect(redirect_url)
 
+
+# =============================================================================
+# Individual Organizer Payouts (Stripe Connect)
+# =============================================================================
+
+
+@roles('organizer', 'admin', route_name='payouts_connect')
+class PayoutsConnectView(generics.GenericAPIView):
+    """
+    POST /api/v1/users/me/payouts/connect/
+
+    Initiates Stripe Connect Express onboarding for the individual organizer.
+    Returns the Stripe hosted onboarding URL.
+    """
+
+    permission_classes = [IsAuthenticated, IsOrganizer]
+
+    def post(self, request):
+        from django.conf import settings
+        from billing.services import stripe_connect_service
+
+        user = request.user
+
+        # 1. Create Connect Account if not exists
+        if not user.stripe_connect_id:
+            account_id = stripe_connect_service.create_account(
+                email=user.email,
+                country='US',  # Default; can be made dynamic
+            )
+            if not account_id:
+                return error_response('Failed to create Stripe account.', code='CONNECT_CREATE_FAILED')
+
+            user.stripe_connect_id = account_id
+            user.stripe_account_status = 'pending'
+            user.save(update_fields=['stripe_connect_id', 'stripe_account_status', 'updated_at'])
+
+        # 2. Generate Onboarding Link
+        frontend_url = settings.CORS_ALLOWED_ORIGINS[0] if settings.CORS_ALLOWED_ORIGINS else 'http://localhost:5173'
+        refresh_url = f"{frontend_url}/settings?tab=payouts&refresh=true"
+        return_url = f"{frontend_url}/settings?tab=payouts&success=true"
+
+        onboarding_url = stripe_connect_service.create_account_link(
+            account_id=user.stripe_connect_id,
+            refresh_url=refresh_url,
+            return_url=return_url,
+        )
+
+        if not onboarding_url:
+            return error_response('Failed to generate onboarding link.', code='CONNECT_LINK_FAILED')
+
+        return Response({'url': onboarding_url})
+
+
+@roles('organizer', 'admin', route_name='payouts_status')
+class PayoutsStatusView(generics.GenericAPIView):
+    """
+    GET /api/v1/users/me/payouts/status/
+
+    Checks and syncs the Stripe Connect status for the individual organizer.
+    """
+
+    permission_classes = [IsAuthenticated, IsOrganizer]
+
+    def get(self, request):
+        from billing.services import stripe_connect_service
+
+        user = request.user
+
+        if not user.stripe_connect_id:
+            return Response({
+                'connected': False,
+                'status': 'not_connected',
+                'charges_enabled': False,
+            })
+
+        status_info = stripe_connect_service.get_account_status(user.stripe_connect_id)
+
+        if 'error' in status_info:
+            return Response(
+                {'detail': 'Failed to retrieve status from Stripe.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Update local state
+        user.stripe_charges_enabled = status_info.get('charges_enabled', False)
+        if status_info.get('charges_enabled'):
+            user.stripe_account_status = 'active'
+        elif status_info.get('details_submitted'):
+            user.stripe_account_status = 'pending_verification'
+        else:
+            user.stripe_account_status = 'restricted'
+
+        user.save(update_fields=['stripe_charges_enabled', 'stripe_account_status', 'updated_at'])
+
+        return Response({
+            'connected': True,
+            'status': user.stripe_account_status,
+            'charges_enabled': user.stripe_charges_enabled,
+            'stripe_id': user.stripe_connect_id,
+            'details': status_info,
+        })

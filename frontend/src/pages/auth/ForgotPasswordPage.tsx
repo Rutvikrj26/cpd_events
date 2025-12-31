@@ -62,7 +62,7 @@ export function ForgotPasswordPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="text-center space-y-4">
-                    <p className="text-sm text-slate-600">
+                    <p className="text-sm text-muted-foreground">
                         Didn't receive the email? Check your spam folder or try again.
                     </p>
                     <Button variant="outline" onClick={() => setIsSent(false)} className="w-full">
@@ -99,7 +99,7 @@ export function ForgotPasswordPage() {
                                     <FormLabel>Email Address</FormLabel>
                                     <FormControl>
                                         <div className="relative">
-                                            <Mail className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
+                                            <Mail className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground" />
                                             <Input placeholder="name@example.com" className="pl-10" {...field} />
                                         </div>
                                     </FormControl>

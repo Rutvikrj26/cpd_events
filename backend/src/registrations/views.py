@@ -45,6 +45,7 @@ class RegistrationFilter(filters.FilterSet):
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='event_registrations')
 class EventRegistrationViewSet(SoftDeleteModelViewSet):
     """
     Manage registrations for an event (organizer view).
@@ -243,6 +244,7 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 # =============================================================================
 
 
+@roles('public', route_name='public_registration')
 class PublicRegistrationView(generics.CreateAPIView):
     """
     POST /api/v1/public/events/{event_uuid}/register/
@@ -360,6 +362,7 @@ class MyRegistrationViewSet(ReadOnlyModelViewSet):
 # =============================================================================
 
 
+@roles('attendee', 'organizer', 'admin', route_name='link_registrations')
 class LinkRegistrationsView(generics.GenericAPIView):
     """
     POST /api/v1/users/me/link-registrations/

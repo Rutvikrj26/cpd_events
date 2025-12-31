@@ -32,6 +32,9 @@ urlpatterns = [
     path('users/me/upgrade/', views.UpgradeToOrganizerView.as_view(), name='upgrade'),
     path('users/me/delete-account/', views.DeleteAccountView.as_view(), name='delete_account'),
     path('users/me/export-data/', views.DataExportView.as_view(), name='export_data'),  # H6: GDPR
+    # Payouts (Stripe Connect for individuals)
+    path('users/me/payouts/connect/', views.PayoutsConnectView.as_view(), name='payouts_connect'),
+    path('users/me/payouts/status/', views.PayoutsStatusView.as_view(), name='payouts_status'),
     # Public organizer profiles
     path('organizers/<uuid:uuid>/', views.PublicOrganizerView.as_view(), name='public_organizer'),
     # ViewSets

@@ -29,6 +29,8 @@ class EmailService:
         'email_verification': 'emails/email_verification.html',
         'invitation': 'emails/invitation.html',
         'organization_invitation': 'emails/organization_invitation.html',
+        'payment_failed': 'emails/payment_failed.html',
+        'waitlist_promotion': 'emails/waitlist_promotion.html',
     }
 
     # Subject lines
@@ -41,6 +43,8 @@ class EmailService:
         'email_verification': 'Verify Your Email',
         'invitation': "You're invited: {event_title}",
         'organization_invitation': "You're invited to join {organization_name}",
+        'payment_failed': "Payment Failed: Invoice #{invoice_number}",
+        'waitlist_promotion': "Spot Available: {event_title}",
     }
 
     def send_email(self, template: str, recipient: str, context: dict[str, Any], subject: str | None = None) -> bool:

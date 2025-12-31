@@ -13,7 +13,9 @@ import {
    Loader2,
    CheckCircle,
    AlertCircle,
-   Plus
+   Plus,
+   Banknote,
+   ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +49,8 @@ import { getCurrentUser, updateProfile, changePassword, getNotificationPreferenc
 import { PaymentMethod, Subscription } from "@/api/billing/types";
 import { User as UserType, NotificationPreferences } from "@/api/accounts/types";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { getPayoutsStatus, initiatePayoutsConnect, PayoutsStatus } from "@/api/payouts";
 
 // Schema for General Profile
 const profileSchema = z.object({
@@ -82,6 +86,13 @@ export function ProfileSettings() {
    const [notifications, setNotifications] = useState<NotificationPreferences | null>(null);
    const [loadingNotifications, setLoadingNotifications] = useState(true);
    const [savingNotifications, setSavingNotifications] = useState(false);
+
+   // Payouts state
+   const { user: authUser } = useAuth();
+   const isOrganizer = authUser?.account_type === 'organizer';
+   const [payoutsStatus, setPayoutsStatus] = useState<PayoutsStatus | null>(null);
+   const [loadingPayouts, setLoadingPayouts] = useState(true);
+   const [initiatingConnect, setInitiatingConnect] = useState(false);
 
    // Forms
    const profileForm = useForm({
@@ -160,6 +171,25 @@ export function ProfileSettings() {
       loadNotifications();
    }, []);
 
+   // Load payouts status (organizers only)
+   useEffect(() => {
+      if (!isOrganizer) {
+         setLoadingPayouts(false);
+         return;
+      }
+      const loadPayouts = async () => {
+         try {
+            const status = await getPayoutsStatus();
+            setPayoutsStatus(status);
+         } catch (error) {
+            console.error("Failed to load payouts status:", error);
+         } finally {
+            setLoadingPayouts(false);
+         }
+      };
+      loadPayouts();
+   }, [isOrganizer]);
+
    const handleDeletePaymentMethod = async (uuid: string) => {
       setDeletingId(uuid);
       try {
@@ -218,6 +248,18 @@ export function ProfileSettings() {
       }
    };
 
+   const handleLinkPayouts = async () => {
+      setInitiatingConnect(true);
+      try {
+         const { url } = await initiatePayoutsConnect();
+         window.location.href = url;
+      } catch (error: any) {
+         toast.error(error.message || "Failed to initiate payouts setup.");
+      } finally {
+         setInitiatingConnect(false);
+      }
+   };
+
    const getInitials = (name: string) => {
       return name
          .split(" ")
@@ -271,6 +313,14 @@ export function ProfileSettings() {
                      >
                         <Bell className="mr-2 h-4 w-4" /> Notifications
                      </TabsTrigger>
+                     {isOrganizer && (
+                        <TabsTrigger
+                           value="payouts"
+                           className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
+                        >
+                           <Banknote className="mr-2 h-4 w-4" /> Payouts
+                        </TabsTrigger>
+                     )}
                   </TabsList>
                </aside>
 
@@ -604,6 +654,81 @@ export function ProfileSettings() {
                         </CardContent>
                      </Card>
                   </TabsContent>
+
+                  {/* PAYOUTS TAB */}
+                  {isOrganizer && (
+                     <TabsContent value="payouts" className="mt-0 space-y-6">
+                        <Card>
+                           <CardHeader>
+                              <CardTitle>Receive Payouts</CardTitle>
+                              <CardDescription>
+                                 Link your bank account to receive revenue from paid events.
+                              </CardDescription>
+                           </CardHeader>
+                           <CardContent className="space-y-4">
+                              {loadingPayouts ? (
+                                 <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                 </div>
+                              ) : payoutsStatus?.charges_enabled ? (
+                                 <div className="space-y-4">
+                                    <Alert className="bg-success/10 border-success/30">
+                                       <CheckCircle className="h-4 w-4 text-success" />
+                                       <AlertDescription className="text-success">
+                                          Payouts are active! You can receive revenue from paid events.
+                                       </AlertDescription>
+                                    </Alert>
+                                    <div className="p-4 border rounded-lg bg-muted/30">
+                                       <div className="flex items-center justify-between">
+                                          <div>
+                                             <p className="font-medium">Stripe Connect</p>
+                                             <p className="text-sm text-muted-foreground">Account ID: {payoutsStatus.stripe_id}</p>
+                                          </div>
+                                          <Badge variant="default">Active</Badge>
+                                       </div>
+                                    </div>
+                                    <Button variant="outline" onClick={handleLinkPayouts} disabled={initiatingConnect}>
+                                       {initiatingConnect && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                       <ExternalLink className="mr-2 h-4 w-4" />
+                                       Update Payout Settings
+                                    </Button>
+                                 </div>
+                              ) : payoutsStatus?.status === 'pending_verification' ? (
+                                 <div className="space-y-4">
+                                    <Alert className="bg-warning/10 border-warning/30">
+                                       <AlertCircle className="h-4 w-4 text-warning" />
+                                       <AlertDescription>
+                                          Your account is pending verification by Stripe. This usually takes 1-2 business days.
+                                       </AlertDescription>
+                                    </Alert>
+                                    <Button variant="outline" onClick={handleLinkPayouts} disabled={initiatingConnect}>
+                                       {initiatingConnect && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                       <ExternalLink className="mr-2 h-4 w-4" />
+                                       Check Status / Complete Setup
+                                    </Button>
+                                 </div>
+                              ) : (
+                                 <div className="text-center py-8 space-y-4">
+                                    <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center">
+                                       <Banknote className="h-6 w-6 text-muted-foreground" />
+                                    </div>
+                                    <div>
+                                       <p className="font-medium">Link Your Bank Account</p>
+                                       <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                                          To charge attendees for your events, you need to link a bank account via Stripe.
+                                       </p>
+                                    </div>
+                                    <Button onClick={handleLinkPayouts} disabled={initiatingConnect}>
+                                       {initiatingConnect && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                       <ExternalLink className="mr-2 h-4 w-4" />
+                                       Link Bank Account
+                                    </Button>
+                                 </div>
+                              )}
+                           </CardContent>
+                        </Card>
+                     </TabsContent>
+                  )}
 
                </div>
             </div>

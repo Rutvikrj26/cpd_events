@@ -365,7 +365,21 @@ class Event(SoftDeleteModel):
         )
 
     def publish(self, user=None):
-        """Publish the event."""
+        """Publish the event.
+
+        Raises:
+            ValueError: If paid event but no payouts are connected.
+        """
+        # Block publishing paid events without connected payouts
+        if self.price > 0:
+            has_org_payouts = self.organization and self.organization.stripe_charges_enabled
+            has_owner_payouts = self.owner.stripe_charges_enabled
+            if not has_org_payouts and not has_owner_payouts:
+                raise ValueError(
+                    "Cannot publish a paid event without connected payouts. "
+                    "Please link a bank account in your profile settings or organization settings."
+                )
+
         self._change_status(self.Status.PUBLISHED, user, 'Event published')
 
     def start(self, user=None):

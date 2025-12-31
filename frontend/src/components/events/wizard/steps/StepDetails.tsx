@@ -127,7 +127,7 @@ export const StepDetails = () => {
                         >
                             <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                             <p className="text-sm text-muted-foreground">Click to upload or drag and drop</p>
-                            <p className="text-xs text-slate-400 mt-1">JPEG, PNG, GIF, WebP • Max 5MB</p>
+                            <p className="text-xs text-muted-foreground mt-1">JPEG, PNG, GIF, WebP • Max 5MB</p>
                         </div>
                     ) : (
                         <div className="relative mt-3 aspect-video max-w-sm overflow-hidden rounded-lg border border-border bg-muted">

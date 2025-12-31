@@ -14,7 +14,7 @@ def create_subscription_for_organizer(sender, instance, created, **kwargs):
     
     Plans:
     - 'attendee': Creates ATTENDEE plan (no events, for attendees only)
-    - 'organizer': Creates ORGANIZER plan with ACTIVE status (paid plan)
+    - 'organizer': Creates PROFESSIONAL plan with ACTIVE status (paid plan)
     - 'organization': Enterprise plan (custom setup)
     """
     from billing.models import Subscription
@@ -33,11 +33,11 @@ def create_subscription_for_organizer(sender, instance, created, **kwargs):
         )
         return
 
-    # Organizers get ORGANIZER plan
+    # Organizers get PROFESSIONAL plan
     Subscription.objects.get_or_create(
         user=instance,
         defaults={
-            'plan': Subscription.Plan.ORGANIZER,
+            'plan': Subscription.Plan.PROFESSIONAL,
             'status': Subscription.Status.ACTIVE,
         },
     )

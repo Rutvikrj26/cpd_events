@@ -161,7 +161,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                          <Link to="/profile" className="cursor-pointer">
+                          <Link to="/settings" className="cursor-pointer">
                             <User className="h-4 w-4 mr-2" />
                             Profile
                           </Link>

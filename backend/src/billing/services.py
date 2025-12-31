@@ -358,7 +358,7 @@ class StripeService:
     # Checkout & Portal
     # =========================================================================
 
-    def create_checkout_session(self, user, plan: str, success_url: str, cancel_url: str) -> dict[str, Any]:
+    def create_checkout_session(self, user, plan: str, success_url: str, cancel_url: str, organization_uuid: str | None = None) -> dict[str, Any]:
         """Create Stripe Checkout Session."""
         if not self.is_configured:
             return {'success': False, 'error': 'Stripe not configured'}
@@ -373,6 +373,13 @@ class StripeService:
         try:
             customer_id = self.create_customer(user)
 
+            metadata = {
+                'user_uuid': str(user.uuid),
+                'plan': plan,
+            }
+            if organization_uuid:
+                metadata['organization_uuid'] = organization_uuid
+
             session = self.stripe.checkout.Session.create(
                 customer=customer_id,
                 payment_method_types=['card'],
@@ -382,15 +389,9 @@ class StripeService:
                 cancel_url=cancel_url,
                 subscription_data={
                     'trial_period_days': trial_days,
-                    'metadata': {
-                        'user_uuid': str(user.uuid),
-                        'plan': plan,
-                    },
+                    'metadata': metadata,
                 },
-                metadata={
-                    'user_uuid': str(user.uuid),
-                    'plan': plan,
-                },
+                metadata=metadata,
             )
 
             return {'success': True, 'session_id': session.id, 'url': session.url}
@@ -660,8 +661,10 @@ class StripePaymentService:
             if amount_cents is None:
                 amount_cents = int(event.price * 100)
 
-            # Application fee (optional, set to 0 for now)
-            application_fee_cents = 0
+            # Platform fee (application_fee_amount goes to the platform)
+            from django.conf import settings as django_settings
+            fee_percent = getattr(django_settings, 'PLATFORM_FEE_PERCENT', 2.0)
+            application_fee_cents = int(amount_cents * fee_percent / 100)
 
             intent = self._stripe.PaymentIntent.create(
                 amount=amount_cents,

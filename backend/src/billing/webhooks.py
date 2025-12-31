@@ -227,7 +227,20 @@ class StripeWebhookView(View):
         )
 
         logger.warning(f"Invoice payment failed: {invoice_id}")
-        # TODO: Send payment failed notification email
+        # Send payment failed notification email
+        from integrations.services import email_service
+        
+        email_service.send_email(
+            template='payment_failed',
+            recipient=subscription.user.email,
+            context={
+                'invoice_number': data.get('number', ''),
+                'amount_due': f"{data.get('amount_due', 0) / 100:.2f}",
+                'currency': data.get('currency', 'usd').upper(),
+                'pay_url': data.get('hosted_invoice_url', ''),
+                'user_name': subscription.user.full_name,
+            }
+        )
 
     def _handle_invoice_finalized(self, data):
         """Handle invoice.finalized event."""

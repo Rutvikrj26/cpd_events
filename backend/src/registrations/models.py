@@ -238,9 +238,19 @@ class Registration(SoftDeleteModel):
         # Update event counts handled by signals
 
 
-        # TODO: Send email notification to attendee
-        # from common.emails import send_waitlist_promotion_email
-        # send_waitlist_promotion_email.delay(registration_id=self.id)
+        # Send email notification to attendee
+        from integrations.services import email_service
+        
+        email_service.send_email(
+            template='waitlist_promotion',
+            recipient=self.email,
+            context={
+                'user_name': self.full_name,
+                'event_title': self.event.title,
+                # Assuming standard frontend route structure
+                'action_url': f"https://cpdevents.com/events/{self.event.slug}", 
+            }
+        )
 
     def update_attendance_summary(self):
         """

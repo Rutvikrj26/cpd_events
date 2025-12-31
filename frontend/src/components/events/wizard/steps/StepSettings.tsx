@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Video, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Video, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 import { useEventWizard } from '../EventWizardContext';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -10,17 +10,25 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { getPayoutsStatus, PayoutsStatus } from '@/api/payouts';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 
 export const StepSettings = () => {
     const { formData, updateFormData } = useEventWizard();
     const { currentOrg } = useOrganization();
+    const { user } = useAuth();
     const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
 
-    // Check if Stripe is connected for paid events
-    const stripeConnected = currentOrg?.stripe_charges_enabled || false;
+    // Payouts state for individual organizers
+    const [userPayoutsEnabled, setUserPayoutsEnabled] = useState(false);
+    const [loadingUserPayouts, setLoadingUserPayouts] = useState(true);
+
+    // Check if Stripe is connected (org OR individual user)
+    const orgStripeConnected = currentOrg?.stripe_charges_enabled || false;
+    const stripeConnected = orgStripeConnected || userPayoutsEnabled;
     const isPaidEvent = !formData.is_free;
 
     useEffect(() => {
@@ -41,6 +49,26 @@ export const StepSettings = () => {
 
         fetchTemplates();
     }, [formData.certificates_enabled]);
+
+    // Fetch individual user payouts status if not using an org
+    useEffect(() => {
+        const fetchUserPayouts = async () => {
+            // Only fetch if user is an organizer and not using an org with stripe enabled
+            if (user?.account_type !== 'organizer' || orgStripeConnected) {
+                setLoadingUserPayouts(false);
+                return;
+            }
+            try {
+                const status = await getPayoutsStatus();
+                setUserPayoutsEnabled(status.charges_enabled);
+            } catch (error) {
+                console.error('Failed to fetch user payouts status', error);
+            } finally {
+                setLoadingUserPayouts(false);
+            }
+        };
+        fetchUserPayouts();
+    }, [user?.account_type, orgStripeConnected]);
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -98,17 +126,24 @@ export const StepSettings = () => {
                 {!formData.is_free && (
                     <div className="pl-6 border-l-2 border-slate-100 ml-2 space-y-4">
                         {/* Stripe Connect Warning */}
-                        {!stripeConnected && (
+                        {loadingUserPayouts ? (
+                            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Checking payouts setup...
+                            </div>
+                        ) : !stripeConnected && (
                             <Alert variant="destructive" className="border-amber-300 bg-amber-50 text-amber-800">
                                 <AlertTriangle className="h-4 w-4" />
                                 <AlertDescription className="flex items-center justify-between">
                                     <span>
-                                        Connect your Stripe account to accept payments for this event.
+                                        {currentOrg
+                                            ? 'Connect your organization\'s Stripe account to accept payments.'
+                                            : 'Link your bank account to accept payments for this event.'}
                                     </span>
-                                    <Link to={`/organizations/${currentOrg?.slug}/settings`}>
+                                    <Link to={currentOrg ? `/organizations/${currentOrg.slug}/settings` : '/settings?tab=payouts'}>
                                         <Button size="sm" variant="outline" className="ml-4">
                                             <ExternalLink className="h-3 w-3 mr-1" />
-                                            Setup Stripe
+                                            {currentOrg ? 'Setup Stripe' : 'Link Payouts'}
                                         </Button>
                                     </Link>
                                 </AlertDescription>

@@ -4,7 +4,10 @@ from rest_framework.response import Response
 from .models import EventFeedback
 from .serializers import EventFeedbackSerializer
 from common.permissions import IsOrganizerOrReadOnly, IsOwnerOrReadOnly
+from common.rbac import roles
 
+
+@roles('attendee', 'organizer', 'admin', route_name='event_feedback')
 class EventFeedbackViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing event feedback.

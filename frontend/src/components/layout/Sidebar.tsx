@@ -28,7 +28,7 @@ export const Sidebar = () => {
     const [isCollapsed, setIsCollapsed] = useState(false);
     const isOrganizer = user?.account_type === 'organizer' || user?.account_type === 'admin';
 
-    const { currentOrg } = useOrganization();
+    const { currentOrg, organizations } = useOrganization();
 
     // Define nav items with route keys matching backend ROUTE_REGISTRY
     const navItems = [
@@ -46,12 +46,12 @@ export const Sidebar = () => {
         },
         { routeKey: 'registrations', to: '/registrations', icon: BookOpen, label: 'My Registrations', attendeeOnly: true },
         { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'My Certificates', attendeeOnly: true },
-        { routeKey: 'org_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', organizerOnly: true, end: true },
+        { routeKey: 'event_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', organizerOnly: true, end: true },
         // { routeKey: 'cert_templates', to: '/organizer/certificates/templates', icon: FileText, label: 'Cert. Templates', organizerOnly: true }, // REMOVED
 
-        { routeKey: 'zoom', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', organizerOnly: true },
+        { routeKey: 'zoom_meetings', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', organizerOnly: true },
         { routeKey: 'organizations', to: '/organizations', icon: Building2, label: 'Organizations', organizerOnly: true },
-        { routeKey: 'billing', to: '/billing', icon: CreditCard, label: 'Billing', organizerOnly: true },
+        { routeKey: 'subscriptions', to: '/billing', icon: CreditCard, label: 'Billing', organizerOnly: true },
         { routeKey: 'profile', to: '/settings', icon: UserCircle, label: 'Profile' },
     ];
 
@@ -78,10 +78,7 @@ export const Sidebar = () => {
             if (['dashboard', 'profile'].includes(item.routeKey)) {
                 return true;
             }
-            // Organizer items not in manifest (frontend-only routes)
-            if (['org_certificates', 'cert_templates', 'zoom', 'billing', 'organizations'].includes(item.routeKey)) {
-                return isOrganizer;
-            }
+
             // Use feature flag for certificates since it's not a distinct backend view
             if (item.routeKey === 'certificates') {
                 return hasFeature('view_own_certificates');
@@ -124,7 +121,7 @@ export const Sidebar = () => {
     return (
         <div
             className={cn(
-                "h-screen bg-card text-card-foreground flex flex-col transition-all duration-300 ease-in-out border-r border-border relative",
+                "h-full bg-card text-card-foreground flex flex-col transition-all duration-300 ease-in-out border-r border-border relative shrink-0",
                 isCollapsed ? "w-20" : "w-64"
             )}
         >
@@ -144,8 +141,8 @@ export const Sidebar = () => {
                     </NavLink>
                 </div>
 
-                {/* Organization Switcher - Only for organizers */}
-                {isOrganizer && (
+                {/* Organization Switcher - Only for organizers with organizations */}
+                {isOrganizer && organizations && organizations.length > 0 && (
                     <OrganizationSwitcher variant={isCollapsed ? "compact" : "default"} />
                 )}
             </div>

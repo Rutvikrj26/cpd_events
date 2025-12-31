@@ -114,7 +114,7 @@ export const MyRegistrationsPage = () => {
             case 'attended': return <span className="inline-flex items-center text-blue-700 bg-blue-50 px-2 py-1 rounded-md text-xs font-medium"><CheckCircle size={12} className="mr-1" /> Attended</span>;
             case 'cancelled': return <span className="inline-flex items-center text-red-700 bg-red-50 px-2 py-1 rounded-md text-xs font-medium"><XCircle size={12} className="mr-1" /> Cancelled</span>;
             case 'waitlisted': return <span className="inline-flex items-center text-yellow-700 bg-yellow-50 px-2 py-1 rounded-md text-xs font-medium"><Clock size={12} className="mr-1" /> Waitlisted</span>;
-            default: return <span className="inline-flex items-center text-gray-700 bg-gray-50 px-2 py-1 rounded-md text-xs font-medium"><Clock size={12} className="mr-1" /> Pending</span>;
+            default: return <span className="inline-flex items-center text-muted-foreground bg-muted px-2 py-1 rounded-md text-xs font-medium"><Clock size={12} className="mr-1" /> Pending</span>;
         }
     };
 
@@ -148,7 +148,7 @@ export const MyRegistrationsPage = () => {
             <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
                 {registrations.length === 0 ? (
                     <div className="p-12 text-center text-muted-foreground">
-                        You have not registered for any events yet. <Link to="/events" className="text-blue-600 hover:underline">Browse Events</Link>
+                        You have not registered for any events yet. <Link to="/events" className="text-primary hover:underline">Browse Events</Link>
                     </div>
                 ) : (
                     <table className="w-full text-left text-sm">
@@ -161,7 +161,7 @@ export const MyRegistrationsPage = () => {
                                 <th className="px-6 py-4 font-medium text-muted-foreground">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-border">
                             {registrations.map(reg => (
                                 <tr key={reg.uuid} className="hover:bg-muted/30 transition-colors">
                                     <td className="px-6 py-4">
@@ -172,7 +172,7 @@ export const MyRegistrationsPage = () => {
                                             {reg.event.starts_at && new Date(reg.event.starts_at).toLocaleDateString()}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-slate-600">
+                                    <td className="px-6 py-4 text-muted-foreground">
                                         {new Date(reg.created_at).toLocaleDateString()}
                                     </td>
                                     <td className="px-6 py-4">
@@ -183,7 +183,7 @@ export const MyRegistrationsPage = () => {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
-                                            <Link to={`/events/${reg.event.slug || reg.event.uuid}`} className="text-blue-600 hover:text-blue-800 font-medium text-xs">
+                                            <Link to={`/events/${reg.event.slug || reg.event.uuid}`} className="text-primary hover:text-primary/80 font-medium text-xs">
                                                 View Event
                                             </Link>
                                             {reg.payment_status === 'pending' && (

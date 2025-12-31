@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getOrganization } from '@/api/organizations';
+import { getOrganization, getOrganizationPlans, upgradeOrganizationSubscription } from '@/api/organizations';
 import { Organization, OrganizationSubscription } from '@/api/organizations/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,96 +28,62 @@ import {
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
 
-// Plan features configuration
-const PLAN_FEATURES: Record<string, { name: string; features: string[]; price?: number; seats?: number; seatPrice?: number }> = {
-    free: {
-        name: 'Free',
-        seats: 1,
-        features: [
-            '1 organizer seat',
-            '2 events per month',
-            '1 course per month',
-            '50 attendees per event',
-        ],
-    },
-    team: {
-        name: 'Team',
-        price: 245, // 5 seats × $49
-        seats: 5,
-        seatPrice: 49,
-        features: [
-            '5 included organizer seats',
-            'Unlimited events & courses',
-            'Unlimited attendees',
-            'Team collaboration',
-            'Zoom integration',
-            'Priority support',
-        ],
-    },
-    business: {
-        name: 'Business',
-        price: 675, // 15 seats × $45
-        seats: 15,
-        seatPrice: 45,
-        features: [
-            '15 included organizer seats',
-            'Unlimited events & courses',
-            'Unlimited attendees',
-            'Advanced analytics',
-            'White-label options',
-            'API access',
-            'Dedicated support',
-        ],
-    },
-    enterprise: {
-        name: 'Enterprise',
-        seats: 50,
-        seatPrice: 40,
-        features: [
-            '50+ organizer seats',
-            'Unlimited everything',
-            'Custom integrations',
-            'On-premise deployment',
-            'Dedicated account manager',
-            'SLA guarantees',
-        ],
-    },
-};
+// Plan features configuration will be fetched from the backend
+interface PlanConfig {
+    name: string;
+    features: string[];
+    price?: number;
+    seats?: number;
+    seatPrice?: number;
+    included_seats?: number;
+    seat_price_cents?: number;
+}
 
 export const OrganizationBillingPage: React.FC = () => {
     const { slug } = useParams<{ slug: string }>();
     const orgSlug = slug;
     const [organization, setOrganization] = useState<Organization | null>(null);
+    const [plans, setPlans] = useState<Record<string, PlanConfig>>({});
     const [loading, setLoading] = useState(true);
     const [planDialogOpen, setPlanDialogOpen] = useState(false);
     const [upgrading, setUpgrading] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchOrganization = async () => {
+        const fetchData = async () => {
             if (!orgSlug) return;
             try {
-                const org = await getOrganization(orgSlug);
+                const [org, fetchedPlans] = await Promise.all([
+                    getOrganization(orgSlug),
+                    getOrganizationPlans()
+                ]);
                 setOrganization(org);
+                setPlans(fetchedPlans);
             } catch (error) {
-                console.error('Failed to load organization', error);
+                console.error('Failed to load data', error);
                 toast.error('Failed to load organization details');
             } finally {
                 setLoading(false);
             }
         };
-        fetchOrganization();
+        fetchData();
     }, [orgSlug]);
 
     const handleUpgrade = async (planId: string) => {
         setUpgrading(planId);
 
         try {
-            // TODO: Implement organization subscription upgrade
-            // This will need a backend endpoint: POST /organizations/{slug}/subscription/upgrade/
-            toast.info('Organization plan upgrades coming soon! Please contact support.');
+            if (!organization) return;
+            const result = await upgradeOrganizationSubscription(organization.uuid, planId);
+            if (result.url) {
+                window.location.href = result.url;
+            } else {
+                toast.error('Failed to initiate upgrade');
+            }
         } catch (error: any) {
             console.error('Upgrade error:', error);
-            toast.error(error?.response?.data?.error?.message || 'Failed to update plan');
+            // Check for specific error message structure from backend
+            const message = error?.response?.data?.detail || error?.response?.data?.error?.message || 'Failed to update plan';
+            toast.error(message);
         } finally {
             setUpgrading(null);
         }
@@ -146,7 +112,7 @@ export const OrganizationBillingPage: React.FC = () => {
 
     const subscription = organization.subscription;
     const currentPlan = subscription?.plan || 'free';
-    const currentPlanData = PLAN_FEATURES[currentPlan];
+    const currentPlanData = plans[currentPlan];
     const seatUtilization = subscription
         ? Math.round((subscription.active_organizer_seats / subscription.total_seats) * 100)
         : 0;
@@ -196,18 +162,25 @@ export const OrganizationBillingPage: React.FC = () => {
                                     </DialogDescription>
                                 </DialogHeader>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                                    {Object.entries(PLAN_FEATURES).map(([planId, plan]) => {
+                                    {Object.entries(plans).map(([planId, plan]) => {
                                         const isCurrent = planId === currentPlan;
+                                        // Simple heuristic for "recommended" - usually the middle paid plan
                                         const isRecommended = planId === 'team';
+
+                                        // Calculate display prices from backend data if available, or fallbacks
+                                        // Backend structure: { included_seats: number, seat_price_cents: number, ... }
+                                        const seats = plan.included_seats || plan.seats || 0;
+                                        const seatPriceCents = plan.seat_price_cents || (plan.seatPrice ? plan.seatPrice * 100 : 0);
+                                        const seatPrice = seatPriceCents / 100;
+                                        const totalPrice = plan.price || (seatPrice * seats);
 
                                         return (
                                             <div
                                                 key={planId}
-                                                className={`relative p-6 rounded-lg border ${
-                                                    isRecommended
-                                                        ? 'border-primary ring-2 ring-primary/20'
-                                                        : 'border-border'
-                                                } ${isCurrent ? 'bg-primary/5' : ''}`}
+                                                className={`relative p-6 rounded-lg border ${isRecommended
+                                                    ? 'border-primary ring-2 ring-primary/20'
+                                                    : 'border-border'
+                                                    } ${isCurrent ? 'bg-primary/5' : ''}`}
                                             >
                                                 {isRecommended && (
                                                     <Badge className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary text-xs">
@@ -224,12 +197,12 @@ export const OrganizationBillingPage: React.FC = () => {
                                                     )}
                                                 </div>
                                                 <div className="mb-4">
-                                                    {plan.price !== undefined ? (
+                                                    {seatPrice > 0 ? (
                                                         <>
-                                                            <span className="text-3xl font-bold">${plan.price}</span>
+                                                            <span className="text-3xl font-bold">${totalPrice}</span>
                                                             <span className="text-muted-foreground text-sm">/mo</span>
                                                             <div className="text-xs text-muted-foreground mt-1">
-                                                                ${plan.seatPrice}/seat × {plan.seats} seats
+                                                                ${seatPrice}/seat × {seats} seats
                                                             </div>
                                                         </>
                                                     ) : planId === 'free' ? (
@@ -375,7 +348,7 @@ export const OrganizationBillingPage: React.FC = () => {
                             <div>
                                 <p className="font-medium">Add More Seats</p>
                                 <p className="text-sm text-muted-foreground">
-                                    Additional seats: ${currentPlanData?.seatPrice || 0}/seat per month
+                                    Additional seats: ${currentPlanData?.seatPrice || (currentPlanData?.seat_price_cents ? currentPlanData.seat_price_cents / 100 : 0)}/seat per month
                                 </p>
                             </div>
                             <Button variant="outline" disabled>

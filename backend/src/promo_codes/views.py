@@ -7,6 +7,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
+from common.permissions import IsOrganizer
+from common.rbac import roles
 from events.models import Event
 from .models import PromoCode, PromoCodeUsage
 from .serializers import (
@@ -22,6 +24,7 @@ from .services import (
 )
 
 
+@roles('organizer', 'admin', route_name='promo_codes')
 class PromoCodeViewSet(viewsets.ModelViewSet):
     """
     API endpoints for managing promo codes (organizer).
@@ -35,7 +38,7 @@ class PromoCodeViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = PromoCodeSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOrganizer]
     lookup_field = 'uuid'
 
     def get_queryset(self):
@@ -82,6 +85,7 @@ class PromoCodeViewSet(viewsets.ModelViewSet):
         })
 
 
+@roles('public', route_name='public_promo_codes')
 class PublicPromoCodeViewSet(viewsets.ViewSet):
     """
     Public API for validating promo codes during registration.

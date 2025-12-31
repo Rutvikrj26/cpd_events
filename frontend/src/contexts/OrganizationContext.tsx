@@ -52,7 +52,7 @@ const ROLE_HIERARCHY: Record<OrganizationRole, number> = {
 const LOCAL_STORAGE_KEY = 'current_org_slug';
 
 export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
-    const { user, isAuthenticated } = useAuth();
+    const { user, isAuthenticated, manifest } = useAuth();
 
     const [organizations, setOrganizations] = useState<OrganizationListItem[]>([]);
     const [currentOrg, setCurrentOrg] = useState<Organization | null>(null);
@@ -62,6 +62,18 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
     // Fetch user's organizations on auth change
     const refreshOrganizations = useCallback(async () => {
         if (!isAuthenticated || !user) {
+            setOrganizations([]);
+            return;
+        }
+
+        // Check if user has permission to view organizations
+        // The backend now strictly enforces plan-based access for this route.
+        // We must also wait for manifest to be loaded.
+        if (!manifest) {
+            return;
+        }
+
+        if (!manifest.routes.includes('organizations')) {
             setOrganizations([]);
             return;
         }
@@ -78,7 +90,7 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [isAuthenticated, user]);
+    }, [isAuthenticated, user, manifest]);
 
     // Load organizations when authenticated
     useEffect(() => {

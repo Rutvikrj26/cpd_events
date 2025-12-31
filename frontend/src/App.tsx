@@ -44,7 +44,6 @@ import { MyRegistrationsPage } from './pages/registrations/MyRegistrationsPage';
 import { CertificatesPage } from './pages/certificates/CertificatesPage';
 import { CertificateVerify } from './pages/certificates/CertificateVerify';
 import { BillingPage } from './pages/billing/BillingPage';
-import { ProfilePage } from './pages/profile/ProfilePage';
 
 // Shared Dashboard Pages
 import { Notifications } from './pages/dashboard/Notifications';
@@ -260,7 +259,6 @@ export default function App() {
                   <Route path="auth/callback" element={<AuthCallback />} />
                   <Route path="forgot-password" element={<ForgotPasswordPage />} />
                   <Route path="/billing" element={<BillingPage />} />
-                  <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/settings" element={<ProfileSettings />} />
 
@@ -292,6 +290,7 @@ export default function App() {
                 <Route path="/organizer/events/:id/edit" element={<Navigate to="/events/:id/edit" replace />} />
                 <Route path="/organizer/settings" element={<Navigate to="/settings" replace />} />
                 <Route path="/organizer/notifications" element={<Navigate to="/notifications" replace />} />
+                <Route path="/profile" element={<Navigate to="/settings" replace />} />
 
               </Route>
 

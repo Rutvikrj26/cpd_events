@@ -14,10 +14,10 @@ export const StepReview = () => {
             </div>
 
             <div className="grid gap-6">
-                <Card className="bg-muted/30/50 border-border shadow-sm">
+                <Card className="bg-muted/50 border-border shadow-sm">
                     {/* Image Preview */}
                     {(formData._imageFile || formData.featured_image_url) && (
-                        <div className="relative w-full h-48 sm:h-64 overflow-hidden rounded-t-lg bg-slate-100">
+                        <div className="relative w-full h-48 sm:h-64 overflow-hidden rounded-t-lg bg-muted">
                             <img
                                 src={
                                     formData._imageFile
@@ -32,33 +32,33 @@ export const StepReview = () => {
                     <CardContent className="p-6 space-y-6">
                         <div>
                             <h3 className="text-2xl font-bold text-foreground mb-2">{formData.title || 'Untitled Event'}</h3>
-                            <p className="text-slate-600 whitespace-pre-wrap">{formData.description || 'No description provided.'}</p>
+                            <p className="text-muted-foreground whitespace-pre-wrap">{formData.description || 'No description provided.'}</p>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                            <div className="flex items-center gap-2 text-slate-700">
+                            <div className="flex items-center gap-2 text-foreground">
                                 <Tag className="h-4 w-4 text-primary" />
                                 <span className="capitalize">{formData.event_type}</span>
                             </div>
-                            <div className="flex items-center gap-2 text-slate-700">
+                            <div className="flex items-center gap-2 text-foreground">
                                 <MapPin className="h-4 w-4 text-primary" />
                                 <span className="capitalize">{formData.format}</span>
                             </div>
-                            <div className="flex items-center gap-2 text-slate-700">
+                            <div className="flex items-center gap-2 text-foreground">
                                 <Calendar className="h-4 w-4 text-primary" />
                                 <span>{formData.starts_at ? new Date(formData.starts_at).toLocaleString() : 'Date not set'}</span>
                             </div>
-                            <div className="flex items-center gap-2 text-slate-700">
+                            <div className="flex items-center gap-2 text-foreground">
                                 <Clock className="h-4 w-4 text-primary" />
                                 <span>{formData.duration_minutes} Minutes</span>
                             </div>
                             {formData.max_attendees && (
-                                <div className="flex items-center gap-2 text-slate-700">
+                                <div className="flex items-center gap-2 text-foreground">
                                     <Users className="h-4 w-4 text-primary" />
                                     <span>Max {formData.max_attendees} Attendees</span>
                                 </div>
                             )}
-                            <div className="flex items-center gap-2 text-slate-700">
+                            <div className="flex items-center gap-2 text-foreground">
                                 <Tag className="h-4 w-4 text-primary" />
                                 <span>{formData.is_free ? 'Free Event' : `${formData.price} ${formData.currency}`}</span>
                             </div>

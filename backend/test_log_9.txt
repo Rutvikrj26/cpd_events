@@ -1,0 +1,24 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.4, pytest-8.4.2, pluggy-1.6.0
+django: version: 6.0, settings: config.settings.development (from env)
+rootdir: /Users/rutvikrj26/Desktop/cpd_events/backend
+configfile: pyproject.toml
+plugins: cov-4.1.0, django-4.11.1, Faker-22.7.0
+collected 4 items
+
+src/organizations/tests/test_plans_and_billing.py ....                   [100%]
+
+=============================== warnings summary ===============================
+src/organizations/tests/test_plans_and_billing.py::TestOrganizationPlansAndBilling::test_get_plans
+src/organizations/tests/test_plans_and_billing.py::TestOrganizationPlansAndBilling::test_upgrade_subscription
+src/organizations/tests/test_plans_and_billing.py::TestOrganizationPlansAndBilling::test_invite_organizer_external
+src/organizations/tests/test_plans_and_billing.py::TestOrganizationPlansAndBilling::test_invite_organizer_non_existent
+  /Users/rutvikrj26/Desktop/cpd_events/backend/.venv/lib/python3.13/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /Users/rutvikrj26/Desktop/cpd_events/backend/src/staticfiles/
+    mw_instance = middleware(adapted_handler)
+
+src/organizations/tests/test_plans_and_billing.py::TestOrganizationPlansAndBilling::test_get_plans
+  /Users/rutvikrj26/Desktop/cpd_events/backend/.venv/lib/python3.13/site-packages/drf_yasg/views.py:100: DeprecationWarning: SwaggerJSONRenderer & SwaggerYAMLRenderer's `format` has changed to not include a `.` prefix, please silence this warning by setting `SWAGGER_USE_COMPAT_RENDERERS = False` in your Django settings and ensure your application works (check your URLCONF and swagger/redoc URLs).
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 4 passed, 5 warnings in 10.12s ========================

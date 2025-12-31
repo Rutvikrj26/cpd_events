@@ -38,16 +38,18 @@ export const DashboardLayout = ({ children, role }: DashboardLayoutProps) => {
   }, [isOrganizer]);
 
   return (
-    <div className="flex bg-muted/30 min-h-screen">
+    <div className="flex h-screen bg-muted/30 overflow-hidden">
       <Sidebar />
-      <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
-        {/* Global trial/subscription banner for organizers */}
-        {isOrganizer && subscription && (
-          <div className="mb-6">
-            <TrialStatusBanner subscription={subscription} />
-          </div>
-        )}
-        {children || <Outlet />}
+      <main className="flex-1 overflow-y-auto">
+        <div className="p-4 md:p-6 lg:p-8 min-h-full">
+          {/* Global trial/subscription banner for organizers */}
+          {isOrganizer && subscription && (
+            <div className="mb-6">
+              <TrialStatusBanner subscription={subscription} />
+            </div>
+          )}
+          {children || <Outlet />}
+        </div>
       </main>
     </div>
   );

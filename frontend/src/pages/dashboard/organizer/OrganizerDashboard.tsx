@@ -160,9 +160,9 @@ export function OrganizerDashboard() {
           <Card className="border-border/60 shadow-sm overflow-hidden">
             <CardContent className="p-0">
               {recentEvents.length === 0 ? (
-                <div className="p-12 text-center bg-muted/30/50">
+                <div className="p-12 text-center bg-muted/50">
                   <div className="w-12 h-12 bg-card border border-border rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-                    <Calendar className="h-6 w-6 text-slate-400" />
+                    <Calendar className="h-6 w-6 text-muted-foreground" />
                   </div>
                   <h3 className="text-lg font-medium text-foreground">No events found</h3>
                   <p className="text-muted-foreground mt-1 max-w-sm mx-auto mb-6">
@@ -175,7 +175,7 @@ export function OrganizerDashboard() {
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-muted/30/80 border-b border-border text-muted-foreground font-medium">
+                    <thead className="bg-muted/80 border-b border-border text-muted-foreground font-medium">
                       <tr>
                         <th className="px-6 py-4">Event Name</th>
                         <th className="px-6 py-4">Date</th>
@@ -184,9 +184,9 @@ export function OrganizerDashboard() {
                         <th className="px-6 py-4 w-[50px]"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-border">
                       {recentEvents.map((event) => (
-                        <tr key={event.uuid} className="group hover:bg-muted/30/50 transition-colors">
+                        <tr key={event.uuid} className="group hover:bg-muted/50 transition-colors">
                           <td className="px-6 py-4 font-medium text-foreground">
                             <div className="flex flex-col gap-1">
                               <Link to={`/organizer/events/${event.uuid}/manage`} className="hover:text-primary transition-colors block truncate max-w-[200px] sm:max-w-xs">
@@ -200,7 +200,7 @@ export function OrganizerDashboard() {
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-slate-600">
+                          <td className="px-6 py-4 text-muted-foreground">
                             {new Date(event.starts_at).toLocaleDateString()}
                           </td>
                           <td className="px-6 py-4">
@@ -208,13 +208,13 @@ export function OrganizerDashboard() {
                               {event.status}
                             </Badge>
                           </td>
-                          <td className="px-6 py-4 text-right font-medium text-slate-700">
+                          <td className="px-6 py-4 text-right font-medium text-foreground">
                             {event.registration_count}
                           </td>
                           <td className="px-6 py-4 text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>

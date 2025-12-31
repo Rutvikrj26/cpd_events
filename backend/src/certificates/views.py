@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 from common.pagination import SmallPagination
 from common.permissions import IsOrganizer
+from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import ReadOnlyModelViewSet, SoftDeleteModelViewSet
 
@@ -29,6 +30,7 @@ from .models import Certificate, CertificateTemplate
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='certificate_templates')
 class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     """
     Manage certificate templates.
@@ -254,6 +256,7 @@ class EventCertificateFilter(filters.FilterSet):
         fields = ['status']
 
 
+@roles('organizer', 'admin', route_name='event_certificates')
 class EventCertificateViewSet(viewsets.ModelViewSet):
     """
     Manage certificates for an event.
@@ -396,6 +399,7 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
+@roles('public', route_name='certificate_verification')
 class CertificateVerificationView(generics.RetrieveAPIView):
     """
     GET /api/v1/public/certificates/verify/{code}/
@@ -481,6 +485,7 @@ class CertificateVerificationView(generics.RetrieveAPIView):
 # =============================================================================
 
 
+@roles('attendee', 'organizer', 'admin', route_name='my_certificates')
 class MyCertificateViewSet(ReadOnlyModelViewSet):
     """
     Current user's certificates.

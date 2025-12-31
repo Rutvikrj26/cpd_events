@@ -27,10 +27,6 @@ class Subscription(BaseModel):
         ATTENDEE = 'attendee', 'Attendee'
         PROFESSIONAL = 'professional', 'Professional'
         ORGANIZATION = 'organization', 'Organization'
-        # Legacy plans (kept for backward compatibility - auto-migrate to new tiers)
-        STARTER = 'starter', 'Starter'  # Maps to Professional
-        PREMIUM = 'premium', 'Premium'  # Maps to Organization
-        ORGANIZER = 'organizer', 'Organizer'  # Maps to Professional
 
     class Status(models.TextChoices):
         TRIALING = 'trialing', 'Trialing'
@@ -97,28 +93,6 @@ class Subscription(BaseModel):
             'events_per_month': None,  # Unlimited
             'certificates_per_month': None,  # Unlimited
             'max_attendees_per_event': 2000,
-        },
-        # Legacy plan mappings (automatically converted)
-        Plan.STARTER: {  # Maps to Professional
-            'events_per_month': 30,
-            'certificates_per_month': 500,
-            'max_attendees_per_event': 500,
-        },
-        Plan.PREMIUM: {  # Maps to Organization
-            'events_per_month': None,
-            'certificates_per_month': None,
-            'max_attendees_per_event': 2000,
-        },
-        # Legacy plans (backward compatibility)
-        Plan.ORGANIZER: {
-            'events_per_month': 30,  # Same as Professional
-            'certificates_per_month': 500,
-            'max_attendees_per_event': 500,
-        },
-        Plan.ORGANIZATION: {
-            'events_per_month': None,  # Unlimited
-            'certificates_per_month': None,  # Unlimited
-            'max_attendees_per_event': None,  # Unlimited
         },
     }
 

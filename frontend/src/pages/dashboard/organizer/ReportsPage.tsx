@@ -86,7 +86,7 @@ export function ReportsPage() {
                     </CardHeader>
                     <CardContent className="pl-2">
                         {/* Placeholder for Chart */}
-                        <div className="h-[300px] flex items-center justify-center bg-muted/30/50 rounded-lg border border-dashed text-slate-400">
+                        <div className="h-[300px] flex items-center justify-center bg-muted/50 rounded-lg border border-dashed text-muted-foreground">
                             <div className="text-center">
                                 <BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-50" />
                                 <p>Chart Visualization Placeholder</p>
@@ -103,9 +103,9 @@ export function ReportsPage() {
                     </CardHeader>
                     <CardContent>
                         {/* Placeholder for Pie Chart */}
-                        <div className="h-[300px] flex items-center justify-center bg-muted/30/50 rounded-lg border border-dashed text-slate-400">
+                        <div className="h-[300px] flex items-center justify-center bg-muted/50 rounded-lg border border-dashed text-muted-foreground">
                             <div className="text-center">
-                                <div className="h-32 w-32 rounded-full border-8 border-blue-100 border-t-blue-500 mx-auto mb-4 opacity-75"></div>
+                                <div className="h-32 w-32 rounded-full border-8 border-primary/20 border-t-primary mx-auto mb-4 opacity-75"></div>
                                 <p>Distribution Chart Placeholder</p>
                             </div>
                         </div>

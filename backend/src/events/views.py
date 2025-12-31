@@ -344,6 +344,7 @@ class PublicEventListView(generics.ListAPIView):
         ).select_related('owner')
 
 
+@roles('public', route_name='public_event_detail')
 class PublicEventDetailView(generics.RetrieveAPIView):
     """
     GET /api/v1/public/events/{slug_or_uuid}/
@@ -403,6 +404,7 @@ class PublicEventDetailView(generics.RetrieveAPIView):
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='event_custom_fields')
 class EventCustomFieldViewSet(viewsets.ModelViewSet):
     """
     Manage custom fields for an event.
@@ -446,6 +448,7 @@ class EventCustomFieldViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='event_sessions')
 class EventSessionViewSet(viewsets.ModelViewSet):
     """
     Manage sessions for a multi-session event.
@@ -502,6 +505,7 @@ class EventSessionViewSet(viewsets.ModelViewSet):
         return Response({'message': 'Sessions reordered.'})
 
 
+@roles('attendee', 'organizer', 'admin', route_name='session_attendance')
 class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
     """
     View session attendance for a registration.

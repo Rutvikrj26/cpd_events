@@ -6,6 +6,7 @@ from rest_framework import permissions, status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from common.rbac import roles
 from .models import Invoice, PaymentMethod, Subscription, StripeProduct
 from .serializers import (
     BillingPortalSerializer,
@@ -25,6 +26,7 @@ from common.utils import error_response
 from drf_yasg.utils import swagger_auto_schema
 
 
+@roles('organizer', 'admin', route_name='subscriptions')
 class SubscriptionViewSet(viewsets.GenericViewSet):
     """
     Subscription management for the authenticated user.
@@ -154,6 +156,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             return error_response('Failed to reactivate subscription', code='REACTIVATION_FAILED')
 
 
+@roles('organizer', 'admin', route_name='invoices')
 class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Invoice history for the authenticated user.
@@ -174,6 +177,7 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
         return InvoiceSerializer
 
 
+@roles('organizer', 'admin', route_name='payment_methods')
 class PaymentMethodViewSet(viewsets.ModelViewSet):
     """
     Payment method management.
@@ -229,6 +233,7 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
         return Response(PaymentMethodSerializer(payment_method).data)
 
 
+@roles('attendee', 'organizer', 'admin', route_name='checkout_session')
 class CheckoutSessionView(views.APIView):
     """
     Create Stripe checkout session.
@@ -255,6 +260,7 @@ class CheckoutSessionView(views.APIView):
             return error_response(result.get('error', 'Failed to create checkout session'), code='CHECKOUT_FAILED')
 
 
+@roles('organizer', 'admin', route_name='billing_portal')
 class BillingPortalView(views.APIView):
     """
     Create Stripe billing portal session.
@@ -276,6 +282,7 @@ class BillingPortalView(views.APIView):
             return error_response(result.get('error', 'Failed to create portal session'), code='PORTAL_FAILED')
 
 
+@roles('organizer', 'admin', route_name='setup_intent')
 class SetupIntentView(views.APIView):
     """
     Create Stripe SetupIntent for collecting payment method via embedded Elements.
@@ -298,6 +305,7 @@ class SetupIntentView(views.APIView):
             return error_response(result.get('error', 'Failed to create setup intent'), code='SETUP_INTENT_FAILED')
 
 
+@roles('public', route_name='public_pricing')
 class PublicPricingView(views.APIView):
     """
     Public API to fetch current pricing from database.

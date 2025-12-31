@@ -65,7 +65,7 @@ export function AttendeeDashboard() {
               <Link to="/events">Browse Events</Link>
             </Button>
             <Button asChild variant="outline" className="bg-transparent text-white border-white/30 hover:bg-card/10 hover:text-white hover:border-white/50">
-              <Link to="/profile">View Profile</Link>
+              <Link to="/settings">View Profile</Link>
             </Button>
           </div>
         </div>
@@ -116,10 +116,10 @@ export function AttendeeDashboard() {
           </div>
 
           {upcomingRegistrations.length === 0 ? (
-            <Card className="border-dashed border-2 bg-muted/30/50 shadow-none border-border">
+            <Card className="border-dashed border-2 bg-muted/50 shadow-none border-border">
               <CardContent className="flex flex-col items-center justify-center p-12 text-center">
                 <div className="p-4 bg-card rounded-full shadow-sm mb-4">
-                  <Calendar className="h-8 w-8 text-slate-400" />
+                  <Calendar className="h-8 w-8 text-muted-foreground" />
                 </div>
                 <h3 className="text-lg font-medium text-foreground">No upcoming events</h3>
                 <p className="text-muted-foreground mt-2 max-w-sm">
@@ -162,14 +162,14 @@ export function AttendeeDashboard() {
                             <Badge variant="secondary" className="text-xs font-medium">
                               {reg.event.event_type}
                             </Badge>
-                            <span className="text-slate-300 text-xs">•</span>
+                            <span className="text-muted-foreground/60 text-xs">•</span>
                             <span className="text-xs font-medium text-muted-foreground flex items-center">
                               <Award className="h-3 w-3 mr-1 text-amber-500" />
                               {reg.event.cpd_credit_value} CPD Credits
                             </span>
                           </div>
                         </div>
-                        <Button variant="ghost" size="icon" className="shrink-0 z-10 relative text-slate-400 hover:text-primary hover:bg-primary/10">
+                        <Button variant="ghost" size="icon" className="shrink-0 z-10 relative text-muted-foreground hover:text-primary hover:bg-primary/10">
                           <ExternalLink className="h-4 w-4" />
                         </Button>
                       </div>
@@ -201,18 +201,18 @@ export function AttendeeDashboard() {
 
 
           {/* Organizer Upsell */}
-          <Card className="bg-slate-900 text-white border-none overflow-hidden relative shadow-lg">
+          <Card className="bg-foreground text-background border-none overflow-hidden relative shadow-lg">
             <div className="absolute top-0 right-0 p-4 opacity-10">
               <Users size={100} />
             </div>
             <CardHeader className="relative z-10">
               <CardTitle className="text-lg">Host Your Own Events</CardTitle>
-              <CardDescription className="text-slate-300">
+              <CardDescription className="text-muted">
                 Ready to share your knowledge?
               </CardDescription>
             </CardHeader>
             <CardContent className="relative z-10">
-              <p className="text-sm text-slate-300 mb-4 font-medium">
+              <p className="text-sm text-muted mb-4 font-medium">
                 Upgrade to an Organizer account to create events, issue certificates, and track attendance automatically.
               </p>
               <Button className="w-full bg-card text-foreground hover:bg-muted font-bold border-0" size="sm">

@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 
 from common.permissions import IsOrganizer
+from common.rbac import roles
 from common.viewsets import ReadOnlyModelViewSet
 from common.utils import error_response
 
@@ -37,6 +38,7 @@ class EventRecordingFilter(filters.FilterSet):
         fields = ['status', 'access_level']
 
 
+@roles('organizer', 'admin', route_name='event_recordings')
 class EventRecordingViewSet(viewsets.ModelViewSet):
     """
     Manage recordings for an event (C3).
@@ -114,6 +116,7 @@ class EventRecordingViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
+@roles('attendee', 'organizer', 'admin', route_name='my_recordings')
 class MyRecordingsViewSet(ReadOnlyModelViewSet):
     """
     Current user's accessible recordings.
@@ -175,8 +178,8 @@ class MyRecordingsViewSet(ReadOnlyModelViewSet):
         recording.view_count = (recording.view_count or 0) + 1
         recording.save(update_fields=['view_count'])
 
-        # TODO: Generate signed streaming URL
-        # For now return the play URL
+        # Future Work: Generate signed streaming URL (e.g. CloudFront/GCP signed URLs)
+        # to prevent direct access. For now, we rely on the play_url from Zoom.
         return Response(
             {
                 'streaming_url': recording_file.play_url,
@@ -190,6 +193,7 @@ class MyRecordingsViewSet(ReadOnlyModelViewSet):
 # =============================================================================
 
 
+@roles('public', route_name='zoom_webhook')
 class ZoomWebhookView(generics.GenericAPIView):
     """
     POST /api/v1/webhooks/zoom/
@@ -300,6 +304,7 @@ class ZoomWebhookView(generics.GenericAPIView):
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='email_logs')
 class EmailLogViewSet(ReadOnlyModelViewSet):
     """
     View email logs for an event.
@@ -320,6 +325,7 @@ class EmailLogViewSet(ReadOnlyModelViewSet):
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='zoom_initiate')
 class ZoomInitiateView(generics.GenericAPIView):
     """
     GET /api/v1/integrations/zoom/initiate/
@@ -340,6 +346,7 @@ class ZoomInitiateView(generics.GenericAPIView):
         return error_response(result.get('error', 'Configuration error'), code='CONFIG_ERROR')
 
 
+@roles('organizer', 'admin', route_name='zoom_callback')
 class ZoomCallbackView(generics.GenericAPIView):
     """
     GET /api/v1/integrations/zoom/callback/
@@ -369,6 +376,7 @@ class ZoomCallbackView(generics.GenericAPIView):
         return error_response(result.get('error', 'Unknown error'), code='CONNECTION_FAILED')
 
 
+@roles('organizer', 'admin', route_name='zoom_status')
 class ZoomStatusView(generics.RetrieveAPIView):
     """
     GET /api/v1/integrations/zoom/status/
@@ -385,6 +393,7 @@ class ZoomStatusView(generics.RetrieveAPIView):
         })
 
 
+@roles('organizer', 'admin', route_name='zoom_disconnect')
 class ZoomDisconnectView(generics.GenericAPIView):
     """
     POST /api/v1/integrations/zoom/disconnect/
@@ -403,6 +412,7 @@ class ZoomDisconnectView(generics.GenericAPIView):
         return error_response('Failed to disconnect Zoom', code='DISCONNECT_FAILED')
 
 
+@roles('organizer', 'admin', route_name='zoom_meetings')
 class ZoomMeetingsListView(generics.ListAPIView):
     """
     GET /api/v1/integrations/zoom/meetings/

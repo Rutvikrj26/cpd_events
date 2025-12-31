@@ -139,6 +139,7 @@ ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', 'YWJjZGVmZ2hpamtsbW5vcHFyc3R1d
 
 # Site URL for generating absolute URLs
 SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
 
 # =============================================================================
 # Django REST Framework
@@ -238,6 +239,10 @@ STRIPE_PRICE_IDS = {
 # Trial Configuration
 BILLING_TRIAL_DAYS = int(os.environ.get('BILLING_TRIAL_DAYS', 14))  # 14-day trial (was 30)
 BILLING_GRACE_PERIOD_DAYS = int(os.environ.get('BILLING_GRACE_PERIOD_DAYS', 30))  # Block access after this
+
+# Platform fee for paid event registrations (percentage of transaction)
+# This is the application_fee_amount sent to Stripe Connect
+PLATFORM_FEE_PERCENT = float(os.environ.get('PLATFORM_FEE_PERCENT', 2.0))  # Default 2%
 
 # Plan Pricing (in cents, for display purposes - actual pricing in Stripe)
 BILLING_PRICES = {

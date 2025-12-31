@@ -193,6 +193,26 @@ export const getPublicOrganizationProfile = async (slug: string): Promise<Organi
 };
 
 // ============================================================================
+// Billing & Plans
+// ============================================================================
+
+/**
+ * Get available organization plans.
+ */
+export const getOrganizationPlans = async (): Promise<Record<string, any>> => {
+    const response = await client.get<Record<string, any>>(`${BASE_URL}/plans/`);
+    return response.data;
+};
+
+/**
+ * Upgrade organization subscription.
+ */
+export const upgradeOrganizationSubscription = async (uuid: string, plan: string): Promise<{ url: string }> => {
+    const response = await client.post<{ url: string }>(`${BASE_URL}/${uuid}/subscription/upgrade/`, { plan });
+    return response.data;
+};
+
+// ============================================================================
 // Re-export types
 // ============================================================================
 

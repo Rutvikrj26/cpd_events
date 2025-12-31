@@ -95,7 +95,7 @@ export function MyEvents() {
           </TabsList>
 
           <div className="relative w-full sm:w-64">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search my events..."
               className="pl-9"
@@ -173,8 +173,8 @@ function RegistrationCard({ registration, isPast = false }: { registration: Regi
 
   return (
     <Card className="overflow-hidden hover:shadow-md transition-shadow">
-      <div className="h-32 bg-gradient-to-br from-primary/5 to-slate-100 relative flex items-center justify-center">
-        <Calendar className="h-8 w-8 text-slate-300" />
+      <div className="h-32 bg-gradient-to-br from-primary/5 to-muted relative flex items-center justify-center">
+        <Calendar className="h-8 w-8 text-muted-foreground/50" />
         <div className="absolute top-3 right-3">
           <Badge variant={registration.status === 'confirmed' ? 'default' : 'secondary'} className="capitalize">
             {registration.status}
@@ -229,8 +229,8 @@ function RegistrationCard({ registration, isPast = false }: { registration: Regi
 
 function EmptyState({ tab }: { tab: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 px-4 bg-gray-50 rounded-lg border border-dashed border-border">
-      <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4 text-gray-400">
+    <div className="flex flex-col items-center justify-center py-16 px-4 bg-muted/50 rounded-lg border border-dashed border-border">
+      <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4 text-muted-foreground">
         <Calendar className="h-6 w-6" />
       </div>
       <h3 className="text-lg font-medium text-foreground mb-1">

@@ -19,7 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const OrganizationsListPage: React.FC = () => {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, hasFeature } = useAuth();
     const { organizations, isLoading, refreshOrganizations } = useOrganization();
     const [linkableData, setLinkableData] = useState<{ events_count: number; templates_count: number; has_linkable_data: boolean } | null>(null);
 
@@ -57,14 +57,16 @@ const OrganizationsListPage: React.FC = () => {
                         Manage your organizations and team accounts
                     </p>
                 </div>
-                <Button onClick={() => navigate('/organizations/new')}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Organization
-                </Button>
+                {hasFeature('can_create_organization') && (
+                    <Button onClick={() => navigate('/organizations/new')}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Organization
+                    </Button>
+                )}
             </div>
 
             {/* Upgrade CTA for individual organizers */}
-            {user?.account_type === 'organizer' && linkableData?.has_linkable_data && organizations.length === 0 && (
+            {hasFeature('can_create_organization') && user?.account_type === 'organizer' && linkableData?.has_linkable_data && organizations.length === 0 && (
                 <Card className="mb-8 border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
                     <CardHeader>
                         <div className="flex items-center gap-2">
@@ -104,18 +106,24 @@ const OrganizationsListPage: React.FC = () => {
             )}
 
             {/* Empty State */}
-            {!isLoading && organizations.length === 0 && (
+            {!isLoading && organizations.length === 0 && !linkableData?.has_linkable_data && (
                 <Card className="text-center py-12">
                     <CardContent>
                         <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                        <h3 className="text-lg font-semibold mb-2">No Organizations Yet</h3>
+                        <h3 className="text-lg font-semibold mb-2">
+                            {hasFeature('can_create_organization') ? 'No Organizations Yet' : 'No Organizations'}
+                        </h3>
                         <p className="text-muted-foreground mb-4">
-                            Create an organization to collaborate with team members on events and courses.
+                            {hasFeature('can_create_organization')
+                                ? 'Create an organization to collaborate with team members on events and courses.'
+                                : 'You are not a member of any organizations yet.'}
                         </p>
-                        <Button onClick={() => navigate('/organizations/new')}>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Create Your First Organization
-                        </Button>
+                        {hasFeature('can_create_organization') && (
+                            <Button onClick={() => navigate('/organizations/new')}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Create Your First Organization
+                            </Button>
+                        )}
                     </CardContent>
                 </Card>
             )}

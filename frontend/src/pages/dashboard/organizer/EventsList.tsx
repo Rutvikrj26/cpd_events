@@ -65,7 +65,7 @@ export function EventsList() {
         description="Manage your events, registrations, and certificates."
         actions={
           <Link to="/organizer/events/new">
-            <Button className="bg-blue-600 hover:bg-blue-700">
+            <Button className="bg-primary hover:bg-primary/90">
               <Plus className="mr-2 h-4 w-4" /> Create Event
             </Button>
           </Link>
@@ -77,7 +77,7 @@ export function EventsList() {
         <div className="p-4 border-b border-border flex flex-col sm:flex-row gap-4 items-center justify-between">
           <div className="relative w-full sm:max-w-sm">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-gray-400" />
+              <Search className="h-4 w-4 text-muted-foreground" />
             </div>
             <Input
               placeholder="Search events..."
@@ -107,11 +107,11 @@ export function EventsList() {
         <div className="overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-muted">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Event</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Date & Time</th>
@@ -121,10 +121,10 @@ export function EventsList() {
                   <th className="px-6 py-3 relative"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
-              <tbody className="bg-card divide-y divide-gray-200">
+              <tbody className="bg-card divide-y divide-border">
                 {filteredEvents.length > 0 ? (
                   filteredEvents.map((event) => (
-                    <tr key={event.uuid} className="hover:bg-gray-50 group">
+                    <tr key={event.uuid} className="hover:bg-muted/50 group">
                       <td className="px-6 py-4">
                         <div className="flex items-center">
                           <div>
@@ -150,9 +150,9 @@ export function EventsList() {
                           {event.registration_count} {event.capacity || event.max_attendees ? `/ ${event.capacity || event.max_attendees}` : ''}
                         </div>
                         {(event.capacity || event.max_attendees) && (
-                          <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                          <div className="w-full bg-muted rounded-full h-1.5 mt-1">
                             <div
-                              className="bg-blue-600 h-1.5 rounded-full"
+                              className="bg-primary h-1.5 rounded-full"
                               style={{ width: `${Math.min(100, (event.registration_count / (event.capacity || event.max_attendees || 1)) * 100)}%` }}
                             ></div>
                           </div>

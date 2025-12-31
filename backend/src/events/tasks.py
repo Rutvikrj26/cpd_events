@@ -83,11 +83,11 @@ def create_zoom_meeting(event_id: int):
     Create Zoom meeting for an event.
     """
     from events.models import Event
-    from events.services import zoom_meeting_service
+    from accounts.services import zoom_service
 
     try:
         event = Event.objects.get(id=event_id)
-        result = zoom_meeting_service.create_meeting(event)
+        result = zoom_service.create_meeting(event)
         return result.get('success', False)
     except Event.DoesNotExist:
         return False

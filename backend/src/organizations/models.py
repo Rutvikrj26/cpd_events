@@ -321,6 +321,7 @@ class OrganizationSubscription(BaseModel):
     # Plan configuration
     PLAN_CONFIG = {
         Plan.FREE: {
+            'name': 'Free',
             'included_seats': 1,
             'seat_price_cents': 0,
             'events_per_month': 2,
@@ -328,6 +329,7 @@ class OrganizationSubscription(BaseModel):
             'max_attendees_per_event': 50,
         },
         Plan.TEAM: {
+            'name': 'Team',
             'included_seats': 5,  # Updated from 3 to 5
             'seat_price_cents': 4900,  # $49/seat (updated from $15)
             'events_per_month': None,  # Unlimited
@@ -335,6 +337,7 @@ class OrganizationSubscription(BaseModel):
             'max_attendees_per_event': None,  # Unlimited
         },
         Plan.BUSINESS: {
+            'name': 'Business',
             'included_seats': 15,  # Updated from 10 to 15
             'seat_price_cents': 4500,  # $45/seat (updated from $12)
             'events_per_month': None,  # Unlimited
@@ -342,6 +345,7 @@ class OrganizationSubscription(BaseModel):
             'max_attendees_per_event': None,  # Unlimited
         },
         Plan.ENTERPRISE: {
+            'name': 'Enterprise',
             'included_seats': 50,
             'seat_price_cents': 4000,  # $40/seat (updated from $9)
             'events_per_month': None,  # Unlimited

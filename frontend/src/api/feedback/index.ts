@@ -11,18 +11,18 @@ import {
  * - Attendees see their own feedback submissions
  */
 export async function getFeedback(): Promise<EventFeedback[]> {
-    const response = await client.get<EventFeedback[]>('/feedback/');
-    return response.data;
+    const response = await client.get<any>('/feedback/');
+    return Array.isArray(response.data) ? response.data : response.data.results || [];
 }
 
 /**
  * Get feedback for a specific event (organizer only)
  */
 export async function getEventFeedback(eventUuid: string): Promise<EventFeedback[]> {
-    const response = await client.get<EventFeedback[]>('/feedback/', {
+    const response = await client.get<any>('/feedback/', {
         params: { event: eventUuid }
     });
-    return response.data;
+    return Array.isArray(response.data) ? response.data : response.data.results || [];
 }
 
 /**
@@ -38,10 +38,11 @@ export async function getFeedbackById(uuid: string): Promise<EventFeedback> {
  */
 export async function getRegistrationFeedback(registrationUuid: string): Promise<EventFeedback | null> {
     try {
-        const response = await client.get<EventFeedback[]>('/feedback/', {
+        const response = await client.get<any>('/feedback/', {
             params: { registration: registrationUuid }
         });
-        return response.data.length > 0 ? response.data[0] : null;
+        const results = Array.isArray(response.data) ? response.data : response.data.results || [];
+        return results.length > 0 ? results[0] : null;
     } catch {
         return null;
     }
