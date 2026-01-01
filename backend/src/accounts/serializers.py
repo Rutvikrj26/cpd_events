@@ -27,7 +27,7 @@ class SignupSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['email', 'password', 'password_confirm', 'full_name', 'professional_title', 'organization_name']
+        fields = ['email', 'password', 'password_confirm', 'full_name', 'professional_title', 'organization_name', 'account_type']
         extra_kwargs = {
             'email': {'required': True},
             'full_name': {'required': True},
@@ -44,7 +44,8 @@ class SignupSerializer(serializers.ModelSerializer):
 
         user = User(**validated_data)
         user.set_password(password)
-        user.account_type = 'attendee'
+        if not user.account_type:
+            user.account_type = 'attendee'
         user.save()
 
         # Link any guest registrations
@@ -233,7 +234,13 @@ class DeleteAccountSerializer(serializers.Serializer):
     """Confirm account deletion."""
 
     password = serializers.CharField(required=True, write_only=True)
+    confirm = serializers.BooleanField(required=True)
     reason = serializers.CharField(required=False, max_length=500, allow_blank=True)
+
+    def validate(self, attrs):
+        if not attrs.get('confirm'):
+            raise serializers.ValidationError({"confirm": "You must confirm account deletion."})
+        return attrs
 
     def validate_password(self, value):
         user = self.context['request'].user

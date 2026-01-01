@@ -29,7 +29,7 @@ User = get_user_model()
 class AuthThrottle(AnonRateThrottle):
     """Stricter throttle for auth endpoints."""
 
-    rate = '20/hour'
+    scope = 'auth'
 
 
 # =============================================================================
@@ -49,13 +49,20 @@ class SignupView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
+        # Generate tokens
+        from rest_framework_simplejwt.tokens import RefreshToken
+        refresh = RefreshToken.for_user(user)
+
         return Response(
             {
                 'message': 'Account created successfully.',
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
                 'user': {
                     'uuid': str(user.uuid),
                     'email': user.email,
                     'full_name': user.full_name,
+                    'account_type': user.account_type,
                 },
             },
             status=status.HTTP_201_CREATED,

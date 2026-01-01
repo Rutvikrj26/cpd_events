@@ -21,6 +21,7 @@ REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
     'anon': '10000/day',
     'user': '10000/day',
     'import': '10000/day',
+    'auth': '10000/day',
 }
 
 
