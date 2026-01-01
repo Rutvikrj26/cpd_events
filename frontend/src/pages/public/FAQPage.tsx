@@ -25,20 +25,20 @@ const faqCategories = [
         icon: HelpCircle,
         questions: [
             {
-                q: "What is CPD Events?",
-                a: "CPD Events is a comprehensive platform for managing professional development events. It enables you to create events, track attendance automatically through Zoom integration, and issue verifiable certificates to attendees who meet your requirements."
+                q: "What is Accredit?",
+                a: "Accredit is a comprehensive platform for managing professional development events. It enables you to create events, track attendance automatically through Zoom integration, and issue verifiable certificates to attendees who meet your requirements."
             },
             {
-                q: "Who is CPD Events for?",
-                a: "CPD Events is designed for professional associations, training providers, corporate L&D teams, and any organization that hosts educational events and needs to track attendance and issue CPD certificates."
+                q: "Who is Accredit for?",
+                a: "Accredit is designed for professional associations, training providers, corporate L&D teams, and any organization that hosts educational events and needs to track attendance and issue CPD certificates."
             },
             {
                 q: "Is there a free plan?",
-                a: "Yes! You can start using CPD Events for free. The free plan includes basic event management, Zoom integration, and certificate issuance. Upgrade to a paid plan for additional features like custom branding and team management."
+                a: "Yes! You can start using Accredit for free. The free plan includes basic event management, Zoom integration, and certificate issuance. Upgrade to a paid plan for additional features like custom branding and team management."
             },
             {
-                q: "Do I need technical skills to use CPD Events?",
-                a: "No technical skills required. Our intuitive interface guides you through event creation, and attendance tracking is automatic when connected to Zoom. If you can use email and basic web applications, you can use CPD Events."
+                q: "Do I need technical skills to use Accredit?",
+                a: "No technical skills required. Our intuitive interface guides you through event creation, and attendance tracking is automatic when connected to Zoom. If you can use email and basic web applications, you can use Accredit."
             }
         ]
     },
@@ -49,7 +49,7 @@ const faqCategories = [
         questions: [
             {
                 q: "What event formats are supported?",
-                a: "CPD Events supports three formats: Online (virtual events via Zoom), In-Person (physical events with manual check-in), and Hybrid (combination of both). You can also create multi-session events for programs that span multiple days or sessions."
+                a: "Accredit supports three formats: Online (virtual events via Zoom), In-Person (physical events with manual check-in), and Hybrid (combination of both). You can also create multi-session events for programs that span multiple days or sessions."
             },
             {
                 q: "Can I create multi-session events?",
@@ -72,7 +72,7 @@ const faqCategories = [
         questions: [
             {
                 q: "How do I connect my Zoom account?",
-                a: "Navigate to Settings → Integrations in your dashboard and click 'Connect Zoom'. You'll be redirected to Zoom to authorize the connection. Once connected, CPD Events can automatically create meetings and track attendance for your events."
+                a: "Navigate to Settings → Integrations in your dashboard and click 'Connect Zoom'. You'll be redirected to Zoom to authorize the connection. Once connected, Accredit can automatically create meetings and track attendance for your events."
             },
             {
                 q: "How is attendance tracked?",
@@ -84,7 +84,7 @@ const faqCategories = [
             },
             {
                 q: "Can I use my existing Zoom account?",
-                a: "Yes! CPD Events connects to your existing Zoom account via OAuth. We don't require a special Zoom plan - any Zoom account (including free accounts) can be connected. However, some features like automatic recording require a Zoom Pro plan or higher."
+                a: "Yes! Accredit connects to your existing Zoom account via OAuth. We don't require a special Zoom plan - any Zoom account (including free accounts) can be connected. However, some features like automatic recording require a Zoom Pro plan or higher."
             },
             {
                 q: "What about in-person events?",
@@ -181,7 +181,7 @@ export function FAQPage() {
                             Frequently Asked Questions
                         </h1>
                         <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                            Find answers to common questions about CPD Events. Can't find what you're looking for? Contact our support team.
+                            Find answers to common questions about Accredit. Can't find what you're looking for? Contact our support team.
                         </p>
                     </div>
                 </div>
@@ -190,7 +190,7 @@ export function FAQPage() {
             {/* FAQ Content */}
             <section className="py-16 bg-secondary/30">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="grid lg:grid-cols-4 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                         {/* Category Sidebar */}
                         <div className="lg:col-span-1">
                             <div className="sticky top-24 space-y-2">
@@ -200,8 +200,8 @@ export function FAQPage() {
                                         key={category.id}
                                         onClick={() => setActiveCategory(category.id)}
                                         className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${activeCategory === category.id
-                                                ? 'bg-primary text-primary-foreground'
-                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                                             }`}
                                     >
                                         <category.icon className="h-4 w-4" />

@@ -28,12 +28,12 @@ export const OrganizationSwitcher: React.FC<OrganizationSwitcherProps> = ({
     variant = 'default',
 }) => {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, hasFeature } = useAuth();
     const { organizations, currentOrg, setCurrentOrg, clearCurrentOrg, isLoading } = useOrganization();
 
     const handleSelectPersonal = () => {
         clearCurrentOrg();
-        navigate('/organizer');
+        navigate('/dashboard');
     };
 
     const handleSelectOrg = async (org: typeof organizations[0]) => {
@@ -185,14 +185,18 @@ const SwitcherContent: React.FC<SwitcherContentProps> = ({
             )}
 
             {/* Create Organization */}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-                onClick={onCreateOrg}
-                className="cursor-pointer"
-            >
-                <Plus className="h-4 w-4 mr-2" />
-                Create Organization
-            </DropdownMenuItem>
+            {hasFeature('can_create_organization') && (
+                <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                        onClick={onCreateOrg}
+                        className="cursor-pointer"
+                    >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Organization
+                    </DropdownMenuItem>
+                </>
+            )}
         </>
     );
 };

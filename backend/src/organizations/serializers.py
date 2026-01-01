@@ -76,6 +76,9 @@ class OrganizationDetailSerializer(serializers.ModelSerializer):
             'created_by_name',
             'created_at',
             'updated_at',
+            'stripe_connect_id',
+            'stripe_account_status',
+            'stripe_charges_enabled',
         ]
         read_only_fields = [
             'uuid',
@@ -89,6 +92,9 @@ class OrganizationDetailSerializer(serializers.ModelSerializer):
             'created_by_name',
             'created_at',
             'updated_at',
+            'stripe_connect_id',
+            'stripe_account_status',
+            'stripe_charges_enabled',
         ]
 
     def get_logo_url(self, obj):

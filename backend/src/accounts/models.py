@@ -152,6 +152,13 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     # =========================================
     # Timestamps
     # =========================================
+    stripe_connect_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe Connect Account ID")
+    stripe_account_status = models.CharField(max_length=50, default='pending', help_text="Connect account status")
+    stripe_charges_enabled = models.BooleanField(default=False, help_text="Whether account can accept payments")
+
+    # =========================================
+    # Timestamps
+    # =========================================
     last_login_at = models.DateTimeField(null=True, blank=True, help_text="Last successful login")
 
     objects = UserManager()

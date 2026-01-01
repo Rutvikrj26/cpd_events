@@ -38,7 +38,7 @@ export const DashboardStat = ({ title, value, icon: Icon, description, trend, cl
                         {trend && (
                             <span className={cn(
                                 "flex items-center font-medium mr-2",
-                                trend.positive ? "text-green-600" : "text-red-600"
+                                trend.positive ? "text-primary" : "text-destructive"
                             )}>
                                 {trend.positive ? "+" : ""}{trend.value}%
                             </span>

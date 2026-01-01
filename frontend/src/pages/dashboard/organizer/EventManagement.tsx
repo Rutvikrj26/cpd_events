@@ -15,7 +15,9 @@ import {
    Copy,
    ExternalLink,
    RefreshCw,
-   Trash2
+   Trash2,
+   MessageSquare,
+   Star
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +53,9 @@ import {
 
 
 import { EditAttendanceDialog } from "@/components/events/EditAttendanceDialog";
+import { FeedbackCard, FeedbackSummary } from "@/components/feedback";
+import { getEventFeedback, calculateFeedbackSummary } from "@/api/feedback";
+import { EventFeedback } from "@/api/feedback/types";
 
 export function EventManagement() {
    const { uuid } = useParams<{ uuid: string }>();
@@ -83,6 +88,10 @@ export function EventManagement() {
    const [searchTerm, setSearchTerm] = useState("");
    const [publishing, setPublishing] = useState(false);
 
+   // Feedback state
+   const [feedback, setFeedback] = useState<EventFeedback[]>([]);
+   const [feedbackLoading, setFeedbackLoading] = useState(false);
+
    const fetchRegistrations = async () => {
       if (!uuid) return;
       try {
@@ -96,6 +105,24 @@ export function EventManagement() {
    // Fetch registrations for the event
    useEffect(() => {
       fetchRegistrations();
+   }, [uuid]);
+
+   // Fetch feedback for the event
+   const fetchFeedback = async () => {
+      if (!uuid) return;
+      setFeedbackLoading(true);
+      try {
+         const data = await getEventFeedback(uuid);
+         setFeedback(data);
+      } catch (e) {
+         console.error("Failed to fetch feedback", e);
+      } finally {
+         setFeedbackLoading(false);
+      }
+   };
+
+   useEffect(() => {
+      fetchFeedback();
    }, [uuid]);
 
    const hasStarted = event ? new Date(event.starts_at) < new Date() : false;
@@ -237,11 +264,15 @@ export function EventManagement() {
       (a.email || '').toLowerCase().includes(searchTerm.toLowerCase())
    );
 
+   const feedbackSummary = calculateFeedbackSummary(feedback);
+
    const stats = {
       registered: attendees.filter(a => a.status !== "cancelled").length,
       checkedIn: attendees.filter(a => a.attended).length,
       cancelled: attendees.filter(a => a.status === "cancelled").length,
       issued: attendees.filter(a => a.certificate_uuid).length,
+      feedbackCount: feedback.length,
+      avgRating: feedbackSummary.average_rating,
    };
 
    return (
@@ -320,7 +351,7 @@ export function EventManagement() {
             </div>
          </PageHeader>
 
-         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card>
                <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Total Registrations</CardTitle>
@@ -328,7 +359,7 @@ export function EventManagement() {
                <CardContent>
                   <div className="text-2xl font-bold">{stats.registered}</div>
                   <p className="text-xs text-muted-foreground mt-1">
-                     {(stats.registered / event.capacity * 100).toFixed(0)}% of capacity
+                     {event.capacity ? `${(stats.registered / event.capacity * 100).toFixed(0)}% of capacity` : 'Unlimited capacity'}
                   </p>
                </CardContent>
             </Card>
@@ -351,6 +382,20 @@ export function EventManagement() {
                   <div className="text-2xl font-bold">{stats.issued}</div>
                   <p className="text-xs text-muted-foreground mt-1">
                      {stats.checkedIn > 0 ? (stats.issued / stats.checkedIn * 100).toFixed(0) : 0}% of attendees
+                  </p>
+               </CardContent>
+            </Card>
+            <Card>
+               <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Feedback</CardTitle>
+               </CardHeader>
+               <CardContent>
+                  <div className="flex items-center gap-2">
+                     <div className="text-2xl font-bold">{stats.avgRating > 0 ? stats.avgRating : '-'}</div>
+                     {stats.avgRating > 0 && <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                     {stats.feedbackCount} response{stats.feedbackCount !== 1 ? 's' : ''}
                   </p>
                </CardContent>
             </Card>
@@ -471,6 +516,13 @@ export function EventManagement() {
                </TabsTrigger>
                <TabsTrigger value="certificates" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
                   Certificates
+               </TabsTrigger>
+               <TabsTrigger value="feedback" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Feedback
+                  {stats.feedbackCount > 0 && (
+                     <Badge variant="secondary" className="ml-2 h-5 px-1.5">{stats.feedbackCount}</Badge>
+                  )}
                </TabsTrigger>
             </TabsList>
 
@@ -728,6 +780,35 @@ export function EventManagement() {
                      </table>
                   </div>
                </Card>
+            </TabsContent>
+
+            {/* FEEDBACK TAB */}
+            <TabsContent value="feedback" className="mt-0">
+               <div className="space-y-6">
+                  {/* Summary Card */}
+                  <FeedbackSummary summary={feedbackSummary} />
+
+                  {/* Individual Feedback Cards */}
+                  {feedback.length > 0 && (
+                     <div className="space-y-4">
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                           <MessageSquare className="h-5 w-5" />
+                           All Responses
+                        </h3>
+                        <div className="grid gap-4">
+                           {feedback.map((fb) => (
+                              <FeedbackCard key={fb.uuid} feedback={fb} />
+                           ))}
+                        </div>
+                     </div>
+                  )}
+
+                  {feedbackLoading && (
+                     <div className="text-center py-8 text-muted-foreground">
+                        Loading feedback...
+                     </div>
+                  )}
+               </div>
             </TabsContent>
          </Tabs>
       </div>

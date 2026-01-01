@@ -20,8 +20,12 @@ def trigger_zoom_creation(sender, instance, created, **kwargs):
     # 3. auto_create is true (optional explicit flag from frontend)
     #    OR just implicit presence of settings
     
+    # Check implicit presence of settings or explicit flag
+    should_create = False
     if instance.zoom_settings and not instance.zoom_meeting_id:
-        # Check explicit enabled flag if present, otherwise assume implicit
         if instance.zoom_settings.get('enabled', True):
-            logger.info(f"Triggering Zoom meeting creation for event {instance.uuid}")
-            create_zoom_meeting.delay(instance.id)
+            should_create = True
+
+    if should_create:
+        logger.info(f"Triggering Zoom meeting creation for event {instance.uuid}")
+        create_zoom_meeting.delay(instance.id)

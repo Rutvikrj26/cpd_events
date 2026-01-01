@@ -24,10 +24,21 @@ class SignupSerializer(serializers.ModelSerializer):
         write_only=True, required=True, validators=[validate_password], style={'input_type': 'password'}
     )
     password_confirm = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    
+    # Optional fields for organizer signup
+    account_type = serializers.ChoiceField(
+        choices=['attendee', 'organizer'],
+        default='attendee',
+        required=False
+    )
 
     class Meta:
         model = User
-        fields = ['email', 'password', 'password_confirm', 'full_name', 'professional_title', 'organization_name', 'account_type']
+        fields = [
+            'email', 'password', 'password_confirm', 'full_name', 
+            'professional_title', 'organization_name',
+            'account_type'
+        ]
         extra_kwargs = {
             'email': {'required': True},
             'full_name': {'required': True},
@@ -41,16 +52,15 @@ class SignupSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
+        account_type = validated_data.pop('account_type', 'attendee')
 
         user = User(**validated_data)
         user.set_password(password)
-        if not user.account_type:
-            user.account_type = 'attendee'
+        user.account_type = account_type
         user.save()
 
         # Link any guest registrations
         from registrations.models import Registration
-
         Registration.link_registrations_for_user(user)
 
         return user

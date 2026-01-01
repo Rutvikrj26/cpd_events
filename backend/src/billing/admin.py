@@ -2,9 +2,9 @@
 Admin configuration for billing app.
 """
 
-from django.contrib import admin
+from django.contrib import admin, messages
 
-from .models import Invoice, PaymentMethod, Subscription
+from .models import Invoice, PaymentMethod, Subscription, StripeProduct, StripePrice
 
 
 @admin.register(Subscription)
@@ -64,3 +64,159 @@ class PaymentMethodAdmin(admin.ModelAdmin):
 
     is_expired.boolean = True
     is_expired.short_description = 'Expired'
+
+
+@admin.register(StripeProduct)
+class StripeProductAdmin(admin.ModelAdmin):
+    """Admin for Stripe Products with auto-sync to Stripe."""
+
+    list_display = [
+        'name',
+        'plan',
+        'trial_period_days',
+        'show_contact_sales',
+        'is_active',
+        'stripe_product_id',
+        'created_at',
+    ]
+    list_filter = ['is_active', 'plan', 'show_contact_sales']
+    search_fields = ['name', 'stripe_product_id', 'description']
+    readonly_fields = ['uuid', 'stripe_product_id', 'created_at', 'updated_at']
+
+    fieldsets = (
+        ('Product Details', {
+            'fields': ('name', 'description', 'plan', 'is_active')
+        }),
+        ('Pricing Display', {
+            'fields': ('show_contact_sales',),
+            'description': 'Check this to hide pricing and show "Contact Sales" button instead (for custom/enterprise plans)'
+        }),
+        ('Trial Configuration', {
+            'fields': ('trial_period_days',),
+            'description': 'Set trial period in days (leave blank to use global default of 14 days)'
+        }),
+        ('Feature Limits', {
+            'fields': ('events_per_month', 'certificates_per_month', 'max_attendees_per_event'),
+            'description': 'Set feature limits for this plan (leave blank for unlimited). These limits affect both subscription enforcement and pricing page features display.'
+        }),
+        ('Stripe Integration', {
+            'fields': ('stripe_product_id',),
+            'classes': ('collapse',),
+            'description': 'Stripe product ID is auto-populated when you save. Click "Sync to Stripe" to push updates.'
+        }),
+        ('Metadata', {
+            'fields': ('uuid', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    actions = ['sync_to_stripe_action']
+
+    def save_model(self, request, obj, form, change):
+        """Auto-sync to Stripe on save."""
+        super().save_model(request, obj, form, change)
+
+        result = obj.sync_to_stripe()
+        if result['success']:
+            if obj.stripe_product_id:
+                messages.success(request, f"✓ Product synced to Stripe: {obj.stripe_product_id}")
+            else:
+                messages.success(request, f"✓ Product created in Stripe")
+        else:
+            messages.error(request, f"✗ Failed to sync to Stripe: {result['error']}")
+
+    @admin.action(description='Sync selected products to Stripe')
+    def sync_to_stripe_action(self, request, queryset):
+        """Bulk sync products to Stripe."""
+        success_count = 0
+        error_count = 0
+
+        for product in queryset:
+            result = product.sync_to_stripe()
+            if result['success']:
+                success_count += 1
+            else:
+                error_count += 1
+                messages.error(request, f"{product.name}: {result['error']}")
+
+        if success_count:
+            messages.success(request, f"✓ Successfully synced {success_count} product(s)")
+        if error_count:
+            messages.warning(request, f"✗ Failed to sync {error_count} product(s)")
+
+
+@admin.register(StripePrice)
+class StripePriceAdmin(admin.ModelAdmin):
+    """Admin for Stripe Prices with auto-sync to Stripe."""
+
+    list_display = [
+        'product',
+        'amount_display_formatted',
+        'billing_interval',
+        'is_active',
+        'stripe_price_id',
+        'created_at',
+    ]
+    list_filter = ['is_active', 'billing_interval', 'product__plan']
+    search_fields = ['product__name', 'stripe_price_id']
+    readonly_fields = ['uuid', 'stripe_price_id', 'amount_display', 'created_at', 'updated_at']
+    raw_id_fields = ['product']
+
+    fieldsets = (
+        ('Price Details', {
+            'fields': ('product', 'amount_cents', 'currency', 'billing_interval', 'is_active'),
+            'description': 'Amount in cents (e.g., 9900 = $99.00)'
+        }),
+        ('Preview', {
+            'fields': ('amount_display',),
+            'description': 'Read-only preview of the price'
+        }),
+        ('Stripe Integration', {
+            'fields': ('stripe_price_id',),
+            'classes': ('collapse',),
+            'description': 'Stripe price ID is auto-populated when you save. Click "Sync to Stripe" to push updates.'
+        }),
+        ('Metadata', {
+            'fields': ('uuid', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    actions = ['sync_to_stripe_action']
+
+    def amount_display_formatted(self, obj):
+        """Display formatted price in list view."""
+        return f"${obj.amount_display}"
+    amount_display_formatted.short_description = 'Amount'
+
+    def save_model(self, request, obj, form, change):
+        """Auto-sync to Stripe on save."""
+        super().save_model(request, obj, form, change)
+
+        result = obj.sync_to_stripe()
+        if result['success']:
+            if obj.stripe_price_id:
+                messages.success(request, f"✓ Price synced to Stripe: {obj.stripe_price_id}")
+            else:
+                messages.success(request, f"✓ Price created in Stripe")
+        else:
+            messages.error(request, f"✗ Failed to sync to Stripe: {result['error']}")
+
+    @admin.action(description='Sync selected prices to Stripe')
+    def sync_to_stripe_action(self, request, queryset):
+        """Bulk sync prices to Stripe."""
+        success_count = 0
+        error_count = 0
+
+        for price in queryset:
+            result = price.sync_to_stripe()
+            if result['success']:
+                success_count += 1
+            else:
+                error_count += 1
+                messages.error(request, f"{price}: {result['error']}")
+
+        if success_count:
+            messages.success(request, f"✓ Successfully synced {success_count} price(s)")
+        if error_count:
+            messages.warning(request, f"✗ Failed to sync {error_count} price(s)")

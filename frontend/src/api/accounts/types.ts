@@ -22,7 +22,7 @@ export interface LoginRequest {
 export interface SignupRequest {
     email: string;
     password: string;
-    confirm_password?: string;
+    password_confirm: string;
     full_name: string;
     account_type?: 'attendee' | 'organizer';
 }
@@ -57,4 +57,16 @@ export interface AuthResponse {
     access: string;
     refresh: string;
     user?: User;
+}
+
+export interface PasswordChangeRequest {
+    current_password: string;
+    new_password: string;
+    new_password_confirm: string;
+}
+
+export interface NotificationPreferences {
+    notify_event_reminders: boolean;
+    notify_certificate_issued: boolean;
+    notify_marketing: boolean;
 }

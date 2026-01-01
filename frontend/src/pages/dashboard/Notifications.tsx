@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-import { 
-  Bell, 
-  Calendar, 
-  Award, 
-  Info, 
-  Check, 
-  Trash2, 
-  Clock 
+import {
+  Bell,
+  Calendar,
+  Award,
+  Info,
+  Check,
+  Trash2,
+  Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,10 +73,10 @@ export function Notifications() {
 
   const getIcon = (type: string) => {
     switch (type) {
-      case "reminder": return <Calendar className="h-5 w-5 text-blue-600" />;
+      case "reminder": return <Calendar className="h-5 w-5 text-primary" />;
       case "award": return <Award className="h-5 w-5 text-green-600" />;
-      case "system": return <Info className="h-5 w-5 text-gray-600" />;
-      default: return <Bell className="h-5 w-5 text-gray-600" />;
+      case "system": return <Info className="h-5 w-5 text-muted-foreground" />;
+      default: return <Bell className="h-5 w-5 text-muted-foreground" />;
     }
   };
 
@@ -87,8 +87,8 @@ export function Notifications() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-12">
-      <PageHeader 
-        title="Notifications" 
+      <PageHeader
+        title="Notifications"
         description="Stay updated on your events and account activity."
         actions={
           unreadCount > 0 && (
@@ -115,33 +115,33 @@ export function Notifications() {
         <TabsContent value={filter} className="mt-0 space-y-4">
           {filteredNotifications.length > 0 ? (
             filteredNotifications.map((notification) => (
-              <Card key={notification.id} className={`transition-all ${notification.read ? 'bg-card' : 'bg-blue-50/50 border-blue-100'}`}>
+              <Card key={notification.id} className={`transition-all ${notification.read ? 'bg-card' : 'bg-primary/5 border-primary/20'}`}>
                 <div className="p-4 flex gap-4 items-start">
                   <div className={`mt-1 p-2 rounded-full shrink-0 ${notification.read ? 'bg-muted' : 'bg-card shadow-sm'}`}>
                     {getIcon(notification.type)}
                   </div>
-                  
+
                   <div className="flex-1 space-y-1">
                     <div className="flex justify-between items-start">
-                      <h4 className={`text-sm font-semibold ${notification.read ? 'text-foreground' : 'text-blue-900'}`}>
+                      <h4 className={`text-sm font-semibold ${notification.read ? 'text-foreground' : 'text-primary'}`}>
                         {notification.title}
                       </h4>
                       <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0 ml-2">
                         <Clock className="h-3 w-3" /> {notification.time}
                       </span>
                     </div>
-                    <p className={`text-sm ${notification.read ? 'text-gray-600' : 'text-blue-800'}`}>
+                    <p className={`text-sm ${notification.read ? 'text-muted-foreground' : 'text-primary/80'}`}>
                       {notification.message}
                     </p>
                   </div>
 
                   <div className="flex gap-1 shrink-0 ml-2">
                     {!notification.read && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-800 hover:bg-blue-100" onClick={() => handleMarkRead(notification.id)} title="Mark as read">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" onClick={() => handleMarkRead(notification.id)} title="Mark as read">
                         <Check className="h-4 w-4" />
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(notification.id)} title="Delete">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(notification.id)} title="Delete">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -149,8 +149,8 @@ export function Notifications() {
               </Card>
             ))
           ) : (
-            <div className="flex flex-col items-center justify-center py-16 px-4 bg-gray-50 rounded-lg border border-dashed border-border">
-              <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4 text-gray-400">
+            <div className="flex flex-col items-center justify-center py-16 px-4 bg-muted/50 rounded-lg border border-dashed border-border">
+              <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4 text-muted-foreground">
                 <Bell className="h-6 w-6" />
               </div>
               <h3 className="text-lg font-medium text-foreground mb-1">

@@ -48,7 +48,13 @@ const initialFormData: Partial<EventCreateRequest> = {
     is_public: true,
     minimum_attendance_minutes: 0,
     minimum_attendance_percent: 80,
+
+    // Payment Settings
+    price: 0,
+    currency: 'USD',
+    is_free: true,
     zoom_settings: {},
+
     // Multi-session support
     is_multi_session: false,
     _sessions: [],

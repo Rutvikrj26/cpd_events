@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Link } from "react-router-dom";
-import { Mail, ArrowLeft } from "lucide-react";
+import { Mail, ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/form";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { resetPassword } from "@/api/accounts";
 
 const forgotPasswordSchema = z.object({
     email: z.string().email("Please enter a valid email address"),
@@ -32,15 +33,20 @@ export function ForgotPasswordPage() {
         },
     });
 
-    function onSubmit(values: z.infer<typeof forgotPasswordSchema>) {
+    async function onSubmit(values: z.infer<typeof forgotPasswordSchema>) {
         setIsSubmitting(true);
-        // Simulate API call
-        setTimeout(() => {
-            console.log(values);
-            setIsSubmitting(false);
+        try {
+            await resetPassword({ email: values.email });
             setIsSent(true);
             toast.success("Password reset link sent to your email.");
-        }, 1500);
+        } catch (error) {
+            // Even if the email doesn't exist, we show success for security
+            // The API should handle this gracefully
+            setIsSent(true);
+            toast.success("If an account exists with this email, you'll receive a reset link.");
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
     if (isSent) {
@@ -56,7 +62,7 @@ export function ForgotPasswordPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="text-center space-y-4">
-                    <p className="text-sm text-slate-600">
+                    <p className="text-sm text-muted-foreground">
                         Didn't receive the email? Check your spam folder or try again.
                     </p>
                     <Button variant="outline" onClick={() => setIsSent(false)} className="w-full">
@@ -93,7 +99,7 @@ export function ForgotPasswordPage() {
                                     <FormLabel>Email Address</FormLabel>
                                     <FormControl>
                                         <div className="relative">
-                                            <Mail className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
+                                            <Mail className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground" />
                                             <Input placeholder="name@example.com" className="pl-10" {...field} />
                                         </div>
                                     </FormControl>
@@ -103,9 +109,10 @@ export function ForgotPasswordPage() {
                         />
                         <Button type="submit" className="w-full" disabled={isSubmitting}>
                             {isSubmitting ? (
-                                <span className="flex items-center gap-2">
-                                    <span className="animate-spin">⏳</span> Sending Link...
-                                </span>
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Sending Link...
+                                </>
                             ) : "Send Reset Link"}
                         </Button>
                     </form>

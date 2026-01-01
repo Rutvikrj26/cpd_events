@@ -33,6 +33,8 @@ urlpatterns = [
     path('api/v1/', include('billing.urls')),
     path('api/v1/', include('learning.urls')),
     path('api/v1/organizations/', include('organizations.urls')),
+    path('api/v1/feedback/', include('feedback.urls')),
+    path('api/v1/', include('promo_codes.urls')),
     # Public registration (needs to be at root, not under /registrations/)
     path('api/v1/public/events/<uuid:event_uuid>/register/', 
          __import__('registrations.views', fromlist=['PublicRegistrationView']).PublicRegistrationView.as_view(), 

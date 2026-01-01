@@ -8,13 +8,6 @@ import {
   User,
   LogOut,
   ChevronDown,
-  Video,
-  Award,
-  Zap,
-  HelpCircle,
-  Mail,
-  FileText,
-  Building2,
   ArrowRight
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,22 +21,33 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   NavigationMenu,
-  NavigationMenuContent,
   NavigationMenuItem,
-  NavigationMenuLink,
   NavigationMenuList,
-  NavigationMenuTrigger,
 } from "@/components/ui/navigation-menu";
 import { cn } from "@/lib/utils";
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
-  const [mobileSubmenu, setMobileSubmenu] = React.useState<string | null>(null);
+
   const location = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
   const isActivePrefix = (prefix: string) => location.pathname.startsWith(prefix);
+
+  // Lock body scroll when mobile menu is open
+  React.useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isMobileMenuOpen]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background font-sans antialiased">
@@ -57,7 +61,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 <Layout className="h-5 w-5" />
               </div>
               <div className="flex flex-col">
-                <span className="text-lg font-bold tracking-tight gradient-text leading-tight">CPD Events</span>
+                <span className="text-lg font-bold tracking-tight gradient-text leading-tight">Accredit</span>
                 <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider hidden sm:block">Professional Development</span>
               </div>
             </Link>
@@ -67,44 +71,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               {/* Main Nav Links with Dropdowns */}
               <NavigationMenu>
                 <NavigationMenuList>
-                  {/* Features Dropdown */}
-                  <NavigationMenuItem>
-                    <NavigationMenuTrigger className="bg-transparent text-muted-foreground hover:text-foreground data-[state=open]:text-foreground h-9 px-3">
-                      Features
-                    </NavigationMenuTrigger>
-                    <NavigationMenuContent>
-                      <ul className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2">
-                        <ListItem
-                          href="/features"
-                          title="Platform Overview"
-                          icon={<Zap className="h-5 w-5" />}
-                        >
-                          Everything you need to manage CPD events
-                        </ListItem>
-                        <ListItem
-                          href="/features/zoom"
-                          title="Zoom Integration"
-                          icon={<Video className="h-5 w-5" />}
-                        >
-                          Automatic attendance tracking via webhooks
-                        </ListItem>
-                        <ListItem
-                          href="/features/certificates"
-                          title="Certificates"
-                          icon={<Award className="h-5 w-5" />}
-                        >
-                          Automated PDF generation with verification
-                        </ListItem>
-                        <ListItem
-                          href="/features/teams"
-                          title="Team Management"
-                          icon={<Building2 className="h-5 w-5" />}
-                        >
-                          Organizations with roles and permissions
-                        </ListItem>
-                      </ul>
-                    </NavigationMenuContent>
-                  </NavigationMenuItem>
 
                   {/* Pricing Link */}
                   <NavigationMenuItem>
@@ -119,36 +85,41 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     </Link>
                   </NavigationMenuItem>
 
-                  {/* Resources Dropdown */}
+                  {/* Resources Links (extracted) */}
                   <NavigationMenuItem>
-                    <NavigationMenuTrigger className="bg-transparent text-muted-foreground hover:text-foreground data-[state=open]:text-foreground h-9 px-3">
-                      Resources
-                    </NavigationMenuTrigger>
-                    <NavigationMenuContent>
-                      <ul className="grid w-[350px] gap-3 p-4">
-                        <ListItem
-                          href="/faq"
-                          title="FAQ"
-                          icon={<HelpCircle className="h-5 w-5" />}
-                        >
-                          Frequently asked questions
-                        </ListItem>
-                        <ListItem
-                          href="/contact"
-                          title="Contact Us"
-                          icon={<Mail className="h-5 w-5" />}
-                        >
-                          Get in touch with our team
-                        </ListItem>
-                        <ListItem
-                          href="/about"
-                          title="About"
-                          icon={<FileText className="h-5 w-5" />}
-                        >
-                          Learn more about CPD Events
-                        </ListItem>
-                      </ul>
-                    </NavigationMenuContent>
+                    <Link
+                      to="/faq"
+                      className={cn(
+                        "group inline-flex h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground focus:outline-none",
+                        isActive('/faq') ? 'text-foreground bg-muted' : 'text-muted-foreground'
+                      )}
+                    >
+                      FAQ
+                    </Link>
+                  </NavigationMenuItem>
+
+                  <NavigationMenuItem>
+                    <Link
+                      to="/about"
+                      className={cn(
+                        "group inline-flex h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground focus:outline-none",
+                        isActive('/about') ? 'text-foreground bg-muted' : 'text-muted-foreground'
+                      )}
+                    >
+                      About
+                    </Link>
+                  </NavigationMenuItem>
+
+                  <NavigationMenuItem>
+                    <Link
+                      to="/contact"
+                      className={cn(
+                        "group inline-flex h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground focus:outline-none",
+                        isActive('/contact') ? 'text-foreground bg-muted' : 'text-muted-foreground'
+                      )}
+                    >
+                      Contact
+                    </Link>
                   </NavigationMenuItem>
                 </NavigationMenuList>
               </NavigationMenu>
@@ -190,7 +161,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                          <Link to="/profile" className="cursor-pointer">
+                          <Link to="/settings" className="cursor-pointer">
                             <User className="h-4 w-4 mr-2" />
                             Profile
                           </Link>
@@ -210,7 +181,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                         Log in
                       </Button>
                     </Link>
-                    <Link to="/signup">
+                    <Link to="/pricing">
                       <Button size="sm" className="font-medium shadow-sm hover:shadow-md transition-all duration-200 glow-primary">
                         Get Started
                         <ArrowRight className="ml-1 h-4 w-4" />
@@ -223,8 +194,10 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             {/* Mobile Menu Button */}
             <button
-              className="flex items-center justify-center h-10 w-10 rounded-lg text-muted-foreground md:hidden hover:bg-muted hover:text-foreground transition-colors"
+              className="flex items-center justify-center h-12 w-12 rounded-lg text-muted-foreground md:hidden hover:bg-muted hover:text-foreground transition-colors"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={isMobileMenuOpen}
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
@@ -235,41 +208,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-border bg-card/95 backdrop-blur-xl px-4 py-6 shadow-lg animate-fade-in-down">
             <nav className="flex flex-col gap-2">
-              {/* Features Accordion */}
-              <div>
-                <button
-                  className="w-full flex items-center justify-between px-4 py-3 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                  onClick={() => setMobileSubmenu(mobileSubmenu === 'features' ? null : 'features')}
-                >
-                  Features
-                  <ChevronDown className={cn("h-4 w-4 transition-transform", mobileSubmenu === 'features' && "rotate-180")} />
-                </button>
-                {mobileSubmenu === 'features' && (
-                  <div className="ml-4 mt-1 flex flex-col gap-1">
-                    <Link
-                      to="/features"
-                      className="flex items-center gap-3 px-4 py-2 text-sm text-muted-foreground hover:text-foreground rounded-lg"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <Zap className="h-4 w-4" /> Platform Overview
-                    </Link>
-                    <Link
-                      to="/features/zoom"
-                      className="flex items-center gap-3 px-4 py-2 text-sm text-muted-foreground hover:text-foreground rounded-lg"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <Video className="h-4 w-4" /> Zoom Integration
-                    </Link>
-                    <Link
-                      to="/features/certificates"
-                      className="flex items-center gap-3 px-4 py-2 text-sm text-muted-foreground hover:text-foreground rounded-lg"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <Award className="h-4 w-4" /> Certificates
-                    </Link>
-                  </div>
-                )}
-              </div>
 
               <Link
                 to="/pricing"
@@ -279,41 +217,27 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 Pricing
               </Link>
 
-              {/* Resources Accordion */}
-              <div>
-                <button
-                  className="w-full flex items-center justify-between px-4 py-3 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                  onClick={() => setMobileSubmenu(mobileSubmenu === 'resources' ? null : 'resources')}
-                >
-                  Resources
-                  <ChevronDown className={cn("h-4 w-4 transition-transform", mobileSubmenu === 'resources' && "rotate-180")} />
-                </button>
-                {mobileSubmenu === 'resources' && (
-                  <div className="ml-4 mt-1 flex flex-col gap-1">
-                    <Link
-                      to="/faq"
-                      className="flex items-center gap-3 px-4 py-2 text-sm text-muted-foreground hover:text-foreground rounded-lg"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <HelpCircle className="h-4 w-4" /> FAQ
-                    </Link>
-                    <Link
-                      to="/contact"
-                      className="flex items-center gap-3 px-4 py-2 text-sm text-muted-foreground hover:text-foreground rounded-lg"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <Mail className="h-4 w-4" /> Contact Us
-                    </Link>
-                    <Link
-                      to="/about"
-                      className="flex items-center gap-3 px-4 py-2 text-sm text-muted-foreground hover:text-foreground rounded-lg"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <FileText className="h-4 w-4" /> About
-                    </Link>
-                  </div>
-                )}
-              </div>
+              <Link
+                to="/faq"
+                className="px-4 py-3 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                FAQ
+              </Link>
+              <Link
+                to="/about"
+                className="px-4 py-3 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                About
+              </Link>
+              <Link
+                to="/contact"
+                className="px-4 py-3 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Contact
+              </Link>
 
               <div className="h-px bg-border my-4" />
 
@@ -333,7 +257,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     <Link to="/login" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
                       <Button variant="outline" className="w-full justify-center h-11">Log in</Button>
                     </Link>
-                    <Link to="/signup" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
+                    <Link to="/pricing" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
                       <Button className="w-full justify-center h-11">Get Started</Button>
                     </Link>
                   </>
@@ -359,7 +283,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent text-white">
                   <Layout className="h-5 w-5" />
                 </div>
-                <span className="text-lg font-bold gradient-text">CPD Events</span>
+                <span className="text-lg font-bold gradient-text">Accredit</span>
               </Link>
               <p className="text-sm text-muted-foreground max-w-xs mb-6">
                 The all-in-one platform for managing professional development events, tracking attendance, and issuing verifiable certificates.
@@ -403,63 +327,29 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             <div>
               <h3 className="text-sm font-semibold text-foreground mb-4">Legal</h3>
               <ul className="space-y-3">
-                <li><Link to="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy Policy</Link></li>
-                <li><Link to="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Terms of Service</Link></li>
-                <li><Link to="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Cookie Policy</Link></li>
+                <li><Link to="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy Policy</Link></li>
+                <li><Link to="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Terms of Service</Link></li>
+                <li><Link to="/cookies" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Cookie Policy</Link></li>
               </ul>
             </div>
           </div>
 
           {/* Bottom Bar */}
           <div className="mt-12 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} CPD Events. All rights reserved.</p>
+            <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} Accredit. All rights reserved.</p>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <Link to="#" className="hover:text-foreground transition-colors">Privacy</Link>
+              <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
               <span>·</span>
-              <Link to="#" className="hover:text-foreground transition-colors">Terms</Link>
+              <Link to="/terms" className="hover:text-foreground transition-colors">Terms</Link>
               <span>·</span>
-              <Link to="#" className="hover:text-foreground transition-colors">Cookies</Link>
+              <Link to="/cookies" className="hover:text-foreground transition-colors">Cookies</Link>
             </div>
           </div>
         </div>
-      </footer>
-    </div>
+      </footer >
+    </div >
   );
 }
 
 // List Item Component for Navigation Menu
-const ListItem = React.forwardRef<
-  React.ElementRef<"a">,
-  React.ComponentPropsWithoutRef<"a"> & { icon?: React.ReactNode; title: string; href: string }
->(({ className, title, children, icon, href, ...props }, ref) => {
-  return (
-    <li>
-      <NavigationMenuLink asChild>
-        <Link
-          ref={ref as any}
-          to={href}
-          className={cn(
-            "block select-none rounded-lg p-3 leading-none no-underline outline-none transition-colors hover:bg-muted focus:bg-muted group",
-            className
-          )}
-          {...props}
-        >
-          <div className="flex items-start gap-3">
-            {icon && (
-              <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 group-hover:bg-primary/15 transition-colors">
-                {icon}
-              </div>
-            )}
-            <div>
-              <div className="text-sm font-medium leading-none text-foreground mb-1">{title}</div>
-              <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
-                {children}
-              </p>
-            </div>
-          </div>
-        </Link>
-      </NavigationMenuLink>
-    </li>
-  );
-});
-ListItem.displayName = "ListItem";
+

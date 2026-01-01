@@ -275,6 +275,106 @@ class ZoomService:
         connection.record_usage()
         return connection.access_token
 
+    def create_meeting(self, event) -> dict[str, Any]:
+        """
+        Create a Zoom meeting for an event.
 
+        Args:
+            event: Event instance
+
+        Returns:
+            Dict with success status and meeting details
+        """
+        from accounts.models import ZoomConnection
+        from common.utils import generate_verification_code
+
+        try:
+            # 1. Get Zoom connection for event owner
+            connection = ZoomConnection.objects.get(user=event.owner, is_active=True)
+
+            # 2. Get valid access token
+            access_token = self.get_access_token(connection)
+            if not access_token:
+                return {'success': False, 'error': 'Could not get valid Zoom access token'}
+
+            # 3. Construct payload
+            # Zoom API: POST /users/me/meetings
+
+            # Password (required for most accounts)
+            password = event.zoom_password or generate_verification_code(8)
+
+            payload = {
+                'topic': event.title,
+                'type': 2,  # Scheduled meeting
+                'start_time': event.starts_at.isoformat(),
+                'duration': event.duration_minutes,
+                'timezone': event.timezone,
+                'password': password,
+                'agenda': event.short_description or event.title,
+                'settings': {
+                    'host_video': True,
+                    'participant_video': False,
+                    'join_before_host': False,
+                    'mute_upon_entry': True,
+                    'waiting_room': True,
+                    'auto_recording': 'cloud' if event.recording_enabled else 'none',
+                    # 'registrants_email_notification': True # We handle emails ourselves
+                },
+            }
+
+            # Apply any custom zoom_settings provided in event model
+            if event.zoom_settings:
+                payload['settings'].update(event.zoom_settings)
+
+            # 4. Make request
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json',
+            }
+
+            response = requests.post(
+                f"{self.API_URL}/users/me/meetings", headers=headers, json=payload, timeout=30
+            )
+
+            if response.status_code != 201:
+                logger.error(f"Zoom meeting creation failed: {response.text}")
+                error_msg = f"Zoom API error: {response.status_code}"
+                try:
+                    error_detail = response.json()
+                    if 'message' in error_detail:
+                        error_msg = f"Zoom: {error_detail['message']}"
+                except Exception:
+                    pass
+                return {'success': False, 'error': error_msg}
+
+            data = response.json()
+
+            # 5. Update event
+            event.zoom_meeting_id = str(data.get('id', ''))
+            event.zoom_meeting_uuid = data.get('uuid', '')
+            event.zoom_join_url = data.get('join_url', '')
+            event.zoom_start_url = data.get('start_url', '')
+            event.zoom_password = data.get('password', password)
+
+            event.save(
+                update_fields=[
+                    'zoom_meeting_id',
+                    'zoom_meeting_uuid',
+                    'zoom_join_url',
+                    'zoom_start_url',
+                    'zoom_password',
+                    'updated_at',
+                ]
+            )
+
+            connection.record_usage()
+
+            return {'success': True, 'meeting': data}
+
+        except ZoomConnection.DoesNotExist:
+            return {'success': False, 'error': 'User does not have connected Zoom account'}
+        except Exception as e:
+            logger.error(f"Create meeting failed: {e}")
+            return {'success': False, 'error': str(e)}
 # Singleton instance
 zoom_service = ZoomService()

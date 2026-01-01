@@ -9,7 +9,7 @@ from rest_framework import serializers
 from common.serializers import BaseModelSerializer, SoftDeleteModelSerializer
 from common.utils import generate_unique_slug
 
-from .models import Event, EventCustomField, EventStatusHistory, EventSession, SessionAttendance
+from .models import Event, EventCustomField, EventStatusHistory, Speaker, EventSession, SessionAttendance
 from certificates.models import CertificateTemplate
 
 # =============================================================================
@@ -48,8 +48,43 @@ class EventCustomFieldCreateSerializer(serializers.ModelSerializer):
             'help_text',
             'required',
             'options',
-            'order',
+            'validation_regex',
+            'position',
         ]
+        read_only_fields = ['uuid', 'owner_name', 'created_at']
+
+    def get_owner_name(self, obj):
+        return obj.owner.display_name
+
+
+# =============================================================================
+# Speaker Serializers
+# =============================================================================
+
+
+class SpeakerSerializer(BaseModelSerializer):
+    """Speaker profile."""
+
+    owner_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Speaker
+        fields = [
+            'uuid',
+            'name',
+            'bio',
+            'qualifications',
+            'photo',
+            'email',
+            'linkedin_url',
+            'is_active',
+            'owner_name',
+            'created_at',
+        ]
+        read_only_fields = ['uuid', 'owner_name', 'created_at']
+
+    def get_owner_name(self, obj):
+        return obj.owner.display_name
 
 
 # =============================================================================
@@ -61,6 +96,7 @@ class EventListSerializer(SoftDeleteModelSerializer):
     """Lightweight event for list views."""
 
     owner_name = serializers.SerializerMethodField()
+    organization_info = serializers.SerializerMethodField()
     registration_count = serializers.IntegerField(read_only=True)
     attendee_count = serializers.IntegerField(read_only=True)
     attendee_count = serializers.IntegerField(read_only=True)
@@ -78,19 +114,34 @@ class EventListSerializer(SoftDeleteModelSerializer):
             'starts_at',
             'ends_at',
             'timezone',
+            'price',
+            'currency',
             'registration_count',
             'attendee_count',
             'waitlist_count',
             'owner_name',
-            'is_public',
+            'organization_info',
             'is_public',
             'featured_image_url',
+            'certificates_enabled',
+            'require_feedback_for_certificate',
             'created_at',
         ]
         read_only_fields = fields
 
     def get_owner_name(self, obj):
         return obj.owner.display_name
+
+    def get_organization_info(self, obj):
+        """Return organization info if event belongs to an organization."""
+        if obj.organization:
+            return {
+                'uuid': str(obj.organization.uuid),
+                'name': obj.organization.name,
+                'slug': obj.organization.slug,
+                'logo_url': obj.organization.logo.url if obj.organization.logo else None,
+            }
+        return None
 
     def get_featured_image_url(self, obj):
         """Return featured image URL."""
@@ -115,7 +166,9 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
     cpd_type = serializers.CharField(source='cpd_credit_type', read_only=True)
     featured_image_url = serializers.SerializerMethodField()
     attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
+    attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
     certificate_template = serializers.SlugRelatedField(read_only=True, slug_field='uuid')
+    speakers = SpeakerSerializer(many=True, read_only=True)
 
     class Meta:
         model = Event
@@ -138,6 +191,14 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'minimum_attendance_percent',
             'minimum_attendance_minutes',
             # Registration
+            'registration_enabled',
+            'registration_opens_at',
+            'registration_closes_at',
+            'price',
+            'currency',
+            'capacity',
+            'waitlist_enabled',
+            'waitlist_max',
             'waitlist_auto_promote',
             # Zoom
             'zoom_meeting_id',
@@ -155,6 +216,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'certificates_enabled',
             'certificate_template',
             'auto_issue_certificates',
+            'require_feedback_for_certificate',
             # Branding
             'featured_image_url',
             'location',
@@ -168,6 +230,9 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'owner',
             # Custom fields
             'custom_fields',
+            # CPD & Education
+            'learning_objectives',
+            'speakers',
             # Status transitions
             'status_transitions',
             # Timestamps
@@ -222,6 +287,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
     certificate_template = serializers.SlugRelatedField(
         slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
+    organization = serializers.UUIDField(required=False, allow_null=True, write_only=True)
 
 
     class Meta:
@@ -245,6 +311,8 @@ class EventCreateSerializer(serializers.ModelSerializer):
             'registration_opens_at',
             'registration_closes_at',
             'max_attendees',
+            'price',
+            'currency',
             'waitlist_enabled',
             'waitlist_max',
             'waitlist_auto_promote',
@@ -255,6 +323,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
             'certificates_enabled',
             'certificate_template',
             'auto_issue_certificates',
+            'require_feedback_for_certificate',
             # Branding
             'is_public',
             # Attendance
@@ -265,7 +334,13 @@ class EventCreateSerializer(serializers.ModelSerializer):
             # Location
             'location',
             # Multi-session
+            # Multi-session
             'is_multi_session',
+            # Education
+            'learning_objectives',
+            'speakers',
+            # Organization (optional, for org-owned events)
+            'organization',
         ]
         read_only_fields = ['uuid', 'slug']
 
@@ -298,6 +373,9 @@ class EventUpdateSerializer(serializers.ModelSerializer):
     certificate_template = serializers.SlugRelatedField(
         slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
+    speakers = serializers.SlugRelatedField(
+        slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False
+    )
 
     class Meta:
         model = Event
@@ -315,6 +393,8 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             'registration_opens_at',
             'registration_closes_at',
             'max_attendees',
+            'price',
+            'currency',
             'waitlist_enabled',
             'waitlist_max',
             'waitlist_auto_promote',
@@ -325,6 +405,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             'certificates_enabled',
             'certificate_template',
             'auto_issue_certificates',
+            'require_feedback_for_certificate',
             # Branding
             # Branding
             'is_public',
@@ -334,7 +415,11 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             # Location
             'location',
             # Multi-session
+            # Multi-session
             'is_multi_session',
+            # Education
+            'learning_objectives',
+            'speakers',
         ]
 
     def validate(self, attrs):
@@ -453,8 +538,14 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
             'spots_remaining',
             'is_multi_session',
             'sessions',
+            'sessions',
             'location',
+            # Education
+            'learning_objectives',
+            'speakers',
         ]
+    
+    speakers = SpeakerSerializer(many=True, read_only=True)
 
     def get_organizer(self, obj):
         return {

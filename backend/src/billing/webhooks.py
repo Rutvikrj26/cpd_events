@@ -74,7 +74,11 @@ class StripeWebhookView(View):
             'invoice.finalized': self._handle_invoice_finalized,
             'payment_method.attached': self._handle_payment_method_attached,
             'payment_method.detached': self._handle_payment_method_detached,
+            'payment_intent.succeeded': self._handle_payment_intent_succeeded,
+            'payment_intent.payment_failed': self._handle_payment_intent_payment_failed,
+            'account.updated': self._handle_account_updated,
         }
+
         return handlers.get(event_type)
 
     def _handle_subscription_created(self, data):
@@ -223,7 +227,20 @@ class StripeWebhookView(View):
         )
 
         logger.warning(f"Invoice payment failed: {invoice_id}")
-        # TODO: Send payment failed notification email
+        # Send payment failed notification email
+        from integrations.services import email_service
+        
+        email_service.send_email(
+            template='payment_failed',
+            recipient=subscription.user.email,
+            context={
+                'invoice_number': data.get('number', ''),
+                'amount_due': f"{data.get('amount_due', 0) / 100:.2f}",
+                'currency': data.get('currency', 'usd').upper(),
+                'pay_url': data.get('hosted_invoice_url', ''),
+                'user_name': subscription.user.full_name,
+            }
+        )
 
     def _handle_invoice_finalized(self, data):
         """Handle invoice.finalized event."""
@@ -270,3 +287,95 @@ class StripeWebhookView(View):
         if pm_id:
             PaymentMethod.objects.filter(stripe_payment_method_id=pm_id).delete()
             logger.info(f"Payment method detached: {pm_id}")
+
+    # =========================================================================
+    # Payment Intent Handlers (for One-time Payments)
+    # =========================================================================
+
+    def _handle_payment_intent_succeeded(self, data):
+        """Handle payment_intent.succeeded."""
+        from registrations.models import Registration
+
+        metadata = data.get('metadata', {})
+        registration_id = metadata.get('registration_id')
+
+        if not registration_id:
+            logger.warning(f"PaymentIntent succeeded ({data['id']}) but no registration_id in metadata.")
+            return
+
+        try:
+            registration = Registration.objects.get(uuid=registration_id)
+        except Registration.DoesNotExist:
+            logger.error(f"Registration {registration_id} not found for payment {data['id']}")
+            return
+
+        # Update registration status
+        amount_received = data.get('amount_received', 0)
+        # Convert cents to decimal using currency logic if needed, but simple division by 100 for now (assuming all currencies 2 decimals, which isn't true but ok for now)
+        registration.amount_paid = amount_received / 100.0 
+        registration.payment_status = Registration.PaymentStatus.PAID
+        
+        # Determine status. If it was pending payment, verify if confirmed.
+        # Use existing logic or status setting.
+        # If we set it to 'pending' during creation, now 'confirmed'.
+        if registration.status == 'pending':
+            registration.status = 'confirmed'
+        
+        registration.save(update_fields=['amount_paid', 'payment_status', 'status'])
+        logger.info(f"Registration {registration_id} marked as PAID via {data['id']}")
+
+    def _handle_payment_intent_payment_failed(self, data):
+        """Handle payment_intent.payment_failed."""
+        from registrations.models import Registration
+
+        metadata = data.get('metadata', {})
+        registration_id = metadata.get('registration_id')
+
+        if not registration_id:
+            return
+
+        try:
+            registration = Registration.objects.get(uuid=registration_id)
+        except Registration.DoesNotExist:
+            return
+
+        registration.payment_status = Registration.PaymentStatus.FAILED
+        # Don't auto-cancel registration immediately? Or do?
+        # Maybe just log it. Admin/User can retry.
+        registration.save(update_fields=['payment_status'])
+        
+        logger.warning(f"Payment failed for registration {registration_id}: {data['last_payment_error']}")
+
+    # =========================================================================
+    # Connect Account Handlers
+    # =========================================================================
+
+    def _handle_account_updated(self, data):
+        """Handle account.updated (for Connect accounts)."""
+        from organizations.models import Organization
+
+        account_id = data.get('id')
+        if not account_id:
+            return
+
+        # Find organization by connect ID
+        try:
+            org = Organization.objects.get(stripe_connect_id=account_id)
+        except Organization.DoesNotExist:
+            return # Might be someone else's account or unlinked
+
+        charges_enabled = data.get('charges_enabled', False)
+        details_submitted = data.get('details_submitted', False)
+
+        org.stripe_charges_enabled = charges_enabled
+        
+        if charges_enabled:
+            org.stripe_account_status = 'active'
+        elif details_submitted:
+            org.stripe_account_status = 'pending_verification'
+        else:
+            org.stripe_account_status = 'restricted'
+            
+        org.save(update_fields=['stripe_charges_enabled', 'stripe_account_status'])
+        logger.info(f"Updated Connect account status for Org {org.uuid}: {org.stripe_account_status}")
+

@@ -30,7 +30,13 @@ class CloudTask:
             logger.info(f"Local dev: Executing task {self.name} immediately.")
             return self.func(*args, **kwargs)
 
-        client = tasks_v2.CloudTasksClient()
+        # Use emulator if configured
+        if hasattr(settings, 'CLOUD_TASKS_EMULATOR_HOST') and settings.CLOUD_TASKS_EMULATOR_HOST:
+            import os
+            os.environ['CLOUD_TASKS_EMULATOR_HOST'] = settings.CLOUD_TASKS_EMULATOR_HOST
+            client = tasks_v2.CloudTasksClient()
+        else:
+            client = tasks_v2.CloudTasksClient()
 
         project = settings.GCP_PROJECT_ID
         location = settings.GCP_LOCATION

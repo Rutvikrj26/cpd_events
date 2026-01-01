@@ -7,7 +7,9 @@ import {
     RefreshTokenRequest,
     PasswordResetRequest,
     PasswordResetConfirm,
-    UpgradeOrganizerRequest
+    UpgradeOrganizerRequest,
+    PasswordChangeRequest,
+    NotificationPreferences
 } from './types';
 
 // Authentication
@@ -38,6 +40,10 @@ export const confirmPasswordReset = async (data: PasswordResetConfirm): Promise<
     await client.post('/auth/password-reset/confirm/', data);
 };
 
+export const changePassword = async (data: PasswordChangeRequest): Promise<void> => {
+    await client.post('/auth/password-change/', data);
+};
+
 // Current User
 export const getCurrentUser = async (): Promise<User> => {
     const response = await client.get<User>('/users/me/');
@@ -51,4 +57,15 @@ export const updateProfile = async (data: Partial<User>): Promise<User> => {
 
 export const upgradeToOrganizer = async (data: UpgradeOrganizerRequest): Promise<void> => {
     await client.post('/users/me/upgrade/', data);
+};
+
+// Notification Preferences
+export const getNotificationPreferences = async (): Promise<NotificationPreferences> => {
+    const response = await client.get<NotificationPreferences>('/users/me/notifications/');
+    return response.data;
+};
+
+export const updateNotificationPreferences = async (data: NotificationPreferences): Promise<NotificationPreferences> => {
+    const response = await client.patch<NotificationPreferences>('/users/me/notifications/', data);
+    return response.data;
 };

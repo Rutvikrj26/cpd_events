@@ -8,7 +8,12 @@ import {
     TrendingUp,
     Loader2,
     AlertCircle,
-    Calendar
+    Calendar,
+    CreditCard,
+    Tag,
+    X,
+    Check,
+    Building2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,12 +21,20 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { getPublicEvent } from "@/api/events";
 import { registerForEvent } from "@/api/registrations";
 import { signup } from "@/api/accounts";
+import { validatePromoCode } from "@/api/promo-codes";
 import { Event } from "@/api/events/types";
+import { RegistrationResponse } from "@/api/registrations/types";
+import { PromoCodeValidationResult } from "@/api/promo-codes/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { PaymentForm, PaymentSuccess } from "@/components/payment/PaymentForm";
+import { CustomFieldsForm } from "@/components/registration/CustomFieldInput";
+
+type RegistrationStep = 'form' | 'payment' | 'success';
 
 export function EventRegistration() {
     const { id } = useParams<{ id: string }>();
@@ -32,7 +45,10 @@ export function EventRegistration() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState(false);
+
+    // Multi-step state
+    const [step, setStep] = useState<RegistrationStep>('form');
+    const [registrationData, setRegistrationData] = useState<RegistrationResponse | null>(null);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -44,6 +60,23 @@ export function EventRegistration() {
         createAccount: false,
         password: "",
     });
+
+    // Custom fields state
+    const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
+
+    // Promo code state
+    const [promoCode, setPromoCode] = useState("");
+    const [promoCodeLoading, setPromoCodeLoading] = useState(false);
+    const [appliedPromo, setAppliedPromo] = useState<PromoCodeValidationResult | null>(null);
+    const [promoError, setPromoError] = useState<string | null>(null);
+
+    // Determine if event is paid
+    const isPaidEvent = event && !event.is_free && event.price && Number(event.price) > 0;
+
+    // Calculate display price (with discount if applicable)
+    const displayPrice = appliedPromo?.valid
+        ? Number(appliedPromo.final_price)
+        : event?.price ? Number(event.price) : 0;
 
     useEffect(() => {
         async function fetchEvent() {
@@ -70,6 +103,46 @@ export function EventRegistration() {
         fetchEvent();
     }, [id, user]);
 
+    const handleApplyPromoCode = async () => {
+        if (!promoCode.trim() || !event?.uuid || !formData.email) {
+            if (!formData.email) {
+                setPromoError("Please enter your email first");
+            }
+            return;
+        }
+
+        setPromoCodeLoading(true);
+        setPromoError(null);
+
+        try {
+            const result = await validatePromoCode({
+                code: promoCode.trim(),
+                event_uuid: event.uuid,
+                email: formData.email,
+            });
+
+            if (result.valid) {
+                setAppliedPromo(result);
+                toast.success(`Promo code applied! ${result.discount_display}`);
+            } else {
+                setPromoError(result.error || "Invalid promo code");
+                setAppliedPromo(null);
+            }
+        } catch (err: any) {
+            const errorMessage = err?.response?.data?.error || "Failed to validate promo code";
+            setPromoError(errorMessage);
+            setAppliedPromo(null);
+        } finally {
+            setPromoCodeLoading(false);
+        }
+    };
+
+    const handleRemovePromoCode = () => {
+        setAppliedPromo(null);
+        setPromoCode("");
+        setPromoError(null);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!event?.uuid) return;
@@ -79,33 +152,28 @@ export function EventRegistration() {
 
         try {
             // 1. Register for the event (use UUID, not slug)
-            await registerForEvent(event.uuid, {
+            const response = await registerForEvent(event.uuid, {
                 email: formData.email,
                 full_name: `${formData.firstName} ${formData.lastName}`.trim(),
                 professional_title: formData.professionalTitle,
                 organization_name: formData.organizationName,
                 allow_public_verification: true,
+                custom_field_responses: customFieldValues,
+                promo_code: appliedPromo?.valid ? appliedPromo.code : undefined,
             });
 
-            // 2. Create account if checkbox is checked
-            if (formData.createAccount && formData.password) {
-                try {
-                    await signup({
-                        email: formData.email,
-                        full_name: `${formData.firstName} ${formData.lastName}`.trim(),
-                        password: formData.password,
-                        confirm_password: formData.password,
-                        account_type: "attendee",
-                    });
-                    toast.success("Account created! Check your email for verification.");
-                } catch (signupError: any) {
-                    // Still show success for registration, but note the account issue
-                    toast.warning("Registered successfully, but account creation failed. You can create an account later.");
-                }
-            }
+            setRegistrationData(response);
 
-            setSuccess(true);
-            toast.success("Successfully registered for the event!");
+            // 2. Check if payment is required
+            if (response.requires_payment && response.client_secret) {
+                setStep('payment');
+                toast.info("Please complete payment to confirm your registration.");
+            } else {
+                // Free event - registration complete
+                await handleAccountCreation();
+                setStep('success');
+                toast.success("Successfully registered for the event!");
+            }
         } catch (err: any) {
             const message = err?.response?.data?.error?.message || err?.response?.data?.detail || "Registration failed. Please try again.";
             setError(message);
@@ -113,6 +181,42 @@ export function EventRegistration() {
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const handleAccountCreation = async () => {
+        if (formData.createAccount && formData.password) {
+            try {
+                await signup({
+                    email: formData.email,
+                    full_name: `${formData.firstName} ${formData.lastName}`.trim(),
+                    password: formData.password,
+                    password_confirm: formData.password,
+                    account_type: "attendee",
+                });
+                toast.success("Account created! Check your email for verification.");
+            } catch (signupError: any) {
+                toast.warning("Registered successfully, but account creation failed. You can create an account later.");
+            }
+        }
+    };
+
+    const handlePaymentSuccess = async () => {
+        await handleAccountCreation();
+        setStep('success');
+        toast.success("Payment successful! You're registered.");
+    };
+
+    const handlePaymentError = (error: string) => {
+        toast.error(error);
+    };
+
+    // Format price for display
+    const formatPrice = (price: number | string | undefined, currency: string = 'USD') => {
+        if (!price) return 'Free';
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: currency.toUpperCase(),
+        }).format(Number(price));
     };
 
     if (loading) {
@@ -137,7 +241,8 @@ export function EventRegistration() {
         );
     }
 
-    if (success) {
+    // Success state
+    if (step === 'success') {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <Card className="max-w-md w-full mx-4">
@@ -163,6 +268,55 @@ export function EventRegistration() {
         );
     }
 
+    // Payment step
+    if (step === 'payment' && registrationData?.client_secret) {
+        return (
+            <div className="min-h-screen bg-gray-50 py-8 px-4">
+                <div className="max-w-lg mx-auto">
+                    {/* Event Summary */}
+                    <Card className="mb-6">
+                        <CardContent className="py-4">
+                            <div className="flex items-start gap-4">
+                                <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                    <Calendar className="h-6 w-6 text-blue-600" />
+                                </div>
+                                <div className="flex-1">
+                                    <h1 className="text-xl font-bold text-foreground">{event?.title}</h1>
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                        Complete payment to confirm your registration
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Payment Form */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <CreditCard className="h-5 w-5" />
+                                Complete Payment
+                            </CardTitle>
+                            <CardDescription>
+                                Your spot is reserved. Complete payment to confirm.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <PaymentForm
+                                clientSecret={registrationData.client_secret}
+                                amount={registrationData.amount || Number(event?.price) || 0}
+                                currency={registrationData.currency || event?.currency || 'USD'}
+                                onSuccess={handlePaymentSuccess}
+                                onError={handlePaymentError}
+                            />
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        );
+    }
+
+    // Registration form step
     return (
         <div className="min-h-screen bg-gray-50 py-8 px-4">
             <div className="max-w-4xl mx-auto">
@@ -174,7 +328,20 @@ export function EventRegistration() {
                                 <Calendar className="h-6 w-6 text-blue-600" />
                             </div>
                             <div className="flex-1">
-                                <h1 className="text-xl font-bold text-foreground">{event?.title}</h1>
+                                <div className="flex items-center gap-2">
+                                    <h1 className="text-xl font-bold text-foreground">{event?.title}</h1>
+                                    {isPaidEvent && (
+                                        <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+                                            {formatPrice(event?.price, event?.currency)}
+                                        </Badge>
+                                    )}
+                                </div>
+                                {event?.organization_info && (
+                                    <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                                        <Building2 className="h-4 w-4" />
+                                        <span>by {event.organization_info.name}</span>
+                                    </div>
+                                )}
                                 <p className="text-sm text-muted-foreground mt-1">
                                     {event?.starts_at && new Date(event.starts_at).toLocaleDateString(undefined, {
                                         weekday: 'long',
@@ -202,7 +369,12 @@ export function EventRegistration() {
                         <Card>
                             <CardHeader>
                                 <CardTitle>Register for this Event</CardTitle>
-                                <CardDescription>Fill in your details to secure your spot.</CardDescription>
+                                <CardDescription>
+                                    {isPaidEvent
+                                        ? "Fill in your details, then proceed to payment."
+                                        : "Fill in your details to secure your spot."
+                                    }
+                                </CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -268,6 +440,81 @@ export function EventRegistration() {
                                         </div>
                                     </div>
 
+                                    {/* Promo Code (for paid events only) */}
+                                    {isPaidEvent && (
+                                        <div className="space-y-3">
+                                            <Label className="flex items-center gap-2">
+                                                <Tag className="h-4 w-4" />
+                                                Have a promo code?
+                                            </Label>
+
+                                            {appliedPromo?.valid ? (
+                                                <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <Check className="h-5 w-5 text-green-600" />
+                                                        <div>
+                                                            <span className="font-medium text-green-800">{appliedPromo.code}</span>
+                                                            <span className="text-green-600 ml-2">
+                                                                {appliedPromo.discount_display}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={handleRemovePromoCode}
+                                                        className="text-green-700 hover:text-green-800 hover:bg-green-100"
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex gap-2">
+                                                    <Input
+                                                        placeholder="Enter promo code"
+                                                        value={promoCode}
+                                                        onChange={(e) => {
+                                                            setPromoCode(e.target.value.toUpperCase());
+                                                            setPromoError(null);
+                                                        }}
+                                                        className="flex-1"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        onClick={handleApplyPromoCode}
+                                                        disabled={promoCodeLoading || !promoCode.trim()}
+                                                    >
+                                                        {promoCodeLoading ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            "Apply"
+                                                        )}
+                                                    </Button>
+                                                </div>
+                                            )}
+
+                                            {promoError && (
+                                                <p className="text-sm text-red-600">{promoError}</p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Custom Fields */}
+                                    {event?.custom_fields && event.custom_fields.length > 0 && (
+                                        <>
+                                            <Separator />
+                                            <CustomFieldsForm
+                                                fields={event.custom_fields}
+                                                values={customFieldValues}
+                                                onChange={(fieldUuid, value) =>
+                                                    setCustomFieldValues(prev => ({ ...prev, [fieldUuid]: value }))
+                                                }
+                                            />
+                                        </>
+                                    )}
+
                                     {!user && (
                                         <>
                                             <Separator />
@@ -317,7 +564,12 @@ export function EventRegistration() {
                                         {submitting ? (
                                             <>
                                                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                                Registering...
+                                                Processing...
+                                            </>
+                                        ) : isPaidEvent ? (
+                                            <>
+                                                <CreditCard className="mr-2 h-5 w-5" />
+                                                Continue to Payment
                                             </>
                                         ) : (
                                             "Complete Registration"
@@ -330,6 +582,35 @@ export function EventRegistration() {
 
                     {/* Benefits Sidebar */}
                     <div className="space-y-6">
+                        {/* Price Card (for paid events) */}
+                        {isPaidEvent && (
+                            <Card className={`border-primary/20 ${appliedPromo?.valid ? 'bg-green-50 border-green-200' : 'bg-primary/5'}`}>
+                                <CardContent className="py-4 text-center">
+                                    <p className="text-sm font-medium text-muted-foreground">
+                                        {appliedPromo?.valid ? 'Your Price' : 'Event Price'}
+                                    </p>
+
+                                    {appliedPromo?.valid ? (
+                                        <>
+                                            <p className="text-3xl font-bold text-green-700 mt-1">
+                                                {displayPrice === 0 ? 'FREE' : formatPrice(displayPrice, event?.currency)}
+                                            </p>
+                                            <p className="text-sm text-muted-foreground mt-1">
+                                                <span className="line-through">{formatPrice(event?.price, event?.currency)}</span>
+                                                <span className="text-green-600 ml-2">
+                                                    Save {formatPrice(appliedPromo.discount_amount, event?.currency)}
+                                                </span>
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <p className="text-3xl font-bold text-foreground mt-1">
+                                            {formatPrice(event?.price, event?.currency)}
+                                        </p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
+
                         <Card>
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-base">Why Create an Account?</CardTitle>

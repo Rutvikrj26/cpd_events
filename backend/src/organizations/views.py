@@ -2,14 +2,16 @@
 DRF Views for Organizations app.
 """
 
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from common.rbac import roles
 from .models import Organization, OrganizationMembership, OrganizationSubscription
 from .permissions import IsOrgAdmin, IsOrgManager, IsOrgOwner, get_user_organizations
 from .serializers import (
@@ -24,8 +26,11 @@ from .serializers import (
     OrganizationUpdateSerializer,
 )
 from .services import OrganizationLinkingService
+from billing.services import stripe_service
+from integrations.services import email_service
 
 
+@roles('organizer', 'admin', route_name='organizations', plans=['organization'])
 class OrganizationViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Organization CRUD operations.
@@ -88,9 +93,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def members(self, request, pk=None):
-        """List organization members."""
+        """List organization members (active and pending)."""
         organization = self.get_object()
-        memberships = organization.memberships.filter(is_active=True).select_related('user', 'invited_by')
+        # Include active members and those with pending invitations
+        from django.db.models import Q
+        memberships = organization.memberships.filter(
+            Q(is_active=True) | Q(invitation_token__isnull=False, accepted_at__isnull=True)
+        ).select_related('user', 'invited_by')
         serializer = OrganizationMembershipListSerializer(memberships, many=True)
         return Response(serializer.data)
 
@@ -120,36 +129,83 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         try:
             user = User.objects.get(email__iexact=email)
-            if organization.memberships.filter(user=user).exists():
-                return Response(
-                    {'detail': 'User is already a member of this organization.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            existing_membership = organization.memberships.filter(user=user).first()
+            
+            if existing_membership:
+                if existing_membership.is_active:
+                    return Response(
+                        {'detail': 'User is already a member of this organization.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                # If pending or inactive, we can proceed to re-invite/reactivate
         except User.DoesNotExist:
             user = None
+            existing_membership = None
 
         # Check seat availability for organizer roles
         if role in ['owner', 'admin', 'manager']:
-            if hasattr(organization, 'subscription') and not organization.subscription.can_add_organizer():
-                return Response(
-                    {'detail': 'No available organizer seats. Please upgrade your plan.'},
-                    status=status.HTTP_402_PAYMENT_REQUIRED,
-                )
+            if hasattr(organization, 'subscription'):
+                subscription = organization.subscription
+                # Only check limit if we are adding a NEW active organizer
+                # Reactivating an existing organizer also consumes a seat
+                if not subscription.can_add_organizer():
+                    return Response(
+                        {
+                            'error': {
+                                'code': 'SEAT_LIMIT_REACHED',
+                                'message': f'No available seats. Your {subscription.get_plan_display()} plan includes {subscription.total_seats} organizer seat(s). Upgrade your plan or assign a "Member" role (free).',
+                                'details': {
+                                    'available_seats': subscription.available_seats,
+                                    'total_seats': subscription.total_seats,
+                                    'active_seats': subscription.active_organizer_seats,
+                                    'current_plan': subscription.plan,
+                                }
+                            }
+                        },
+                        status=status.HTTP_402_PAYMENT_REQUIRED,
+                    )
 
-        # Create pending membership
-        membership = OrganizationMembership.objects.create(
-            organization=organization,
-            user=user,
-            role=role,
-            title=title,
-            invited_by=request.user,
-            invited_at=timezone.now(),
-            invitation_email=email,
-            is_active=False,  # Pending until accepted
+        # Create or update membership
+        if existing_membership:
+            membership = existing_membership
+            membership.role = role
+            membership.title = title
+            membership.invited_by = request.user
+            membership.invited_at = timezone.now()
+            membership.invitation_email = email
+            membership.is_active = False # Keep inactive until accepted if it was pending/inactive
+            membership.save()
+            membership.generate_invitation_token()
+        else:
+            membership = OrganizationMembership.objects.create(
+                organization=organization,
+                user=user,
+                role=role,
+                title=title,
+                invited_by=request.user,
+                invited_at=timezone.now(),
+                invitation_email=email,
+                is_active=False,  # Pending until accepted
+            )
+            membership.generate_invitation_token()
+
+        # Send invitation email
+        from integrations.services import email_service
+        from django.conf import settings
+
+        invitation_url = f"{settings.SITE_URL}/accept-invite/{membership.invitation_token}"
+
+        email_service.send_email(
+            template='organization_invitation',
+            recipient=email,
+            context={
+                'invitee_email': email,
+                'organization_name': organization.name,
+                'inviter_name': request.user.full_name or request.user.email,
+                'role': role,
+                'invitation_url': invitation_url,
+            }
         )
-        membership.generate_invitation_token()
-
-        # TODO: Send invitation email
 
         return Response(
             {
@@ -264,11 +320,241 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 'templates_transferred': result['templates_transferred'],
             })
 
-        # TODO: Handle inviting other organizers
+        # Handle invitation for external email
+        if serializer.validated_data.get('organizer_email'):
+            email = serializer.validated_data['organizer_email']
+            role = serializer.validated_data['role']
 
-        return Response({'detail': 'Link invitation sent.'}, status=status.HTTP_201_CREATED)
+            # Check if membership already exists
+            if OrganizationMembership.objects.filter(organization=organization, user__email=email, is_active=True).exists():
+                 return Response(
+                    {'detail': 'User is already a member of this organization.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Create pending membership (if user exists) or just send invite logic
+            # For simplicity, we'll assume the user might not exist yet, but we need a user object for membership
+            # if we strictly follow the model. However, commonly invites track email.
+            # The model OrganizationMembership REQUIRES a user ForeignKey.
+            # So typically we need to invite them to join the PLATFORM first, or if they exist, link them.
+            
+            # Re-checking model: OrganizationMembership has `user = ForeignKey`.
+            # So we can only invite EXISTING users for now, unless we change the model to allow null user (which we haven't planned).
+            # But wait, looking at the code I viewed earlier...
+            # OrganizationMembership fields:
+            # user = models.ForeignKey(settings.AUTH_USER_MODEL, ...) (Not null usually, let's check model again... yes on_delete=CASCADE)
+            # So we can only invite existing users.
+            
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            
+            try:
+                user_to_invite = User.objects.get(email=email)
+            except User.DoesNotExist:
+                 return Response(
+                    {'detail': 'User with this email does not exist. Please ask them to sign up first.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Create pending membership
+            membership, created = OrganizationMembership.objects.get_or_create(
+                organization=organization,
+                user=user_to_invite,
+                defaults={
+                    'role': role,
+                    'is_active': False, # Pending acceptance
+                    'invited_by': request.user,
+                }
+            )
+            
+            # Generate token
+            token = membership.generate_invitation_token()
+            
+            # Send email
+            invite_url = f"{settings.FRONTEND_URL}/dashboard/organizations/accept-invite?token={token}"
+            email_service.send_email(
+                template='organization_invitation',
+                recipient=email,
+                context={
+                    'organization_name': organization.name,
+                    'inviter_name': request.user.full_name,
+                    'role': role,
+                    'invitation_url': invite_url,
+                }
+            )
+
+            return Response({'detail': f'Invitation sent to {email}.'}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='stripe/connect')
+    def stripe_connect(self, request, pk=None):
+        """
+        Initiate Stripe Connect onboarding.
+        Returns account onboarding URL.
+        """
+        organization = self.get_object()
+
+        # Check admin permission
+        if not organization.memberships.filter(
+            user=request.user, role__in=['owner', 'admin'], is_active=True
+        ).exists():
+            return Response(
+                {'detail': 'You do not have permission to manage billing.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        from billing.services import stripe_connect_service
+
+        # 1. Ensure Organization has a Connect Account ID
+        if not organization.stripe_connect_id:
+            account_id = stripe_connect_service.create_account(
+                email=organization.contact_email or request.user.email,
+                country='US',  # Default to US for now, or make dynamic
+            )
+            if not account_id:
+                return Response(
+                    {'detail': 'Failed to create Stripe account.'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+            
+            organization.stripe_connect_id = account_id
+            organization.save(update_fields=['stripe_connect_id'])
+        
+        # 2. Generate Onboarding Link
+        # Redirect back to frontend organization settings -> payments
+        refresh_url = f"{settings.FRONTEND_URL}/organizer/organizations/{organization.slug}/settings/payments?refresh=true"
+        return_url = f"{settings.FRONTEND_URL}/organizer/organizations/{organization.slug}/settings/payments?success=true"
+
+        onboarding_url = stripe_connect_service.create_account_link(
+            account_id=organization.stripe_connect_id,
+            refresh_url=refresh_url,
+            return_url=return_url,
+        )
+
+        if not onboarding_url:
+            return Response(
+                {'detail': 'Failed to generate onboarding link.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response({'url': onboarding_url})
+
+    @action(detail=True, methods=['post'], url_path='subscription/upgrade')
+    def upgrade_subscription(self, request, pk=None):
+        """
+        Upgrade organization subscription.
+        Creates a Stripe Checkout Session for the upgrade.
+        """
+        organization = self.get_object()
+        
+        # Check permissions (Owner/Admin only)
+        if not organization.memberships.filter(
+            user=request.user, role__in=['owner', 'admin'], is_active=True
+        ).exists():
+             return Response(
+                {'detail': 'You do not have permission to manage billing.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        plan = request.data.get('plan')
+        if not plan:
+            return Response({'detail': 'Plan is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+        
+        # Create checkout session
+        success_url = f"{settings.FRONTEND_URL}/dashboard/organizations/{organization.slug}/billing?success=true"
+        cancel_url = f"{settings.FRONTEND_URL}/dashboard/organizations/{organization.slug}/billing?canceled=true"
+        
+        result = stripe_service.create_checkout_session(
+            user=request.user, 
+            plan=plan, 
+            success_url=success_url, 
+            cancel_url=cancel_url,
+            organization_uuid=str(organization.uuid), # Pass organization UUID for webhook
+        )
+        
+        if not result.get('success'):
+            return Response({'detail': result.get('error')}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({'url': result.get('url')})
+
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def plans(self, request):
+        """
+        Get available organization plans and capabilities.
+        """
+        from organizations.models import OrganizationSubscription
+        return Response(OrganizationSubscription.PLAN_CONFIG)
+
+    @action(detail=True, methods=['get'], url_path='stripe/status')
+    def stripe_status(self, request, pk=None):
+        """
+        Check and sync Stripe Connect status.
+        """
+        organization = self.get_object()
+        
+        # Check admin permission
+        if not organization.memberships.filter(
+            user=request.user, role__in=['owner', 'admin'], is_active=True
+        ).exists():
+            return Response(
+                {'detail': 'You do not have permission to view billing status.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+            
+        if not organization.stripe_connect_id:
+             return Response({
+                'connected': False,
+                'status': 'not_connected',
+                'charges_enabled': False,
+            })
+
+        from billing.services import stripe_connect_service
+        
+        status_info = stripe_connect_service.get_account_status(organization.stripe_connect_id)
+        
+        if 'error' in status_info:
+             return Response(
+                {'detail': 'Failed to retrieve status from Stripe.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Update local state
+        organization.stripe_charges_enabled = status_info.get('charges_enabled', False)
+        # Use details_submitted or charges_enabled to determine 'active' status
+        if status_info.get('charges_enabled'):
+            organization.stripe_account_status = 'active'
+        elif status_info.get('details_submitted'):
+            organization.stripe_account_status = 'pending_verification'
+        else:
+            organization.stripe_account_status = 'restricted'
+            
+        organization.save(update_fields=['stripe_charges_enabled', 'stripe_account_status'])
+
+        return Response({
+            'connected': True,
+            'status': organization.stripe_account_status,
+            'charges_enabled': organization.stripe_charges_enabled,
+            'stripe_id': organization.stripe_connect_id,
+            'details': status_info,
+        })
+
+    @action(detail=False, methods=['get'], url_path='public/(?P<slug>[^/.]+)', permission_classes=[AllowAny])
+    def public_profile(self, request, slug=None):
+        """
+        Get public profile for an organization by slug.
+        No authentication required.
+        """
+        organization = get_object_or_404(
+            Organization.objects.filter(is_active=True),
+            slug=slug
+        )
+
+        serializer = OrganizationDetailSerializer(organization, context={'request': request})
+        return Response(serializer.data)
+
+
+@roles('attendee', 'organizer', 'admin', route_name='accept_invitation')
 class AcceptInvitationView(APIView):
     """Accept an organization invitation."""
 
@@ -311,6 +597,7 @@ class AcceptInvitationView(APIView):
         })
 
 
+@roles('organizer', 'admin', route_name='create_org_from_account')
 class CreateOrgFromAccountView(APIView):
     """Create an organization from the current organizer's account."""
 

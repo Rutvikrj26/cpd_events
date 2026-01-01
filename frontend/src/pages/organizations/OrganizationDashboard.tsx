@@ -19,6 +19,7 @@ import {
     Shield,
     UserCog,
     User as UserIcon,
+    CreditCard,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -153,10 +154,16 @@ const OrganizationDashboard: React.FC = () => {
                 </div>
 
                 {hasRole('admin') && (
-                    <Button variant="outline" onClick={() => navigate(`/org/${slug}/settings`)}>
-                        <Settings className="h-4 w-4 mr-2" />
-                        Settings
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={() => navigate(`/org/${slug}/billing`)}>
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Billing
+                        </Button>
+                        <Button variant="outline" onClick={() => navigate(`/org/${slug}/settings`)}>
+                            <Settings className="h-4 w-4 mr-2" />
+                            Settings
+                        </Button>
+                    </div>
                 )}
             </div>
 

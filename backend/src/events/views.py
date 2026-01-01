@@ -19,7 +19,7 @@ from common.utils import error_response
 from common.viewsets import SoftDeleteModelViewSet
 
 from . import serializers
-from .models import Event, EventCustomField
+from .models import Event, EventCustomField, Speaker
 
 # =============================================================================
 # Filters
@@ -96,7 +96,22 @@ class EventViewSet(SoftDeleteModelViewSet):
         return serializers.EventDetailSerializer
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        from .services import event_service
+        from rest_framework.exceptions import ValidationError
+
+        organization_uuid = self.request.data.get('organization')
+
+        try:
+            event_service.create_event(
+                user=self.request.user,
+                data=serializer.validated_data,
+                organization_uuid=organization_uuid
+            )
+        except ValidationError as e:
+             raise e
+        except Exception as e:
+             # Re-raise known exceptions as is, wrap others if needed
+             raise e
 
     @swagger_auto_schema(
         operation_summary="Publish event",
@@ -330,6 +345,7 @@ class PublicEventListView(generics.ListAPIView):
         ).select_related('owner')
 
 
+@roles('public', route_name='public_event_detail')
 class PublicEventDetailView(generics.RetrieveAPIView):
     """
     GET /api/v1/public/events/{slug_or_uuid}/
@@ -389,6 +405,7 @@ class PublicEventDetailView(generics.RetrieveAPIView):
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='event_custom_fields')
 class EventCustomFieldViewSet(viewsets.ModelViewSet):
     """
     Manage custom fields for an event.
@@ -434,6 +451,7 @@ class EventCustomFieldViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='event_sessions')
 class EventSessionViewSet(viewsets.ModelViewSet):
     """
     Manage sessions for a multi-session event.
@@ -495,6 +513,7 @@ class EventSessionViewSet(viewsets.ModelViewSet):
         return Response({'message': 'Sessions reordered.'})
 
 
+@roles('attendee', 'organizer', 'admin', route_name='session_attendance')
 class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
     """
     View session attendance for a registration.
@@ -554,3 +573,22 @@ class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         session_attendance.save()
 
         return Response(serializers.SessionAttendanceSerializer(session_attendance).data)
+
+
+@roles('organizer', 'admin', route_name='speakers')
+class SpeakerViewSet(SoftDeleteModelViewSet):
+    """
+    CRUD for speakers.
+    """
+    permission_classes = [IsAuthenticated, IsOrganizer]
+    queryset = Speaker.objects.all()
+    serializer_class = serializers.SpeakerSerializer
+    search_fields = ['name', 'bio']
+    ordering_fields = ['name', 'created_at']
+    ordering = ['name']
+
+    def get_queryset(self):
+        return Speaker.objects.filter(owner=self.request.user, deleted_at__isnull=True)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)

@@ -15,6 +15,7 @@ app_name = 'events'
 # Main event router
 router = DefaultRouter()
 router.register(r'events', views.EventViewSet, basename='event')
+router.register(r'speakers', views.SpeakerViewSet, basename='speaker')
 
 # Nested registration router
 registration_router = DefaultRouter()

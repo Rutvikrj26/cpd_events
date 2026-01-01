@@ -11,6 +11,7 @@ from common.utils import error_response
 from drf_yasg.utils import swagger_auto_schema
 
 from common.permissions import IsOrganizer
+from common.rbac import roles
 
 from .models import (
     Assignment,
@@ -46,6 +47,7 @@ from .serializers import (
 )
 
 
+@roles('organizer', 'admin', route_name='event_modules')
 class EventModuleViewSet(viewsets.ModelViewSet):
     """
     Event module management.
@@ -108,6 +110,7 @@ class EventModuleViewSet(viewsets.ModelViewSet):
         return Response(EventModuleSerializer(module).data)
 
 
+@roles('organizer', 'admin', route_name='module_content')
 class ModuleContentViewSet(viewsets.ModelViewSet):
     """
     Module content management.
@@ -145,6 +148,7 @@ class ModuleContentViewSet(viewsets.ModelViewSet):
         serializer.save(module=module)
 
 
+@roles('organizer', 'admin', route_name='assignments')
 class AssignmentViewSet(viewsets.ModelViewSet):
     """
     Assignment management.
@@ -182,6 +186,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         serializer.save(module=module)
 
 
+@roles('attendee', 'organizer', 'admin', route_name='attendee_submissions')
 class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
     """
     Attendee's assignment submissions.
@@ -244,6 +249,7 @@ class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
         return Response(AssignmentSubmissionSerializer(submission).data)
 
 
+@roles('organizer', 'admin', route_name='organizer_submissions')
 class OrganizerSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Organizer view of all submissions for their events.
@@ -301,6 +307,7 @@ class OrganizerSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(AssignmentSubmissionSerializer(submission).data)
 
 
+@roles('attendee', 'organizer', 'admin', route_name='my_learning')
 class MyLearningViewSet(viewsets.GenericViewSet):
     """
     Attendee's learning dashboard.
@@ -393,6 +400,7 @@ class MyLearningViewSet(viewsets.GenericViewSet):
         return Response({'event_uuid': event.uuid, 'event_title': event.title, 'modules': module_data})
 
 
+@roles('attendee', 'organizer', 'admin', route_name='content_progress')
 class ContentProgressView(views.APIView):
     """
     Update content progress.
@@ -433,6 +441,7 @@ class ContentProgressView(views.APIView):
 
         return Response(ContentProgressSerializer(progress).data)
 
+@roles('attendee', 'organizer', 'admin', route_name='courses')
 class CourseViewSet(viewsets.ModelViewSet):
     """
     Course management for organizations.
@@ -476,17 +485,32 @@ class CourseViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         from organizations.models import Organization
-        
+        from rest_framework.exceptions import ValidationError, PermissionDenied
+
         org_slug = self.request.data.get('organization_slug')
         if not org_slug:
-            # Fallback or error
-            pass
-            
+            raise ValidationError("Courses must belong to an organization. Please provide 'organization_slug'.")
+
         try:
             org = Organization.objects.get(slug=org_slug)
+
+            # Check organization subscription limits
+            if hasattr(org, 'subscription'):
+                org_subscription = org.subscription
+                if not org_subscription.check_course_limit():
+                    limit = org_subscription.config.get('courses_per_month')
+                    raise PermissionDenied(
+                        f"Organization has reached its course limit of {limit} courses this month. "
+                        f"Please upgrade your plan to create more courses."
+                    )
+
+                # Increment organization course counter
+                org_subscription.increment_courses()
+
             serializer.save(organization=org, created_by=self.request.user)
+
         except Organization.DoesNotExist:
-            pass # Validation should handle this
+            raise ValidationError(f"Organization with slug '{org_slug}' not found")
 
     @action(detail=True, methods=['post'])
     def publish(self, request, uuid=None):
@@ -495,11 +519,12 @@ class CourseViewSet(viewsets.ModelViewSet):
         return Response(CourseSerializer(course).data)
 
 
+@roles('attendee', 'organizer', 'admin', route_name='course_enrollments')
 class CourseEnrollmentViewSet(viewsets.ModelViewSet):
     """
     User enrollments in courses.
     """
-    
+
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = CourseEnrollmentSerializer
     lookup_field = 'uuid'
@@ -513,16 +538,17 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user, course=course)
 
 
+@roles('organizer', 'admin', route_name='course_modules')
 class CourseModuleViewSet(viewsets.ModelViewSet):
     """
     Manage modules within a course.
-    
+
     Acts as a wrapper around EventModule creation but links to a Course.
-    
+
     GET /courses/{course_uuid}/modules/
     POST /courses/{course_uuid}/modules/
     """
-    
+
     permission_classes = [permissions.IsAuthenticated]
     lookup_field = 'uuid'
     
@@ -589,14 +615,15 @@ class CourseModuleViewSet(viewsets.ModelViewSet):
         return Response(CourseModuleSerializer(course_link).data)
 
 
+@roles('organizer', 'admin', route_name='course_module_content')
 class CourseModuleContentViewSet(viewsets.ModelViewSet):
     """
     Content management for course modules.
-    
+
     GET /courses/{course_uuid}/modules/{module_uuid}/contents/
     POST /courses/{course_uuid}/modules/{module_uuid}/contents/
     """
-    
+
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
     lookup_field = 'uuid'

@@ -47,7 +47,7 @@ export function CertificatesList() {
 
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="relative w-full sm:w-96">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by event or course..."
             className="pl-9"
@@ -72,8 +72,8 @@ export function CertificatesList() {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-lg border border-dashed border-border">
-          <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4 text-gray-400">
+        <div className="flex flex-col items-center justify-center py-20 bg-muted/30 rounded-lg border border-dashed border-border">
+          <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4 text-muted-foreground">
             <ShieldCheck className="h-8 w-8" />
           </div>
           <h3 className="text-lg font-medium text-foreground mb-1">No certificates found</h3>
@@ -93,17 +93,17 @@ function CertificateCard({ cert }: { cert: Certificate }) {
 
   return (
     <Card className="flex flex-col h-full hover:shadow-md transition-shadow group">
-      <div className="relative aspect-[1.414/1] bg-card border-b border-gray-100 p-6 flex flex-col items-center justify-center text-center overflow-hidden">
+      <div className="relative aspect-[1.414/1] bg-card border-b border-border/50 p-6 flex flex-col items-center justify-center text-center overflow-hidden">
         {/* Mini Certificate Preview */}
-        <div className="absolute inset-0 bg-gray-50 opacity-0 group-hover:opacity-10 transition-opacity"></div>
-        <div className="border-4 border-double border-gray-100 absolute inset-3 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-muted/30 opacity-0 group-hover:opacity-10 transition-opacity"></div>
+        <div className="border-4 border-double border-border/50 absolute inset-3 pointer-events-none"></div>
 
-        <ShieldCheck className="h-8 w-8 text-blue-600 mb-2 opacity-80" />
+        <ShieldCheck className="h-8 w-8 text-primary mb-2 opacity-80" />
         <h3 className="font-serif font-bold text-foreground text-sm line-clamp-2 px-2 leading-tight mb-1">
           {cert.event?.title || 'Certificate'}
         </h3>
         <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Certificate of Completion</p>
-        <div className="mt-3 text-xs font-bold text-gray-400 font-mono">
+        <div className="mt-3 text-xs font-bold text-muted-foreground font-mono">
           {cert.issued_at ? new Date(cert.issued_at).toLocaleDateString() : 'Pending'}
         </div>
       </div>

@@ -74,6 +74,13 @@ class Organization(SoftDeleteModel):
         help_text="User who created this organization",
     )
 
+    # =========================================
+    # Stripe Connect
+    # =========================================
+    stripe_connect_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe Connect Account ID")
+    stripe_account_status = models.CharField(max_length=50, default='pending', help_text="Connect account status")
+    stripe_charges_enabled = models.BooleanField(default=False, help_text="Whether account can accept payments")
+
     # Denormalized counts (updated via signals/methods)
     members_count = models.PositiveIntegerField(default=0, help_text="Number of active members")
     events_count = models.PositiveIntegerField(default=0, help_text="Number of events")
@@ -229,20 +236,16 @@ class OrganizationMembership(BaseModel):
             self.invitation_token = ''
             self.is_active = True
             self.save(update_fields=['accepted_at', 'invitation_token', 'is_active', 'updated_at'])
-            # Update org member count
-            self.organization.update_counts()
 
     def deactivate(self):
         """Deactivate this membership."""
         self.is_active = False
         self.save(update_fields=['is_active', 'updated_at'])
-        self.organization.update_counts()
 
     def reactivate(self):
         """Reactivate this membership."""
         self.is_active = True
         self.save(update_fields=['is_active', 'updated_at'])
-        self.organization.update_counts()
 
 
 class OrganizationSubscription(BaseModel):
@@ -318,6 +321,7 @@ class OrganizationSubscription(BaseModel):
     # Plan configuration
     PLAN_CONFIG = {
         Plan.FREE: {
+            'name': 'Free',
             'included_seats': 1,
             'seat_price_cents': 0,
             'events_per_month': 2,
@@ -325,22 +329,25 @@ class OrganizationSubscription(BaseModel):
             'max_attendees_per_event': 50,
         },
         Plan.TEAM: {
-            'included_seats': 3,
-            'seat_price_cents': 1500,  # $15/seat
-            'events_per_month': 20,
-            'courses_per_month': 5,
-            'max_attendees_per_event': 200,
+            'name': 'Team',
+            'included_seats': 5,  # Updated from 3 to 5
+            'seat_price_cents': 4900,  # $49/seat (updated from $15)
+            'events_per_month': None,  # Unlimited
+            'courses_per_month': None,  # Unlimited
+            'max_attendees_per_event': None,  # Unlimited
         },
         Plan.BUSINESS: {
-            'included_seats': 10,
-            'seat_price_cents': 1200,  # $12/seat
-            'events_per_month': 100,
-            'courses_per_month': 25,
-            'max_attendees_per_event': 1000,
+            'name': 'Business',
+            'included_seats': 15,  # Updated from 10 to 15
+            'seat_price_cents': 4500,  # $45/seat (updated from $12)
+            'events_per_month': None,  # Unlimited
+            'courses_per_month': None,  # Unlimited
+            'max_attendees_per_event': None,  # Unlimited
         },
         Plan.ENTERPRISE: {
+            'name': 'Enterprise',
             'included_seats': 50,
-            'seat_price_cents': 900,  # $9/seat
+            'seat_price_cents': 4000,  # $40/seat (updated from $9)
             'events_per_month': None,  # Unlimited
             'courses_per_month': None,  # Unlimited
             'max_attendees_per_event': None,  # Unlimited

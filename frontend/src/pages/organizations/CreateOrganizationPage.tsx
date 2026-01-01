@@ -32,10 +32,17 @@ interface FormData {
 const CreateOrganizationPage: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { user } = useAuth();
+    const { user, hasFeature } = useAuth();
     const { refreshOrganizations } = useOrganization();
 
     const isFromAccount = searchParams.get('from') === 'account';
+
+    // Redirect if user cannot create organization
+    useEffect(() => {
+        if (!hasFeature('can_create_organization')) {
+            navigate('/organizations', { replace: true });
+        }
+    }, [hasFeature, navigate]);
 
     const [formData, setFormData] = useState<FormData>({
         name: user?.organization_name || '',

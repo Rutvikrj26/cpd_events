@@ -83,7 +83,7 @@ export function QuizBuilder({ initialData, onChange }: QuizBuilderProps) {
             if (q.id !== questionId) return q;
 
             // For single choice, if setting correct, uncheck others
-            let newOptions = q.options.map(opt => {
+            const newOptions = q.options.map(opt => {
                 if (opt.id === optionId) {
                     return { ...opt, ...updates };
                 }

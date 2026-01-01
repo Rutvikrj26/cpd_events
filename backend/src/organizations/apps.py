@@ -12,4 +12,8 @@ class OrganizationsConfig(AppConfig):
 
     def ready(self):
         """Import signals when app is ready."""
-        pass  # Will import signals here later if needed
+        try:
+            import organizations.signals  # noqa: F401
+        except ImportError:
+            pass
+

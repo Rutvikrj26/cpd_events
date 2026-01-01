@@ -20,14 +20,14 @@ interface StatusBadgeProps {
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; className?: string }> = {
   draft: { label: "Draft", variant: "secondary", className: "bg-muted text-gray-700 hover:bg-gray-200 border-border" },
-  published: { label: "Published", variant: "default", className: "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200" },
-  live: { label: "Live Now", variant: "default", className: "bg-red-100 text-red-700 hover:bg-red-200 border-red-200 animate-pulse" },
-  completed: { label: "Completed", variant: "outline", className: "text-gray-600 border-gray-300" },
-  cancelled: { label: "Cancelled", variant: "destructive", className: "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" },
-  issued: { label: "Issued", variant: "default", className: "bg-green-100 text-green-700 hover:bg-green-200 border-green-200" },
-  revoked: { label: "Revoked", variant: "destructive", className: "bg-red-50 text-red-600 border-red-200" },
-  registered: { label: "Registered", variant: "default", className: "bg-green-50 text-green-700 border-green-200" },
-  attended: { label: "Attended", variant: "default", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  published: { label: "Published", variant: "default", className: "bg-primary/10 text-primary hover:bg-primary/20 border-primary/20" },
+  live: { label: "Live Now", variant: "default", className: "bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20 animate-pulse" },
+  completed: { label: "Completed", variant: "outline", className: "text-muted-foreground border-border" },
+  cancelled: { label: "Cancelled", variant: "destructive", className: "bg-destructive/5 text-destructive border-destructive/10 hover:bg-destructive/10" },
+  issued: { label: "Issued", variant: "default", className: "bg-primary/15 text-primary hover:bg-primary/25 border-primary/20" },
+  revoked: { label: "Revoked", variant: "destructive", className: "bg-destructive/10 text-destructive border-destructive/20" },
+  registered: { label: "Registered", variant: "default", className: "bg-primary/5 text-primary border-primary/10" },
+  attended: { label: "Attended", variant: "default", className: "bg-primary/10 text-primary border-primary/20" },
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {

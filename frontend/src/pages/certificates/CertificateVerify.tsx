@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ShieldCheck, ShieldX, Calendar, Award, Building, User, Loader2 } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ShieldCheck, ShieldX, Calendar, Award, Building, User, Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { verifyCertificate } from '@/api/certificates';
 
 interface CertificateVerificationData {
@@ -25,17 +26,20 @@ interface CertificateVerificationData {
 
 export const CertificateVerify = () => {
     const { code } = useParams<{ code: string }>();
+    const navigate = useNavigate();
     const [certificate, setCertificate] = useState<CertificateVerificationData | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [inputCode, setInputCode] = useState('');
 
     useEffect(() => {
+        if (!code) {
+            return;
+        }
+
         const verify = async () => {
-            if (!code) {
-                setError('Invalid verification code');
-                setLoading(false);
-                return;
-            }
+            setLoading(true);
+            setError(null);
 
             try {
                 const data = await verifyCertificate(code);
@@ -53,6 +57,73 @@ export const CertificateVerify = () => {
 
         verify();
     }, [code]);
+
+    const handleVerify = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!inputCode.trim()) {
+            setError('Please enter a verification code');
+            return;
+        }
+        // Navigate to the verification URL with the code
+        navigate(`/verify/${inputCode.trim()}`);
+    };
+
+    // Show manual input form when no code is provided
+    if (!code) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+                    <div className="text-center mb-8">
+                        <div className="h-20 w-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <ShieldCheck className="h-10 w-10" />
+                        </div>
+                        <h1 className="text-2xl font-bold text-foreground mb-2">Verify Certificate</h1>
+                        <p className="text-muted-foreground">Enter the verification code to check certificate authenticity</p>
+                    </div>
+
+                    <form onSubmit={handleVerify} className="space-y-4">
+                        <div>
+                            <label htmlFor="code" className="block text-sm font-medium text-foreground mb-2">
+                                Verification Code
+                            </label>
+                            <Input
+                                id="code"
+                                type="text"
+                                placeholder="Enter 8-character code or full verification code"
+                                value={inputCode}
+                                onChange={(e) => {
+                                    setInputCode(e.target.value.toUpperCase());
+                                    setError(null);
+                                }}
+                                className="text-center font-mono tracking-wider"
+                                maxLength={50}
+                            />
+                            <p className="text-xs text-muted-foreground mt-2">
+                                Find the code on your certificate (e.g., ABC12345 or full verification string)
+                            </p>
+                        </div>
+
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                                {error}
+                            </div>
+                        )}
+
+                        <Button type="submit" className="w-full" size="lg">
+                            <Search className="h-5 w-5 mr-2" />
+                            Verify Certificate
+                        </Button>
+                    </form>
+
+                    <div className="mt-6 text-center">
+                        <Link to="/">
+                            <Button variant="ghost" size="sm">Return to Home</Button>
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (loading) {
         return (

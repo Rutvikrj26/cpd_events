@@ -16,6 +16,8 @@ router.register(r'cpd-requirements', views.CPDRequirementViewSet, basename='cpd-
 urlpatterns = [
     # Authentication
     path('auth/signup/', views.SignupView.as_view(), name='signup'),
+    path('auth/zoom/login/', views.ZoomAuthView.as_view(), name='zoom_login'),
+    path('auth/zoom/callback/', views.ZoomCallbackView.as_view(), name='zoom_callback'),
     path('auth/token/', views.CustomTokenObtainPairView.as_view(), name='token_obtain'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/verify-email/', views.EmailVerificationView.as_view(), name='verify_email'),
@@ -30,6 +32,9 @@ urlpatterns = [
     path('users/me/upgrade/', views.UpgradeToOrganizerView.as_view(), name='upgrade'),
     path('users/me/delete-account/', views.DeleteAccountView.as_view(), name='delete_account'),
     path('users/me/export-data/', views.DataExportView.as_view(), name='export_data'),  # H6: GDPR
+    # Payouts (Stripe Connect for individuals)
+    path('users/me/payouts/connect/', views.PayoutsConnectView.as_view(), name='payouts_connect'),
+    path('users/me/payouts/status/', views.PayoutsStatusView.as_view(), name='payouts_status'),
     # Public organizer profiles
     path('organizers/<uuid:uuid>/', views.PublicOrganizerView.as_view(), name='public_organizer'),
     # ViewSets

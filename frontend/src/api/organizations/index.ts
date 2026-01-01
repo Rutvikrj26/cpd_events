@@ -147,6 +147,72 @@ export const linkOrganizerToOrg = async (orgUuid: string, data?: LinkOrganizerRe
 };
 
 // ============================================================================
+// Stripe Connect
+// ============================================================================
+
+import { StripeConnectResponse, StripeStatusResponse } from './types';
+
+/**
+ * Initiate Stripe Connect onboarding.
+ */
+export const connectStripe = async (orgUuid: string): Promise<StripeConnectResponse> => {
+    const response = await client.post<StripeConnectResponse>(`${BASE_URL}/${orgUuid}/stripe/connect/`);
+    return response.data;
+};
+
+/**
+ * Get Stripe Connect account status.
+ */
+export const getStripeStatus = async (orgUuid: string): Promise<StripeStatusResponse> => {
+    const response = await client.get<StripeStatusResponse>(`${BASE_URL}/${orgUuid}/stripe/status/`);
+    return response.data;
+};
+
+// ============================================================================
+// Invitation Management
+// ============================================================================
+
+/**
+ * Accept an organization invitation
+ */
+export const acceptOrganizationInvitation = async (token: string): Promise<{ detail: string; organization: OrganizationListItem }> => {
+    const response = await client.post<{ detail: string; organization: OrganizationListItem }>(`${BASE_URL}/accept-invite/${token}/`);
+    return response.data;
+};
+
+// ============================================================================
+// Public Organization Profiles
+// ============================================================================
+
+/**
+ * Get public organization profile by slug (no authentication required).
+ */
+export const getPublicOrganizationProfile = async (slug: string): Promise<Organization> => {
+    const response = await client.get<Organization>(`${BASE_URL}/public/${slug}/`);
+    return response.data;
+};
+
+// ============================================================================
+// Billing & Plans
+// ============================================================================
+
+/**
+ * Get available organization plans.
+ */
+export const getOrganizationPlans = async (): Promise<Record<string, any>> => {
+    const response = await client.get<Record<string, any>>(`${BASE_URL}/plans/`);
+    return response.data;
+};
+
+/**
+ * Upgrade organization subscription.
+ */
+export const upgradeOrganizationSubscription = async (uuid: string, plan: string): Promise<{ url: string }> => {
+    const response = await client.post<{ url: string }>(`${BASE_URL}/${uuid}/subscription/upgrade/`, { plan });
+    return response.data;
+};
+
+// ============================================================================
 // Re-export types
 // ============================================================================
 

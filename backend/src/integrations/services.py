@@ -28,6 +28,9 @@ class EmailService:
         'password_reset': 'emails/password_reset.html',
         'email_verification': 'emails/email_verification.html',
         'invitation': 'emails/invitation.html',
+        'organization_invitation': 'emails/organization_invitation.html',
+        'payment_failed': 'emails/payment_failed.html',
+        'waitlist_promotion': 'emails/waitlist_promotion.html',
     }
 
     # Subject lines
@@ -39,6 +42,9 @@ class EmailService:
         'password_reset': 'Password Reset Request',
         'email_verification': 'Verify Your Email',
         'invitation': "You're invited: {event_title}",
+        'organization_invitation': "You're invited to join {organization_name}",
+        'payment_failed': "Payment Failed: Invoice #{invoice_number}",
+        'waitlist_promotion': "Spot Available: {event_title}",
     }
 
     def send_email(self, template: str, recipient: str, context: dict[str, Any], subject: str | None = None) -> bool:
@@ -156,6 +162,12 @@ class EmailService:
         elif template == 'event_reminder':
             lines.append(f"<p><strong>{context.get('event_title', 'Your event')}</strong> starts soon.</p>")
 
+        elif template == 'organization_invitation':
+            lines.append(f"<p>{context.get('inviter_name', 'Someone')} has invited you to join <strong>{context.get('organization_name', 'their organization')}</strong> as a <strong>{context.get('role', 'member')}</strong>.</p>")
+            if context.get('invitation_url'):
+                lines.append(f"<p><a href='{context['invitation_url']}' style='background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Accept Invitation</a></p>")
+            lines.append(f"<p>This invitation will expire in 7 days.</p>")
+
         else:
             for key, value in context.items():
                 if isinstance(value, str) and key not in ['user_name']:
@@ -183,7 +195,11 @@ class WebhookProcessor:
         """
         try:
             event_type = log.event_type
-            payload = log.payload
+            event_type = log.event_type
+            # log.payload is the full request data
+            # The actual event data is inside the 'payload' key
+            # { "event": "...", "payload": { "object": { ... } } }
+            payload = log.payload.get('payload', {})
 
             handler = self._get_zoom_handler(event_type)
             if handler:

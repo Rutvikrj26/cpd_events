@@ -11,7 +11,10 @@ Field names match the actual model fields:
 - promoted_from_waitlist_at (not waitlisted_at/promoted_at)
 """
 
+import logging
 from rest_framework import serializers
+
+logger = logging.getLogger(__name__)
 
 from common.serializers import BaseModelSerializer, MinimalEventSerializer, MinimalUserSerializer, SoftDeleteModelSerializer
 
@@ -189,6 +192,7 @@ class RegistrationCreateSerializer(serializers.Serializer):
     organization_name = serializers.CharField(required=False, max_length=255, allow_blank=True)
     custom_field_responses = serializers.DictField(required=False)
     allow_public_verification = serializers.BooleanField(default=True)
+    promo_code = serializers.CharField(required=False, max_length=50, allow_blank=True)
 
     def validate(self, attrs):
         request = self.context.get('request')
@@ -266,8 +270,8 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
             try:
                 cert = obj.certificate
                 return f"/api/v1/certificates/{cert.uuid}/"
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to resolve certificate for registration {obj.uuid}: {e}")
         return None
 
 

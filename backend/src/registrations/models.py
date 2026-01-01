@@ -76,7 +76,22 @@ class Registration(SoftDeleteModel):
     # =========================================
     # Registration Metadata
     # =========================================
+    class PaymentStatus(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        PAID = 'paid', 'Paid'
+        FAILED = 'failed', 'Failed'
+        REFUNDED = 'refunded', 'Refunded'
+        NA = 'na', 'N/A'  # For free events
+
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.CONFIRMED, db_index=True)
+    
+    # Payment Tracking
+    payment_status = models.CharField(
+        max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.NA, db_index=True
+    )
+    payment_intent_id = models.CharField(max_length=255, blank=True, db_index=True)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
     source = models.CharField(
         max_length=20, choices=Source.choices, default=Source.SELF, help_text="How this registration was created"
     )
@@ -189,7 +204,8 @@ class Registration(SoftDeleteModel):
         self.save(update_fields=['status', 'cancelled_at', 'cancellation_reason', 'updated_at'])
 
         # Update event counts
-        self.event.update_counts()
+        # Update event counts handled by signals
+
 
         # Promote from waitlist if applicable
         self._promote_next_from_waitlist()
@@ -219,7 +235,22 @@ class Registration(SoftDeleteModel):
         self.waitlist_position = None
         self.save(update_fields=['status', 'promoted_from_waitlist_at', 'waitlist_position', 'updated_at'])
 
-        self.event.update_counts()
+        # Update event counts handled by signals
+
+
+        # Send email notification to attendee
+        from integrations.services import email_service
+        
+        email_service.send_email(
+            template='waitlist_promotion',
+            recipient=self.email,
+            context={
+                'user_name': self.full_name,
+                'event_title': self.event.title,
+                # Assuming standard frontend route structure
+                'action_url': f"https://cpdevents.com/events/{self.event.slug}", 
+            }
+        )
 
     def update_attendance_summary(self):
         """

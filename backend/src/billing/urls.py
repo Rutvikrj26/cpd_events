@@ -10,6 +10,8 @@ from .views import (
     CheckoutSessionView,
     InvoiceViewSet,
     PaymentMethodViewSet,
+    PublicPricingView,
+    SetupIntentView,
     SubscriptionViewSet,
 )
 
@@ -18,13 +20,14 @@ router.register(r'subscription', SubscriptionViewSet, basename='subscription')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'payment-methods', PaymentMethodViewSet, basename='payment-method')
 
-# User nested routes - these will be added to accounts/urls.py
-user_billing_patterns = [
-    path('', include(router.urls)),
-]
-
-# Top-level billing routes
+# All billing routes
 urlpatterns = [
+    # ViewSet routes (subscription/, invoices/, payment-methods/)
+    path('', include(router.urls)),
+    # Public pricing API (no auth required)
+    path('public/pricing/', PublicPricingView.as_view(), name='public-pricing'),
+    # Checkout and portal
     path('billing/checkout/', CheckoutSessionView.as_view(), name='checkout'),
     path('billing/portal/', BillingPortalView.as_view(), name='portal'),
+    path('billing/setup-intent/', SetupIntentView.as_view(), name='setup-intent'),
 ]

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Award, Download, Eye, Share2, Check, ShieldCheck } from 'lucide-react';
+import { Award, Download, Eye, Share2, Check, ShieldCheck, Search, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
-import { getMyCertificates } from '@/api/certificates';
+import { Input } from '@/components/ui/input';
+import { Link, useNavigate } from 'react-router-dom';
+import { getMyCertificates, downloadCertificate } from '@/api/certificates';
 import { Certificate } from '@/api/certificates/types';
 import { toast } from 'sonner';
 import {
@@ -16,9 +17,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 
 export const CertificatesPage = () => {
+    const navigate = useNavigate();
     const [certificates, setCertificates] = useState<Certificate[]>([]);
+    const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(true);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchCerts = async () => {
@@ -47,17 +51,46 @@ export const CertificatesPage = () => {
         }
     };
 
-    const handleDownload = (cert: Certificate) => {
-        if (cert.download_url) {
-            window.open(cert.download_url, '_blank');
-        } else {
-            toast.error("PDF not available for this certificate");
+    const handleDownload = async (cert: Certificate) => {
+        setDownloadingId(cert.uuid);
+        try {
+            const { download_url } = await downloadCertificate(cert.uuid);
+            if (download_url) {
+                window.open(download_url, '_blank');
+                toast.success("Certificate downloaded!");
+            } else {
+                toast.error("PDF not available for this certificate");
+            }
+        } catch (error: any) {
+            // Check if it's a feedback required error
+            if (error?.response?.data?.error?.code === 'FEEDBACK_REQUIRED') {
+                toast.error(
+                    error?.response?.data?.error?.message || 'Please submit feedback before downloading',
+                    {
+                        action: {
+                            label: 'Give Feedback',
+                            onClick: () => navigate('/my-registrations')
+                        }
+                    }
+                );
+            } else {
+                toast.error("Failed to download certificate");
+            }
+        } finally {
+            setDownloadingId(null);
         }
     };
 
     const handleView = (cert: Certificate) => {
         window.open(`/verify/${cert.short_code}`, '_blank');
     };
+
+    const filteredCertificates = certificates.filter(cert => {
+        const searchLower = searchTerm.toLowerCase();
+        const title = (cert.event?.title || cert.certificate_data?.event_title || '').toLowerCase();
+        const code = (cert.short_code || '').toLowerCase();
+        return title.includes(searchLower) || code.includes(searchLower);
+    });
 
     if (loading) {
         return (
@@ -81,125 +114,146 @@ export const CertificatesPage = () => {
                 )}
             </div>
 
-            {certificates.length > 0 ? (
-                <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="bg-muted/50">
-                                <TableHead className="w-[300px]">Event</TableHead>
-                                <TableHead>Certificate ID</TableHead>
-                                <TableHead>Issued</TableHead>
-                                <TableHead>CPD Credits</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {certificates.map(cert => (
-                                <TableRow key={cert.uuid} className="hover:bg-muted/30">
-                                    <TableCell>
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
-                                                <Award size={20} />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="font-medium text-foreground truncate">
-                                                    {cert.event?.title || cert.certificate_data?.event_title || 'Certificate'}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Certificate of Completion
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <code className="text-sm bg-muted px-2 py-1 rounded font-mono">
-                                            {cert.short_code}
-                                        </code>
-                                    </TableCell>
-                                    <TableCell>
-                                        <span className="text-sm">
-                                            {new Date(cert.issued_at || cert.created_at).toLocaleDateString('en-US', {
-                                                month: 'short',
-                                                day: 'numeric',
-                                                year: 'numeric'
-                                            })}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell>
-                                        {(cert.event?.cpd_credits || cert.certificate_data?.cpd_credits) ? (
-                                            <Badge variant="outline" className="font-medium">
-                                                {cert.event?.cpd_credits || cert.certificate_data?.cpd_credits} {cert.event?.cpd_type || cert.certificate_data?.cpd_type || 'credits'}
-                                            </Badge>
-                                        ) : (
-                                            <span className="text-muted-foreground text-sm">—</span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        {cert.is_valid !== false && cert.status !== 'revoked' ? (
-                                            <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-                                                <ShieldCheck size={12} className="mr-1" />
-                                                Valid
-                                            </Badge>
-                                        ) : (
-                                            <Badge variant="destructive">Revoked</Badge>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 px-2"
-                                                onClick={() => handleView(cert)}
-                                            >
-                                                <Eye size={16} className="mr-1" />
-                                                View
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 px-2"
-                                                onClick={() => handleCopyLink(cert)}
-                                            >
-                                                {copiedId === cert.uuid ? (
-                                                    <Check size={16} className="mr-1 text-green-600" />
-                                                ) : (
-                                                    <Share2 size={16} className="mr-1" />
-                                                )}
-                                                Share
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 px-2"
-                                                onClick={() => handleDownload(cert)}
-                                                disabled={!cert.download_url}
-                                            >
-                                                <Download size={16} className="mr-1" />
-                                                PDF
-                                            </Button>
-                                        </div>
-                                    </TableCell>
+            <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <Input
+                    placeholder="Search certificates by event or code..."
+                    className="pl-10 max-w-sm"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+
+            {
+                filteredCertificates.length > 0 ? (
+                    <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="bg-muted/50">
+                                    <TableHead className="w-[300px]">Event</TableHead>
+                                    <TableHead>Certificate ID</TableHead>
+                                    <TableHead>Issued</TableHead>
+                                    <TableHead>CPD Credits</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </div>
-            ) : (
-                <div className="flex flex-col items-center justify-center py-20 bg-muted/30 rounded-lg border border-dashed">
-                    <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4 text-muted-foreground">
-                        <Award size={32} />
+                            </TableHeader>
+                            <TableBody>
+                                {filteredCertificates.map(cert => (
+                                    <TableRow key={cert.uuid} className="hover:bg-muted/30">
+                                        <TableCell>
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 bg-primary/10 text-primary rounded-lg flex items-center justify-center shrink-0">
+                                                    <Award size={20} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-foreground truncate">
+                                                        {cert.event?.title || cert.certificate_data?.event_title || 'Certificate'}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Certificate of Completion
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <code className="text-sm bg-muted px-2 py-1 rounded font-mono">
+                                                {cert.short_code}
+                                            </code>
+                                        </TableCell>
+                                        <TableCell>
+                                            <span className="text-sm">
+                                                {new Date(cert.issued_at || cert.created_at).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric'
+                                                })}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell>
+                                            {(cert.event?.cpd_credits || cert.certificate_data?.cpd_credits) ? (
+                                                <Badge variant="outline" className="font-medium">
+                                                    {cert.event?.cpd_credits || cert.certificate_data?.cpd_credits} {cert.event?.cpd_type || cert.certificate_data?.cpd_type || 'credits'}
+                                                </Badge>
+                                            ) : (
+                                                <span className="text-muted-foreground text-sm">—</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            {cert.is_valid !== false && cert.status !== 'revoked' ? (
+                                                <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-0">
+                                                    <ShieldCheck size={12} className="mr-1" />
+                                                    Valid
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="destructive">Revoked</Badge>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 px-2"
+                                                    onClick={() => handleView(cert)}
+                                                >
+                                                    <Eye size={16} className="mr-1" />
+                                                    View
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 px-2"
+                                                    onClick={() => handleCopyLink(cert)}
+                                                >
+                                                    {copiedId === cert.uuid ? (
+                                                        <Check size={16} className="mr-1 text-green-600" />
+                                                    ) : (
+                                                        <Share2 size={16} className="mr-1" />
+                                                    )}
+                                                    Share
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 px-2"
+                                                    onClick={() => handleDownload(cert)}
+                                                    disabled={downloadingId === cert.uuid}
+                                                >
+                                                    <Download size={16} className="mr-1" />
+                                                    {downloadingId === cert.uuid ? 'Downloading...' : 'PDF'}
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                     </div>
-                    <h3 className="text-lg font-medium text-foreground mb-1">No certificates yet</h3>
-                    <p className="text-muted-foreground text-center max-w-sm">
-                        Complete events to earn certificates. They will appear here once issued by the organizer.
-                    </p>
-                    <Link to="/events/browse" className="mt-4">
-                        <Button variant="outline">Browse Events</Button>
-                    </Link>
-                </div>
-            )}
-        </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center py-20 bg-muted/30 rounded-lg border border-dashed">
+                        <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4 text-muted-foreground">
+                            <Award size={32} />
+                        </div>
+                        <h3 className="text-lg font-medium text-foreground mb-1">
+                            {searchTerm ? 'No matching certificates' : 'No certificates yet'}
+                        </h3>
+                        <p className="text-muted-foreground text-center max-w-sm">
+                            {searchTerm
+                                ? "Try adjusting your search terms to find what you're looking for."
+                                : "Complete events to earn certificates. They will appear here once issued by the organizer."
+                            }
+                        </p>
+                        {!searchTerm && (
+                            <Link to="/events/browse" className="mt-4">
+                                <Button variant="outline">Browse Events</Button>
+                            </Link>
+                        )}
+                    </div>
+                )
+            }
+        </div >
     );
 };

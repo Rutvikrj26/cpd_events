@@ -41,6 +41,11 @@ export interface Event {
     minimum_attendance_minutes?: number;
     minimum_attendance_percent?: number;
 
+    // Pricing
+    price?: number;
+    currency?: string;
+    is_free?: boolean;
+
     // Branding
     featured_image_url?: string;
 
@@ -50,12 +55,24 @@ export interface Event {
     // Sessions (for multi-session events)
     sessions?: EventSession[];
 
+    // Custom registration fields
+    custom_fields?: EventCustomField[];
+
     // Misc
     is_public: boolean;
     owner_name?: string; // List view
     organizer_name?: string; // Public list view
     owner?: { uuid: string; display_name: string }; // Detail view
     organizer?: { uuid: string; display_name: string; logo_url?: string }; // Public detail view
+
+    // Organization (if event belongs to an organization)
+    organization_info?: {
+        uuid: string;
+        name: string;
+        slug: string;
+        logo_url: string | null;
+    };
+
     created_at: string;
     updated_at: string;
 }
@@ -78,17 +95,12 @@ export interface EventCreateRequest {
     max_attendees?: number; // capacity
 
     // Pricing
-    price?: number; // Backend doesn't have price field in Event model? 
-    // Wait, checked Event model in Step 162. It DOES NOT have 'price'!
-    // It has cpd_credit_value.
-    // It seems price is missing from backend entirely? 
-    // Or maybe it's managed via 'Ticket' model which I haven't seen?
-    // User asked me originally to audit Zoom, but now I see a Price gap?
-    // 'Registrations' usually link to 'TicketTypes' or similar if paid?
-    // Registration model (viewed in Step 24 context mentions 'Registration' model).
-    // I can't fix proper paid events now. I'll omit price from backend payload or send it as custom field?
-    // The previous form had price.
-    // I will comment it out or leave it optional but note it won't persist.
+    price?: number;
+    currency?: string;
+    is_free?: boolean;
+
+    // Organization (optional - for creating events under an organization)
+    organization?: string; // UUID
 
     // CPD
     cpd_credit_value?: number;
@@ -104,6 +116,7 @@ export interface EventCreateRequest {
 
     // Zoom
     zoom_settings?: any;
+
 
     // Location (for in-person/hybrid events)
     location?: string;

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 from common.pagination import SmallPagination
 from common.permissions import IsOrganizer
+from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import ReadOnlyModelViewSet, SoftDeleteModelViewSet
 
@@ -29,6 +30,7 @@ from .models import Certificate, CertificateTemplate
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='certificate_templates')
 class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     """
     Manage certificate templates.
@@ -254,6 +256,7 @@ class EventCertificateFilter(filters.FilterSet):
         fields = ['status']
 
 
+@roles('organizer', 'admin', route_name='event_certificates')
 class EventCertificateViewSet(viewsets.ModelViewSet):
     """
     Manage certificates for an event.
@@ -396,11 +399,13 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
+@roles('public', route_name='certificate_verification')
 class CertificateVerificationView(generics.RetrieveAPIView):
     """
     GET /api/v1/public/certificates/verify/{code}/
 
     Public certificate verification.
+    Supports both short_code (8 chars) and full verification_code lookup.
     """
 
     serializer_class = serializers.PublicCertificateVerificationSerializer
@@ -413,8 +418,55 @@ class CertificateVerificationView(generics.RetrieveAPIView):
             'registration', 'registration__event', 'registration__event__owner'
         )
 
+    def get_object(self):
+        """Override to support both short_code and verification_code lookup."""
+        code = self.kwargs.get('code')
+        queryset = self.get_queryset()
+
+        # Try short_code first (8 characters, alphanumeric)
+        if len(code) <= 10:
+            try:
+                obj = queryset.get(short_code__iexact=code)
+                self.check_object_permissions(self.request, obj)
+                return obj
+            except Certificate.DoesNotExist:
+                pass
+
+        # Try full verification_code (longer, URL-safe string)
+        try:
+            obj = queryset.get(verification_code=code)
+            self.check_object_permissions(self.request, obj)
+            return obj
+        except Certificate.DoesNotExist:
+            pass
+
+        # If neither works, raise 404
+        from rest_framework.exceptions import NotFound
+        raise NotFound('Certificate not found with the provided code.')
+
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
+
+        # Check if this is the certificate owner trying to access
+        is_owner = request.user.is_authenticated and instance.registration.user == request.user
+
+        # If feedback is required and the owner is trying to view, check feedback
+        event = instance.registration.event
+        if is_owner and event.require_feedback_for_certificate:
+            from feedback.models import EventFeedback
+
+            # Check if user has submitted feedback for this event
+            feedback_exists = EventFeedback.objects.filter(
+                event=event,
+                registration=instance.registration
+            ).exists()
+
+            if not feedback_exists:
+                return error_response(
+                    'Please submit feedback for this event before accessing your certificate.',
+                    code='FEEDBACK_REQUIRED',
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
 
         # Track view - only set first_viewed_at on first view
         instance.view_count = (instance.view_count or 0) + 1
@@ -433,6 +485,7 @@ class CertificateVerificationView(generics.RetrieveAPIView):
 # =============================================================================
 
 
+@roles('attendee', 'organizer', 'admin', route_name='my_certificates')
 class MyCertificateViewSet(ReadOnlyModelViewSet):
     """
     Current user's certificates.
@@ -452,7 +505,7 @@ class MyCertificateViewSet(ReadOnlyModelViewSet):
     @swagger_auto_schema(
         operation_summary="Download certificate",
         operation_description="Get a signed download URL for the certificate PDF.",
-        responses={200: '{"download_url": "..."}', 400: '{"error": {}}'},
+        responses={200: '{"download_url": "..."}', 400: '{"error": {}}', 403: '{"error": {"code": "FEEDBACK_REQUIRED"}}'},
     )
     @action(detail=True, methods=['post'])
     def download(self, request, uuid=None):
@@ -461,6 +514,24 @@ class MyCertificateViewSet(ReadOnlyModelViewSet):
 
         if certificate.status != 'issued':
             return error_response('Certificate not available.', code='NOT_AVAILABLE')
+
+        # Check if feedback is required
+        event = certificate.registration.event
+        if event.require_feedback_for_certificate:
+            from feedback.models import EventFeedback
+
+            # Check if user has submitted feedback for this event
+            feedback_exists = EventFeedback.objects.filter(
+                event=event,
+                registration=certificate.registration
+            ).exists()
+
+            if not feedback_exists:
+                return error_response(
+                    'Please submit feedback for this event before downloading your certificate.',
+                    code='FEEDBACK_REQUIRED',
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
 
         # Track download
         certificate.download_count = (certificate.download_count or 0) + 1

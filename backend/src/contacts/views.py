@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 
 from common.permissions import IsOrganizer
+from common.rbac import roles
 from common.viewsets import BaseModelViewSet
 from common.utils import error_response
 
@@ -41,6 +42,7 @@ class ContactFilter(filters.FilterSet):
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='tags')
 class TagViewSet(BaseModelViewSet):
     """
     Manage tags.
@@ -93,6 +95,7 @@ class TagViewSet(BaseModelViewSet):
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='contact_lists')
 class ContactListViewSet(BaseModelViewSet):
     """
     Manage contact lists.
@@ -173,6 +176,7 @@ class ContactListViewSet(BaseModelViewSet):
 # =============================================================================
 
 
+@roles('organizer', 'admin', route_name='list_contacts')
 class ListContactViewSet(BaseModelViewSet):
     """
     Manage contacts in a list.
