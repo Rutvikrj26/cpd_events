@@ -173,6 +173,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '1000/min',
         'user': '10000/min',
+        'auth': '100/hour',
     },
     # Rendering
     'DEFAULT_RENDERER_CLASSES': [

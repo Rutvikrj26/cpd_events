@@ -139,12 +139,16 @@ export function ProfileSettings() {
    const loadPaymentData = async () => {
       setLoadingPayment(true);
       try {
-         const [methods, sub] = await Promise.all([
-            getPaymentMethods(),
-            getSubscription(),
-         ]);
+         const promises: Promise<any>[] = [getPaymentMethods()];
+         if (isOrganizer) {
+            promises.push(getSubscription());
+         }
+
+         const [methods, sub] = await Promise.all(promises);
          setPaymentMethods(methods);
-         setSubscription(sub);
+         if (isOrganizer) {
+            setSubscription(sub);
+         }
       } catch (error) {
          console.error("Failed to load payment data:", error);
       } finally {
@@ -476,61 +480,63 @@ export function ProfileSettings() {
                         </CardContent>
                      </Card>
 
-                     {/* Subscription Status Card */}
-                     <Card>
-                        <CardHeader>
-                           <CardTitle>Subscription</CardTitle>
-                           <CardDescription>Your current plan and billing status.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                           {subscription ? (
-                              <div className="space-y-4">
-                                 <div className="flex items-center justify-between">
-                                    <span className="text-muted-foreground">Current Plan</span>
-                                    <span className="font-medium capitalize">{subscription.plan}</span>
+                     {/* Subscription Status Card - Organizers Only */}
+                     {isOrganizer && (
+                        <Card>
+                           <CardHeader>
+                              <CardTitle>Subscription</CardTitle>
+                              <CardDescription>Your current plan and billing status.</CardDescription>
+                           </CardHeader>
+                           <CardContent>
+                              {subscription ? (
+                                 <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                       <span className="text-muted-foreground">Current Plan</span>
+                                       <span className="font-medium capitalize">{subscription.plan}</span>
+                                    </div>
+                                    <Separator />
+                                    <div className="flex items-center justify-between">
+                                       <span className="text-muted-foreground">Status</span>
+                                       <Badge variant={subscription.is_active ? "default" : "secondary"}>
+                                          {subscription.status_display}
+                                       </Badge>
+                                    </div>
+                                    {subscription.is_trialing && subscription.days_until_trial_ends !== null && (
+                                       <>
+                                          <Separator />
+                                          <div className="flex items-center justify-between">
+                                             <span className="text-muted-foreground">Trial Ends</span>
+                                             <span className="font-medium">
+                                                {subscription.days_until_trial_ends} days remaining
+                                             </span>
+                                          </div>
+                                       </>
+                                    )}
+                                    {subscription.has_payment_method && (
+                                       <Alert className="bg-success/10 border-success/30">
+                                          <CheckCircle className="h-4 w-4 text-success" />
+                                          <AlertDescription className="text-success">
+                                             Billing is set up. You'll be charged automatically when your trial ends.
+                                          </AlertDescription>
+                                       </Alert>
+                                    )}
+                                    {!subscription.has_payment_method && subscription.is_trialing && (
+                                       <Alert className="bg-warning/10 border-warning/30">
+                                          <AlertCircle className="h-4 w-4 text-warning" />
+                                          <AlertDescription>
+                                             Add a payment method to continue using premium features after your trial.
+                                          </AlertDescription>
+                                       </Alert>
+                                    )}
                                  </div>
-                                 <Separator />
-                                 <div className="flex items-center justify-between">
-                                    <span className="text-muted-foreground">Status</span>
-                                    <Badge variant={subscription.is_active ? "default" : "secondary"}>
-                                       {subscription.status_display}
-                                    </Badge>
+                              ) : (
+                                 <div className="text-center py-4 text-muted-foreground">
+                                    No subscription information available.
                                  </div>
-                                 {subscription.is_trialing && subscription.days_until_trial_ends !== null && (
-                                    <>
-                                       <Separator />
-                                       <div className="flex items-center justify-between">
-                                          <span className="text-muted-foreground">Trial Ends</span>
-                                          <span className="font-medium">
-                                             {subscription.days_until_trial_ends} days remaining
-                                          </span>
-                                       </div>
-                                    </>
-                                 )}
-                                 {subscription.has_payment_method && (
-                                    <Alert className="bg-success/10 border-success/30">
-                                       <CheckCircle className="h-4 w-4 text-success" />
-                                       <AlertDescription className="text-success">
-                                          Billing is set up. You'll be charged automatically when your trial ends.
-                                       </AlertDescription>
-                                    </Alert>
-                                 )}
-                                 {!subscription.has_payment_method && subscription.is_trialing && (
-                                    <Alert className="bg-warning/10 border-warning/30">
-                                       <AlertCircle className="h-4 w-4 text-warning" />
-                                       <AlertDescription>
-                                          Add a payment method to continue using premium features after your trial.
-                                       </AlertDescription>
-                                    </Alert>
-                                 )}
-                              </div>
-                           ) : (
-                              <div className="text-center py-4 text-muted-foreground">
-                                 No subscription information available.
-                              </div>
-                           )}
-                        </CardContent>
-                     </Card>
+                              )}
+                           </CardContent>
+                        </Card>
+                     )}
                   </TabsContent>
 
                   {/* SECURITY TAB */}

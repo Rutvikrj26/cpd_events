@@ -1,0 +1,66 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - link "Accredit" [ref=e5] [cursor=pointer]:
+      - /url: /
+      - img [ref=e7]
+      - generic [ref=e9]: Accredit
+    - generic [ref=e10]:
+      - generic [ref=e12]:
+        - generic [ref=e13]:
+          - heading "Create Attendee Account" [level=1] [ref=e14]
+          - paragraph [ref=e15]:
+            - text: Already have an account?
+            - link "Sign in" [ref=e16] [cursor=pointer]:
+              - /url: /login
+        - generic [ref=e17]:
+          - generic [ref=e18]:
+            - text: Email address
+            - textbox "Email address" [active] [ref=e19]:
+              - /placeholder: name@company.com
+              - text: organizer_1767302735333@example.com
+          - generic [ref=e20]:
+            - text: Full Name
+            - textbox "Full Name" [ref=e21]:
+              - /placeholder: John Doe
+          - generic [ref=e22]:
+            - text: Password
+            - textbox "Password" [ref=e23]:
+              - /placeholder: ••••••••
+            - paragraph [ref=e24]: Must be at least 8 characters long.
+          - generic [ref=e25]:
+            - text: Confirm Password
+            - textbox "Confirm Password" [ref=e26]:
+              - /placeholder: ••••••••
+          - generic [ref=e27]:
+            - checkbox "I agree to the Terms of Service and Privacy Policy" [ref=e28] [cursor=pointer]
+            - checkbox
+            - generic [ref=e30]:
+              - text: I agree to the
+              - link "Terms of Service" [ref=e31] [cursor=pointer]:
+                - /url: /terms
+              - text: and
+              - link "Privacy Policy" [ref=e32] [cursor=pointer]:
+                - /url: /privacy
+          - button "Create Attendee Account" [ref=e33] [cursor=pointer]
+        - paragraph [ref=e35]:
+          - text: Want to organize events?
+          - link "Create an Organizer Account" [ref=e36] [cursor=pointer]:
+            - /url: /signup?role=organizer
+      - paragraph [ref=e38]:
+        - text: By signing in, you agree to our
+        - link "Terms of Service" [ref=e39] [cursor=pointer]:
+          - /url: /terms
+        - text: and
+        - link "Privacy Policy" [ref=e40] [cursor=pointer]:
+          - /url: /privacy
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e41]:
+    - img [ref=e43]
+    - button "Open Tanstack query devtools" [ref=e91] [cursor=pointer]:
+      - img [ref=e92]
+```
