@@ -493,11 +493,16 @@ class Event(SoftDeleteModel):
             is_public=self.is_public,
         )
 
-        # Generate unique slug
-        new_event.slug = generate_unique_slug(new_event.title, set(Event.objects.values_list('slug', flat=True)))
+        # Generate unique slug (M1)
+        new_event.slug = generate_unique_slug(Event, new_event.title)
 
         return new_event
 
+
+    @property
+    def attendee_count(self):
+        """Alias for attendance_count."""
+        return self.attendance_count
 
 class EventStatusHistory(BaseModel):
     """
@@ -518,6 +523,69 @@ class EventStatusHistory(BaseModel):
 
     def __str__(self):
         return f"{self.event.title}: {self.from_status} → {self.to_status}"
+
+# =============================================================================
+# Multi-session Models (Moved from sessions.py)
+# =============================================================================
+
+class EventSession(BaseModel):
+    """
+    Individual session within a multi-session event.
+    """
+    class SessionType(models.TextChoices):
+        LIVE = 'live', 'Live Session'
+        RECORDED = 'recorded', 'Recorded/On-demand'
+        HYBRID = 'hybrid', 'Hybrid'
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='sessions')
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    speaker_names = models.CharField(max_length=500, blank=True)
+    order = models.PositiveIntegerField(default=0)
+    starts_at = models.DateTimeField()
+    duration_minutes = models.PositiveIntegerField(default=60)
+    timezone = models.CharField(max_length=50, default='UTC')
+    session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.LIVE)
+    has_separate_zoom = models.BooleanField(default=False)
+    zoom_meeting_id = models.CharField(max_length=100, blank=True)
+    zoom_join_url = models.URLField(max_length=500, blank=True)
+    zoom_host_url = models.URLField(max_length=500, blank=True)
+    cpd_credits = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    is_mandatory = models.BooleanField(default=True)
+    is_published = models.BooleanField(default=True)
+    minimum_attendance_percent = models.PositiveIntegerField(
+        default=80, help_text="Minimum attendance percentage for this session"
+    )
+
+    class Meta:
+        db_table = 'event_sessions'
+        ordering = ['event', 'order', 'starts_at']
+        verbose_name = 'Event Session'
+        verbose_name_plural = 'Event Sessions'
+
+    def __str__(self):
+        return f"{self.event.title} - {self.title}"
+
+    @property
+    def ends_at(self):
+        return self.starts_at + timezone.timedelta(minutes=self.duration_minutes)
+
+    @property
+    def is_past(self):
+        return timezone.now() > self.ends_at
+
+class SessionAttendance(BaseModel):
+    """Attendance record for a session."""
+    session = models.ForeignKey(EventSession, on_delete=models.CASCADE, related_name='attendance_records')
+    registration = models.ForeignKey('registrations.Registration', on_delete=models.CASCADE, related_name='session_attendance')
+    duration_minutes = models.PositiveIntegerField(default=0)
+    is_eligible = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'session_attendance'
+        unique_together = [['session', 'registration']]
+        verbose_name = 'Session Attendance'
+        verbose_name_plural = 'Session Attendance'
 
 
 class EventCustomField(BaseModel):

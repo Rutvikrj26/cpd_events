@@ -88,6 +88,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     timezone = models.CharField(max_length=50, default='UTC', help_text="User's preferred timezone")
     profile_photo_url = models.URLField(blank=True, help_text="URL to profile photo")
     profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True, help_text="Profile image file")
+    bio = models.TextField(blank=True, max_length=1000, help_text="User bio/description")
 
     # =========================================
     # Account Type & Status
@@ -136,6 +137,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     organizer_slug = models.SlugField(
         max_length=100, unique=True, null=True, blank=True, help_text="URL-friendly identifier for public profile"
     )
+    is_organizer_profile_public = models.BooleanField(default=False, help_text="Make organizer profile visible to public")
 
     # =========================================
     # Engagement Stats (denormalized)
@@ -203,6 +205,13 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         """Check if Zoom is connected."""
         return hasattr(self, 'zoom_connection') and self.zoom_connection.is_active
 
+    @property
+    def email_verification_expires_at(self):
+        """Calculate when email verification token expires (24 hours)."""
+        if not self.email_verification_sent_at:
+            return None
+        return self.email_verification_sent_at + timezone.timedelta(hours=24)
+
     # =========================================
     # Methods
     # =========================================
@@ -255,8 +264,37 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
 
         self.set_password(new_password)
         self.password_reset_token = ''
+        self.save(update_fields=['password', 'password_reset_token', 'updated_at'])
+        return True
+
+    def anonymize(self):
+        """
+        Anonymize user data for GDPR compliance.
+        Clears personal details and marks as inactive.
+        """
+        import uuid
+        self.full_name = "Deleted User"
+        self.email = f"deleted-{uuid.uuid4()}@example.com"
+        self.professional_title = ""
+        self.organization_name = ""
+        self.bio = ""
+        self.organizer_bio = ""
+        self.organizer_website = ""
+        self.profile_photo_url = ""
+        self.is_active = False
+        self.email_verified = False
+        self.password_reset_token = ""
         self.password_reset_sent_at = None
-        self.save(update_fields=['password', 'password_reset_token', 'password_reset_sent_at', 'updated_at'])
+        
+        # Save all changes and then soft delete
+        self.save()
+        
+        # If the model has soft_delete, use it
+        if hasattr(self, 'soft_delete'):
+            self.soft_delete()
+        else:
+            self.delete()
+            
         return True
 
     def soft_delete(self):

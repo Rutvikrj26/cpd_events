@@ -9,8 +9,7 @@ from rest_framework import serializers
 from common.serializers import BaseModelSerializer, SoftDeleteModelSerializer
 from common.utils import generate_unique_slug
 
-from .models import Event, EventCustomField, EventStatusHistory, Speaker
-from .sessions import EventSession, SessionAttendance
+from .models import Event, EventCustomField, EventStatusHistory, Speaker, EventSession, SessionAttendance
 from certificates.models import CertificateTemplate
 
 # =============================================================================
@@ -28,11 +27,10 @@ class EventCustomFieldSerializer(BaseModelSerializer):
             'field_type',
             'label',
             'placeholder',
-            'default_value',
-            'is_required',
+            'help_text', 
+            'required',
             'options',
-            'validation_regex',
-            'position',
+            'order',
             'created_at',
         ]
         read_only_fields = ['uuid', 'created_at']
@@ -47,12 +45,16 @@ class EventCustomFieldCreateSerializer(serializers.ModelSerializer):
             'field_type',
             'label',
             'placeholder',
-            'default_value',
-            'is_required',
+            'help_text',
+            'required',
             'options',
             'validation_regex',
             'position',
         ]
+        read_only_fields = ['uuid', 'owner_name', 'created_at']
+
+    def get_owner_name(self, obj):
+        return obj.owner.display_name
 
 
 # =============================================================================
@@ -200,6 +202,10 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'waitlist_auto_promote',
             # Zoom
             'zoom_meeting_id',
+            'registration_enabled',
+            'registration_deadline',
+            'registration_opens_at',
+            'registration_closes_at',
             'zoom_join_url',
             'zoom_passcode',
             'zoom_settings',
@@ -219,6 +225,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'registration_count',
             'attendee_count',
             'waitlist_count',
+            'capacity',
             # Owner
             'owner',
             # Custom fields
@@ -289,6 +296,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
             'uuid',
             'slug',
             'title',
+            'status',
             'short_description',
             'description',
             'event_type',
@@ -349,8 +357,8 @@ class EventCreateSerializer(serializers.ModelSerializer):
         event = super().create(validated_data)
 
         # Create custom fields
-        for position, field_data in enumerate(custom_fields_data):
-            field_data['position'] = position
+        for order, field_data in enumerate(custom_fields_data):
+            field_data['order'] = order
             EventCustomField.objects.create(event=event, **field_data)
 
         return event
@@ -485,6 +493,8 @@ class PublicEventListSerializer(serializers.ModelSerializer):
             'organizer_name',
             'featured_image_url',
             'is_registration_open',
+            'registration_enabled',
+            'registration_deadline',
             'registration_count',
             'capacity',
         ]

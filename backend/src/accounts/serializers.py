@@ -244,7 +244,13 @@ class DeleteAccountSerializer(serializers.Serializer):
     """Confirm account deletion."""
 
     password = serializers.CharField(required=True, write_only=True)
+    confirm = serializers.BooleanField(required=True)
     reason = serializers.CharField(required=False, max_length=500, allow_blank=True)
+
+    def validate(self, attrs):
+        if not attrs.get('confirm'):
+            raise serializers.ValidationError({"confirm": "You must confirm account deletion."})
+        return attrs
 
     def validate_password(self, value):
         user = self.context['request'].user

@@ -159,11 +159,11 @@ class EventViewSet(SoftDeleteModelViewSet):
     def cancel(self, request, uuid=None):
         """Cancel an event."""
         event = self.get_object()
-        serializer = serializers.EventStatusChangeSerializer(data=request.data)
+        serializer = serializers.EventStatusChangeSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
         try:
-            event.cancel(reason=serializer.validated_data.get('reason', ''), cancelled_by=request.user)
+            event.cancel(reason=serializer.validated_data.get('reason', ''), user=request.user)
         except ValueError as e:
             return error_response(str(e), code='INVALID_STATE')
 
@@ -174,13 +174,13 @@ class EventViewSet(SoftDeleteModelViewSet):
         operation_description="Mark the event as live (in progress).",
         responses={200: serializers.EventDetailSerializer, 400: '{"error": {"code": "INVALID_STATE"}}'},
     )
-    @action(detail=True, methods=['post'], url_path='go-live')
+    @action(detail=True, methods=['post'])
     def go_live(self, request, uuid=None):
         """Start the event (mark as live)."""
         event = self.get_object()
 
         try:
-            event.go_live()
+            event.start(user=request.user)
         except ValueError as e:
             return error_response(str(e), code='INVALID_STATE')
 
@@ -213,6 +213,7 @@ class EventViewSet(SoftDeleteModelViewSet):
         """Create a copy of this event."""
         event = self.get_object()
         new_event = event.duplicate()
+        new_event.save()
 
         return Response(serializers.EventDetailSerializer(new_event).data, status=status.HTTP_201_CREATED)
 
@@ -331,7 +332,7 @@ class PublicEventListView(generics.ListAPIView):
     serializer_class = serializers.PublicEventListSerializer
     permission_classes = [AllowAny]
     filterset_class = PublicEventFilter
-    search_fields = ['title', 'description', 'owner__organizer_display_name']
+    search_fields = ['title', 'description', 'owner__full_name', 'owner__organization_name']
     ordering_fields = ['starts_at', 'registration_count']
     ordering = ['starts_at']
 
@@ -413,6 +414,7 @@ class EventCustomFieldViewSet(viewsets.ModelViewSet):
     """
 
     permission_classes = [IsAuthenticated, IsOrganizer]
+    lookup_field = 'uuid'
 
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
@@ -424,21 +426,22 @@ class EventCustomFieldViewSet(viewsets.ModelViewSet):
         return serializers.EventCustomFieldSerializer
 
     def perform_create(self, serializer):
+        from django.shortcuts import get_object_or_404
         event_uuid = self.kwargs.get('event_uuid')
-        event = Event.objects.get(uuid=event_uuid, owner=self.request.user)
+        event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
 
-        # Get next position
-        max_position = self.get_queryset().order_by('-position').values_list('position', flat=True).first() or 0
+        # Get next order position
+        max_order = self.get_queryset().order_by('-order').values_list('order', flat=True).first() or 0
 
-        serializer.save(event=event, position=max_position + 1)
+        serializer.save(event=event, order=max_order + 1)
 
     @action(detail=False, methods=['post'])
     def reorder(self, request, event_uuid=None):
         """Reorder custom fields."""
         field_order = request.data.get('order', [])  # List of UUIDs in desired order
 
-        for position, field_uuid in enumerate(field_order):
-            self.get_queryset().filter(uuid=field_uuid).update(position=position)
+        for order, field_uuid in enumerate(field_order):
+            self.get_queryset().filter(uuid=field_uuid).update(order=order)
 
         return Response({'message': 'Fields reordered.'})
 
@@ -461,7 +464,7 @@ class EventSessionViewSet(viewsets.ModelViewSet):
     lookup_field = 'uuid'
 
     def get_queryset(self):
-        from .sessions import EventSession
+        from .models import EventSession
 
         event_uuid = self.kwargs.get('event_uuid')
         return EventSession.objects.filter(event__uuid=event_uuid, event__owner=self.request.user).order_by(
@@ -478,8 +481,9 @@ class EventSessionViewSet(viewsets.ModelViewSet):
         return serializers.EventSessionDetailSerializer
 
     def perform_create(self, serializer):
+        from django.shortcuts import get_object_or_404
         event_uuid = self.kwargs.get('event_uuid')
-        event = Event.objects.get(uuid=event_uuid, owner=self.request.user)
+        event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
 
         # Get next order position
         max_order = self.get_queryset().order_by('-order').values_list('order', flat=True).first() or 0
@@ -495,6 +499,10 @@ class EventSessionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def reorder(self, request, event_uuid=None):
         """Reorder sessions within the event."""
+        from django.shortcuts import get_object_or_404
+        # Validate event ownership
+        get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
+        
         reorder_serializer = serializers.SessionReorderSerializer(data=request.data)
         reorder_serializer.is_valid(raise_exception=True)
 
@@ -520,7 +528,7 @@ class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         from registrations.models import Registration
 
-        from .sessions import SessionAttendance
+        from .models import SessionAttendance
 
         registration_uuid = self.kwargs.get('registration_uuid')
         registration = Registration.objects.get(uuid=registration_uuid)
