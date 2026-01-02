@@ -25,7 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { updateProfile } from '@/api/accounts';
 import { initiateZoomOAuth, getZoomStatus } from '@/api/integrations';
 import { ZoomStatus } from '@/api/integrations/types';
-import { PaymentMethodModal } from '@/components/billing/PaymentMethodModal';
+import { createCheckoutSession } from '@/api/billing';
 import { getSubscription } from '@/api/billing';
 import { Subscription } from '@/api/billing/types';
 import { toast } from 'sonner';
@@ -59,9 +59,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     const [zoomChecked, setZoomChecked] = useState(false);
 
     // Billing state
-    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
     const [subscription, setSubscription] = useState<Subscription | null>(null);
     const [billingChecked, setBillingChecked] = useState(false);
+    const [addingPayment, setAddingPayment] = useState(false);
 
     const progress = ((currentStep + 1) / STEPS.length) * 100;
 
@@ -124,10 +124,21 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         }
     };
 
-    const handlePaymentSuccess = () => {
-        // Refresh subscription to get updated has_payment_method
-        checkBillingStatus();
-        toast.success("Billing details saved!");
+    const handleAddPayment = async () => {
+        setAddingPayment(true);
+        try {
+            // Store current onboarding step so we can return after Stripe
+            sessionStorage.setItem('onboarding_redirect', '/onboarding?step=3');
+            const result = await createCheckoutSession(
+                subscription?.plan || 'professional',
+                `${window.location.origin}/onboarding?step=3&checkout=success`,
+                `${window.location.origin}/onboarding?step=3&checkout=canceled`
+            );
+            window.location.href = result.url;
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error?.message || 'Failed to start checkout.');
+            setAddingPayment(false);
+        }
     };
 
     const handleComplete = async () => {
@@ -422,9 +433,14 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
                                                 <Button
                                                     className="w-full"
-                                                    onClick={() => setPaymentModalOpen(true)}
+                                                    onClick={handleAddPayment}
+                                                    disabled={addingPayment}
                                                 >
-                                                    <CreditCard className="mr-2 h-4 w-4" />
+                                                    {addingPayment ? (
+                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <CreditCard className="mr-2 h-4 w-4" />
+                                                    )}
                                                     Add Payment Method
                                                 </Button>
                                             </div>
@@ -496,13 +512,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                 </AnimatePresence>
             </div>
 
-            {/* Payment Method Modal */}
-            <PaymentMethodModal
-                open={paymentModalOpen}
-                onOpenChange={setPaymentModalOpen}
-                subscription={subscription}
-                onSuccess={handlePaymentSuccess}
-            />
+
         </div>
     );
 }

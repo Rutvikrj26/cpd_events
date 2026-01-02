@@ -21,6 +21,7 @@ export interface Manifest {
         register_for_events: boolean;
         view_own_registrations: boolean;
         view_own_certificates: boolean;
+        can_create_organization: boolean;
     };
 }
 

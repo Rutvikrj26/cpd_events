@@ -1,7 +1,9 @@
 {
     "compilerOptions": {
         "types": [
-            "vitest/globals"
+            "vitest/globals",
+            "node",
+            "google.maps"
         ],
         "target": "ES2020",
         "useDefineForClassFields": true,

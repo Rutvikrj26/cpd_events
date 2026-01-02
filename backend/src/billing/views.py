@@ -297,27 +297,7 @@ class BillingPortalView(views.APIView):
             return error_response(result.get('error', 'Failed to create portal session'), code='PORTAL_FAILED')
 
 
-@roles('attendee', 'organizer', 'admin', route_name='setup_intent')
-class SetupIntentView(views.APIView):
-    """
-    Create Stripe SetupIntent for collecting payment method via embedded Elements.
 
-    POST /billing/setup-intent/
-    """
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        result = stripe_service.create_setup_intent(user=request.user)
-
-        if result['success']:
-            return Response({
-                'client_secret': result['client_secret'],
-                'customer_id': result['customer_id'],
-                'trial_ends_at': result.get('trial_ends_at'),
-            })
-        else:
-            return error_response(result.get('error', 'Failed to create setup intent'), code='SETUP_INTENT_FAILED')
 
 
 @roles('public', route_name='public_pricing')

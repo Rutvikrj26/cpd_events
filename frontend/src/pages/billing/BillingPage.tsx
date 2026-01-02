@@ -31,7 +31,7 @@ import {
 import { toast } from 'sonner';
 import { CancellationModal } from '@/components/billing/CancellationModal';
 
-// Plan features mapped by plan type
+// Plan features mapped by plan type (fallback if backend doesn't provide features)
 const PLAN_FEATURES: Record<string, string[]> = {
     attendee: [
         'Register for events',
@@ -40,19 +40,21 @@ const PLAN_FEATURES: Record<string, string[]> = {
     ],
     professional: [
         '30 events per month',
-        '500 attendees per event',
         '500 certificates/month',
         'Zoom integration',
-        'Advanced analytics',
-        'Priority support',
+        'Custom certificate templates',
+        'Priority email support',
     ],
     organization: [
         'Unlimited events',
-        '2,000 attendees per event',
         'Unlimited certificates',
-        'Team collaboration',
+        'Multi-user team access',
+        'White-label options',
         'API access',
         'Priority support',
+        'Team collaboration',
+        'Shared templates',
+        'Dedicated account manager',
     ],
 };
 

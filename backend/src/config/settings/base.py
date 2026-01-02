@@ -66,6 +66,11 @@ GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', '')  # Required for producti
 CLOUD_TASKS_EMULATOR_HOST = os.environ.get('CLOUD_TASKS_EMULATOR_HOST', '')
 GCS_EMULATOR_HOST = os.environ.get('GCS_EMULATOR_HOST', '')
 
+# Cloud Tasks Sync Mode
+# When True, tasks execute synchronously instead of being pushed to Cloud Tasks queue.
+# Useful for initial deployments or debugging. Set to False to enable async Cloud Tasks.
+CLOUD_TASKS_SYNC = os.environ.get('CLOUD_TASKS_SYNC', 'true').lower() in ('true', '1', 'yes')
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',

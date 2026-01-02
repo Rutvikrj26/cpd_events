@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Clock, Crown, XCircle, ArrowRight, CreditCard } from 'lucide-react';
+import { AlertTriangle, Clock, Crown, XCircle, ArrowRight, CreditCard, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Subscription } from '@/api/billing/types';
-import { PaymentMethodModal } from './PaymentMethodModal';
+import { createCheckoutSession } from '@/api/billing';
+import { toast } from 'sonner';
 
 interface TrialStatusBannerProps {
     subscription: Subscription | null;
 }
 
 export function TrialStatusBanner({ subscription }: TrialStatusBannerProps) {
-    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     if (!subscription) return null;
 
@@ -25,6 +26,22 @@ export function TrialStatusBanner({ subscription }: TrialStatusBannerProps) {
     if (subscription.is_trialing && subscription.has_payment_method) {
         return null;
     }
+
+    const handleAddBilling = async () => {
+        setLoading(true);
+        try {
+            // Redirect to Stripe Checkout to add billing and confirm subscription
+            const result = await createCheckoutSession(
+                subscription.plan || 'professional',
+                `${window.location.origin}/billing?checkout=success`,
+                `${window.location.origin}/billing?checkout=canceled`
+            );
+            window.location.href = result.url;
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error?.message || 'Failed to start checkout. Please try again.');
+            setLoading(false);
+        }
+    };
 
     // Attendee plan - show upgrade prompt
     if (subscription.plan === 'attendee' && subscription.status === 'active') {
@@ -53,105 +70,96 @@ export function TrialStatusBanner({ subscription }: TrialStatusBannerProps) {
         const isUrgent = daysLeft <= 7;
 
         return (
-            <>
-                <Alert className={isUrgent ? "bg-warning/10 border-warning/30" : "bg-success/10 border-success/30"}>
-                    <Clock className={`h-4 w-4 ${isUrgent ? 'text-warning' : 'text-success'}`} />
-                    <AlertTitle className="text-sm font-medium flex items-center gap-2">
-                        Professional Trial
-                        <Badge variant={isUrgent ? "destructive" : "secondary"} className="text-xs">
-                            {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
-                        </Badge>
-                    </AlertTitle>
-                    <AlertDescription className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">
-                            {isUrgent
-                                ? "Your trial is ending soon. Add billing details to keep your features."
-                                : "You have full access to all Professional features. Add billing details to continue after trial."
-                            }
-                        </span>
-                        <Button
-                            size="sm"
-                            variant={isUrgent ? "default" : "outline"}
-                            onClick={() => setPaymentModalOpen(true)}
-                            className="ml-4"
-                        >
+            <Alert className={isUrgent ? "bg-warning/10 border-warning/30" : "bg-success/10 border-success/30"}>
+                <Clock className={`h-4 w-4 ${isUrgent ? 'text-warning' : 'text-success'}`} />
+                <AlertTitle className="text-sm font-medium flex items-center gap-2">
+                    Professional Trial
+                    <Badge variant={isUrgent ? "destructive" : "secondary"} className="text-xs">
+                        {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
+                    </Badge>
+                </AlertTitle>
+                <AlertDescription className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
+                        {isUrgent
+                            ? "Your trial is ending soon. Add billing details to keep your features."
+                            : "You have full access to all Professional features. Add billing details to continue after trial."
+                        }
+                    </span>
+                    <Button
+                        size="sm"
+                        variant={isUrgent ? "default" : "outline"}
+                        onClick={handleAddBilling}
+                        disabled={loading}
+                        className="ml-4"
+                    >
+                        {loading ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
                             <CreditCard className="h-3 w-3 mr-1" />
-                            Add Billing Details
-                        </Button>
-                    </AlertDescription>
-                </Alert>
-
-                <PaymentMethodModal
-                    open={paymentModalOpen}
-                    onOpenChange={setPaymentModalOpen}
-                    subscription={subscription}
-                />
-            </>
+                        )}
+                        Add Billing Details
+                    </Button>
+                </AlertDescription>
+            </Alert>
         );
     }
 
     // Trial expired - in grace period
     if (subscription.is_in_grace_period) {
         return (
-            <>
-                <Alert variant="destructive" className="bg-destructive/10">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle className="text-sm font-medium">Trial Expired</AlertTitle>
-                    <AlertDescription className="flex items-center justify-between">
-                        <span className="text-sm">
-                            Your trial has ended. <strong>You can no longer create new events.</strong>
-                            Add billing details to restore full access.
-                        </span>
-                        <Button
-                            size="sm"
-                            variant="destructive"
-                            className="ml-4"
-                            onClick={() => setPaymentModalOpen(true)}
-                        >
+            <Alert variant="destructive" className="bg-destructive/10">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle className="text-sm font-medium">Trial Expired</AlertTitle>
+                <AlertDescription className="flex items-center justify-between">
+                    <span className="text-sm">
+                        Your trial has ended. <strong>You can no longer create new events.</strong>
+                        Add billing details to restore full access.
+                    </span>
+                    <Button
+                        size="sm"
+                        variant="destructive"
+                        className="ml-4"
+                        onClick={handleAddBilling}
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
                             <CreditCard className="h-3 w-3 mr-1" />
-                            Add Billing Details
-                        </Button>
-                    </AlertDescription>
-                </Alert>
-
-                <PaymentMethodModal
-                    open={paymentModalOpen}
-                    onOpenChange={setPaymentModalOpen}
-                    subscription={subscription}
-                />
-            </>
+                        )}
+                        Add Billing Details
+                    </Button>
+                </AlertDescription>
+            </Alert>
         );
     }
 
     // Access blocked - after grace period
     if (subscription.is_access_blocked) {
         return (
-            <>
-                <Alert variant="destructive">
-                    <XCircle className="h-4 w-4" />
-                    <AlertTitle className="text-sm font-medium">Access Suspended</AlertTitle>
-                    <AlertDescription className="flex items-center justify-between">
-                        <span className="text-sm">
-                            Your subscription has expired. Please add billing details to regain access.
-                        </span>
-                        <Button
-                            size="sm"
-                            variant="destructive"
-                            className="ml-4"
-                            onClick={() => setPaymentModalOpen(true)}
-                        >
+            <Alert variant="destructive">
+                <XCircle className="h-4 w-4" />
+                <AlertTitle className="text-sm font-medium">Access Suspended</AlertTitle>
+                <AlertDescription className="flex items-center justify-between">
+                    <span className="text-sm">
+                        Your subscription has expired. Please add billing details to regain access.
+                    </span>
+                    <Button
+                        size="sm"
+                        variant="destructive"
+                        className="ml-4"
+                        onClick={handleAddBilling}
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
                             <CreditCard className="h-3 w-3 mr-1" />
-                            Reactivate Account
-                        </Button>
-                    </AlertDescription>
-                </Alert>
-
-                <PaymentMethodModal
-                    open={paymentModalOpen}
-                    onOpenChange={setPaymentModalOpen}
-                    subscription={subscription}
-                />
-            </>
+                        )}
+                        Reactivate Account
+                    </Button>
+                </AlertDescription>
+            </Alert>
         );
     }
 

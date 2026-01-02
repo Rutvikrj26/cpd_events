@@ -558,12 +558,6 @@ class StripeProduct(BaseModel):
         elif self.events_per_month > 0:
             features.append(f"{self.events_per_month} events per month")
 
-        # Attendees per event
-        if self.max_attendees_per_event is None:
-            features.append("Unlimited attendees per event")
-        elif self.max_attendees_per_event > 0:
-            features.append(f"{self.max_attendees_per_event:,} attendees per event")
-
         # Certificates per month
         if self.certificates_per_month is None:
             features.append("Unlimited certificates")
@@ -574,14 +568,12 @@ class StripeProduct(BaseModel):
         if self.plan == 'professional':
             features.extend([
                 "Zoom integration",
-                "Advanced analytics",
                 "Custom certificate templates",
                 "Priority email support",
             ])
         elif self.plan == 'organization':
             features.extend([
                 "Multi-user team access",
-                "Advanced analytics & reporting",
                 "White-label options",
                 "API access",
                 "Priority support",

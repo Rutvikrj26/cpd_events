@@ -11,7 +11,6 @@ from .views import (
     InvoiceViewSet,
     PaymentMethodViewSet,
     PublicPricingView,
-    SetupIntentView,
     SubscriptionViewSet,
 )
 
@@ -29,5 +28,4 @@ urlpatterns = [
     # Checkout and portal
     path('billing/checkout/', CheckoutSessionView.as_view(), name='checkout'),
     path('billing/portal/', BillingPortalView.as_view(), name='portal'),
-    path('billing/setup-intent/', SetupIntentView.as_view(), name='setup-intent'),
 ]

@@ -43,8 +43,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageHeader } from "@/components/custom/PageHeader";
-import { PaymentMethodModal } from "@/components/billing/PaymentMethodModal";
-import { getPaymentMethods, deletePaymentMethod, getSubscription } from "@/api/billing";
+import { getPaymentMethods, deletePaymentMethod, getSubscription, getBillingPortal } from "@/api/billing";
 import { getCurrentUser, updateProfile, changePassword, getNotificationPreferences, updateNotificationPreferences } from "@/api/accounts";
 import { PaymentMethod, Subscription } from "@/api/billing/types";
 import { User as UserType, NotificationPreferences } from "@/api/accounts/types";
@@ -80,7 +79,7 @@ export function ProfileSettings() {
    const [subscription, setSubscription] = useState<Subscription | null>(null);
    const [loadingPayment, setLoadingPayment] = useState(true);
    const [deletingId, setDeletingId] = useState<string | null>(null);
-   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+   const [addingPayment, setAddingPayment] = useState(false);
 
    // Notification state
    const [notifications, setNotifications] = useState<NotificationPreferences | null>(null);
@@ -204,6 +203,17 @@ export function ProfileSettings() {
          toast.error(error.message || "Failed to remove payment method");
       } finally {
          setDeletingId(null);
+      }
+   };
+
+   const handleManagePayments = async () => {
+      setAddingPayment(true);
+      try {
+         const { url } = await getBillingPortal(`${window.location.origin}/settings?tab=billing`);
+         window.location.href = url;
+      } catch (error: any) {
+         toast.error(error.message || "Failed to open billing portal");
+         setAddingPayment(false);
       }
    };
 
@@ -424,8 +434,12 @@ export function ProfileSettings() {
                                        Add a payment method to continue after your trial ends.
                                     </p>
                                  </div>
-                                 <Button onClick={() => setPaymentModalOpen(true)}>
-                                    <Plus className="h-4 w-4 mr-2" />
+                                 <Button onClick={handleManagePayments} disabled={addingPayment}>
+                                    {addingPayment ? (
+                                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    ) : (
+                                       <Plus className="h-4 w-4 mr-2" />
+                                    )}
                                     Add Payment Method
                                  </Button>
                               </div>
@@ -471,8 +485,12 @@ export function ProfileSettings() {
                                        </Button>
                                     </div>
                                  ))}
-                                 <Button variant="outline" className="w-full" onClick={() => setPaymentModalOpen(true)}>
-                                    <Plus className="h-4 w-4 mr-2" />
+                                 <Button variant="outline" className="w-full" onClick={handleManagePayments} disabled={addingPayment}>
+                                    {addingPayment ? (
+                                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    ) : (
+                                       <Plus className="h-4 w-4 mr-2" />
+                                    )}
                                     Add Another Payment Method
                                  </Button>
                               </div>
@@ -740,13 +758,7 @@ export function ProfileSettings() {
             </div>
          </Tabs>
 
-         {/* Payment Method Modal */}
-         <PaymentMethodModal
-            open={paymentModalOpen}
-            onOpenChange={setPaymentModalOpen}
-            subscription={subscription}
-            onSuccess={() => loadPaymentData()}
-         />
+
       </div>
    );
 }

@@ -25,9 +25,9 @@ class CloudTask:
 
     def delay(self, *args, **kwargs):
         """Push the task to Google Cloud Tasks."""
-        if settings.DEBUG:
-            # In local dev, just run it immediately (or use a local emulator if you prefer)
-            logger.info(f"Local dev: Executing task {self.name} immediately.")
+        if getattr(settings, 'CLOUD_TASKS_SYNC', False):
+            # Sync mode: execute immediately instead of queueing
+            logger.info(f"Sync mode: Executing task {self.name} immediately.")
             return self.func(*args, **kwargs)
 
         # Use emulator if configured

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { getPublicPricing } from "@/api/billing";
 import type { PricingProduct } from "@/api/billing/types";
 
-// Plan features mapped by plan type
+// Plan features mapped by plan type (fallback if backend doesn't provide features)
 const PLAN_FEATURES = {
     attendee: [
         "Browse & register for events",
@@ -24,19 +24,15 @@ const PLAN_FEATURES = {
     ],
     professional: [
         "30 events per month",
-        "500 attendees per event",
         "500 certificates/month",
         "Zoom integration",
-        "Advanced analytics",
         "Custom certificate templates",
         "Priority email support",
     ],
     organization: [
         "Unlimited events",
-        "2,000 attendees per event",
         "Unlimited certificates",
         "Multi-user team access",
-        "Advanced analytics & reporting",
         "White-label options",
         "API access",
         "Priority support",

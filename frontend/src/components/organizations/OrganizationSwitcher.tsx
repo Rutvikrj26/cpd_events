@@ -72,6 +72,7 @@ export const OrganizationSwitcher: React.FC<OrganizationSwitcherProps> = ({
                         onSelectPersonal={handleSelectPersonal}
                         onSelectOrg={handleSelectOrg}
                         onCreateOrg={handleCreateOrg}
+                        hasFeature={hasFeature}
                     />
                 </DropdownMenuContent>
             </DropdownMenu>
@@ -106,6 +107,7 @@ export const OrganizationSwitcher: React.FC<OrganizationSwitcherProps> = ({
                     onSelectPersonal={handleSelectPersonal}
                     onSelectOrg={handleSelectOrg}
                     onCreateOrg={handleCreateOrg}
+                    hasFeature={hasFeature}
                 />
             </DropdownMenuContent>
         </DropdownMenu>
@@ -121,6 +123,7 @@ interface SwitcherContentProps {
     onSelectPersonal: () => void;
     onSelectOrg: (org: any) => void;
     onCreateOrg: () => void;
+    hasFeature: (feature: any) => boolean;
 }
 
 const SwitcherContent: React.FC<SwitcherContentProps> = ({
@@ -131,6 +134,7 @@ const SwitcherContent: React.FC<SwitcherContentProps> = ({
     onSelectPersonal,
     onSelectOrg,
     onCreateOrg,
+    hasFeature,
 }) => {
     return (
         <>

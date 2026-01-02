@@ -46,17 +46,6 @@ export const getBillingPortal = async (returnUrl?: string): Promise<{ url: strin
     return response.data;
 };
 
-export interface SetupIntentResponse {
-    client_secret: string;
-    customer_id: string;
-    trial_ends_at: string | null;
-}
-
-export const createSetupIntent = async (): Promise<SetupIntentResponse> => {
-    const response = await client.post<SetupIntentResponse>('/billing/setup-intent/');
-    return response.data;
-};
-
 export const cancelSubscription = async (immediate: boolean = false, reason?: string): Promise<Subscription> => {
     const response = await client.post<Subscription>('/subscription/cancel/', {
         immediate,
@@ -86,22 +75,11 @@ export const syncSubscription = async (): Promise<Subscription> => {
     return response.data;
 };
 
-// Payment Method APIs
+// Payment Method APIs (view/delete only - adding handled by Stripe Portal)
 export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
     const response = await client.get('/payment-methods/');
     const data = response.data;
     return Array.isArray(data) ? data : (data.results || []);
-};
-
-export const addPaymentMethod = async (
-    stripePaymentMethodId: string,
-    setAsDefault: boolean = true
-): Promise<PaymentMethod> => {
-    const response = await client.post<PaymentMethod>('/payment-methods/', {
-        stripe_payment_method_id: stripePaymentMethodId,
-        set_as_default: setAsDefault,
-    });
-    return response.data;
 };
 
 export const deletePaymentMethod = async (uuid: string): Promise<void> => {

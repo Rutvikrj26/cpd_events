@@ -2,9 +2,12 @@
 Billing signals for subscription events.
 """
 
+from datetime import timedelta
+
 from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
@@ -33,11 +36,13 @@ def create_subscription_for_organizer(sender, instance, created, **kwargs):
         )
         return
 
-    # Organizers get PROFESSIONAL plan
+    # Organizers get PROFESSIONAL plan with trial period
+    trial_days = getattr(settings, 'BILLING_TRIAL_DAYS', 14)
     Subscription.objects.get_or_create(
         user=instance,
         defaults={
             'plan': Subscription.Plan.PROFESSIONAL,
-            'status': Subscription.Status.ACTIVE,
+            'status': Subscription.Status.TRIALING,
+            'trial_ends_at': timezone.now() + timedelta(days=trial_days),
         },
     )
