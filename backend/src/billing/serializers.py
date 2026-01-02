@@ -54,6 +54,8 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'canceled_at',
             'events_created_this_period',
             'certificates_issued_this_period',
+            'stripe_subscription_id',
+            'stripe_customer_id',
             'created_at',
             'updated_at',
         ]

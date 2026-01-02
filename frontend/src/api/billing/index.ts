@@ -81,6 +81,11 @@ export const updateSubscription = async (
     return response.data;
 };
 
+export const syncSubscription = async (): Promise<Subscription> => {
+    const response = await client.post<Subscription>('/subscription/sync/');
+    return response.data;
+};
+
 // Payment Method APIs
 export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
     const response = await client.get('/payment-methods/');

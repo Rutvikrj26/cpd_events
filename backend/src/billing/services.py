@@ -3,6 +3,7 @@ Stripe integration service for billing.
 """
 
 import logging
+from datetime import datetime, timezone as dt_timezone
 from typing import Any
 
 from django.conf import settings
@@ -352,6 +353,90 @@ class StripeService:
 
         except Exception as e:
             logger.error(f"Failed to update subscription: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def sync_subscription(self, user) -> dict[str, Any]:
+        """
+        Sync local subscription with Stripe.
+        Useful when webhooks are not available (e.g. local dev).
+        """
+        from billing.models import Subscription, StripeProduct
+
+        if not self.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        subscription = getattr(user, 'subscription', None)
+        if not subscription:
+            # Create a blank one to populate
+            subscription = Subscription.objects.create(user=user)
+
+        try:
+            # 1. Try to find subscription by ID if we have it
+            stripe_sub = None
+            if subscription.stripe_subscription_id:
+                try:
+                    stripe_sub = self.stripe.Subscription.retrieve(subscription.stripe_subscription_id)
+                except Exception:
+                    stripe_sub = None
+
+            # 2. If not found, try to find by customer ID
+            if not stripe_sub and subscription.stripe_customer_id:
+                subs = self.stripe.Subscription.list(customer=subscription.stripe_customer_id, status='all', limit=1)
+                if subs and subs.data:
+                    stripe_sub = subs.data[0]
+
+            # 3. If still not found, try to find customer by email and then subscription
+            if not stripe_sub:
+                customers = self.stripe.Customer.list(email=user.email, limit=1)
+                if customers and customers.data:
+                    customer = customers.data[0]
+                    subscription.stripe_customer_id = customer.id
+                    subscription.save(update_fields=['stripe_customer_id'])
+                    
+                    subs = self.stripe.Subscription.list(customer=customer.id, status='all', limit=1)
+                    if subs and subs.data:
+                        stripe_sub = subs.data[0]
+
+            if not stripe_sub:
+                return {'success': False, 'error': 'No subscription found in Stripe'}
+
+            # We found a subscription, update local
+            subscription.stripe_subscription_id = stripe_sub.id
+            subscription.status = stripe_sub.status
+            subscription.current_period_start = datetime.fromtimestamp(stripe_sub.current_period_start, tz=dt_timezone.utc)
+            subscription.current_period_end = datetime.fromtimestamp(stripe_sub.current_period_end, tz=dt_timezone.utc)
+            
+            # Determine plan from price
+            if stripe_sub.get('items') and stripe_sub['items'].data:
+                price_id = stripe_sub['items'].data[0].price.id
+                # Find product/plan for this price
+                # This is a bit reverse engineering, but we can check our local products
+                try:
+                    # Retrieve price to get product
+                    # Optimized: If we stored price_id in DB, we could look it up. 
+                    # But we only store product_id on product.
+                    # Let's match product ID
+                    product_id = stripe_sub['items'].data[0].price.product
+                    local_product = StripeProduct.objects.filter(stripe_product_id=product_id).first()
+                    if local_product:
+                        subscription.plan = local_product.plan
+                except Exception as e:
+                    logger.warning(f"Could not map Stripe product to local plan: {e}")
+
+            subscription.save()
+            
+            # Upgrade/downgrade account_type based on plan
+            if subscription.plan in ['professional', 'organization']:
+                user.upgrade_to_organizer()
+                logger.info(f"Upgraded user {user.email} to organizer based on plan {subscription.plan}")
+            elif subscription.plan == 'attendee':
+                user.downgrade_to_attendee()
+                logger.info(f"Downgraded user {user.email} to attendee")
+            
+            return {'success': True, 'subscription': subscription}
+
+        except Exception as e:
+            logger.error(f"Failed to sync subscription: {e}")
             return {'success': False, 'error': str(e)}
 
     # =========================================================================

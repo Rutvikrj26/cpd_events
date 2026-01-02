@@ -109,6 +109,13 @@ class StripeWebhookView(View):
             subscription.current_period_end = timezone.datetime.fromtimestamp(data['current_period_end'], tz=timezone.utc)
 
         subscription.save()
+        
+        # Upgrade user account_type based on plan
+        user = subscription.user
+        if subscription.plan in ['professional', 'organization']:
+            user.upgrade_to_organizer()
+            logger.info(f"Upgraded user {user.email} to organizer via webhook")
+        
         logger.info(f"Subscription created for customer {customer_id}")
 
     def _handle_subscription_updated(self, data):
@@ -136,6 +143,14 @@ class StripeWebhookView(View):
             subscription.canceled_at = timezone.datetime.fromtimestamp(data['canceled_at'], tz=timezone.utc)
 
         subscription.save()
+        
+        # Upgrade/downgrade user account_type based on plan changes
+        user = subscription.user
+        if subscription.plan in ['professional', 'organization']:
+            user.upgrade_to_organizer()
+        elif subscription.plan == 'attendee' and subscription.status == 'canceled':
+            user.downgrade_to_attendee()
+        
         logger.info(f"Subscription updated: {subscription_id}")
 
     def _handle_subscription_deleted(self, data):

@@ -26,7 +26,7 @@ from common.utils import error_response
 from drf_yasg.utils import swagger_auto_schema
 
 
-@roles('organizer', 'admin', route_name='subscriptions')
+@roles('attendee', 'organizer', 'admin', route_name='subscriptions')
 class SubscriptionViewSet(viewsets.GenericViewSet):
     """
     Subscription management for the authenticated user.
@@ -155,8 +155,23 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         else:
             return error_response('Failed to reactivate subscription', code='REACTIVATION_FAILED')
 
+    @swagger_auto_schema(
+        operation_summary="Sync subscription",
+        operation_description="Force sync subscription status from Stripe (useful when webhooks are missing).",
+        responses={200: SubscriptionSerializer, 400: '{"error": "..."}'},
+    )
+    @action(detail=False, methods=['post'])
+    def sync(self, request):
+        """Force sync subscription from Stripe."""
+        result = stripe_service.sync_subscription(request.user)
 
-@roles('organizer', 'admin', route_name='invoices')
+        if result['success']:
+            return Response(SubscriptionSerializer(result['subscription']).data)
+        else:
+            return error_response(result.get('error', 'Failed to sync subscription'), code='SYNC_FAILED')
+
+
+@roles('attendee', 'organizer', 'admin', route_name='invoices')
 class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Invoice history for the authenticated user.
@@ -177,7 +192,7 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
         return InvoiceSerializer
 
 
-@roles('organizer', 'admin', route_name='payment_methods')
+@roles('attendee', 'organizer', 'admin', route_name='payment_methods')
 class PaymentMethodViewSet(viewsets.ModelViewSet):
     """
     Payment method management.
@@ -260,7 +275,7 @@ class CheckoutSessionView(views.APIView):
             return error_response(result.get('error', 'Failed to create checkout session'), code='CHECKOUT_FAILED')
 
 
-@roles('organizer', 'admin', route_name='billing_portal')
+@roles('attendee', 'organizer', 'admin', route_name='billing_portal')
 class BillingPortalView(views.APIView):
     """
     Create Stripe billing portal session.
@@ -282,7 +297,7 @@ class BillingPortalView(views.APIView):
             return error_response(result.get('error', 'Failed to create portal session'), code='PORTAL_FAILED')
 
 
-@roles('organizer', 'admin', route_name='setup_intent')
+@roles('attendee', 'organizer', 'admin', route_name='setup_intent')
 class SetupIntentView(views.APIView):
     """
     Create Stripe SetupIntent for collecting payment method via embedded Elements.

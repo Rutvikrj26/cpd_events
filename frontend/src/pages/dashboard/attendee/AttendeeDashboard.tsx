@@ -215,8 +215,8 @@ export function AttendeeDashboard() {
               <p className="text-sm text-muted mb-4 font-medium">
                 Upgrade to an Organizer account to create events, issue certificates, and track attendance automatically.
               </p>
-              <Button className="w-full bg-card text-foreground hover:bg-muted font-bold border-0" size="sm">
-                Become an Organizer
+              <Button asChild className="w-full bg-card text-foreground hover:bg-muted font-bold border-0" size="sm">
+                <Link to="/billing">Become an Organizer</Link>
               </Button>
             </CardContent>
           </Card>

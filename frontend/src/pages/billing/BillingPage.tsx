@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { getSubscription, getInvoices, getBillingPortal, createCheckoutSession, cancelSubscription, reactivateSubscription, updateSubscription, getPublicPricing } from '@/api/billing';
+import { getSubscription, getInvoices, getBillingPortal, createCheckoutSession, cancelSubscription, reactivateSubscription, updateSubscription, getPublicPricing, syncSubscription } from '@/api/billing';
 import { Subscription, Invoice, PricingProduct } from '@/api/billing/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -102,7 +102,24 @@ export const BillingPage = () => {
 
     useEffect(() => {
         if (checkoutStatus === 'success') {
-            toast.success("Payment successful! Your subscription has been upgraded.");
+            toast.success("Payment successful! Updating subscription...");
+            // Force a reload of subscription data, potentially with a small delay to allow webhook processing
+            // In a real env, webhooks are fast. Locally, they might not exist. 
+            // We'll try to re-fetch.
+            const timeout = setTimeout(async () => {
+                try {
+                    const synced = await syncSubscription();
+                    setSubscription(synced);
+                    toast.success("Your account has been upgraded!");
+                    // Navigate to /billing without query params to prevent loop and refresh user context
+                    window.location.href = '/billing';
+                } catch (e) {
+                    console.error("Sync failed, falling back to get", e);
+                    const sub = await getSubscription();
+                    setSubscription(sub);
+                }
+            }, 1000);
+            return () => clearTimeout(timeout);
         } else if (checkoutStatus === 'canceled') {
             toast.info("Checkout was canceled. No changes were made.");
         }
@@ -149,6 +166,23 @@ export const BillingPage = () => {
         setUpgrading(planId);
 
         try {
+            // Special handling for downgrade to free 'attendee' plan
+            if (planId === 'attendee') {
+                if (subscription?.stripe_subscription_id) {
+                    // Cancel subscription at period end for downgrade to free
+                    const updated = await cancelSubscription(false, 'Downgrading to free plan');
+                    setSubscription(updated);
+                    toast.success("You've been downgraded to the free plan. Access continues until your billing period ends.");
+                    // Sync to update account_type
+                    await syncSubscription();
+                    window.location.href = '/billing';
+                } else {
+                    toast.info("You're already on the free plan.");
+                }
+                setUpgrading(null);
+                return;
+            }
+
             // Check if user already has an active Stripe subscription
             if (subscription && subscription.stripe_subscription_id) {
                 // UPDATE existing subscription (upgrade/downgrade)
