@@ -5,6 +5,8 @@ Common pagination classes for the API.
 from rest_framework.pagination import CursorPagination, PageNumberPagination
 from rest_framework.response import Response
 
+from common.config import Pagination, ThrottleRates
+
 
 class StandardPagination(PageNumberPagination):
     """
@@ -15,9 +17,9 @@ class StandardPagination(PageNumberPagination):
         page_size: Items per page (max 100)
     """
 
-    page_size = 20
+    page_size = Pagination.DEFAULT_PAGE_SIZE
     page_size_query_param = 'page_size'
-    max_page_size = 100
+    max_page_size = Pagination.MAX_PAGE_SIZE
 
     def get_paginated_response(self, data):
         return Response(
@@ -40,7 +42,7 @@ class CursorPaginationByCreated(CursorPagination):
     More efficient for large offsets and stable when items are added.
     """
 
-    page_size = 20
+    page_size = Pagination.DEFAULT_PAGE_SIZE
     ordering = '-created_at'
     cursor_query_param = 'cursor'
 
@@ -48,9 +50,9 @@ class CursorPaginationByCreated(CursorPagination):
 class SmallPagination(PageNumberPagination):
     """Smaller page size for nested resources."""
 
-    page_size = 10
+    page_size = Pagination.SMALL_PAGE_SIZE
     page_size_query_param = 'page_size'
-    max_page_size = 50
+    max_page_size = Pagination.SMALL_MAX_PAGE_SIZE
 
 
 # =============================================================================
@@ -67,19 +69,19 @@ class BulkOperationThrottle(UserRateThrottle):
     More restrictive than regular operations to prevent abuse.
     """
 
-    rate = '10/hour'
+    rate = ThrottleRates.BULK
     scope = 'bulk'
 
 
 class ImportThrottle(UserRateThrottle):
     """Rate limiting for import operations."""
 
-    rate = '5/hour'
+    rate = ThrottleRates.IMPORT
     scope = 'import'
 
 
 class ExportThrottle(UserRateThrottle):
     """Rate limiting for export/download operations."""
 
-    rate = '20/hour'
+    rate = ThrottleRates.EXPORT
     scope = 'export'

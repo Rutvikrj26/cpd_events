@@ -13,6 +13,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from common.config import IndividualPlanLimits, TrialConfig
 from common.models import BaseModel
 
 
@@ -77,23 +78,11 @@ class Subscription(BaseModel):
     def __str__(self):
         return f"{self.user.email} - {self.plan} ({self.status})"
 
-    # Plan limits configuration
+    # Plan limits configuration (imported from common.config.billing)
     PLAN_LIMITS = {
-        Plan.ATTENDEE: {
-            'events_per_month': 0,  # Cannot create events
-            'certificates_per_month': 0,
-            'max_attendees_per_event': 0,
-        },
-        Plan.PROFESSIONAL: {
-            'events_per_month': 30,  # Generous limit
-            'certificates_per_month': 500,  # Generous limit
-            'max_attendees_per_event': 500,
-        },
-        Plan.ORGANIZATION: {
-            'events_per_month': None,  # Unlimited
-            'certificates_per_month': None,  # Unlimited
-            'max_attendees_per_event': 2000,
-        },
+        Plan.ATTENDEE: IndividualPlanLimits.ATTENDEE,
+        Plan.PROFESSIONAL: IndividualPlanLimits.PROFESSIONAL,
+        Plan.ORGANIZATION: IndividualPlanLimits.ORGANIZATION,
     }
 
     @property
@@ -228,21 +217,18 @@ class Subscription(BaseModel):
     def is_in_grace_period(self):
         """
         Check if subscription is in grace period after trial.
-        Grace period = trial_ends_at + BILLING_GRACE_PERIOD_DAYS
+        Grace period = trial_ends_at + TrialConfig.GRACE_PERIOD_DAYS
         During grace period: can't create events, but can still access dashboard
         After grace period: complete access block
         """
-        from django.conf import settings
-        
         if self.status not in [self.Status.TRIALING, self.Status.PAST_DUE]:
             return False
         if not self.trial_ends_at:
             return False
-            
-        grace_days = getattr(settings, 'BILLING_GRACE_PERIOD_DAYS', 30)
-        grace_end = self.trial_ends_at + timedelta(days=grace_days)
+
+        grace_end = self.trial_ends_at + timedelta(days=TrialConfig.GRACE_PERIOD_DAYS)
         now = timezone.now()
-        
+
         return self.trial_ends_at <= now < grace_end
 
     @property
@@ -251,22 +237,19 @@ class Subscription(BaseModel):
         Check if access should be completely blocked.
         This happens after trial + grace period with no payment.
         """
-        from django.conf import settings
-        
         # Active/paid subscriptions are never blocked
         if self.status == self.Status.ACTIVE and not self.is_trial_expired:
             return False
         if self.stripe_subscription_id:
             # Has a Stripe subscription - let Stripe status determine access
             return self.status in [self.Status.CANCELED, self.Status.UNPAID]
-            
+
         # For trials without payment
         if not self.trial_ends_at:
             return False
-            
-        grace_days = getattr(settings, 'BILLING_GRACE_PERIOD_DAYS', 30)
-        grace_end = self.trial_ends_at + timedelta(days=grace_days)
-        
+
+        grace_end = self.trial_ends_at + timedelta(days=TrialConfig.GRACE_PERIOD_DAYS)
+
         return timezone.now() >= grace_end
 
     @property
@@ -534,8 +517,8 @@ class StripeProduct(BaseModel):
         """Get trial period days for this product."""
         if self.trial_period_days is not None:
             return self.trial_period_days
-        # Fallback to global setting
-        return getattr(settings, 'BILLING_TRIAL_DAYS', 14)
+        # Fallback to global config
+        return TrialConfig.TRIAL_DAYS
 
     def get_feature_limits(self):
         """Get feature limits for this product."""

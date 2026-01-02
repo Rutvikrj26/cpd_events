@@ -114,8 +114,8 @@ class GCSStorage:
             return f"gs://{self.bucket.name}/{path}"
 
         except Exception as e:
-            logger.error(f"GCS upload failed: {e}")
-            return None
+            logger.error(f"GCS upload failed: {e}. Falling back to local storage.")
+            return self._save_local(content, path)
 
     def upload_file(
         self, file_path: str, destination_path: str, content_type: str = 'application/octet-stream', public: bool = False
@@ -146,8 +146,14 @@ class GCSStorage:
             return f"gs://{self.bucket.name}/{destination_path}"
 
         except Exception as e:
-            logger.error(f"GCS file upload failed: {e}")
-            return None
+            logger.error(f"GCS file upload failed: {e}. Falling back to local storage.")
+            try:
+                with open(file_path, 'rb') as f:
+                    content = f.read()
+                return self._save_local(content, destination_path)
+            except Exception as read_error:
+                logger.error(f"Failed to read local file for fallback: {read_error}")
+                return None
 
     def download(self, path: str) -> bytes | None:
         """

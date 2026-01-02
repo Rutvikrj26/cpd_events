@@ -88,6 +88,182 @@ class SpeakerSerializer(BaseModelSerializer):
 
 
 # =============================================================================
+# Session Serializers (C1: Multi-Session Events API)
+# =============================================================================
+
+
+class EventSessionListSerializer(BaseModelSerializer):
+    """Lightweight session for list views."""
+
+    is_past = serializers.BooleanField(read_only=True)
+    ends_at = serializers.DateTimeField(read_only=True)
+
+    class Meta:
+        model = EventSession
+        fields = [
+            'uuid',
+            'title',
+            'description',
+            'speaker_names',
+            'order',
+            'starts_at',
+            'ends_at',
+            'duration_minutes',
+            'timezone',
+            'session_type',
+            'is_mandatory',
+            'is_published',
+            'is_past',
+            'cpd_credits',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+
+class EventSessionDetailSerializer(BaseModelSerializer):
+    """Full session detail."""
+
+    is_past = serializers.BooleanField(read_only=True)
+    ends_at = serializers.DateTimeField(read_only=True)
+    minimum_required_minutes = serializers.IntegerField(read_only=True)
+    attendance_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EventSession
+        fields = [
+            'uuid',
+            'title',
+            'description',
+            'speaker_names',
+            'order',
+            'starts_at',
+            'ends_at',
+            'duration_minutes',
+            'timezone',
+            'session_type',
+            'has_separate_zoom',
+            'zoom_meeting_id',
+            'zoom_join_url',
+            'zoom_host_url',
+            'cpd_credits',
+            'minimum_attendance_percent',
+            'minimum_required_minutes',
+            'is_mandatory',
+            'is_published',
+            'is_past',
+            'attendance_count',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'uuid',
+            'ends_at',
+            'is_past',
+            'minimum_required_minutes',
+            'zoom_meeting_id',
+            'zoom_join_url',
+            'attendance_count',
+            'created_at',
+            'updated_at',
+        ]
+
+    def get_attendance_count(self, obj):
+        """Count attendees for this session."""
+        return SessionAttendance.objects.filter(session=obj, is_eligible=True).count()
+
+
+class EventSessionCreateSerializer(serializers.ModelSerializer):
+    """Create a new session."""
+
+    class Meta:
+        model = EventSession
+        fields = [
+            'title',
+            'description',
+            'speaker_names',
+            'order',
+            'starts_at',
+            'duration_minutes',
+            'timezone',
+            'session_type',
+            'cpd_credits',
+            'minimum_attendance_percent',
+            'is_mandatory',
+            'is_published',
+            'has_separate_zoom',
+            'zoom_meeting_id',
+            'zoom_join_url',
+            'zoom_host_url',
+        ]
+
+
+class EventSessionUpdateSerializer(serializers.ModelSerializer):
+    """Update an existing session."""
+
+    class Meta:
+        model = EventSession
+        fields = [
+            'title',
+            'description',
+            'speaker_names',
+            'order',
+            'starts_at',
+            'duration_minutes',
+            'timezone',
+            'session_type',
+            'cpd_credits',
+            'minimum_attendance_percent',
+            'is_mandatory',
+            'is_published',
+            'has_separate_zoom',
+            'zoom_meeting_id',
+            'zoom_join_url',
+            'zoom_host_url',
+        ]
+
+
+class SessionReorderSerializer(serializers.Serializer):
+    """Reorder sessions within an event."""
+
+    order = serializers.ListField(child=serializers.UUIDField(), help_text="List of session UUIDs in desired order")
+
+
+class SessionAttendanceSerializer(BaseModelSerializer):
+    """Session attendance for a registration."""
+
+    session_title = serializers.CharField(source='session.title', read_only=True)
+    session_starts_at = serializers.DateTimeField(source='session.starts_at', read_only=True)
+    attendance_percent = serializers.IntegerField(read_only=True)
+    final_eligibility = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = SessionAttendance
+        fields = [
+            'uuid',
+            'session',
+            'session_title',
+            'session_starts_at',
+            'joined_at',
+            'left_at',
+            'duration_minutes',
+            'attendance_percent',
+            'is_eligible',
+            'override_eligible',
+            'override_reason',
+            'final_eligibility',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+
+class SessionAttendanceOverrideSerializer(serializers.Serializer):
+    """Override session attendance eligibility."""
+
+    eligible = serializers.BooleanField()
+    reason = serializers.CharField(max_length=500)
+
+
+# =============================================================================
 # Event Serializers
 # =============================================================================
 
@@ -169,6 +345,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
     attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
     certificate_template = serializers.SlugRelatedField(read_only=True, slug_field='uuid')
     speakers = SpeakerSerializer(many=True, read_only=True)
+    sessions = EventSessionListSerializer(many=True, read_only=True)
 
     class Meta:
         model = Event
@@ -233,6 +410,8 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             # CPD & Education
             'learning_objectives',
             'speakers',
+            # Sessions
+            'sessions',
             # Status transitions
             'status_transitions',
             # Timestamps
@@ -585,168 +764,4 @@ class EventStatusHistorySerializer(BaseModelSerializer):
         read_only_fields = fields
 
 
-# =============================================================================
-# Session Serializers (C1: Multi-Session Events API)
-# =============================================================================
 
-
-class EventSessionListSerializer(BaseModelSerializer):
-    """Lightweight session for list views."""
-
-    is_past = serializers.BooleanField(read_only=True)
-    ends_at = serializers.DateTimeField(read_only=True)
-
-    class Meta:
-        model = EventSession
-        fields = [
-            'uuid',
-            'title',
-            'order',
-            'starts_at',
-            'ends_at',
-            'duration_minutes',
-            'timezone',
-            'session_type',
-            'is_mandatory',
-            'is_published',
-            'is_past',
-            'cpd_credits',
-            'created_at',
-        ]
-        read_only_fields = fields
-
-
-class EventSessionDetailSerializer(BaseModelSerializer):
-    """Full session detail."""
-
-    is_past = serializers.BooleanField(read_only=True)
-    ends_at = serializers.DateTimeField(read_only=True)
-    minimum_required_minutes = serializers.IntegerField(read_only=True)
-    attendance_count = serializers.SerializerMethodField()
-
-    class Meta:
-        model = EventSession
-        fields = [
-            'uuid',
-            'title',
-            'description',
-            'order',
-            'starts_at',
-            'ends_at',
-            'duration_minutes',
-            'timezone',
-            'session_type',
-            # Zoom
-            'has_separate_zoom',
-            'zoom_meeting_id',
-            'zoom_join_url',
-            # CPD
-            'cpd_credits',
-            # Attendance
-            'minimum_attendance_percent',
-            'minimum_required_minutes',
-            # Status
-            'is_mandatory',
-            'is_published',
-            'is_past',
-            'attendance_count',
-            # Timestamps
-            'created_at',
-            'updated_at',
-        ]
-        read_only_fields = [
-            'uuid',
-            'ends_at',
-            'is_past',
-            'minimum_required_minutes',
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'attendance_count',
-            'created_at',
-            'updated_at',
-        ]
-
-    def get_attendance_count(self, obj):
-        """Count attendees for this session."""
-        return SessionAttendance.objects.filter(session=obj, is_eligible=True).count()
-
-
-class EventSessionCreateSerializer(serializers.ModelSerializer):
-    """Create a new session."""
-
-    class Meta:
-        model = EventSession
-        fields = [
-            'title',
-            'description',
-            'order',
-            'starts_at',
-            'duration_minutes',
-            'timezone',
-            'session_type',
-            'cpd_credits',
-            'minimum_attendance_percent',
-            'is_mandatory',
-            'is_published',
-        ]
-
-
-class EventSessionUpdateSerializer(serializers.ModelSerializer):
-    """Update an existing session."""
-
-    class Meta:
-        model = EventSession
-        fields = [
-            'title',
-            'description',
-            'order',
-            'starts_at',
-            'duration_minutes',
-            'timezone',
-            'session_type',
-            'cpd_credits',
-            'minimum_attendance_percent',
-            'is_mandatory',
-            'is_published',
-        ]
-
-
-class SessionReorderSerializer(serializers.Serializer):
-    """Reorder sessions within an event."""
-
-    order = serializers.ListField(child=serializers.UUIDField(), help_text="List of session UUIDs in desired order")
-
-
-class SessionAttendanceSerializer(BaseModelSerializer):
-    """Session attendance for a registration."""
-
-    session_title = serializers.CharField(source='session.title', read_only=True)
-    session_starts_at = serializers.DateTimeField(source='session.starts_at', read_only=True)
-    attendance_percent = serializers.IntegerField(read_only=True)
-    final_eligibility = serializers.BooleanField(read_only=True)
-
-    class Meta:
-        model = SessionAttendance
-        fields = [
-            'uuid',
-            'session',
-            'session_title',
-            'session_starts_at',
-            'joined_at',
-            'left_at',
-            'duration_minutes',
-            'attendance_percent',
-            'is_eligible',
-            'override_eligible',
-            'override_reason',
-            'final_eligibility',
-            'created_at',
-        ]
-        read_only_fields = fields
-
-
-class SessionAttendanceOverrideSerializer(serializers.Serializer):
-    """Override session attendance eligibility."""
-
-    eligible = serializers.BooleanField()
-    reason = serializers.CharField(max_length=500)

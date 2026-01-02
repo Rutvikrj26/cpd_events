@@ -47,6 +47,20 @@ def custom_exception_handler(exc, context):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Handle built-in Python exceptions that represent business logic errors
+    if response is None:
+        if isinstance(exc, (ValueError, TypeError)):
+            return Response(
+                {
+                    'error': {
+                        'code': 'INVALID_REQUEST',
+                        'message': str(exc),
+                        'details': None,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
     return response
 
 

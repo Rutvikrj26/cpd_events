@@ -60,7 +60,7 @@ export const StepReview = () => {
                             )}
                             <div className="flex items-center gap-2 text-foreground">
                                 <Tag className="h-4 w-4 text-primary" />
-                                <span>{formData.is_free ? 'Free Event' : `${formData.price} ${formData.currency}`}</span>
+                                <span>{(formData.price ?? 0) === 0 ? 'Free Event' : `${formData.price} ${formData.currency}`}</span>
                             </div>
 
                         </div>

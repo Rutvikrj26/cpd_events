@@ -30,8 +30,8 @@ export const deleteEvent = async (uuid: string): Promise<void> => {
 // -- Nested: Sessions --
 
 export const getEventSessions = async (eventUuid: string): Promise<EventSession[]> => {
-    const response = await client.get<EventSession[]>(`/events/${eventUuid}/sessions/`);
-    return response.data;
+    const response = await client.get<any>(`/events/${eventUuid}/sessions/`);
+    return Array.isArray(response.data) ? response.data : response.data.results;
 };
 
 export const createEventSession = async (eventUuid: string, data: Partial<EventSession>): Promise<EventSession> => {

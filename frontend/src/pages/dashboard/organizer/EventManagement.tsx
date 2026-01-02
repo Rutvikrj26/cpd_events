@@ -1,14 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
-   Users,
-   CheckCircle,
    Clock,
    Search,
    Download,
-   Mail,
    MoreVertical,
-   QrCode,
    Award,
    Filter,
    Video,
@@ -36,7 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { StatusBadge } from "@/components/custom/StatusBadge";
 import { toast } from "sonner";
-import { getEvent, publishEvent, unpublishEvent, getEventRegistrations, checkInAttendee, deleteEvent } from "@/api/events";
+import { getEvent, updateEvent, publishEvent, unpublishEvent, getEventRegistrations, checkInAttendee, deleteEvent } from "@/api/events";
 import { issueCertificates } from "@/api/certificates";
 import {
    AlertDialog,
@@ -64,25 +60,27 @@ export function EventManagement() {
    const [loading, setLoading] = useState(true);
    const [deleting, setDeleting] = useState(false);
 
-   // Dialog State
    const [editAttendanceOpen, setEditAttendanceOpen] = useState(false);
+
    const [selectedAttendee, setSelectedAttendee] = useState<any>(null);
+   const [retryingZoom, setRetryingZoom] = useState(false);
+
+   const fetchEvent = useCallback(async () => {
+      if (!uuid) return;
+      try {
+         const data = await getEvent(uuid);
+         setEvent(data);
+      } catch (e) {
+         console.error("Failed to fetch event", e);
+         toast.error("Failed to load event details");
+      } finally {
+         setLoading(false);
+      }
+   }, [uuid]);
 
    useEffect(() => {
-      async function fetchEvent() {
-         if (!uuid) return;
-         try {
-            const data = await getEvent(uuid);
-            setEvent(data);
-         } catch (e) {
-            console.error("Failed to fetch event", e);
-            toast.error("Failed to load event details");
-         } finally {
-            setLoading(false);
-         }
-      }
       fetchEvent();
-   }, [uuid]);
+   }, [fetchEvent]);
 
    const [attendees, setAttendees] = useState<any[]>([]);
    const [searchTerm, setSearchTerm] = useState("");
@@ -92,7 +90,7 @@ export function EventManagement() {
    const [feedback, setFeedback] = useState<EventFeedback[]>([]);
    const [feedbackLoading, setFeedbackLoading] = useState(false);
 
-   const fetchRegistrations = async () => {
+   const fetchRegistrations = useCallback(async () => {
       if (!uuid) return;
       try {
          const regs = await getEventRegistrations(uuid);
@@ -100,15 +98,15 @@ export function EventManagement() {
       } catch (e) {
          console.error("Failed to fetch registrations", e);
       }
-   };
+   }, [uuid]);
 
    // Fetch registrations for the event
    useEffect(() => {
       fetchRegistrations();
-   }, [uuid]);
+   }, [fetchRegistrations]);
 
    // Fetch feedback for the event
-   const fetchFeedback = async () => {
+   const fetchFeedback = useCallback(async () => {
       if (!uuid) return;
       setFeedbackLoading(true);
       try {
@@ -119,11 +117,11 @@ export function EventManagement() {
       } finally {
          setFeedbackLoading(false);
       }
-   };
+   }, [uuid]);
 
    useEffect(() => {
       fetchFeedback();
-   }, [uuid]);
+   }, [fetchFeedback]);
 
    const hasStarted = event ? new Date(event.starts_at) < new Date() : false;
 
@@ -212,6 +210,33 @@ export function EventManagement() {
       }
    };
 
+
+
+
+   const handleRetryZoom = async () => {
+      if (!event) return;
+
+      setRetryingZoom(true);
+      try {
+         // Trigger an update with the same zoom settings to fire the backend signal
+         // which will retry creating the meeting
+         await updateEvent(event.uuid, {
+            zoom_settings: event.zoom_settings
+         });
+         toast.success("Retry command sent. Please wait a moment for the meeting to be created.");
+
+         // Refresh event data after a delay to show the new meeting ID
+         setTimeout(() => {
+            fetchEvent();
+         }, 3000);
+
+      } catch (error) {
+         console.error("Failed to retry zoom creation", error);
+         toast.error("Failed to retry Zoom creation. Please check your Zoom integration settings.");
+      } finally {
+         setRetryingZoom(false);
+      }
+   };
 
    const handlePublish = async () => {
       if (!uuid) return;
@@ -418,9 +443,15 @@ export function EventManagement() {
                         </div>
                      </div>
                      {!event.zoom_meeting_id && (
-                        <Button variant="outline" size="sm" className="gap-2">
-                           <RefreshCw className="h-4 w-4" />
-                           Retry Creation
+                        <Button
+                           variant="outline"
+                           size="sm"
+                           className="gap-2"
+                           onClick={handleRetryZoom}
+                           disabled={retryingZoom}
+                        >
+                           <RefreshCw className={`h-4 w-4 ${retryingZoom ? 'animate-spin' : ''}`} />
+                           {retryingZoom ? 'Retrying...' : 'Retry Creation'}
                         </Button>
                      )}
                   </div>

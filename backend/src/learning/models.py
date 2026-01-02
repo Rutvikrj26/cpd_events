@@ -16,6 +16,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+from common.config import AssignmentDefaults, ModuleDefaults, ScoringDefaults
 from common.models import BaseModel
 
 
@@ -51,7 +52,10 @@ class EventModule(BaseModel):
     release_days_after_registration = models.PositiveIntegerField(default=0)
 
     # Scoring
-    passing_score = models.PositiveIntegerField(default=70, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    passing_score = models.PositiveIntegerField(
+        default=ModuleDefaults.PASSING_SCORE,
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
 
     # CPD credits for this module
     cpd_credits = models.DecimalField(max_digits=5, decimal_places=2, default=0)
@@ -177,15 +181,15 @@ class Assignment(BaseModel):
     instructions = models.TextField()
 
     # Due date (relative to module release)
-    due_days_after_release = models.PositiveIntegerField(default=7)
+    due_days_after_release = models.PositiveIntegerField(default=AssignmentDefaults.DUE_DAYS_AFTER_RELEASE)
 
     # Scoring
-    max_score = models.PositiveIntegerField(default=100)
-    passing_score = models.PositiveIntegerField(default=70)
+    max_score = models.PositiveIntegerField(default=AssignmentDefaults.MAX_SCORE)
+    passing_score = models.PositiveIntegerField(default=AssignmentDefaults.PASSING_SCORE)
 
     # Submission settings
     allow_resubmission = models.BooleanField(default=True)
-    max_attempts = models.PositiveIntegerField(default=3)
+    max_attempts = models.PositiveIntegerField(default=AssignmentDefaults.MAX_ATTEMPTS)
     submission_type = models.CharField(max_length=20, choices=SubmissionType.choices, default=SubmissionType.TEXT)
 
     # Rubric (JSON)

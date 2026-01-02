@@ -226,47 +226,43 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
 
-# Stripe Price IDs for each plan (set in Stripe Dashboard)
-STRIPE_PRICE_IDS = {
-    'starter': os.environ.get('STRIPE_PRICE_STARTER'),
-    'starter_annual': os.environ.get('STRIPE_PRICE_STARTER_ANNUAL'),
-    'professional': os.environ.get('STRIPE_PRICE_PROFESSIONAL'),
-    'professional_annual': os.environ.get('STRIPE_PRICE_PROFESSIONAL_ANNUAL'),
-    'premium': os.environ.get('STRIPE_PRICE_PREMIUM'),
-    'premium_annual': os.environ.get('STRIPE_PRICE_PREMIUM_ANNUAL'),
-    'team': os.environ.get('STRIPE_PRICE_TEAM'),
-    'team_annual': os.environ.get('STRIPE_PRICE_TEAM_ANNUAL'),
-    'enterprise': os.environ.get('STRIPE_PRICE_ENTERPRISE'),
-    # Legacy plans (backward compatibility)
-    'organizer': os.environ.get('STRIPE_PRICE_PROFESSIONAL'),  # Maps to professional
-    'organization': os.environ.get('STRIPE_PRICE_TEAM'),  # Maps to team
-}
+# Billing configuration imported from common.config.billing
+# These are re-exported here for backward compatibility with code that imports from settings
+from common.config.billing import (
+    TrialConfig,
+    PlatformFees,
+    PricingConfig,
+    StripePriceIds,
+    DefaultPlan,
+)
 
-# Trial Configuration
-BILLING_TRIAL_DAYS = int(os.environ.get('BILLING_TRIAL_DAYS', 14))  # 14-day trial (was 30)
-BILLING_GRACE_PERIOD_DAYS = int(os.environ.get('BILLING_GRACE_PERIOD_DAYS', 30))  # Block access after this
+# Stripe Price IDs for each plan (set in Stripe Dashboard)
+STRIPE_PRICE_IDS = StripePriceIds.as_dict()
+
+# Trial Configuration (from common.config.billing)
+BILLING_TRIAL_DAYS = TrialConfig.TRIAL_DAYS
+BILLING_GRACE_PERIOD_DAYS = TrialConfig.GRACE_PERIOD_DAYS
 
 # Platform fee for paid event registrations (percentage of transaction)
-# This is the application_fee_amount sent to Stripe Connect
-PLATFORM_FEE_PERCENT = float(os.environ.get('PLATFORM_FEE_PERCENT', 2.0))  # Default 2%
+PLATFORM_FEE_PERCENT = PlatformFees.FEE_PERCENT
 
 # Plan Pricing (in cents, for display purposes - actual pricing in Stripe)
 BILLING_PRICES = {
-    'attendee': 0,  # Free
-    'starter': 4900,  # $49/month
-    'starter_annual': 4100,  # $41/month (billed annually at $492)
-    'professional': 9900,  # $99/month
-    'professional_annual': 8300,  # $83/month (billed annually at $996)
-    'premium': 19900,  # $199/month
-    'premium_annual': 16600,  # $166/month (billed annually at $1,992)
-    'team': 29900,  # $299/month (base with 5 seats)
-    'team_annual': 24900,  # $249/month (billed annually at $2,988)
-    'enterprise': 0,  # Custom pricing
+    'attendee': PricingConfig.ATTENDEE,
+    'starter': PricingConfig.STARTER_MONTHLY,
+    'starter_annual': PricingConfig.STARTER_ANNUAL,
+    'professional': PricingConfig.PROFESSIONAL_MONTHLY,
+    'professional_annual': PricingConfig.PROFESSIONAL_ANNUAL,
+    'premium': PricingConfig.PREMIUM_MONTHLY,
+    'premium_annual': PricingConfig.PREMIUM_ANNUAL,
+    'team': PricingConfig.TEAM_MONTHLY,
+    'team_annual': PricingConfig.TEAM_ANNUAL,
+    'enterprise': PricingConfig.ENTERPRISE,
     # Legacy plans
-    'organizer': 9900,  # Maps to professional
-    'organization': 29900,  # Maps to team
+    'organizer': PricingConfig.ORGANIZER_MONTHLY,
+    'organization': PricingConfig.ORGANIZATION_MONTHLY,
 }
 
 # Default plan for new organizers
-BILLING_DEFAULT_PLAN = os.environ.get('BILLING_DEFAULT_PLAN', 'attendee')
+BILLING_DEFAULT_PLAN = DefaultPlan.NAME
 

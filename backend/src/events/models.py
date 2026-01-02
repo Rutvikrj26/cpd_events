@@ -6,6 +6,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+from common.config import AttendanceThresholds, EventDuration, EventDuplication, SessionDefaults
 from common.models import BaseModel, SoftDeleteModel
 from common.validators import validate_zoom_settings_schema
 
@@ -135,7 +136,9 @@ class Event(SoftDeleteModel):
     timezone = models.CharField(max_length=50, default='UTC', help_text="Event timezone")
     starts_at = models.DateTimeField(db_index=True, help_text="Scheduled start time")
     duration_minutes = models.PositiveIntegerField(
-        default=60, validators=[MinValueValidator(15), MaxValueValidator(480)], help_text="Duration in minutes (15-480)"
+        default=EventDuration.DEFAULT,
+        validators=[MinValueValidator(EventDuration.MIN), MaxValueValidator(EventDuration.MAX)],
+        help_text=f"Duration in minutes ({EventDuration.MIN}-{EventDuration.MAX})"
     )
 
     # Actual timing (set when event runs)
@@ -185,9 +188,13 @@ class Event(SoftDeleteModel):
     # =========================================
     # Attendance Settings
     # =========================================
-    minimum_attendance_minutes = models.PositiveIntegerField(default=0, help_text="Minimum minutes for certificate eligibility")
+    minimum_attendance_minutes = models.PositiveIntegerField(
+        default=AttendanceThresholds.DEFAULT_MINUTES, help_text="Minimum minutes for certificate eligibility"
+    )
     minimum_attendance_percent = models.PositiveIntegerField(
-        default=80, validators=[MinValueValidator(0), MaxValueValidator(100)], help_text="Minimum % attendance for certificate"
+        default=AttendanceThresholds.DEFAULT_PERCENT,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Minimum % attendance for certificate"
     )
 
     # =========================================
@@ -472,7 +479,7 @@ class Event(SoftDeleteModel):
             event_type=self.event_type,
             status=self.Status.DRAFT,
             timezone=self.timezone,
-            starts_at=new_start or (self.starts_at + timezone.timedelta(days=7)),
+            starts_at=new_start or (self.starts_at + timezone.timedelta(days=EventDuplication.DAYS_OFFSET)),
             duration_minutes=self.duration_minutes,
             registration_enabled=self.registration_enabled,
             max_attendees=self.max_attendees,
@@ -543,7 +550,7 @@ class EventSession(BaseModel):
     speaker_names = models.CharField(max_length=500, blank=True)
     order = models.PositiveIntegerField(default=0)
     starts_at = models.DateTimeField()
-    duration_minutes = models.PositiveIntegerField(default=60)
+    duration_minutes = models.PositiveIntegerField(default=SessionDefaults.DURATION_MINUTES)
     timezone = models.CharField(max_length=50, default='UTC')
     session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.LIVE)
     has_separate_zoom = models.BooleanField(default=False)
@@ -554,7 +561,7 @@ class EventSession(BaseModel):
     is_mandatory = models.BooleanField(default=True)
     is_published = models.BooleanField(default=True)
     minimum_attendance_percent = models.PositiveIntegerField(
-        default=80, help_text="Minimum attendance percentage for this session"
+        default=SessionDefaults.ATTENDANCE_PERCENT, help_text="Minimum attendance percentage for this session"
     )
 
     class Meta:

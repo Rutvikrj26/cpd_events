@@ -22,6 +22,10 @@ export function EventCreatePage() {
                     // Map aliased fields back to form field names
                     cpd_credit_value: data.cpd_credits,
                     cpd_credit_type: data.cpd_type,
+                    // Map sessions to wizard internal state
+                    _sessions: data.sessions || [],
+                    // Explicitly set is_free based on price, as backend might not return is_free
+                    is_free: !data.price || parseFloat(data.price.toString()) === 0,
                 });
             } catch (e) {
                 console.error("Failed to fetch event", e);

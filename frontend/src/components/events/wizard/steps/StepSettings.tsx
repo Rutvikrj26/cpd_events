@@ -119,7 +119,13 @@ export const StepSettings = () => {
                     </div>
                     <Switch
                         checked={!formData.is_free}
-                        onCheckedChange={(checked) => updateFormData({ is_free: !checked })}
+                        onCheckedChange={(checked) => {
+                            updateFormData({
+                                is_free: !checked,
+                                // Force price to 0 when toggled to free to ensure backend persistence
+                                ...(!checked ? { price: 0 } : {})
+                            });
+                        }}
                     />
                 </div>
 
