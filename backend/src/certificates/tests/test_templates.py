@@ -112,7 +112,7 @@ class TestSetDefaultTemplate:
         template = CertificateTemplateFactory(owner=organizer, is_default=False)
         
         response = organizer_client.post(
-            f'/api/v1/certificate-templates/{template.uuid}/set_default/'
+            f'/api/v1/certificate-templates/{template.uuid}/set-default/'
         )
         assert response.status_code == status.HTTP_200_OK
         template.refresh_from_db()
@@ -124,7 +124,7 @@ class TestSetDefaultTemplate:
         new_template = CertificateTemplateFactory(owner=organizer, is_default=False)
         
         response = organizer_client.post(
-            f'/api/v1/certificate-templates/{new_template.uuid}/set_default/'
+            f'/api/v1/certificate-templates/{new_template.uuid}/set-default/'
         )
         assert response.status_code == status.HTTP_200_OK
         
@@ -143,10 +143,10 @@ class TestAvailableTemplates:
 
     def test_get_available_templates(self, organizer_client, certificate_template):
         """Organizer can get all available templates."""
-        response = organizer_client.get('/api/v1/certificate-templates/available_templates/')
+        response = organizer_client.get('/api/v1/certificate-templates/available/')
         assert response.status_code == status.HTTP_200_OK
         # Should include own templates
-        template_uuids = [t['uuid'] for t in response.data]
+        template_uuids = [t['uuid'] for t in response.data['templates']]
         assert str(certificate_template.uuid) in template_uuids
 
     def test_includes_shared_org_templates(self, organizer_client, organization, organizer, db):
@@ -159,7 +159,7 @@ class TestAvailableTemplates:
             is_shared=True,
         )
         
-        response = organizer_client.get('/api/v1/certificate-templates/available_templates/')
+        response = organizer_client.get('/api/v1/certificate-templates/available/')
         assert response.status_code == status.HTTP_200_OK
 
 

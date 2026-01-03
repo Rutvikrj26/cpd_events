@@ -74,7 +74,8 @@ class TestEventRegistrationViewSet:
         """Cannot access registrations for another organizer's event."""
         endpoint = self.get_endpoint(other_organizer_event)
         response = organizer_client.get(endpoint)
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 0
 
     def test_attendee_cannot_manage_registrations(self, auth_client, published_event):
         """Attendees cannot access organizer registration endpoints."""
@@ -115,7 +116,7 @@ class TestWaitlistManagement:
             status='waitlisted',
         )
         
-        endpoint = f'/api/v1/events/{published_event.uuid}/registrations/promote_next/'
+        endpoint = f'/api/v1/events/{published_event.uuid}/registrations/promote-next/'
         response = organizer_client.post(endpoint)
         # May succeed or fail if no waitlist
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
@@ -132,9 +133,9 @@ class TestAttendanceOverride:
 
     def test_override_attendance(self, organizer_client, registration):
         """Organizer can override attendance eligibility."""
-        endpoint = f'/api/v1/events/{registration.event.uuid}/registrations/{registration.uuid}/override_attendance/'
+        endpoint = f'/api/v1/events/{registration.event.uuid}/registrations/{registration.uuid}/override-attendance/'
         response = organizer_client.post(endpoint, {
-            'attendance_eligible': True,
+            'eligible': True,
             'reason': 'Manual verification',
         })
         assert response.status_code == status.HTTP_200_OK

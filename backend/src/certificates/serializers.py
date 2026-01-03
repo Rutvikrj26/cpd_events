@@ -177,6 +177,8 @@ class CertificateDetailSerializer(SoftDeleteModelSerializer):
     event = serializers.SerializerMethodField()
     registration = serializers.SerializerMethodField()
     verification_url = serializers.SerializerMethodField()
+    public_url = serializers.SerializerMethodField()
+    last_viewed_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Certificate
@@ -222,6 +224,13 @@ class CertificateDetailSerializer(SoftDeleteModelSerializer):
         from django.conf import settings
 
         return f"{settings.SITE_URL}/verify/{obj.short_code}"
+
+    def get_public_url(self, obj):
+        from django.conf import settings
+        return f"{settings.SITE_URL}/verify/{obj.short_code}"
+
+    def get_last_viewed_at(self, obj):
+        return obj.last_viewed_at if hasattr(obj, 'last_viewed_at') else None
 
 
 class CertificateIssueSerializer(serializers.Serializer):

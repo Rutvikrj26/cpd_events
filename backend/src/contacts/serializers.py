@@ -196,6 +196,25 @@ class ContactCreateSerializer(serializers.ModelSerializer):
             'tag_uuids',
         ]
 
+    def validate(self, attrs):
+        """Validate that email is unique within the contact list."""
+        email = attrs.get('email')
+        contact_list = self.context.get('contact_list')
+        
+        if email and contact_list:
+            # Check for duplicate email in same list
+            exists = Contact.objects.filter(
+                contact_list=contact_list,
+                email__iexact=email
+            ).exists()
+            
+            if exists:
+                raise serializers.ValidationError({
+                    'email': 'A contact with this email already exists in this list.'
+                })
+        
+        return attrs
+
     def create(self, validated_data):
         tag_uuids = validated_data.pop('tag_uuids', [])
         contact = super().create(validated_data)

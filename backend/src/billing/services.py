@@ -3,7 +3,7 @@ Stripe integration service for billing.
 """
 
 import logging
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime, timedelta, timezone as dt_timezone
 from typing import Any
 
 from django.conf import settings
@@ -237,11 +237,11 @@ class StripeService:
                 subscription.stripe_customer_id = customer_id
                 subscription.plan = plan
                 subscription.status = stripe_subscription.status
-                subscription.current_period_start = timezone.datetime.fromtimestamp(
-                    stripe_subscription.current_period_start, tz=timezone.utc
+                subscription.current_period_start = datetime.fromtimestamp(
+                    stripe_subscription.current_period_start, tz=dt_timezone.utc
                 )
-                subscription.current_period_end = timezone.datetime.fromtimestamp(
-                    stripe_subscription.current_period_end, tz=timezone.utc
+                subscription.current_period_end = datetime.fromtimestamp(
+                    stripe_subscription.current_period_end, tz=dt_timezone.utc
                 )
                 subscription.save()
 
@@ -455,6 +455,9 @@ class StripeService:
                 subscription.status = stripe_sub.status
                 subscription.current_period_start = datetime.fromtimestamp(stripe_sub.current_period_start, tz=dt_timezone.utc)
                 subscription.current_period_end = datetime.fromtimestamp(stripe_sub.current_period_end, tz=dt_timezone.utc)
+                subscription.trial_ends_at = datetime.fromtimestamp(stripe_sub.trial_end, tz=dt_timezone.utc) if stripe_sub.trial_end else None
+                subscription.cancel_at_period_end = stripe_sub.cancel_at_period_end
+                subscription.canceled_at = datetime.fromtimestamp(stripe_sub.canceled_at, tz=dt_timezone.utc) if stripe_sub.canceled_at else None
 
                 # Determine plan from price
                 if stripe_sub.get('items') and stripe_sub['items'].data:
@@ -927,8 +930,12 @@ class StripePaymentService:
         payee_account_id = None
         if event.organization and event.organization.stripe_connect_id:
             payee_account_id = event.organization.stripe_connect_id
+            if not event.organization.stripe_charges_enabled:
+                return {'success': False, 'error': 'Organizer payment setup incomplete (charges disabled)'}
         elif event.owner.stripe_connect_id:
             payee_account_id = event.owner.stripe_connect_id
+            if not event.owner.stripe_charges_enabled:
+                return {'success': False, 'error': 'Organizer payment setup incomplete (charges disabled)'}
 
         if not payee_account_id:
             return {'success': False, 'error': 'Event organizer is not connected to Stripe'}

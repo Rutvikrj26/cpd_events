@@ -49,6 +49,7 @@ class EventRecordingViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsOrganizer]
     filterset_class = EventRecordingFilter
     ordering = ['-created_at']
+    lookup_field = 'uuid'
 
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
@@ -215,6 +216,7 @@ class ZoomWebhookView(generics.GenericAPIView):
                 webhook_id=f"invalid_{timezone.now().timestamp()}",
                 event_type='signature_failed',
                 zoom_meeting_id='',
+                event_timestamp=timezone.now(),  # Added missing timestamp
                 payload=request.data,
                 processing_status='failed',
                 error_message='Invalid signature',
@@ -284,6 +286,7 @@ class ZoomWebhookView(generics.GenericAPIView):
             return False
 
         secret_token = getattr(settings, 'ZOOM_WEBHOOK_SECRET', '')
+
         if not secret_token:
             return True  # Skip verification in dev mode
 

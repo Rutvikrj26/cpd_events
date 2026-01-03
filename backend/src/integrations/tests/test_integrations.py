@@ -32,12 +32,16 @@ class TestEventRecordingViewSet:
 
     def test_update_recording_access(self, organizer_client, completed_event, organizer, db):
         """Organizer can update recording access settings."""
-        from integrations.models import EventRecording
+        from integrations.models import ZoomRecording, EmailLog
         # Create a recording
-        recording = EventRecording.objects.create(
+        # Create a recording
+        recording = ZoomRecording.objects.create(
             event=completed_event,
             title='Test Recording',
-            recording_type='video',
+            zoom_recording_id='rec_123', # Adding required fields if any
+            zoom_meeting_id='123456789',
+            recording_start=completed_event.starts_at,
+            recording_end=completed_event.ends_at,
         )
         
         response = organizer_client.patch(
@@ -80,44 +84,37 @@ class TestZoomOAuth:
         # Should return auth URL
         assert 'url' in response.data or 'auth_url' in response.data
 
-    @patch('integrations.views.requests.post')
-    def test_zoom_callback(self, mock_post, api_client, organizer, db):
+    @patch('accounts.services.zoom_service.complete_oauth')
+    def test_zoom_callback(self, mock_complete_oauth, organizer_client, organizer, db):
         """Zoom OAuth callback is handled."""
-        mock_post.return_value = MagicMock(
-            json=lambda: {
-                'access_token': 'test_access_token',
-                'refresh_token': 'test_refresh_token',
-                'expires_in': 3600,
-            },
-            status_code=200,
-        )
+        mock_complete_oauth.return_value = {'success': True}
         
         # Callback with authorization code
-        response = api_client.get('/api/v1/integrations/zoom/callback/', {
+        response = organizer_client.get('/api/v1/integrations/zoom/callback/', {
             'code': 'test_auth_code',
             'state': 'test_state',
         })
-        # Callback typically redirects
-        assert response.status_code in [
-            status.HTTP_200_OK,
-            status.HTTP_302_FOUND,
-            status.HTTP_400_BAD_REQUEST,
-        ]
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['status'] == 'connected'
 
     def test_get_zoom_status(self, organizer_client, organizer):
         """Organizer can check Zoom connection status."""
         response = organizer_client.get('/api/v1/integrations/zoom/status/')
         assert response.status_code == status.HTTP_200_OK
-        assert 'connected' in response.data
+        assert 'is_connected' in response.data
 
     def test_disconnect_zoom(self, organizer_client, mock_zoom, organizer, db):
         """Organizer can disconnect Zoom."""
         # Create a Zoom connection
         from accounts.models import ZoomConnection
+        from django.utils import timezone
         ZoomConnection.objects.create(
             user=organizer,
             access_token='test_token',
             refresh_token='test_refresh',
+            token_expires_at=timezone.now() + timezone.timedelta(hours=1),
+            zoom_user_id='test_user_id',
         )
         
         response = organizer_client.post('/api/v1/integrations/zoom/disconnect/')
@@ -138,10 +135,13 @@ class TestZoomMeetingsList:
     def test_list_zoom_meetings(self, organizer_client, organizer, db):
         """Organizer can list their Zoom meetings."""
         from accounts.models import ZoomConnection
+        from django.utils import timezone
         ZoomConnection.objects.create(
             user=organizer,
             access_token='test_token',
             refresh_token='test_refresh',
+            token_expires_at=timezone.now() + timezone.timedelta(hours=1),
+            zoom_user_id='test_user_id',
         )
         
         response = organizer_client.get(self.endpoint)
@@ -180,8 +180,11 @@ class TestZoomWebhook:
         # URL validation should return the token hash
         assert response.status_code == status.HTTP_200_OK
 
-    def test_recording_completed_event(self, api_client, completed_event, organizer, db):
+    @pytest.mark.django_db
+    @patch('integrations.views.ZoomWebhookView._verify_signature')
+    def test_recording_completed_event(self, mock_verify, api_client, completed_event, organizer, db):
         """Handle recording.completed event."""
+        mock_verify.return_value = True
         completed_event.zoom_meeting_id = '123456789'
         completed_event.save()
         

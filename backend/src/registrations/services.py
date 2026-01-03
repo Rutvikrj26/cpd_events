@@ -258,10 +258,27 @@ class PaymentConfirmationService:
                 intent = self.stripe.PaymentIntent.retrieve(registration.payment_intent_id)
 
                 if intent.status == 'succeeded':
-                    # Update registration immediately
-                    registration.payment_status = Registration.PaymentStatus.PAID
-                    registration.amount_paid = Decimal(str(intent.amount_received / 100))
-                    registration.save(update_fields=['payment_status', 'amount_paid', 'updated_at'])
+                    # Update registration with locking to prevent race conditions
+                    with transaction.atomic():
+                        # Refetch with lock
+                        locked_reg = Registration.objects.select_for_update().get(pk=registration.pk)
+                        
+                        # Idempotency check inside lock
+                        if locked_reg.payment_status == Registration.PaymentStatus.PAID:
+                            logger.info(f"Registration {registration.uuid} already confirmed (idempotent skip)")
+                            return {
+                                'status': 'paid',
+                                'registration_uuid': str(registration.uuid),
+                                'amount_paid': float(locked_reg.amount_paid),
+                            }
+                        
+                        locked_reg.payment_status = Registration.PaymentStatus.PAID
+                        locked_reg.amount_paid = Decimal(str(intent.amount_received / 100))
+                        locked_reg.save(update_fields=['payment_status', 'amount_paid', 'updated_at'])
+                        
+                        # Update original instance to reflect changes
+                        registration.payment_status = locked_reg.payment_status
+                        registration.amount_paid = locked_reg.amount_paid
 
                     logger.info(f"Registration {registration.uuid} payment confirmed: PAID")
                     return {

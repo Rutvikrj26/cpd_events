@@ -17,6 +17,10 @@ recording_router.register(r'recordings', views.EventRecordingViewSet, basename='
 email_router = DefaultRouter()
 email_router.register(r'emails', views.EmailLogViewSet, basename='event-email')
 
+# My recordings router
+my_recordings_router = DefaultRouter()
+my_recordings_router.register(r'recordings', views.MyRecordingsViewSet, basename='my-recordings')
+
 urlpatterns = [
     # Webhooks
     path('webhooks/zoom/', views.ZoomWebhookView.as_view(), name='zoom_webhook'),

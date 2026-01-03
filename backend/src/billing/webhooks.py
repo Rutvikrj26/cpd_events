@@ -5,6 +5,7 @@ Stripe webhook handlers.
 import logging
 
 from django.conf import settings
+from django.db import transaction
 from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -330,21 +331,32 @@ class StripeWebhookView(View):
             logger.error(f"Registration {registration_id} not found for payment {data['id']}")
             return
 
-        # IDEMPOTENT: Skip if already paid (likely confirmed via sync endpoint)
-        if registration.payment_status == Registration.PaymentStatus.PAID:
-            logger.info(f"Registration {registration_id} already PAID, skipping webhook update")
-            return
-
         # Update registration status (fallback path)
-        amount_received = data.get('amount_received', 0)
-        registration.amount_paid = amount_received / 100.0
-        registration.payment_status = Registration.PaymentStatus.PAID
+        try:
+            with transaction.atomic():
+                # Lock the row
+                locked_reg = Registration.objects.select_for_update().get(pk=registration.pk)
+                
+                # Check idempotency again under lock
+                if locked_reg.payment_status == Registration.PaymentStatus.PAID:
+                    logger.info(f"Registration {registration_id} already PAID, skipping webhook update")
+                    return
 
-        if registration.status == 'pending':
-            registration.status = 'confirmed'
+                amount_received = data.get('amount_received', 0)
+                locked_reg.amount_paid = amount_received / 100.0
+                locked_reg.payment_status = Registration.PaymentStatus.PAID
 
-        registration.save(update_fields=['amount_paid', 'payment_status', 'status', 'updated_at'])
-        logger.info(f"Registration {registration_id} marked as PAID via webhook fallback {data['id']}")
+                # If it was just a pending reservation, confirm it
+                # Note: Currently registration creation sets status to CONFIRMED or WAITLISTED immediately
+                # but if we add a 'pending_payment' status later, this handles it.
+                if locked_reg.status == 'pending':
+                    locked_reg.status = 'confirmed'
+
+                locked_reg.save(update_fields=['amount_paid', 'payment_status', 'status', 'updated_at'])
+                logger.info(f"Registration {registration_id} marked as PAID via webhook fallback {data['id']}")
+        except Exception as e:
+            logger.error(f"Error locking registration {registration_id} in webhook: {e}")
+            raise
 
     def _handle_payment_intent_payment_failed(self, data):
         """
@@ -384,29 +396,42 @@ class StripeWebhookView(View):
     def _handle_account_updated(self, data):
         """Handle account.updated (for Connect accounts)."""
         from organizations.models import Organization
+        from accounts.models import User
 
         account_id = data.get('id')
         if not account_id:
             return
 
-        # Find organization by connect ID
+        # Helper to update status
+        def update_status(obj):
+            charges_enabled = data.get('charges_enabled', False)
+            details_submitted = data.get('details_submitted', False)
+
+            obj.stripe_charges_enabled = charges_enabled
+            
+            if charges_enabled:
+                obj.stripe_account_status = 'active'
+            elif details_submitted:
+                obj.stripe_account_status = 'pending_verification'
+            else:
+                obj.stripe_account_status = 'restricted'
+                
+            obj.save(update_fields=['stripe_charges_enabled', 'stripe_account_status'])
+            logger.info(f"Updated Connect account status for {obj.__class__.__name__} {obj.uuid}: {obj.stripe_account_status}")
+
+        # Try Organization first
         try:
             org = Organization.objects.get(stripe_connect_id=account_id)
+            update_status(org)
+            return
         except Organization.DoesNotExist:
-            return # Might be someone else's account or unlinked
-
-        charges_enabled = data.get('charges_enabled', False)
-        details_submitted = data.get('details_submitted', False)
-
-        org.stripe_charges_enabled = charges_enabled
-        
-        if charges_enabled:
-            org.stripe_account_status = 'active'
-        elif details_submitted:
-            org.stripe_account_status = 'pending_verification'
-        else:
-            org.stripe_account_status = 'restricted'
+            pass
             
-        org.save(update_fields=['stripe_charges_enabled', 'stripe_account_status'])
-        logger.info(f"Updated Connect account status for Org {org.uuid}: {org.stripe_account_status}")
+        # Try User
+        try:
+            user = User.objects.get(stripe_connect_id=account_id)
+            update_status(user)
+            return
+        except User.DoesNotExist:
+            logger.warning(f"Received account.updated for unknown Connect account: {account_id}")
 

@@ -209,6 +209,18 @@ class ListContactViewSet(BaseModelViewSet):
             return serializers.ContactListItemSerializer
         return serializers.ContactSerializer
 
+    def get_serializer_context(self):
+        """Add contact_list to serializer context."""
+        context = super().get_serializer_context()
+        list_uuid = self.kwargs.get('list_uuid')
+        if list_uuid:
+            try:
+                contact_list = ContactList.objects.get(uuid=list_uuid, owner=self.request.user)
+                context['contact_list'] = contact_list
+            except ContactList.DoesNotExist:
+                pass
+        return context
+
     def perform_create(self, serializer):
         list_uuid = self.kwargs.get('list_uuid')
         contact_list = ContactList.objects.get(uuid=list_uuid, owner=self.request.user)

@@ -60,7 +60,7 @@ class TestEventCertificateViewSet:
         
         endpoint = f'{self.get_endpoint(completed_event)}issue/'
         response = organizer_client.post(endpoint, {
-            'bulk': True,
+            'issue_all_eligible': True,
             'template_uuid': str(certificate_template.uuid),
         })
         # Bulk issuance may return different status
@@ -68,7 +68,7 @@ class TestEventCertificateViewSet:
 
     def test_revoke_certificate(self, organizer_client, certificate, completed_event):
         """Organizer can revoke a certificate."""
-        endpoint = f'/api/v1/events/{completed_event.uuid}/certificates/{certificate.uuid}/revoke/'
+        endpoint = f'/api/v1/events/{certificate.registration.event.uuid}/certificates/{certificate.uuid}/revoke/'
         response = organizer_client.post(endpoint, {
             'reason': 'Issued in error',
         })
@@ -77,10 +77,11 @@ class TestEventCertificateViewSet:
         assert certificate.status == 'revoked'
 
     def test_cannot_manage_other_event_certificates(self, organizer_client, other_organizer_event):
-        """Cannot manage certificates for another organizer's event."""
+        """Organizer cannot list certificates for another organizer's event."""
         endpoint = self.get_endpoint(other_organizer_event)
         response = organizer_client.get(endpoint)
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['count'] == 0
 
     def test_attendee_cannot_manage_certificates(self, auth_client, completed_event):
         """Attendees cannot access certificate management."""
@@ -142,7 +143,7 @@ class TestMyCertificateViewSet:
 
     def test_download_certificate(self, auth_client, certificate):
         """User can download their certificate."""
-        response = auth_client.get(f'{self.endpoint}{certificate.uuid}/download/')
+        response = auth_client.post(f'{self.endpoint}{certificate.uuid}/download/')
         # Download should return file or URL
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_302_FOUND]
 

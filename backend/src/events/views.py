@@ -102,11 +102,12 @@ class EventViewSet(SoftDeleteModelViewSet):
         organization_uuid = self.request.data.get('organization')
 
         try:
-            event_service.create_event(
+            event = event_service.create_event(
                 user=self.request.user,
                 data=serializer.validated_data,
                 organization_uuid=organization_uuid
             )
+            serializer.instance = event
         except ValidationError as e:
              raise e
         except Exception as e:

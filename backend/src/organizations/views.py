@@ -59,7 +59,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
     def get_object(self):
         """Get organization by UUID."""
-        queryset = Organization.objects.filter(is_active=True)
+        # Use get_queryset to ensure user permission (must be a member)
+        queryset = self.get_queryset()
         obj = get_object_or_404(queryset, uuid=self.kwargs['pk'])
         self.check_object_permissions(self.request, obj)
         return obj

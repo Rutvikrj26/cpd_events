@@ -513,6 +513,7 @@ class CPDRequirement(BaseModel):
         verbose_name = 'CPD Requirement'
         verbose_name_plural = 'CPD Requirements'
         unique_together = [['user', 'cpd_type']]
+        ordering = ['-created_at']
         indexes = [
             models.Index(fields=['user', 'is_active']),
         ]
@@ -571,15 +572,24 @@ class CPDRequirement(BaseModel):
 
         start, end = self.get_current_period_bounds()
 
-        earned = Certificate.objects.filter(
+        certificates = Certificate.objects.filter(
             registration__user=self.user,
-            cpd_type=self.cpd_type,
+            certificate_data__cpd_type=self.cpd_type,
             status='issued',
-            issued_at__date__gte=start,
-            issued_at__date__lte=end,
-        ).aggregate(total=Sum('cpd_credits'))['total']
+            created_at__date__gte=start,
+            created_at__date__lte=end,
+        )
 
-        return earned or Decimal('0')
+        total = Decimal('0')
+        for cert in certificates:
+            try:
+                # Value stored as string/number in JSON
+                val = cert.certificate_data.get('cpd_credits', 0)
+                total += Decimal(str(val))
+            except (TypeError, ValueError):
+                continue
+                
+        return total
 
     @property
     def completion_percent(self):

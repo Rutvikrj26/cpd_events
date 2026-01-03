@@ -139,6 +139,7 @@ class TestAssignmentViewSet:
         data = {
             'title': 'New Assignment',
             'description': 'Complete this task',
+            'instructions': 'Detailed instructions here.',
             'max_score': 100,
         }
         response = organizer_client.post(endpoint, data)
@@ -161,14 +162,19 @@ class TestSubmissionViewSet:
         response = auth_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
 
-    def test_create_submission(self, auth_client, assignment, registration):
+    def test_create_submission(self, auth_client, registration):
         """User can submit an assignment."""
+        # Create assignment for the registered event
+        from factories import EventModuleFactory, AssignmentFactory
+        module = EventModuleFactory(event=registration.event)
+        assignment = AssignmentFactory(module=module)
+
         data = {
-            'assignment_uuid': str(assignment.uuid),
+            'assignment': str(assignment.uuid),
             'content': 'My submission content',
         }
         response = auth_client.post(self.endpoint, data)
-        # May succeed or fail based on enrollment
+        # May succeed or fail based on enrollment/attempts, but shouldn't be 404
         assert response.status_code in [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST]
 
 
@@ -229,11 +235,14 @@ class TestCourseViewSet:
         response = organizer_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
 
-    def test_create_course(self, organizer_client):
+    def test_create_course(self, organizer_client, course):
         """Organizer can create a course."""
+        # Need organization slug
         data = {
             'title': 'New Course',
+            'slug': 'new-course',
             'description': 'Course description',
+            'organization_slug': course.organization.slug,
         }
         response = organizer_client.post(self.endpoint, data)
         assert response.status_code == status.HTTP_201_CREATED

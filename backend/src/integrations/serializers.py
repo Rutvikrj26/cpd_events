@@ -70,7 +70,6 @@ class ZoomRecordingDetailSerializer(BaseModelSerializer):
             'duration_seconds',
             'total_size',
             'share_url',
-            'password',
             'files',
             'view_count',
             'unique_viewers',
@@ -94,7 +93,7 @@ class ZoomRecordingUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ZoomRecording
-        fields = ['access_level', 'password']
+        fields = ['access_level']
 
 
 # =============================================================================

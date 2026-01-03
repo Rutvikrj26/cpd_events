@@ -8,6 +8,7 @@ from rest_framework.routers import DefaultRouter
 from registrations.views import EventRegistrationViewSet
 
 from certificates.urls import certificate_router
+from integrations.urls import recording_router, email_router
 from . import views
 
 app_name = 'events'
@@ -37,6 +38,8 @@ urlpatterns = [
     path('events/<uuid:event_uuid>/', include(custom_field_router.urls)),
     path('events/<uuid:event_uuid>/', include(session_router.urls)),
     path('events/<uuid:event_uuid>/', include(certificate_router.urls)),
+    path('events/<uuid:event_uuid>/', include(recording_router.urls)),
+    path('events/<uuid:event_uuid>/', include(email_router.urls)),
     # Public events
     path('public/events/', views.PublicEventListView.as_view(), name='public_event_list'),
     path('public/events/<str:identifier>/', views.PublicEventDetailView.as_view(), name='public_event_detail'),

@@ -160,7 +160,11 @@ class OrganizationMembership(BaseModel):
         Organization, on_delete=models.CASCADE, related_name='memberships'
     )
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='organization_memberships'
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='organization_memberships',
+        null=True,
+        blank=True,
     )
 
     # Role

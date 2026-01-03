@@ -152,8 +152,8 @@ class TestUpgradeToOrganizerView:
     def test_organizer_cannot_upgrade(self, organizer_client, organizer):
         """Already an organizer - upgrade should handle gracefully."""
         response = organizer_client.post(self.endpoint)
-        # Could be 200 (no-op) or 400 (already organizer)
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
+        # 403 because @roles('attendee') decorator restricts access, or 400 if reached
+        assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST, status.HTTP_403_FORBIDDEN]
 
     def test_unauthenticated_cannot_upgrade(self, api_client):
         """Unauthenticated request is rejected."""

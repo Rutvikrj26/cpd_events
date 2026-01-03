@@ -29,3 +29,9 @@ REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
 GOOGLE_CLOUD_PROJECT = 'test-project'
 GOOGLE_CLOUD_LOCATION = 'us-central1'
 GOOGLE_CLOUD_TASKS_QUEUE = 'test-queue'
+
+# Zoom Integration Config for tests
+ZOOM_CLIENT_ID = 'test_client_id'
+ZOOM_CLIENT_SECRET = 'test_client_secret'
+ZOOM_REDIRECT_URI = 'http://testserver/zoom/callback'
+ZOOM_WEBHOOK_SECRET = 'test_webhook_token'

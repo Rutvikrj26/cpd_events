@@ -25,11 +25,20 @@ class UserFactory(DjangoModelFactory):
 
     class Meta:
         model = 'accounts.User'
+        skip_postgeneration_save = True
 
     email = factory.Sequence(lambda n: f'user{n}@example.com')
     full_name = factory.Faker('name')
-    password = factory.PostGeneration(lambda obj, create, extracted, **kwargs: obj.set_password(extracted or 'testpass123'))
     account_type = 'attendee'
+    email_verified = True
+    is_active = True
+
+    @factory.post_generation
+    def password(self, create, extracted, **kwargs):
+        password = extracted or 'testpass123'
+        self.set_password(password)
+        if create:
+            self.save()
     email_verified = True
     is_active = True
 

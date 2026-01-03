@@ -79,6 +79,7 @@ class EventService:
         # 4. Prepare Data
         # Pop custom fields to handle separately
         custom_fields_data = data.pop('custom_fields', [])
+        speakers_data = data.pop('speakers', None)
 
         # Generate unique slug (M1) if not present
         if 'slug' not in data:
@@ -99,6 +100,10 @@ class EventService:
             for position, field_data in enumerate(custom_fields_data):
                 field_data['position'] = position
                 EventCustomField.objects.create(event=event, **field_data)
+            
+            # Set speakers
+            if speakers_data:
+                event.speakers.set(speakers_data)
 
             # Increment Counters
             if organization and hasattr(organization, 'subscription'):

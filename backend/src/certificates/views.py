@@ -43,6 +43,7 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     """
 
     permission_classes = [IsAuthenticated, IsOrganizer]
+    lookup_field = 'uuid'
 
     def get_queryset(self):
         return CertificateTemplate.objects.filter(owner=self.request.user, deleted_at__isnull=True)
@@ -268,6 +269,7 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
     pagination_class = SmallPagination  # M5: Nested resource pagination
     filterset_class = EventCertificateFilter
     ordering = ['-created_at']
+    lookup_field = 'uuid'
 
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
@@ -366,12 +368,15 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
         """Revoke a certificate."""
         certificate = self.get_object()
         serializer = serializers.CertificateRevokeSerializer(data=request.data)
+        if not serializer.is_valid():
+            print(f"DEBUG REVOKE SERIALIZER ERRORS: {serializer.errors}")
         serializer.is_valid(raise_exception=True)
 
         if certificate.status == 'revoked':
+            print(f"DEBUG REFUSE REVOCATION: Status is {certificate.status}")
             return error_response('Certificate already revoked.', code='ALREADY_REVOKED')
 
-        certificate.revoke(reason=serializer.validated_data['reason'], revoked_by=request.user)
+        certificate.revoke(request.user, reason=serializer.validated_data['reason'])
 
         return Response(serializers.CertificateDetailSerializer(certificate).data)
 
@@ -387,7 +392,7 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
         return Response(
             {
                 'total': qs.count(),
-                'issued': qs.filter(status='issued').count(),
+                'issued': qs.filter(status='active').count(),
                 'pending': qs.filter(status='pending').count(),
                 'revoked': qs.filter(status='revoked').count(),
             }
@@ -512,7 +517,7 @@ class MyCertificateViewSet(ReadOnlyModelViewSet):
         """Track and return download URL."""
         certificate = self.get_object()
 
-        if certificate.status != 'issued':
+        if certificate.status != 'active':
             return error_response('Certificate not available.', code='NOT_AVAILABLE')
 
         # Check if feedback is required

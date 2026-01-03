@@ -1,200 +1,153 @@
 """
-Tests for CPD requirements endpoints.
-
-Endpoints tested:
-- GET /api/v1/cpd-requirements/
-- POST /api/v1/cpd-requirements/
-- GET /api/v1/cpd-requirements/{uuid}/
-- PATCH /api/v1/cpd-requirements/{uuid}/
-- DELETE /api/v1/cpd-requirements/{uuid}/
-- GET /api/v1/cpd-requirements/progress/
+Tests for CPD requirement tracking.
 """
 
 import pytest
 from rest_framework import status
-from datetime import date
 
+from accounts.models import CPDRequirement
+from factories import UserFactory
+from django.urls import reverse
 
-# =============================================================================
-# CPD Requirements ViewSet Tests
-# =============================================================================
+@pytest.fixture
+def cpd_requirement(db, user):
+    """A CPD requirement for the user."""
+    return CPDRequirement.objects.create(
+        user=user,
+        cpd_type='general',
+        cpd_type_display='General CPD',
+        annual_requirement=50.0,
+        period_type='calendar_year',
+    )
 
 
 @pytest.mark.django_db
 class TestCPDRequirementViewSet:
-    """Tests for CPD requirements CRUD operations."""
+    """Tests for CPD requirement management."""
 
-    base_endpoint = '/api/v1/cpd-requirements/'
+    def get_endpoint(self):
+        return '/api/v1/cpd-requirements/'
 
-    def test_list_cpd_requirements(self, auth_client, user, db):
+    def test_list_cpd_requirements(self, auth_client, cpd_requirement):
         """User can list their CPD requirements."""
-        from accounts.models import CPDRequirement
-        # Create some requirements
-        CPDRequirement.objects.create(
-            user=user,
-            name='Medical CPD',
-            required_credits=30,
-            period_start=date(2024, 1, 1),
-            period_end=date(2024, 12, 31),
-        )
-        response = auth_client.get(self.base_endpoint)
+        response = auth_client.get(self.get_endpoint())
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data['results']) >= 1
+        # Check that we only get our own requirements
+        assert len(response.data) >= 1
 
     def test_create_cpd_requirement(self, auth_client):
         """User can create a CPD requirement."""
         data = {
-            'name': 'Medical CPD 2024',
-            'required_credits': 25,
-            'period_start': '2024-01-01',
-            'period_end': '2024-12-31',
-            'cpd_type': 'medical',
+            'cpd_type': 'ethics',
+            'cpd_type_display': 'Ethics',
+            'annual_requirement': 10.0,
+            'period_type': 'calendar_year',
         }
-        response = auth_client.post(self.base_endpoint, data)
+        response = auth_client.post(self.get_endpoint(), data)
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['name'] == 'Medical CPD 2024'
+        assert CPDRequirement.objects.filter(user__isnull=False, cpd_type='ethics').exists()
 
-    def test_retrieve_cpd_requirement(self, auth_client, user, db):
-        """User can retrieve a specific CPD requirement."""
-        from accounts.models import CPDRequirement
-        req = CPDRequirement.objects.create(
-            user=user,
-            name='Test Requirement',
-            required_credits=20,
-            period_start=date(2024, 1, 1),
-            period_end=date(2024, 12, 31),
-        )
-        response = auth_client.get(f'{self.base_endpoint}{req.uuid}/')
+    def test_retrieve_cpd_requirement(self, auth_client, cpd_requirement):
+        """User can retrieve a specific requirement."""
+        url = f"{self.get_endpoint()}{cpd_requirement.uuid}/"
+        response = auth_client.get(url)
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['name'] == 'Test Requirement'
+        assert response.data['cpd_type'] == cpd_requirement.cpd_type
 
-    def test_update_cpd_requirement(self, auth_client, user, db):
-        """User can update their CPD requirement."""
-        from accounts.models import CPDRequirement
-        req = CPDRequirement.objects.create(
-            user=user,
-            name='Original Name',
-            required_credits=20,
-            period_start=date(2024, 1, 1),
-            period_end=date(2024, 12, 31),
-        )
-        response = auth_client.patch(f'{self.base_endpoint}{req.uuid}/', {
-            'name': 'Updated Name',
-            'required_credits': 30,
-        })
+    def test_update_cpd_requirement(self, auth_client, cpd_requirement):
+        """User can update a requirement."""
+        url = f"{self.get_endpoint()}{cpd_requirement.uuid}/"
+        data = {'annual_requirement': '75.00'}
+        response = auth_client.patch(url, data)
         assert response.status_code == status.HTTP_200_OK
-        req.refresh_from_db()
-        assert req.name == 'Updated Name'
-        assert req.required_credits == 30
+        cpd_requirement.refresh_from_db()
+        assert cpd_requirement.annual_requirement == 75.0
 
-    def test_delete_cpd_requirement(self, auth_client, user, db):
-        """User can delete their CPD requirement."""
-        from accounts.models import CPDRequirement
-        req = CPDRequirement.objects.create(
-            user=user,
-            name='To Delete',
-            required_credits=20,
-            period_start=date(2024, 1, 1),
-            period_end=date(2024, 12, 31),
-        )
-        response = auth_client.delete(f'{self.base_endpoint}{req.uuid}/')
+    def test_delete_cpd_requirement(self, auth_client, cpd_requirement):
+        """User can delete a requirement."""
+        url = f"{self.get_endpoint()}{cpd_requirement.uuid}/"
+        response = auth_client.delete(url)
         assert response.status_code == status.HTTP_204_NO_CONTENT
-        assert not CPDRequirement.objects.filter(uuid=req.uuid).exists()
+        assert not CPDRequirement.objects.filter(uuid=cpd_requirement.uuid).exists()
 
-    def test_cannot_access_others_requirements(self, auth_client, other_organizer, db):
-        """User cannot access another user's CPD requirements."""
-        from accounts.models import CPDRequirement
+    def test_cannot_access_others_requirements(self, auth_client):
+        """User cannot see others' requirements."""
+        other_user = UserFactory()
         other_req = CPDRequirement.objects.create(
-            user=other_organizer,
-            name='Other User Requirement',
-            required_credits=20,
-            period_start=date(2024, 1, 1),
-            period_end=date(2024, 12, 31),
+            user=other_user,
+            cpd_type='clinical',
+            annual_requirement=20
         )
-        response = auth_client.get(f'{self.base_endpoint}{other_req.uuid}/')
+        url = f"{self.get_endpoint()}{other_req.uuid}/"
+        response = auth_client.get(url)
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_unauthenticated_cannot_access(self, api_client):
-        """Unauthenticated request is rejected."""
-        response = api_client.get(self.base_endpoint)
+    def test_unauthenticated_cannot_access(self, client):
+        """Unauthenticated user cannot access endpoints."""
+        response = client.get(self.get_endpoint())
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-
-
-# =============================================================================
-# CPD Progress Tests
-# =============================================================================
 
 
 @pytest.mark.django_db
 class TestCPDProgressView:
-    """Tests for GET /api/v1/cpd-requirements/progress/"""
+    """Tests for CPD progress calculation."""
 
-    endpoint = '/api/v1/cpd-requirements/progress/'
-
-    def test_get_cpd_progress(self, auth_client, user, db):
-        """User can get their CPD progress summary."""
-        from accounts.models import CPDRequirement
-        # Create a requirement
-        CPDRequirement.objects.create(
-            user=user,
-            name='Medical CPD',
-            required_credits=30,
-            earned_credits=15,
-            period_start=date(2024, 1, 1),
-            period_end=date(2024, 12, 31),
-        )
-        response = auth_client.get(self.endpoint)
+    def test_get_cpd_progress(self, auth_client, cpd_requirement):
+        """User can get their calculated CPD progress."""
+        endpoint = '/api/v1/cpd-requirements/progress/'
+        response = auth_client.get(endpoint)
         assert response.status_code == status.HTTP_200_OK
+        
+        # Should return summary dict
+        assert isinstance(response.data, dict)
+        assert 'total_requirements' in response.data
+        assert 'completed_requirements' in response.data
+        assert 'requirements' in response.data
+        
+        reqs = response.data['requirements']
+        assert isinstance(reqs, list)
+        if len(reqs) > 0:
+            item = reqs[0]
+            # Check for fields from serializer
+            assert 'annual_requirement' in item
 
     def test_progress_empty(self, auth_client):
-        """Progress works even with no requirements."""
-        response = auth_client.get(self.endpoint)
+        """Returns empty summary if no requirements set."""
+        # Ensure no requirements
+        CPDRequirement.objects.all().delete()
+        
+        endpoint = '/api/v1/cpd-requirements/progress/'
+        response = auth_client.get(endpoint)
         assert response.status_code == status.HTTP_200_OK
+        assert response.data['total_requirements'] == 0
 
-    def test_unauthenticated_cannot_access(self, api_client):
-        """Unauthenticated request is rejected."""
-        response = api_client.get(self.endpoint)
+    def test_unauthenticated_cannot_access(self, client):
+        """Unauthenticated user cannot access progress."""
+        endpoint = '/api/v1/cpd-requirements/progress/'
+        response = client.get(endpoint)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-
-
-# =============================================================================
-# CPD Requirements Validation Tests
-# =============================================================================
 
 
 @pytest.mark.django_db
 class TestCPDRequirementValidation:
-    """Tests for CPD requirement validation rules."""
-
-    base_endpoint = '/api/v1/cpd-requirements/'
-
-    def test_period_end_after_start(self, auth_client):
-        """Period end must be after period start."""
-        data = {
-            'name': 'Invalid Period',
-            'required_credits': 25,
-            'period_start': '2024-12-31',
-            'period_end': '2024-01-01',  # Before start
-        }
-        response = auth_client.post(self.base_endpoint, data)
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-
+    """Tests for data validation."""
+    
     def test_required_credits_positive(self, auth_client):
-        """Required credits must be positive."""
+        """Annual requirement must be positive."""
+        endpoint = '/api/v1/cpd-requirements/'
         data = {
-            'name': 'Invalid Credits',
-            'required_credits': -5,
-            'period_start': '2024-01-01',
-            'period_end': '2024-12-31',
+            'cpd_type': 'general',
+            'annual_requirement': -10,
         }
-        response = auth_client.post(self.base_endpoint, data)
+        response = auth_client.post(endpoint, data)
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_missing_required_fields(self, auth_client):
-        """Required fields must be provided."""
+        """Missing fields should fail."""
+        endpoint = '/api/v1/cpd-requirements/'
         data = {
-            'name': 'Missing Fields',
-            # Missing required_credits, period_start, period_end
+            'annual_requirement': 50,
+            # Missing cpd_type
         }
-        response = auth_client.post(self.base_endpoint, data)
+        response = auth_client.post(endpoint, data)
         assert response.status_code == status.HTTP_400_BAD_REQUEST

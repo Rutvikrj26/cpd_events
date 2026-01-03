@@ -37,9 +37,10 @@ class TestStripeWebhook:
         return f't={timestamp},v1={signature}'
 
     @patch('stripe.Webhook.construct_event')
-    def test_subscription_created(self, mock_construct_event, api_client, organizer, db):
+    def test_subscription_created(self, mock_construct_event, api_client, organizer, db, settings):
         """Handle subscription.created event."""
         from billing.models import Subscription
+        settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         
         event_data = {
             'type': 'customer.subscription.created',
@@ -64,7 +65,8 @@ class TestStripeWebhook:
         assert response.status_code == status.HTTP_200_OK
 
     @patch('stripe.Webhook.construct_event')
-    def test_subscription_updated(self, mock_construct_event, api_client, subscription):
+    def test_subscription_updated(self, mock_construct_event, api_client, subscription, settings):
+        settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         """Handle subscription.updated event."""
         event_data = {
             'type': 'customer.subscription.updated',
@@ -86,7 +88,8 @@ class TestStripeWebhook:
         assert response.status_code == status.HTTP_200_OK
 
     @patch('stripe.Webhook.construct_event')
-    def test_subscription_deleted(self, mock_construct_event, api_client, subscription):
+    def test_subscription_deleted(self, mock_construct_event, api_client, subscription, settings):
+        settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         """Handle subscription.deleted event."""
         event_data = {
             'type': 'customer.subscription.deleted',
@@ -107,7 +110,8 @@ class TestStripeWebhook:
         assert response.status_code == status.HTTP_200_OK
 
     @patch('stripe.Webhook.construct_event')
-    def test_invoice_paid(self, mock_construct_event, api_client, organizer):
+    def test_invoice_paid(self, mock_construct_event, api_client, organizer, settings):
+        settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         """Handle invoice.paid event."""
         event_data = {
             'type': 'invoice.paid',
@@ -132,7 +136,8 @@ class TestStripeWebhook:
         assert response.status_code == status.HTTP_200_OK
 
     @patch('stripe.Webhook.construct_event')
-    def test_invoice_payment_failed(self, mock_construct_event, api_client, subscription):
+    def test_invoice_payment_failed(self, mock_construct_event, api_client, subscription, settings):
+        settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         """Handle invoice.payment_failed event."""
         event_data = {
             'type': 'invoice.payment_failed',
@@ -155,7 +160,8 @@ class TestStripeWebhook:
         assert response.status_code == status.HTTP_200_OK
 
     @patch('stripe.Webhook.construct_event')
-    def test_payment_method_attached(self, mock_construct_event, api_client, organizer):
+    def test_payment_method_attached(self, mock_construct_event, api_client, organizer, settings):
+        settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         """Handle payment_method.attached event."""
         event_data = {
             'type': 'payment_method.attached',
@@ -181,7 +187,8 @@ class TestStripeWebhook:
         assert response.status_code == status.HTTP_200_OK
 
     @patch('stripe.Webhook.construct_event')
-    def test_unknown_event_type(self, mock_construct_event, api_client):
+    def test_unknown_event_type(self, mock_construct_event, api_client, settings):
+        settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         """Unknown event types are acknowledged but not processed."""
         event_data = {
             'type': 'unknown.event.type',
@@ -199,9 +206,10 @@ class TestStripeWebhook:
         assert response.status_code == status.HTTP_200_OK
 
     @patch('stripe.Webhook.construct_event')
-    def test_invalid_signature(self, mock_construct_event, api_client):
+    def test_invalid_signature(self, mock_construct_event, api_client, settings):
+        settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         """Invalid signature is rejected."""
-        from stripe.error import SignatureVerificationError
+        from stripe import SignatureVerificationError
         mock_construct_event.side_effect = SignatureVerificationError(
             'Invalid signature', 'test_sig'
         )

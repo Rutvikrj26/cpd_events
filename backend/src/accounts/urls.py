@@ -5,6 +5,7 @@ Accounts app URL routing.
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 from rest_framework_simplejwt.views import TokenRefreshView
+from integrations.urls import my_recordings_router
 
 from . import views
 
@@ -37,6 +38,7 @@ urlpatterns = [
     path('users/me/payouts/status/', views.PayoutsStatusView.as_view(), name='payouts_status'),
     # Public organizer profiles
     path('organizers/<uuid:uuid>/', views.PublicOrganizerView.as_view(), name='public_organizer'),
-    # ViewSets
     path('', include(router.urls)),
+    # Integrations
+    path('users/me/', include(my_recordings_router.urls)),
 ]

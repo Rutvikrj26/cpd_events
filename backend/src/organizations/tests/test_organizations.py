@@ -50,13 +50,13 @@ class TestOrganizationViewSet:
 
     def test_retrieve_organization(self, organizer_client, organization):
         """Member can retrieve organization details."""
-        response = organizer_client.get(f'{self.endpoint}{organization.pk}/')
+        response = organizer_client.get(f'{self.endpoint}{organization.uuid}/')
         assert response.status_code == status.HTTP_200_OK
         assert response.data['name'] == organization.name
 
     def test_update_organization_as_owner(self, organizer_client, organization):
         """Owner can update organization."""
-        response = organizer_client.patch(f'{self.endpoint}{organization.pk}/', {
+        response = organizer_client.patch(f'{self.endpoint}{organization.uuid}/', {
             'name': 'Updated Org Name',
         })
         assert response.status_code == status.HTTP_200_OK
@@ -65,7 +65,7 @@ class TestOrganizationViewSet:
 
     def test_delete_organization_as_owner(self, organizer_client, organization):
         """Owner can delete organization."""
-        response = organizer_client.delete(f'{self.endpoint}{organization.pk}/')
+        response = organizer_client.delete(f'{self.endpoint}{organization.uuid}/')
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
     def test_attendee_cannot_create_organization(self, auth_client):
@@ -78,7 +78,7 @@ class TestOrganizationViewSet:
         from factories import OrganizationFactory
         other_org = OrganizationFactory(created_by=other_organizer)
         
-        response = organizer_client.get(f'{self.endpoint}{other_org.pk}/')
+        response = organizer_client.get(f'{self.endpoint}{other_org.uuid}/')
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -93,13 +93,13 @@ class TestMemberManagement:
 
     def test_list_members(self, organizer_client, organization):
         """Owner can list organization members."""
-        response = organizer_client.get(f'/api/v1/organizations/{organization.pk}/members/')
+        response = organizer_client.get(f'/api/v1/organizations/{organization.uuid}/members/')
         assert response.status_code == status.HTTP_200_OK
 
     def test_invite_member(self, organizer_client, organization):
         """Owner can invite a new member."""
         response = organizer_client.post(
-            f'/api/v1/organizations/{organization.pk}/invite_member/',
+            f'/api/v1/organizations/{organization.uuid}/members/invite/',
             {
                 'email': 'newmember@example.com',
                 'role': 'member',
@@ -116,7 +116,7 @@ class TestMemberManagement:
         )
         
         response = organizer_client.patch(
-            f'/api/v1/organizations/{organization.pk}/members/{membership.uuid}/',
+            f'/api/v1/organizations/{organization.uuid}/members/{membership.user.uuid}/',
             {'role': 'admin'}
         )
         assert response.status_code == status.HTTP_200_OK
@@ -132,7 +132,7 @@ class TestMemberManagement:
         )
         
         response = organizer_client.delete(
-            f'/api/v1/organizations/{organization.pk}/members/{membership.uuid}/'
+            f'/api/v1/organizations/{organization.uuid}/members/{membership.user.uuid}/remove/'
         )
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
@@ -143,7 +143,7 @@ class TestMemberManagement:
         member_client.force_authenticate(user=org_member)
         
         response = member_client.post(
-            f'/api/v1/organizations/{organization.pk}/invite_member/',
+            f'/api/v1/organizations/{organization.uuid}/members/invite/',
             {'email': 'another@example.com', 'role': 'member'}
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -232,7 +232,7 @@ class TestLinkOrganizer:
     def test_link_organizer_data(self, organizer_client, organization, organizer, event):
         """Can link existing organizer data to organization."""
         response = organizer_client.post(
-            f'/api/v1/organizations/{organization.pk}/link_organizer/',
+            f'/api/v1/organizations/{organization.uuid}/link-organizer/',
             {'confirm': True}
         )
         # May succeed or fail based on business logic

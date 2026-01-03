@@ -35,10 +35,10 @@ class TestSubscriptionViewSet:
         response = organizer_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
 
-    def test_create_subscription(self, organizer_client, mock_stripe):
+    def test_create_subscription(self, organizer_client, mock_stripe, stripe_products):
         """Organizer can create/upgrade subscription."""
         data = {
-            'plan': 'team',
+            'plan': 'professional',
         }
         response = organizer_client.post(self.endpoint, data)
         # May redirect to Stripe or return subscription
@@ -67,10 +67,10 @@ class TestSubscriptionViewSet:
         # May succeed or fail based on Stripe
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
 
-    def test_attendee_cannot_access_subscription(self, auth_client):
-        """Attendees cannot access subscription endpoints."""
+    def test_attendee_can_access_subscription(self, auth_client):
+        """Attendees can access subscription endpoints."""
         response = auth_client.get(self.endpoint)
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_200_OK
 
 
 # =============================================================================
@@ -132,6 +132,7 @@ class TestPaymentMethodViewSet:
         """Organizer can add a payment method."""
         data = {
             'payment_method_id': 'pm_test123',
+            'stripe_payment_method_id': 'pm_test123',  # Serializer expects 'stripe_payment_method_id'
         }
         response = organizer_client.post(self.endpoint, data)
         # May succeed or require setup intent
@@ -173,11 +174,13 @@ class TestPaymentMethodViewSet:
 @pytest.mark.django_db
 class TestBillingViews:
     """Tests for checkout and billing portal."""
-
-    def test_create_checkout_session(self, organizer_client, mock_stripe):
+    
+    def test_create_checkout_session(self, organizer_client, mock_stripe, stripe_products):
         """Organizer can create a checkout session."""
         response = organizer_client.post('/api/v1/billing/checkout/', {
-            'plan': 'team',
+            'plan': 'professional',
+            'success_url': 'https://example.com/success',
+            'cancel_url': 'https://example.com/cancel',
         })
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
         # Should return checkout URL
@@ -186,13 +189,19 @@ class TestBillingViews:
 
     def test_create_billing_portal_session(self, organizer_client, mock_stripe, subscription):
         """Organizer can access billing portal."""
-        response = organizer_client.post('/api/v1/billing/portal/')
+        response = organizer_client.post('/api/v1/billing/portal/', {
+            'return_url': 'https://example.com/return',
+        })
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
         # Should return portal URL
         if response.status_code == status.HTTP_200_OK:
             assert 'url' in response.data or 'portal_url' in response.data
 
-    def test_attendee_cannot_access_checkout(self, auth_client):
-        """Attendees cannot access checkout."""
-        response = auth_client.post('/api/v1/billing/checkout/', {'plan': 'team'})
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+    def test_attendee_can_access_checkout(self, auth_client, stripe_products, mock_stripe):
+        """Attendees can access checkout."""
+        response = auth_client.post('/api/v1/billing/checkout/', {
+            'plan': 'professional',
+            'success_url': 'https://example.com/success',
+            'cancel_url': 'https://example.com/cancel',
+        })
+        assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]

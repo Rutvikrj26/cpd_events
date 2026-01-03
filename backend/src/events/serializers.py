@@ -48,13 +48,11 @@ class EventCustomFieldCreateSerializer(serializers.ModelSerializer):
             'help_text',
             'required',
             'options',
-            'validation_regex',
-            'position',
+            'min_value',
+            'max_value',
+            'order',
         ]
-        read_only_fields = ['uuid', 'owner_name', 'created_at']
-
-    def get_owner_name(self, obj):
-        return obj.owner.display_name
+        read_only_fields = ['uuid', 'created_at']
 
 
 # =============================================================================
@@ -467,6 +465,9 @@ class EventCreateSerializer(serializers.ModelSerializer):
         slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
     organization = serializers.UUIDField(required=False, allow_null=True, write_only=True)
+    speakers = serializers.SlugRelatedField(
+        slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False
+    )
 
 
     class Meta:
@@ -527,6 +528,12 @@ class EventCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         custom_fields_data = validated_data.pop('custom_fields', [])
+        speakers_data = validated_data.pop('speakers', None)
+        organization_uuid = validated_data.pop('organization', None)
+
+        # Handle write-only organization UUID
+        if organization_uuid:
+            validated_data['organization_id'] = organization_uuid
 
         # Generate unique slug (M1)
         title = validated_data.get('title', '')
@@ -539,6 +546,10 @@ class EventCreateSerializer(serializers.ModelSerializer):
         for order, field_data in enumerate(custom_fields_data):
             field_data['order'] = order
             EventCustomField.objects.create(event=event, **field_data)
+            
+        # Set speakers
+        if speakers_data is not None:
+            event.speakers.set(speakers_data)
 
         return event
 

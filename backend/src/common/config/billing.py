@@ -142,6 +142,7 @@ class OrganizationPlanLimits:
     """
 
     FREE: dict = {
+        'name': 'Free',
         'included_seats': 1,
         'seat_price_cents': 0,
         'events_per_month': 2,
@@ -150,6 +151,7 @@ class OrganizationPlanLimits:
     }
 
     TEAM: dict = {
+        'name': 'Team',
         'included_seats': 5,
         'seat_price_cents': 4900,  # $49/seat/month
         'events_per_month': None,  # Unlimited
@@ -158,6 +160,7 @@ class OrganizationPlanLimits:
     }
 
     BUSINESS: dict = {
+        'name': 'Business',
         'included_seats': 15,
         'seat_price_cents': 4500,  # $45/seat/month
         'events_per_month': None,  # Unlimited
@@ -166,6 +169,7 @@ class OrganizationPlanLimits:
     }
 
     ENTERPRISE: dict = {
+        'name': 'Enterprise',
         'included_seats': 50,
         'seat_price_cents': 4000,  # $40/seat/month
         'events_per_month': None,  # Unlimited

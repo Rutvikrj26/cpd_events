@@ -108,11 +108,23 @@ def unverified_user(db):
 @pytest.fixture
 def organizer(db):
     """An organizer user."""
-    return OrganizerFactory(
+    organizer = OrganizerFactory(
         email='organizer@example.com',
         full_name='Test Organizer',
         organizer_slug='test-organizer',
     )
+    
+    # Update subscription to organization plan so RBAC checks pass
+    # Signal creates subscription with PROFESSIONAL plan, we need ORGANIZATION
+    from billing.models import Subscription
+    sub = Subscription.objects.get(user=organizer)
+    sub.plan = 'organization'
+    sub.save()
+    
+    # Refresh to ensure relationship is loaded
+    organizer.refresh_from_db()
+    
+    return organizer
 
 
 @pytest.fixture
@@ -452,8 +464,9 @@ def registration_create_data(user):
 
 
 @pytest.fixture
-def mock_stripe():
+def mock_stripe(settings):
     """Mock Stripe API for billing tests."""
+    settings.STRIPE_SECRET_KEY = 'sk_test_mock'
     with patch('stripe.Customer') as mock_customer, \
          patch('stripe.Subscription') as mock_sub, \
          patch('stripe.checkout.Session') as mock_checkout, \
@@ -504,3 +517,23 @@ def mock_cloud_tasks():
     """Mock Google Cloud Tasks for async task tests."""
     with patch('common.cloud_tasks.enqueue_task') as mock:
         yield mock
+
+
+@pytest.fixture
+def stripe_products(db):
+    from billing.models import StripeProduct, StripePrice
+    if not StripeProduct.objects.filter(plan='professional').exists():
+        prod = StripeProduct.objects.create(
+            name='Professional',
+            plan='professional',
+            stripe_product_id='prod_test_prof',
+            is_active=True,
+        )
+        StripePrice.objects.create(
+            product=prod,
+            stripe_price_id='price_test_prof_month',
+            amount_cents=2900,
+            currency='usd',
+            billing_interval='month',
+            is_active=True,
+        )

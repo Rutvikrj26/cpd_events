@@ -70,7 +70,7 @@ class CertificateService:
             
             if template_bytes:
                 # Use PyPDF2 to overlay text on template
-                from PyPDF2 import PdfReader, PdfWriter
+                from pypdf import PdfReader, PdfWriter
 
                 template_reader = PdfReader(BytesIO(template_bytes))
                 if len(template_reader.pages) == 0:
@@ -153,7 +153,7 @@ class CertificateService:
         """
         try:
             from io import BytesIO
-            from PyPDF2 import PdfReader, PdfWriter
+            from pypdf import PdfReader, PdfWriter
             from reportlab.lib.pagesizes import letter, A4
             from reportlab.pdfgen import canvas
             from reportlab.lib.colors import black

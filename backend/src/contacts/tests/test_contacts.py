@@ -75,7 +75,7 @@ class TestTagViewSet:
         tag2 = TagFactory(owner=organizer, name='Tag 2')
         
         response = organizer_client.post(f'{self.endpoint}{tag1.uuid}/merge/', {
-            'target_tag_uuid': str(tag2.uuid),
+            'target_uuid': str(tag2.uuid),
         })
         assert response.status_code == status.HTTP_200_OK
 
@@ -133,7 +133,7 @@ class TestContactListViewSet:
 
     def test_set_default_list(self, organizer_client, contact_list):
         """Organizer can set a list as default."""
-        response = organizer_client.post(f'{self.endpoint}{contact_list.uuid}/set_default/')
+        response = organizer_client.post(f'{self.endpoint}{contact_list.uuid}/set-default/')
         assert response.status_code == status.HTTP_200_OK
         contact_list.refresh_from_db()
         assert contact_list.is_default is True
@@ -151,7 +151,7 @@ class TestContactListViewSet:
         list2 = ContactListFactory(owner=organizer, name='List 2')
         
         response = organizer_client.post(f'{self.endpoint}{list1.uuid}/merge/', {
-            'target_list_uuid': str(list2.uuid),
+            'target_uuid': str(list2.uuid),
         })
         assert response.status_code == status.HTTP_200_OK
 

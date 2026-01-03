@@ -1,0 +1,2013 @@
+The currently activated Python version 3.12.3 is not supported by the project (>=3.13,<4.0).
+Trying to find and use a compatible version. 
+Using python3.13 (3.13.11)
+============================= test session starts ==============================
+platform linux -- Python 3.13.11, pytest-8.4.2, pluggy-1.6.0 -- /home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/bin/python
+cachedir: .pytest_cache
+django: version: 6.0, settings: config.settings.test (from ini)
+rootdir: /home/beyonder/projects/cpd_events/backend
+configfile: pyproject.toml
+testpaths: src
+plugins: Faker-22.7.0, cov-4.1.0, django-4.11.1
+collecting ... collected 334 items
+
+src/accounts/tests/test_auth.py::TestSignupView::test_signup_attendee_success PASSED [  0%]
+src/accounts/tests/test_auth.py::TestSignupView::test_signup_organizer_success PASSED [  0%]
+src/accounts/tests/test_auth.py::TestSignupView::test_signup_duplicate_email PASSED [  0%]
+src/accounts/tests/test_auth.py::TestSignupView::test_signup_password_mismatch PASSED [  1%]
+src/accounts/tests/test_auth.py::TestSignupView::test_signup_weak_password PASSED [  1%]
+src/accounts/tests/test_auth.py::TestSignupView::test_signup_missing_required_fields PASSED [  1%]
+src/accounts/tests/test_auth.py::TestSignupView::test_signup_invalid_email PASSED [  2%]
+src/accounts/tests/test_auth.py::TestTokenObtainView::test_login_success PASSED [  2%]
+src/accounts/tests/test_auth.py::TestTokenObtainView::test_login_wrong_password PASSED [  2%]
+src/accounts/tests/test_auth.py::TestTokenObtainView::test_login_nonexistent_user PASSED [  2%]
+src/accounts/tests/test_auth.py::TestTokenObtainView::test_login_inactive_user PASSED [  3%]
+src/accounts/tests/test_auth.py::TestTokenObtainView::test_login_case_insensitive_email PASSED [  3%]
+src/accounts/tests/test_auth.py::TestTokenRefreshView::test_refresh_token_success PASSED [  3%]
+src/accounts/tests/test_auth.py::TestTokenRefreshView::test_refresh_invalid_token PASSED [  4%]
+src/accounts/tests/test_auth.py::TestTokenRefreshView::test_refresh_missing_token PASSED [  4%]
+src/accounts/tests/test_auth.py::TestEmailVerificationView::test_verify_email_success PASSED [  4%]
+src/accounts/tests/test_auth.py::TestEmailVerificationView::test_verify_email_invalid_token PASSED [  5%]
+src/accounts/tests/test_auth.py::TestEmailVerificationView::test_verify_email_already_verified PASSED [  5%]
+src/accounts/tests/test_auth.py::TestPasswordResetRequestView::test_request_reset_existing_user PASSED [  5%]
+src/accounts/tests/test_auth.py::TestPasswordResetRequestView::test_request_reset_nonexistent_user PASSED [  5%]
+src/accounts/tests/test_auth.py::TestPasswordResetRequestView::test_request_reset_invalid_email PASSED [  6%]
+src/accounts/tests/test_auth.py::TestPasswordResetConfirmView::test_reset_password_success PASSED [  6%]
+src/accounts/tests/test_auth.py::TestPasswordResetConfirmView::test_reset_password_invalid_token PASSED [  6%]
+src/accounts/tests/test_auth.py::TestPasswordResetConfirmView::test_reset_password_mismatch PASSED [  7%]
+src/accounts/tests/test_auth.py::TestPasswordChangeView::test_change_password_success PASSED [  7%]
+src/accounts/tests/test_auth.py::TestPasswordChangeView::test_change_password_wrong_old_password PASSED [  7%]
+src/accounts/tests/test_auth.py::TestPasswordChangeView::test_change_password_unauthenticated PASSED [  8%]
+src/accounts/tests/test_auth.py::TestPasswordChangeView::test_change_password_mismatch PASSED [  8%]
+src/accounts/tests/test_auth.py::TestManifestView::test_manifest_authenticated PASSED [  8%]
+src/accounts/tests/test_auth.py::TestManifestView::test_manifest_organizer PASSED [  8%]
+src/accounts/tests/test_auth.py::TestManifestView::test_manifest_unauthenticated PASSED [  9%]
+src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_list_cpd_requirements FAILED [  9%]
+src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_create_cpd_requirement FAILED [  9%]
+src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_retrieve_cpd_requirement FAILED [ 10%]
+src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_update_cpd_requirement FAILED [ 10%]
+src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_delete_cpd_requirement FAILED [ 10%]
+src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_cannot_access_others_requirements FAILED [ 11%]
+src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_unauthenticated_cannot_access PASSED [ 11%]
+src/accounts/tests/test_cpd.py::TestCPDProgressView::test_get_cpd_progress FAILED [ 11%]
+src/accounts/tests/test_cpd.py::TestCPDProgressView::test_progress_empty PASSED [ 11%]
+src/accounts/tests/test_cpd.py::TestCPDProgressView::test_unauthenticated_cannot_access PASSED [ 12%]
+src/accounts/tests/test_cpd.py::TestCPDRequirementValidation::test_period_end_after_start PASSED [ 12%]
+src/accounts/tests/test_cpd.py::TestCPDRequirementValidation::test_required_credits_positive PASSED [ 12%]
+src/accounts/tests/test_cpd.py::TestCPDRequirementValidation::test_missing_required_fields PASSED [ 13%]
+src/accounts/tests/test_users.py::TestCurrentUserView::test_get_current_user PASSED [ 13%]
+src/accounts/tests/test_users.py::TestCurrentUserView::test_get_current_user_unauthenticated PASSED [ 13%]
+src/accounts/tests/test_users.py::TestCurrentUserView::test_update_current_user PASSED [ 14%]
+src/accounts/tests/test_users.py::TestCurrentUserView::test_update_email_not_allowed PASSED [ 14%]
+src/accounts/tests/test_users.py::TestCurrentUserView::test_organizer_profile_fields PASSED [ 14%]
+src/accounts/tests/test_users.py::TestOrganizerProfileView::test_get_organizer_profile PASSED [ 14%]
+src/accounts/tests/test_users.py::TestOrganizerProfileView::test_update_organizer_profile PASSED [ 15%]
+src/accounts/tests/test_users.py::TestOrganizerProfileView::test_attendee_cannot_access PASSED [ 15%]
+src/accounts/tests/test_users.py::TestOrganizerProfileView::test_unauthenticated_cannot_access PASSED [ 15%]
+src/accounts/tests/test_users.py::TestNotificationPreferencesView::test_get_notification_preferences PASSED [ 16%]
+src/accounts/tests/test_users.py::TestNotificationPreferencesView::test_update_notification_preferences PASSED [ 16%]
+src/accounts/tests/test_users.py::TestNotificationPreferencesView::test_unauthenticated_cannot_access PASSED [ 16%]
+src/accounts/tests/test_users.py::TestUpgradeToOrganizerView::test_upgrade_attendee_to_organizer PASSED [ 17%]
+src/accounts/tests/test_users.py::TestUpgradeToOrganizerView::test_organizer_cannot_upgrade FAILED [ 17%]
+src/accounts/tests/test_users.py::TestUpgradeToOrganizerView::test_unauthenticated_cannot_upgrade PASSED [ 17%]
+src/accounts/tests/test_users.py::TestDeleteAccountView::test_delete_account_with_password PASSED [ 17%]
+src/accounts/tests/test_users.py::TestDeleteAccountView::test_delete_account_wrong_password PASSED [ 18%]
+src/accounts/tests/test_users.py::TestDeleteAccountView::test_delete_account_no_confirmation PASSED [ 18%]
+src/accounts/tests/test_users.py::TestDeleteAccountView::test_unauthenticated_cannot_delete PASSED [ 18%]
+src/accounts/tests/test_users.py::TestDataExportView::test_request_data_export PASSED [ 19%]
+src/accounts/tests/test_users.py::TestDataExportView::test_unauthenticated_cannot_export PASSED [ 19%]
+src/accounts/tests/test_users.py::TestPublicOrganizerView::test_get_public_organizer_profile PASSED [ 19%]
+src/accounts/tests/test_users.py::TestPublicOrganizerView::test_public_profile_limited_fields PASSED [ 20%]
+src/accounts/tests/test_users.py::TestPublicOrganizerView::test_nonexistent_organizer PASSED [ 20%]
+src/accounts/tests/test_users.py::TestPublicOrganizerView::test_attendee_not_public PASSED [ 20%]
+src/billing/tests/test_subscriptions.py::TestSubscriptionViewSet::test_get_subscription PASSED [ 20%]
+src/billing/tests/test_subscriptions.py::TestSubscriptionViewSet::test_create_subscription FAILED [ 21%]
+src/billing/tests/test_subscriptions.py::TestSubscriptionViewSet::test_get_subscription_status PASSED [ 21%]
+src/billing/tests/test_subscriptions.py::TestSubscriptionViewSet::test_cancel_subscription PASSED [ 21%]
+src/billing/tests/test_subscriptions.py::TestSubscriptionViewSet::test_reactivate_subscription PASSED [ 22%]
+src/billing/tests/test_subscriptions.py::TestSubscriptionViewSet::test_attendee_cannot_access_subscription FAILED [ 22%]
+src/billing/tests/test_subscriptions.py::TestInvoiceViewSet::test_list_invoices PASSED [ 22%]
+src/billing/tests/test_subscriptions.py::TestInvoiceViewSet::test_retrieve_invoice PASSED [ 23%]
+src/billing/tests/test_subscriptions.py::TestInvoiceViewSet::test_cannot_see_others_invoices PASSED [ 23%]
+src/billing/tests/test_subscriptions.py::TestPaymentMethodViewSet::test_list_payment_methods PASSED [ 23%]
+src/billing/tests/test_subscriptions.py::TestPaymentMethodViewSet::test_add_payment_method PASSED [ 23%]
+src/billing/tests/test_subscriptions.py::TestPaymentMethodViewSet::test_delete_payment_method PASSED [ 24%]
+src/billing/tests/test_subscriptions.py::TestPaymentMethodViewSet::test_set_default_payment_method PASSED [ 24%]
+src/billing/tests/test_subscriptions.py::TestPaymentMethodViewSet::test_cannot_delete_only_payment_method PASSED [ 24%]
+src/billing/tests/test_subscriptions.py::TestBillingViews::test_create_checkout_session FAILED [ 25%]
+src/billing/tests/test_subscriptions.py::TestBillingViews::test_create_billing_portal_session FAILED [ 25%]
+src/billing/tests/test_subscriptions.py::TestBillingViews::test_attendee_cannot_access_checkout FAILED [ 25%]
+src/billing/tests/test_webhook_critical_workflows.py::TestAccountUpdatedWebhook::test_account_updated_pending_verification_status PASSED [ 26%]
+src/billing/tests/test_webhook_critical_workflows.py::TestAccountUpdatedWebhook::test_account_updated_unknown_account_logs_warning PASSED [ 26%]
+src/billing/tests/test_webhook_critical_workflows.py::TestAccountUpdatedWebhook::test_account_updated_updates_organization PASSED [ 26%]
+src/billing/tests/test_webhook_critical_workflows.py::TestAccountUpdatedWebhook::test_account_updated_updates_user PASSED [ 26%]
+src/billing/tests/test_webhook_critical_workflows.py::TestChargesEnabledValidation::test_payment_intent_fails_when_org_charges_disabled PASSED [ 27%]
+src/billing/tests/test_webhook_critical_workflows.py::TestChargesEnabledValidation::test_payment_intent_fails_when_user_charges_disabled PASSED [ 27%]
+src/billing/tests/test_webhook_critical_workflows.py::TestChargesEnabledValidation::test_payment_intent_succeeds_when_charges_enabled PASSED [ 27%]
+src/billing/tests/test_webhook_critical_workflows.py::TestPaymentConfirmationLocking::test_confirm_payment_is_idempotent PASSED [ 28%]
+src/billing/tests/test_webhook_critical_workflows.py::TestPaymentConfirmationLocking::test_confirm_payment_updates_pending_to_paid PASSED [ 28%]
+src/billing/tests/test_webhook_critical_workflows.py::TestPaymentConfirmationLocking::test_webhook_payment_confirmation_is_idempotent PASSED [ 28%]
+src/billing/tests/test_webhooks.py::TestStripeWebhook::test_subscription_created FAILED [ 29%]
+src/billing/tests/test_webhooks.py::TestStripeWebhook::test_subscription_updated FAILED [ 29%]
+src/billing/tests/test_webhooks.py::TestStripeWebhook::test_subscription_deleted FAILED [ 29%]
+src/billing/tests/test_webhooks.py::TestStripeWebhook::test_invoice_paid FAILED [ 29%]
+src/billing/tests/test_webhooks.py::TestStripeWebhook::test_invoice_payment_failed FAILED [ 30%]
+src/billing/tests/test_webhooks.py::TestStripeWebhook::test_payment_method_attached FAILED [ 30%]
+src/billing/tests/test_webhooks.py::TestStripeWebhook::test_unknown_event_type FAILED [ 30%]
+src/billing/tests/test_webhooks.py::TestStripeWebhook::test_invalid_signature FAILED [ 31%]
+src/certificates/tests/test_certificates.py::TestEventCertificateViewSet::test_list_event_certificates PASSED [ 31%]
+src/certificates/tests/test_certificates.py::TestEventCertificateViewSet::test_issue_certificate PASSED [ 31%]
+src/certificates/tests/test_certificates.py::TestEventCertificateViewSet::test_issue_bulk_certificates FAILED [ 32%]
+src/certificates/tests/test_certificates.py::TestEventCertificateViewSet::test_revoke_certificate FAILED [ 32%]
+src/certificates/tests/test_certificates.py::TestEventCertificateViewSet::test_cannot_manage_other_event_certificates FAILED [ 32%]
+src/certificates/tests/test_certificates.py::TestEventCertificateViewSet::test_attendee_cannot_manage_certificates PASSED [ 32%]
+src/certificates/tests/test_certificates.py::TestCertificateSummary::test_get_certificate_summary PASSED [ 33%]
+src/certificates/tests/test_certificates.py::TestMyCertificateViewSet::test_list_my_certificates PASSED [ 33%]
+src/certificates/tests/test_certificates.py::TestMyCertificateViewSet::test_retrieve_my_certificate PASSED [ 33%]
+src/certificates/tests/test_certificates.py::TestMyCertificateViewSet::test_cannot_see_others_certificates PASSED [ 34%]
+src/certificates/tests/test_certificates.py::TestMyCertificateViewSet::test_download_certificate FAILED [ 34%]
+src/certificates/tests/test_certificates.py::TestMyCertificateViewSet::test_unauthenticated_cannot_access PASSED [ 34%]
+src/certificates/tests/test_certificates.py::TestCertificateVerification::test_verify_valid_certificate PASSED [ 35%]
+src/certificates/tests/test_certificates.py::TestCertificateVerification::test_verify_revoked_certificate PASSED [ 35%]
+src/certificates/tests/test_certificates.py::TestCertificateVerification::test_verify_invalid_code PASSED [ 35%]
+src/certificates/tests/test_certificates.py::TestCertificateVerification::test_verify_short_code PASSED [ 35%]
+src/certificates/tests/test_certificates.py::TestCertificateVerification::test_verification_response_includes_details PASSED [ 36%]
+src/certificates/tests/test_certificates.py::TestCertificateEligibility::test_cannot_issue_to_non_eligible PASSED [ 36%]
+src/certificates/tests/test_certificates.py::TestCertificateEligibility::test_cannot_issue_duplicate PASSED [ 36%]
+src/certificates/tests/test_templates.py::TestCertificateTemplateListCreate::test_list_templates PASSED [ 37%]
+src/certificates/tests/test_templates.py::TestCertificateTemplateListCreate::test_create_template PASSED [ 37%]
+src/certificates/tests/test_templates.py::TestCertificateTemplateListCreate::test_attendee_cannot_create_template PASSED [ 37%]
+src/certificates/tests/test_templates.py::TestCertificateTemplateListCreate::test_unauthenticated_cannot_access PASSED [ 38%]
+src/certificates/tests/test_templates.py::TestCertificateTemplateDetail::test_retrieve_template PASSED [ 38%]
+src/certificates/tests/test_templates.py::TestCertificateTemplateDetail::test_update_template PASSED [ 38%]
+src/certificates/tests/test_templates.py::TestCertificateTemplateDetail::test_delete_template_without_certificates PASSED [ 38%]
+src/certificates/tests/test_templates.py::TestCertificateTemplateDetail::test_cannot_access_other_organizer_template PASSED [ 39%]
+src/certificates/tests/test_templates.py::TestSetDefaultTemplate::test_set_default_template FAILED [ 39%]
+src/certificates/tests/test_templates.py::TestSetDefaultTemplate::test_previous_default_unset FAILED [ 39%]
+src/certificates/tests/test_templates.py::TestAvailableTemplates::test_get_available_templates FAILED [ 40%]
+src/certificates/tests/test_templates.py::TestAvailableTemplates::test_includes_shared_org_templates FAILED [ 40%]
+src/certificates/tests/test_templates.py::TestTemplateUpload::test_upload_pdf_template PASSED [ 40%]
+src/certificates/tests/test_templates.py::TestTemplatePreview::test_preview_template PASSED [ 41%]
+src/common/tests/test_tasks.py::TestCloudTaskHandler::test_handle_valid_task PASSED [ 41%]
+src/common/tests/test_tasks.py::TestCloudTaskHandler::test_missing_task_name PASSED [ 41%]
+src/common/tests/test_tasks.py::TestCloudTaskHandler::test_unknown_task PASSED [ 41%]
+src/common/tests/test_tasks.py::TestCloudTaskHandler::test_task_without_queue_header PASSED [ 42%]
+src/contacts/tests/test_contacts.py::TestTagViewSet::test_list_tags PASSED [ 42%]
+src/contacts/tests/test_contacts.py::TestTagViewSet::test_create_tag PASSED [ 42%]
+src/contacts/tests/test_contacts.py::TestTagViewSet::test_update_tag PASSED [ 43%]
+src/contacts/tests/test_contacts.py::TestTagViewSet::test_delete_tag PASSED [ 43%]
+src/contacts/tests/test_contacts.py::TestTagViewSet::test_merge_tags FAILED [ 43%]
+src/contacts/tests/test_contacts.py::TestTagViewSet::test_attendee_cannot_access_tags PASSED [ 44%]
+src/contacts/tests/test_contacts.py::TestContactListViewSet::test_list_contact_lists PASSED [ 44%]
+src/contacts/tests/test_contacts.py::TestContactListViewSet::test_create_contact_list PASSED [ 44%]
+src/contacts/tests/test_contacts.py::TestContactListViewSet::test_retrieve_contact_list PASSED [ 44%]
+src/contacts/tests/test_contacts.py::TestContactListViewSet::test_update_contact_list PASSED [ 45%]
+src/contacts/tests/test_contacts.py::TestContactListViewSet::test_delete_contact_list PASSED [ 45%]
+src/contacts/tests/test_contacts.py::TestContactListViewSet::test_set_default_list FAILED [ 45%]
+src/contacts/tests/test_contacts.py::TestContactListViewSet::test_duplicate_list PASSED [ 46%]
+src/contacts/tests/test_contacts.py::TestContactListViewSet::test_merge_lists FAILED [ 46%]
+src/contacts/tests/test_contacts.py::TestContactListViewSet::test_cannot_access_other_organizer_list PASSED [ 46%]
+src/contacts/tests/test_contacts.py::TestListContactViewSet::test_list_contacts PASSED [ 47%]
+src/contacts/tests/test_contacts.py::TestListContactViewSet::test_create_contact PASSED [ 47%]
+src/contacts/tests/test_contacts.py::TestListContactViewSet::test_update_contact PASSED [ 47%]
+src/contacts/tests/test_contacts.py::TestListContactViewSet::test_delete_contact PASSED [ 47%]
+src/contacts/tests/test_contacts.py::TestListContactViewSet::test_bulk_create_contacts PASSED [ 48%]
+src/contacts/tests/test_contacts.py::TestListContactViewSet::test_move_contact PASSED [ 48%]
+src/contacts/tests/test_contacts.py::TestListContactViewSet::test_filter_contacts_by_tag PASSED [ 48%]
+src/contacts/tests/test_contacts.py::TestListContactViewSet::test_search_contacts PASSED [ 49%]
+src/contacts/tests/test_contacts.py::TestContactValidation::test_duplicate_email_in_list FAILED [ 49%]
+src/contacts/tests/test_contacts.py::TestContactValidation::test_invalid_email_format PASSED [ 49%]
+src/events/tests/test_custom_fields.py::TestEventCustomFieldListCreate::test_list_custom_fields PASSED [ 50%]
+src/events/tests/test_custom_fields.py::TestEventCustomFieldListCreate::test_list_custom_fields_empty PASSED [ 50%]
+src/events/tests/test_custom_fields.py::TestEventCustomFieldListCreate::test_create_custom_field_text FAILED [ 50%]
+src/events/tests/test_custom_fields.py::TestEventCustomFieldListCreate::test_create_custom_field_select FAILED [ 50%]
+src/events/tests/test_custom_fields.py::TestEventCustomFieldListCreate::test_create_custom_field_other_event_forbidden FAILED [ 51%]
+src/events/tests/test_custom_fields.py::TestEventCustomFieldListCreate::test_create_custom_field_attendee_forbidden PASSED [ 51%]
+src/events/tests/test_custom_fields.py::TestEventCustomFieldDetail::test_retrieve_custom_field PASSED [ 51%]
+src/events/tests/test_custom_fields.py::TestEventCustomFieldDetail::test_update_custom_field PASSED [ 52%]
+src/events/tests/test_custom_fields.py::TestEventCustomFieldDetail::test_delete_custom_field PASSED [ 52%]
+src/events/tests/test_custom_fields.py::TestEventCustomFieldDetail::test_update_other_event_field_forbidden PASSED [ 52%]
+src/events/tests/test_custom_fields.py::TestEventCustomFieldReorder::test_reorder_custom_fields PASSED [ 52%]
+src/events/tests/test_custom_fields.py::TestEventCustomFieldReorder::test_reorder_attendee_forbidden PASSED [ 53%]
+src/events/tests/test_events.py::TestEventList::test_list_events_organizer PASSED [ 53%]
+src/events/tests/test_events.py::TestEventList::test_list_events_only_own PASSED [ 53%]
+src/events/tests/test_events.py::TestEventList::test_list_events_attendee_forbidden PASSED [ 54%]
+src/events/tests/test_events.py::TestEventList::test_list_events_unauthenticated PASSED [ 54%]
+src/events/tests/test_events.py::TestEventList::test_list_events_filter_by_status PASSED [ 54%]
+src/events/tests/test_events.py::TestEventList::test_list_events_pagination PASSED [ 55%]
+src/events/tests/test_events.py::TestEventCreate::test_create_event_success FAILED [ 55%]
+src/events/tests/test_events.py::TestEventCreate::test_create_event_minimal FAILED [ 55%]
+src/events/tests/test_events.py::TestEventCreate::test_create_event_attendee_forbidden PASSED [ 55%]
+src/events/tests/test_events.py::TestEventCreate::test_create_event_missing_title PASSED [ 56%]
+src/events/tests/test_events.py::TestEventCreate::test_create_event_past_start_date PASSED [ 56%]
+src/events/tests/test_events.py::TestEventDetail::test_retrieve_event PASSED [ 56%]
+src/events/tests/test_events.py::TestEventDetail::test_retrieve_other_organizer_event_not_found PASSED [ 57%]
+src/events/tests/test_events.py::TestEventDetail::test_retrieve_nonexistent_event PASSED [ 57%]
+src/events/tests/test_events.py::TestEventUpdate::test_update_event PASSED [ 57%]
+src/events/tests/test_events.py::TestEventUpdate::test_update_other_organizer_event_forbidden PASSED [ 58%]
+src/events/tests/test_events.py::TestEventUpdate::test_update_completed_event_limited PASSED [ 58%]
+src/events/tests/test_events.py::TestEventDelete::test_delete_draft_event PASSED [ 58%]
+src/events/tests/test_events.py::TestEventDelete::test_delete_other_organizer_event_forbidden PASSED [ 58%]
+src/events/tests/test_events.py::TestEventDelete::test_delete_published_event PASSED [ 59%]
+src/events/tests/test_events.py::TestEventStatusTransitions::test_publish_draft_event PASSED [ 59%]
+src/events/tests/test_events.py::TestEventStatusTransitions::test_unpublish_published_event PASSED [ 59%]
+src/events/tests/test_events.py::TestEventStatusTransitions::test_cancel_event PASSED [ 60%]
+src/events/tests/test_events.py::TestEventStatusTransitions::test_go_live PASSED [ 60%]
+src/events/tests/test_events.py::TestEventStatusTransitions::test_complete_live_event PASSED [ 60%]
+src/events/tests/test_events.py::TestEventStatusTransitions::test_invalid_transition_draft_to_complete PASSED [ 61%]
+src/events/tests/test_events.py::TestEventStatusTransitions::test_invalid_transition_completed_to_draft PASSED [ 61%]
+src/events/tests/test_events.py::TestEventActions::test_duplicate_event PASSED [ 61%]
+src/events/tests/test_events.py::TestEventActions::test_get_event_history PASSED [ 61%]
+src/events/tests/test_events.py::TestEventDashboard::test_get_dashboard PASSED [ 62%]
+src/events/tests/test_events.py::TestEventDashboard::test_dashboard_attendee_forbidden PASSED [ 62%]
+src/events/tests/test_events.py::TestEventDashboard::test_dashboard_unauthenticated PASSED [ 62%]
+src/events/tests/test_events.py::TestEventPermissions::test_attendee_cannot_manage_events PASSED [ 63%]
+src/events/tests/test_events.py::TestEventPermissions::test_organizer_cannot_access_other_events PASSED [ 63%]
+src/events/tests/test_public_events.py::TestPublicEventListView::test_list_public_events_unauthenticated PASSED [ 63%]
+src/events/tests/test_public_events.py::TestPublicEventListView::test_list_public_events_authenticated PASSED [ 64%]
+src/events/tests/test_public_events.py::TestPublicEventListView::test_only_published_events_visible PASSED [ 64%]
+src/events/tests/test_public_events.py::TestPublicEventListView::test_cancelled_events_not_visible PASSED [ 64%]
+src/events/tests/test_public_events.py::TestPublicEventListView::test_filter_by_event_type PASSED [ 64%]
+src/events/tests/test_public_events.py::TestPublicEventListView::test_filter_by_date_range PASSED [ 65%]
+src/events/tests/test_public_events.py::TestPublicEventListView::test_search_events PASSED [ 65%]
+src/events/tests/test_public_events.py::TestPublicEventListView::test_pagination PASSED [ 65%]
+src/events/tests/test_public_events.py::TestPublicEventListView::test_ordering_by_start_date PASSED [ 66%]
+src/events/tests/test_public_events.py::TestPublicEventDetailView::test_retrieve_by_uuid PASSED [ 66%]
+src/events/tests/test_public_events.py::TestPublicEventDetailView::test_retrieve_by_slug PASSED [ 66%]
+src/events/tests/test_public_events.py::TestPublicEventDetailView::test_draft_event_not_accessible PASSED [ 67%]
+src/events/tests/test_public_events.py::TestPublicEventDetailView::test_cancelled_event_not_accessible PASSED [ 67%]
+src/events/tests/test_public_events.py::TestPublicEventDetailView::test_nonexistent_event PASSED [ 67%]
+src/events/tests/test_public_events.py::TestPublicEventDetailView::test_public_event_detail_includes_required_fields PASSED [ 67%]
+src/events/tests/test_public_events.py::TestPublicEventDetailView::test_public_event_excludes_sensitive_fields PASSED [ 68%]
+src/events/tests/test_public_events.py::TestPublicEventDetailView::test_registration_info_included PASSED [ 68%]
+src/events/tests/test_public_events.py::TestPublicEventWithSessions::test_event_with_sessions_includes_session_info PASSED [ 68%]
+src/events/tests/test_sessions.py::TestEventSessionListCreate::test_list_sessions PASSED [ 69%]
+src/events/tests/test_sessions.py::TestEventSessionListCreate::test_list_sessions_empty PASSED [ 69%]
+src/events/tests/test_sessions.py::TestEventSessionListCreate::test_create_session PASSED [ 69%]
+src/events/tests/test_sessions.py::TestEventSessionListCreate::test_create_session_with_speaker PASSED [ 70%]
+src/events/tests/test_sessions.py::TestEventSessionListCreate::test_create_session_other_event_forbidden PASSED [ 70%]
+src/events/tests/test_sessions.py::TestEventSessionListCreate::test_create_session_attendee_forbidden PASSED [ 70%]
+src/events/tests/test_sessions.py::TestEventSessionListCreate::test_create_session_missing_title PASSED [ 70%]
+src/events/tests/test_sessions.py::TestEventSessionDetail::test_retrieve_session PASSED [ 71%]
+src/events/tests/test_sessions.py::TestEventSessionDetail::test_update_session PASSED [ 71%]
+src/events/tests/test_sessions.py::TestEventSessionDetail::test_delete_session PASSED [ 71%]
+src/events/tests/test_sessions.py::TestEventSessionDetail::test_update_other_event_session_forbidden PASSED [ 72%]
+src/events/tests/test_sessions.py::TestEventSessionReorder::test_reorder_sessions PASSED [ 72%]
+src/events/tests/test_sessions.py::TestEventSessionReorder::test_reorder_other_event_forbidden PASSED [ 72%]
+src/events/tests/test_sessions.py::TestSessionOrdering::test_sessions_returned_in_order PASSED [ 73%]
+src/events/tests/test_sessions.py::TestSessionOrdering::test_new_session_gets_next_order PASSED [ 73%]
+src/events/tests/test_zoom_retry_signal.py::TestZoomRetrySignal::test_signal_triggers_task_on_update PASSED [ 73%]
+src/events/tests/test_zoom_retry_signal.py::TestZoomRetrySignal::test_signal_does_not_trigger_if_meeting_exists PASSED [ 73%]
+src/events/tests/test_zoom_retry_signal.py::TestZoomRetrySignal::test_signal_does_not_trigger_if_zoom_disabled PASSED [ 74%]
+src/integrations/tests/test_integrations.py::TestEventRecordingViewSet::test_list_recordings FAILED [ 74%]
+src/integrations/tests/test_integrations.py::TestEventRecordingViewSet::test_update_recording_access FAILED [ 74%]
+src/integrations/tests/test_integrations.py::TestMyRecordingsViewSet::test_list_my_recordings FAILED [ 75%]
+src/integrations/tests/test_integrations.py::TestZoomOAuth::test_initiate_zoom_oauth FAILED [ 75%]
+src/integrations/tests/test_integrations.py::TestZoomOAuth::test_zoom_callback FAILED [ 75%]
+src/integrations/tests/test_integrations.py::TestZoomOAuth::test_get_zoom_status FAILED [ 76%]
+src/integrations/tests/test_integrations.py::TestZoomOAuth::test_disconnect_zoom FAILED [ 76%]
+src/integrations/tests/test_integrations.py::TestZoomMeetingsList::test_list_zoom_meetings FAILED [ 76%]
+src/integrations/tests/test_integrations.py::TestZoomMeetingsList::test_attendee_cannot_list_meetings PASSED [ 76%]
+src/integrations/tests/test_integrations.py::TestZoomWebhook::test_url_validation FAILED [ 77%]
+src/integrations/tests/test_integrations.py::TestZoomWebhook::test_recording_completed_event FAILED [ 77%]
+src/integrations/tests/test_integrations.py::TestEmailLogViewSet::test_list_email_logs FAILED [ 77%]
+src/integrations/tests/test_integrations.py::TestEmailLogViewSet::test_attendee_cannot_view_email_logs FAILED [ 78%]
+src/learning/tests/test_learning.py::TestEventModuleViewSet::test_list_modules PASSED [ 78%]
+src/learning/tests/test_learning.py::TestEventModuleViewSet::test_create_module PASSED [ 78%]
+src/learning/tests/test_learning.py::TestEventModuleViewSet::test_update_module PASSED [ 79%]
+src/learning/tests/test_learning.py::TestEventModuleViewSet::test_delete_module PASSED [ 79%]
+src/learning/tests/test_learning.py::TestEventModuleViewSet::test_publish_module PASSED [ 79%]
+src/learning/tests/test_learning.py::TestEventModuleViewSet::test_unpublish_module PASSED [ 79%]
+src/learning/tests/test_learning.py::TestModuleContentViewSet::test_list_contents PASSED [ 80%]
+src/learning/tests/test_learning.py::TestModuleContentViewSet::test_create_text_content PASSED [ 80%]
+src/learning/tests/test_learning.py::TestModuleContentViewSet::test_create_video_content PASSED [ 80%]
+src/learning/tests/test_learning.py::TestAssignmentViewSet::test_list_assignments PASSED [ 81%]
+src/learning/tests/test_learning.py::TestAssignmentViewSet::test_create_assignment FAILED [ 81%]
+src/learning/tests/test_learning.py::TestSubmissionViewSet::test_list_my_submissions PASSED [ 81%]
+src/learning/tests/test_learning.py::TestSubmissionViewSet::test_create_submission FAILED [ 82%]
+src/learning/tests/test_learning.py::TestMyLearningViewSet::test_list_learning_progress PASSED [ 82%]
+src/learning/tests/test_learning.py::TestMyLearningViewSet::test_get_event_learning PASSED [ 82%]
+src/learning/tests/test_learning.py::TestContentProgress::test_update_content_progress PASSED [ 82%]
+src/learning/tests/test_learning.py::TestCourseViewSet::test_list_courses PASSED [ 83%]
+src/learning/tests/test_learning.py::TestCourseViewSet::test_create_course FAILED [ 83%]
+src/learning/tests/test_learning.py::TestCourseViewSet::test_publish_course PASSED [ 83%]
+src/learning/tests/test_learning.py::TestCourseEnrollmentViewSet::test_list_enrollments PASSED [ 84%]
+src/learning/tests/test_learning.py::TestCourseEnrollmentViewSet::test_enroll_in_course PASSED [ 84%]
+src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_list_organizations FAILED [ 84%]
+src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_create_organization FAILED [ 85%]
+src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_retrieve_organization FAILED [ 85%]
+src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_update_organization_as_owner FAILED [ 85%]
+src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_delete_organization_as_owner FAILED [ 85%]
+src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_attendee_cannot_create_organization PASSED [ 86%]
+src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_cannot_access_unrelated_organization FAILED [ 86%]
+src/organizations/tests/test_organizations.py::TestMemberManagement::test_list_members FAILED [ 86%]
+src/organizations/tests/test_organizations.py::TestMemberManagement::test_invite_member FAILED [ 87%]
+src/organizations/tests/test_organizations.py::TestMemberManagement::test_update_member_role FAILED [ 87%]
+src/organizations/tests/test_organizations.py::TestMemberManagement::test_remove_member FAILED [ 87%]
+src/organizations/tests/test_organizations.py::TestMemberManagement::test_member_cannot_invite FAILED [ 88%]
+src/organizations/tests/test_organizations.py::TestAcceptInvitation::test_accept_valid_invitation PASSED [ 88%]
+src/organizations/tests/test_organizations.py::TestAcceptInvitation::test_accept_invalid_token PASSED [ 88%]
+src/organizations/tests/test_organizations.py::TestCreateFromAccount::test_preview_create_from_account PASSED [ 88%]
+src/organizations/tests/test_organizations.py::TestCreateFromAccount::test_create_org_from_account PASSED [ 89%]
+src/organizations/tests/test_organizations.py::TestCreateFromAccount::test_attendee_cannot_create_from_account PASSED [ 89%]
+src/organizations/tests/test_organizations.py::TestLinkOrganizer::test_link_organizer_data FAILED [ 89%]
+src/organizations/tests/test_plans_and_billing.py::TestOrganizationPlansAndBilling::test_get_plans FAILED [ 90%]
+src/organizations/tests/test_plans_and_billing.py::TestOrganizationPlansAndBilling::test_upgrade_subscription PASSED [ 90%]
+src/organizations/tests/test_plans_and_billing.py::TestOrganizationPlansAndBilling::test_invite_organizer_external PASSED [ 90%]
+src/organizations/tests/test_plans_and_billing.py::TestOrganizationPlansAndBilling::test_invite_organizer_non_existent PASSED [ 91%]
+src/registrations/tests/test_registrations.py::TestEventRegistrationViewSet::test_list_registrations PASSED [ 91%]
+src/registrations/tests/test_registrations.py::TestEventRegistrationViewSet::test_list_registrations_filter_by_status PASSED [ 91%]
+src/registrations/tests/test_registrations.py::TestEventRegistrationViewSet::test_bulk_add_registrations PASSED [ 91%]
+src/registrations/tests/test_registrations.py::TestEventRegistrationViewSet::test_update_registration_attendance PASSED [ 92%]
+src/registrations/tests/test_registrations.py::TestEventRegistrationViewSet::test_cannot_access_other_event_registrations FAILED [ 92%]
+src/registrations/tests/test_registrations.py::TestEventRegistrationViewSet::test_attendee_cannot_manage_registrations PASSED [ 92%]
+src/registrations/tests/test_registrations.py::TestWaitlistManagement::test_get_waitlist PASSED [ 93%]
+src/registrations/tests/test_registrations.py::TestWaitlistManagement::test_promote_from_waitlist PASSED [ 93%]
+src/registrations/tests/test_registrations.py::TestWaitlistManagement::test_promote_next FAILED [ 93%]
+src/registrations/tests/test_registrations.py::TestAttendanceOverride::test_override_attendance FAILED [ 94%]
+src/registrations/tests/test_registrations.py::TestRegistrationSummary::test_get_summary PASSED [ 94%]
+src/registrations/tests/test_registrations.py::TestPublicRegistration::test_register_authenticated_user PASSED [ 94%]
+src/registrations/tests/test_registrations.py::TestPublicRegistration::test_register_guest PASSED [ 94%]
+src/registrations/tests/test_registrations.py::TestPublicRegistration::test_register_duplicate_email PASSED [ 95%]
+src/registrations/tests/test_registrations.py::TestPublicRegistration::test_register_closed_event PASSED [ 95%]
+src/registrations/tests/test_registrations.py::TestPublicRegistration::test_register_full_event_goes_to_waitlist PASSED [ 95%]
+src/registrations/tests/test_registrations.py::TestPublicRegistration::test_register_missing_email PASSED [ 96%]
+src/registrations/tests/test_registrations.py::TestMyRegistrationViewSet::test_list_my_registrations PASSED [ 96%]
+src/registrations/tests/test_registrations.py::TestMyRegistrationViewSet::test_list_empty_registrations PASSED [ 96%]
+src/registrations/tests/test_registrations.py::TestMyRegistrationViewSet::test_retrieve_my_registration PASSED [ 97%]
+src/registrations/tests/test_registrations.py::TestMyRegistrationViewSet::test_cannot_see_others_registrations PASSED [ 97%]
+src/registrations/tests/test_registrations.py::TestMyRegistrationViewSet::test_cancel_registration PASSED [ 97%]
+src/registrations/tests/test_registrations.py::TestMyRegistrationViewSet::test_cancel_already_cancelled PASSED [ 97%]
+src/registrations/tests/test_registrations.py::TestMyRegistrationViewSet::test_unauthenticated_cannot_access PASSED [ 98%]
+src/registrations/tests/test_registrations.py::TestLinkRegistrationsView::test_link_guest_registrations PASSED [ 98%]
+src/registrations/tests/test_registrations.py::TestLinkRegistrationsView::test_link_no_orphaned_registrations PASSED [ 98%]
+src/registrations/tests/test_registrations.py::TestLinkRegistrationsView::test_unauthenticated_cannot_link PASSED [ 99%]
+src/tests/test_smoke.py::test_swagger_docs_accessible PASSED             [ 99%]
+src/tests/test_smoke.py::test_create_event FAILED                        [ 99%]
+src/tests/test_smoke.py::test_unauthenticated_access_denied PASSED       [100%]
+
+=================================== FAILURES ===================================
+_____________ TestCPDRequirementViewSet.test_list_cpd_requirements _____________
+src/accounts/tests/test_cpd.py:33: in test_list_cpd_requirements
+    CPDRequirement.objects.create(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:667: in create
+    obj = self.model(**kwargs)
+          ^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:590: in __init__
+    raise TypeError(
+E   TypeError: CPDRequirement() got unexpected keyword arguments: 'name', 'required_credits', 'period_start', 'period_end'
+____________ TestCPDRequirementViewSet.test_create_cpd_requirement _____________
+src/accounts/tests/test_cpd.py:54: in test_create_cpd_requirement
+    assert response.status_code == status.HTTP_201_CREATED
+E   assert 400 == 201
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+E    +  and   201 = status.HTTP_201_CREATED
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/cpd-requirements/
+___________ TestCPDRequirementViewSet.test_retrieve_cpd_requirement ____________
+src/accounts/tests/test_cpd.py:60: in test_retrieve_cpd_requirement
+    req = CPDRequirement.objects.create(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:667: in create
+    obj = self.model(**kwargs)
+          ^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:590: in __init__
+    raise TypeError(
+E   TypeError: CPDRequirement() got unexpected keyword arguments: 'name', 'required_credits', 'period_start', 'period_end'
+____________ TestCPDRequirementViewSet.test_update_cpd_requirement _____________
+src/accounts/tests/test_cpd.py:74: in test_update_cpd_requirement
+    req = CPDRequirement.objects.create(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:667: in create
+    obj = self.model(**kwargs)
+          ^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:590: in __init__
+    raise TypeError(
+E   TypeError: CPDRequirement() got unexpected keyword arguments: 'name', 'required_credits', 'period_start', 'period_end'
+____________ TestCPDRequirementViewSet.test_delete_cpd_requirement _____________
+src/accounts/tests/test_cpd.py:93: in test_delete_cpd_requirement
+    req = CPDRequirement.objects.create(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:667: in create
+    obj = self.model(**kwargs)
+          ^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:590: in __init__
+    raise TypeError(
+E   TypeError: CPDRequirement() got unexpected keyword arguments: 'name', 'required_credits', 'period_start', 'period_end'
+_______ TestCPDRequirementViewSet.test_cannot_access_others_requirements _______
+src/accounts/tests/test_cpd.py:107: in test_cannot_access_others_requirements
+    other_req = CPDRequirement.objects.create(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:667: in create
+    obj = self.model(**kwargs)
+          ^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:590: in __init__
+    raise TypeError(
+E   TypeError: CPDRequirement() got unexpected keyword arguments: 'name', 'required_credits', 'period_start', 'period_end'
+__________________ TestCPDProgressView.test_get_cpd_progress ___________________
+src/accounts/tests/test_cpd.py:138: in test_get_cpd_progress
+    CPDRequirement.objects.create(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:667: in create
+    obj = self.model(**kwargs)
+          ^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:590: in __init__
+    raise TypeError(
+E   TypeError: CPDRequirement() got unexpected keyword arguments: 'name', 'required_credits', 'earned_credits', 'period_start', 'period_end'
+___________ TestUpgradeToOrganizerView.test_organizer_cannot_upgrade ___________
+src/accounts/tests/test_users.py:156: in test_organizer_cannot_upgrade
+    assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
+E   assert 403 in [200, 400]
+E    +  where 403 = <Response status_code=403, "application/json">.status_code
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Forbidden: /api/v1/users/me/upgrade/
+_______________ TestSubscriptionViewSet.test_create_subscription _______________
+src/billing/tests/test_subscriptions.py:45: in test_create_subscription
+    assert response.status_code in [
+E   assert 400 in [200, 201, 302]
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/subscription/
+_______ TestSubscriptionViewSet.test_attendee_cannot_access_subscription _______
+src/billing/tests/test_subscriptions.py:73: in test_attendee_cannot_access_subscription
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+E   assert 200 == 403
+E    +  where 200 = <Response status_code=200, "application/json">.status_code
+E    +  and   403 = status.HTTP_403_FORBIDDEN
+________________ TestBillingViews.test_create_checkout_session _________________
+src/billing/tests/test_subscriptions.py:182: in test_create_checkout_session
+    assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
+E   assert 400 in [200, 201]
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/billing/checkout/
+_____________ TestBillingViews.test_create_billing_portal_session ______________
+src/billing/tests/test_subscriptions.py:190: in test_create_billing_portal_session
+    assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
+E   assert 400 in [200, 201]
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/billing/portal/
+____________ TestBillingViews.test_attendee_cannot_access_checkout _____________
+src/billing/tests/test_subscriptions.py:198: in test_attendee_cannot_access_checkout
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+E   assert 400 == 403
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+E    +  and   403 = status.HTTP_403_FORBIDDEN
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/billing/checkout/
+_________________ TestStripeWebhook.test_subscription_created __________________
+src/billing/tests/test_webhooks.py:64: in test_subscription_created
+    assert response.status_code == status.HTTP_200_OK
+E   assert 500 == 200
+E    +  where 500 = <HttpResponse status_code=500, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  billing.webhooks:webhooks.py:37 Stripe webhook secret not configured
+ERROR    django.request:log.py:249 Internal Server Error: /webhooks/stripe/
+_________________ TestStripeWebhook.test_subscription_updated __________________
+src/billing/tests/test_webhooks.py:86: in test_subscription_updated
+    assert response.status_code == status.HTTP_200_OK
+E   assert 500 == 200
+E    +  where 500 = <HttpResponse status_code=500, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  billing.webhooks:webhooks.py:37 Stripe webhook secret not configured
+ERROR    django.request:log.py:249 Internal Server Error: /webhooks/stripe/
+_________________ TestStripeWebhook.test_subscription_deleted __________________
+src/billing/tests/test_webhooks.py:107: in test_subscription_deleted
+    assert response.status_code == status.HTTP_200_OK
+E   assert 500 == 200
+E    +  where 500 = <HttpResponse status_code=500, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  billing.webhooks:webhooks.py:37 Stripe webhook secret not configured
+ERROR    django.request:log.py:249 Internal Server Error: /webhooks/stripe/
+_____________________ TestStripeWebhook.test_invoice_paid ______________________
+src/billing/tests/test_webhooks.py:132: in test_invoice_paid
+    assert response.status_code == status.HTTP_200_OK
+E   assert 500 == 200
+E    +  where 500 = <HttpResponse status_code=500, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  billing.webhooks:webhooks.py:37 Stripe webhook secret not configured
+ERROR    django.request:log.py:249 Internal Server Error: /webhooks/stripe/
+________________ TestStripeWebhook.test_invoice_payment_failed _________________
+src/billing/tests/test_webhooks.py:155: in test_invoice_payment_failed
+    assert response.status_code == status.HTTP_200_OK
+E   assert 500 == 200
+E    +  where 500 = <HttpResponse status_code=500, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  billing.webhooks:webhooks.py:37 Stripe webhook secret not configured
+ERROR    django.request:log.py:249 Internal Server Error: /webhooks/stripe/
+________________ TestStripeWebhook.test_payment_method_attached ________________
+src/billing/tests/test_webhooks.py:181: in test_payment_method_attached
+    assert response.status_code == status.HTTP_200_OK
+E   assert 500 == 200
+E    +  where 500 = <HttpResponse status_code=500, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  billing.webhooks:webhooks.py:37 Stripe webhook secret not configured
+ERROR    django.request:log.py:249 Internal Server Error: /webhooks/stripe/
+__________________ TestStripeWebhook.test_unknown_event_type ___________________
+src/billing/tests/test_webhooks.py:199: in test_unknown_event_type
+    assert response.status_code == status.HTTP_200_OK
+E   assert 500 == 200
+E    +  where 500 = <HttpResponse status_code=500, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  billing.webhooks:webhooks.py:37 Stripe webhook secret not configured
+ERROR    django.request:log.py:249 Internal Server Error: /webhooks/stripe/
+___________________ TestStripeWebhook.test_invalid_signature ___________________
+src/billing/tests/test_webhooks.py:215: in test_invalid_signature
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+E   assert 500 == 400
+E    +  where 500 = <HttpResponse status_code=500, "text/html; charset=utf-8">.status_code
+E    +  and   400 = status.HTTP_400_BAD_REQUEST
+------------------------------ Captured log call -------------------------------
+WARNING  billing.webhooks:webhooks.py:37 Stripe webhook secret not configured
+ERROR    django.request:log.py:249 Internal Server Error: /webhooks/stripe/
+___________ TestEventCertificateViewSet.test_issue_bulk_certificates ___________
+src/certificates/tests/test_certificates.py:67: in test_issue_bulk_certificates
+    assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
+E   assert 400 in [200, 201]
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/events/938ebd1d-968a-423b-a5b7-8aa37fab0860/certificates/issue/
+_____________ TestEventCertificateViewSet.test_revoke_certificate ______________
+src/certificates/tests/test_certificates.py:75: in test_revoke_certificate
+    assert response.status_code == status.HTTP_200_OK
+E   assert 400 == 200
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/events/326eedd8-c2fa-4465-8205-d0a44a1ac9ff/certificates/4b24079b-227e-4afd-905f-2445e2d67971/revoke/
+___ TestEventCertificateViewSet.test_cannot_manage_other_event_certificates ____
+src/certificates/tests/test_certificates.py:83: in test_cannot_manage_other_event_certificates
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+E   assert 200 == 404
+E    +  where 200 = <Response status_code=200, "application/json">.status_code
+E    +  and   404 = status.HTTP_404_NOT_FOUND
+______________ TestMyCertificateViewSet.test_download_certificate ______________
+src/certificates/tests/test_certificates.py:147: in test_download_certificate
+    assert response.status_code in [status.HTTP_200_OK, status.HTTP_302_FOUND]
+E   assert 405 in [200, 302]
+E    +  where 405 = <Response status_code=405, "application/json">.status_code
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Method Not Allowed: /api/v1/certificates/4ab91da8-0240-47cb-906f-cb5573641eea/download/
+_______________ TestSetDefaultTemplate.test_set_default_template _______________
+src/certificates/tests/test_templates.py:117: in test_set_default_template
+    assert response.status_code == status.HTTP_200_OK
+E   assert 404 == 200
+E    +  where 404 = <HttpResponseNotFound status_code=404, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/certificate-templates/f44565cc-c6fc-49ac-af48-71261c765ca4/set_default/
+______________ TestSetDefaultTemplate.test_previous_default_unset ______________
+src/certificates/tests/test_templates.py:129: in test_previous_default_unset
+    assert response.status_code == status.HTTP_200_OK
+E   assert 404 == 200
+E    +  where 404 = <HttpResponseNotFound status_code=404, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/certificate-templates/a455e137-5b67-47f1-bb0e-d0b5e9c73d68/set_default/
+_____________ TestAvailableTemplates.test_get_available_templates ______________
+src/certificates/tests/test_templates.py:147: in test_get_available_templates
+    assert response.status_code == status.HTTP_200_OK
+E   assert 404 == 200
+E    +  where 404 = <Response status_code=404, "application/json">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/certificate-templates/available_templates/
+__________ TestAvailableTemplates.test_includes_shared_org_templates ___________
+src/certificates/tests/test_templates.py:163: in test_includes_shared_org_templates
+    assert response.status_code == status.HTTP_200_OK
+E   assert 404 == 200
+E    +  where 404 = <Response status_code=404, "application/json">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/certificate-templates/available_templates/
+________________________ TestTagViewSet.test_merge_tags ________________________
+src/contacts/tests/test_contacts.py:80: in test_merge_tags
+    assert response.status_code == status.HTTP_200_OK
+E   assert 400 == 200
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/tags/d87de6e0-cb55-4caa-bda5-59a47cc07276/merge/
+_________________ TestContactListViewSet.test_set_default_list _________________
+src/contacts/tests/test_contacts.py:137: in test_set_default_list
+    assert response.status_code == status.HTTP_200_OK
+E   assert 404 == 200
+E    +  where 404 = <HttpResponseNotFound status_code=404, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/contact-lists/6e359879-3748-4bfa-b180-79290f3deec1/set_default/
+___________________ TestContactListViewSet.test_merge_lists ____________________
+src/contacts/tests/test_contacts.py:156: in test_merge_lists
+    assert response.status_code == status.HTTP_200_OK
+E   assert 400 == 200
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/contact-lists/22d98e04-2330-4c3e-9d4e-716a8dd2d857/merge/
+______________ TestContactValidation.test_duplicate_email_in_list ______________
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:105: in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/sqlite3/base.py:359: in execute
+    return super().execute(query, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   sqlite3.IntegrityError: UNIQUE constraint failed: contacts.contact_list_id, contacts.email
+
+The above exception was the direct cause of the following exception:
+src/contacts/tests/test_contacts.py:268: in test_duplicate_email_in_list
+    response = organizer_client.post(endpoint, data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:299: in post
+    response = super().post(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:213: in post
+    return self.generic('POST', path, data, content_type, **extra)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:237: in generic
+    return super().generic(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:671: in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:289: in request
+    return super().request(**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:241: in request
+    request = super().request(**kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:1087: in request
+    self.check_exception(response)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:802: in check_exception
+    raise exc_value
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/exception.py:55: in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py:198: in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/decorators/csrf.py:65: in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/viewsets.py:125: in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:515: in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:475: in handle_exception
+    self.raise_uncaught_exception(exc)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:486: in raise_uncaught_exception
+    raise exc
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:512: in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/mixins.py:19: in create
+    self.perform_create(serializer)
+src/contacts/views.py:215: in perform_create
+    serializer.save(contact_list=contact_list)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:210: in save
+    self.instance = self.create(validated_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/contacts/serializers.py:201: in create
+    contact = super().create(validated_data)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:991: in create
+    instance = ModelClass._default_manager.create(**validated_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:669: in create
+    obj.save(force_insert=True, using=self.db)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:874: in save
+    self.save_base(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:966: in save_base
+    updated = self._save_table(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:1167: in _save_table
+    results = self._do_insert(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:1218: in _do_insert
+    return manager._insert(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:1918: in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/sql/compiler.py:1925: in execute_sql
+    cursor.execute(sql, params)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:79: in execute
+    return self._execute_with_wrappers(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:92: in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:100: in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/utils.py:94: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:105: in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/sqlite3/base.py:359: in execute
+    return super().execute(query, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.IntegrityError: UNIQUE constraint failed: contacts.contact_list_id, contacts.email
+------------------------------ Captured log call -------------------------------
+ERROR    django.request:log.py:249 Internal Server Error: /api/v1/contact-lists/6220d06e-7a56-43d6-b427-ac6d1b8945f8/contacts/
+Traceback (most recent call last):
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/sqlite3/base.py", line 359, in execute
+    return super().execute(query, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+sqlite3.IntegrityError: UNIQUE constraint failed: contacts.contact_list_id, contacts.email
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/viewsets.py", line 125, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/mixins.py", line 19, in create
+    self.perform_create(serializer)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/home/beyonder/projects/cpd_events/backend/src/contacts/views.py", line 215, in perform_create
+    serializer.save(contact_list=contact_list)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 210, in save
+    self.instance = self.create(validated_data)
+                    ~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/home/beyonder/projects/cpd_events/backend/src/contacts/serializers.py", line 201, in create
+    contact = super().create(validated_data)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 991, in create
+    instance = ModelClass._default_manager.create(**validated_data)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py", line 669, in create
+    obj.save(force_insert=True, using=self.db)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py", line 874, in save
+    self.save_base(
+    ~~~~~~~~~~~~~~^
+        using=using,
+        ^^^^^^^^^^^^
+    ...<2 lines>...
+        update_fields=update_fields,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py", line 966, in save_base
+    updated = self._save_table(
+        raw,
+    ...<4 lines>...
+        update_fields,
+    )
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py", line 1167, in _save_table
+    results = self._do_insert(
+        cls._base_manager, using, insert_fields, returning_fields, raw
+    )
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py", line 1218, in _do_insert
+    return manager._insert(
+           ~~~~~~~~~~~~~~~^
+        [self],
+        ^^^^^^^
+    ...<3 lines>...
+        raw=raw,
+        ^^^^^^^^
+    )
+    ^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py", line 1918, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/sql/compiler.py", line 1925, in execute_sql
+    cursor.execute(sql, params)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sql, params, many=False, executor=self._execute
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/utils.py", line 94, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/sqlite3/base.py", line 359, in execute
+    return super().execute(query, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+django.db.utils.IntegrityError: UNIQUE constraint failed: contacts.contact_list_id, contacts.email
+_________ TestEventCustomFieldListCreate.test_create_custom_field_text _________
+src/events/tests/test_custom_fields.py:50: in test_create_custom_field_text
+    response = organizer_client.post(endpoint, data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:299: in post
+    response = super().post(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:213: in post
+    return self.generic('POST', path, data, content_type, **extra)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:237: in generic
+    return super().generic(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:671: in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:289: in request
+    return super().request(**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:241: in request
+    request = super().request(**kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:1087: in request
+    self.check_exception(response)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:802: in check_exception
+    raise exc_value
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/exception.py:55: in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py:198: in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/decorators/csrf.py:65: in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/viewsets.py:125: in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:515: in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:475: in handle_exception
+    self.raise_uncaught_exception(exc)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:486: in raise_uncaught_exception
+    raise exc
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:512: in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/mixins.py:18: in create
+    serializer.is_valid(raise_exception=True)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:225: in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:444: in run_validation
+    value = self.to_internal_value(data)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:497: in to_internal_value
+    for field in fields:
+                 ^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:380: in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/utils/functional.py:47: in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:374: in fields
+    for key, value in self.get_fields().items():
+                      ^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:1105: in get_fields
+    field_class, field_kwargs = self.build_field(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:1251: in build_field
+    return self.build_unknown_field(field_name, model_class)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:1369: in build_unknown_field
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Field name `validation_regex` is not valid for model `EventCustomField` in `events.serializers.EventCustomFieldCreateSerializer`.
+------------------------------ Captured log call -------------------------------
+ERROR    django.request:log.py:249 Internal Server Error: /api/v1/events/82119b1a-8cef-4f39-88e1-d142dd609906/custom-fields/
+Traceback (most recent call last):
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/viewsets.py", line 125, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/mixins.py", line 18, in create
+    serializer.is_valid(raise_exception=True)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 225, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 444, in run_validation
+    value = self.to_internal_value(data)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 497, in to_internal_value
+    for field in fields:
+                 ^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 380, in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ~~~~~~~~~^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 374, in fields
+    for key, value in self.get_fields().items():
+                      ~~~~~~~~~~~~~~~^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 1105, in get_fields
+    field_class, field_kwargs = self.build_field(
+                                ~~~~~~~~~~~~~~~~^
+        source, info, model, depth
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 1251, in build_field
+    return self.build_unknown_field(field_name, model_class)
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 1369, in build_unknown_field
+    raise ImproperlyConfigured(
+    ...<2 lines>...
+    )
+django.core.exceptions.ImproperlyConfigured: Field name `validation_regex` is not valid for model `EventCustomField` in `events.serializers.EventCustomFieldCreateSerializer`.
+________ TestEventCustomFieldListCreate.test_create_custom_field_select ________
+src/events/tests/test_custom_fields.py:62: in test_create_custom_field_select
+    response = organizer_client.post(endpoint, data, format='json')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:299: in post
+    response = super().post(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:213: in post
+    return self.generic('POST', path, data, content_type, **extra)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:237: in generic
+    return super().generic(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:671: in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:289: in request
+    return super().request(**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:241: in request
+    request = super().request(**kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:1087: in request
+    self.check_exception(response)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:802: in check_exception
+    raise exc_value
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/exception.py:55: in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py:198: in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/decorators/csrf.py:65: in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/viewsets.py:125: in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:515: in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:475: in handle_exception
+    self.raise_uncaught_exception(exc)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:486: in raise_uncaught_exception
+    raise exc
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:512: in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/mixins.py:18: in create
+    serializer.is_valid(raise_exception=True)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:225: in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:444: in run_validation
+    value = self.to_internal_value(data)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:497: in to_internal_value
+    for field in fields:
+                 ^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:380: in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/utils/functional.py:47: in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:374: in fields
+    for key, value in self.get_fields().items():
+                      ^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:1105: in get_fields
+    field_class, field_kwargs = self.build_field(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:1251: in build_field
+    return self.build_unknown_field(field_name, model_class)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:1369: in build_unknown_field
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Field name `validation_regex` is not valid for model `EventCustomField` in `events.serializers.EventCustomFieldCreateSerializer`.
+------------------------------ Captured log call -------------------------------
+ERROR    django.request:log.py:249 Internal Server Error: /api/v1/events/18f2bb62-dc22-4843-91cc-d51169dbb43e/custom-fields/
+Traceback (most recent call last):
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/viewsets.py", line 125, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/mixins.py", line 18, in create
+    serializer.is_valid(raise_exception=True)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 225, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 444, in run_validation
+    value = self.to_internal_value(data)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 497, in to_internal_value
+    for field in fields:
+                 ^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 380, in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ~~~~~~~~~^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 374, in fields
+    for key, value in self.get_fields().items():
+                      ~~~~~~~~~~~~~~~^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 1105, in get_fields
+    field_class, field_kwargs = self.build_field(
+                                ~~~~~~~~~~~~~~~~^
+        source, info, model, depth
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 1251, in build_field
+    return self.build_unknown_field(field_name, model_class)
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 1369, in build_unknown_field
+    raise ImproperlyConfigured(
+    ...<2 lines>...
+    )
+django.core.exceptions.ImproperlyConfigured: Field name `validation_regex` is not valid for model `EventCustomField` in `events.serializers.EventCustomFieldCreateSerializer`.
+_ TestEventCustomFieldListCreate.test_create_custom_field_other_event_forbidden _
+src/events/tests/test_custom_fields.py:72: in test_create_custom_field_other_event_forbidden
+    response = organizer_client.post(endpoint, data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:299: in post
+    response = super().post(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:213: in post
+    return self.generic('POST', path, data, content_type, **extra)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:237: in generic
+    return super().generic(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:671: in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:289: in request
+    return super().request(**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:241: in request
+    request = super().request(**kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:1087: in request
+    self.check_exception(response)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:802: in check_exception
+    raise exc_value
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/exception.py:55: in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py:198: in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/decorators/csrf.py:65: in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/viewsets.py:125: in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:515: in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:475: in handle_exception
+    self.raise_uncaught_exception(exc)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:486: in raise_uncaught_exception
+    raise exc
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:512: in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/mixins.py:18: in create
+    serializer.is_valid(raise_exception=True)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:225: in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:444: in run_validation
+    value = self.to_internal_value(data)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:497: in to_internal_value
+    for field in fields:
+                 ^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:380: in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/utils/functional.py:47: in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:374: in fields
+    for key, value in self.get_fields().items():
+                      ^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:1105: in get_fields
+    field_class, field_kwargs = self.build_field(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:1251: in build_field
+    return self.build_unknown_field(field_name, model_class)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py:1369: in build_unknown_field
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Field name `validation_regex` is not valid for model `EventCustomField` in `events.serializers.EventCustomFieldCreateSerializer`.
+------------------------------ Captured log call -------------------------------
+ERROR    django.request:log.py:249 Internal Server Error: /api/v1/events/7b8d50cc-fc17-476b-b948-5931a0e7b741/custom-fields/
+Traceback (most recent call last):
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/viewsets.py", line 125, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/mixins.py", line 18, in create
+    serializer.is_valid(raise_exception=True)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 225, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 444, in run_validation
+    value = self.to_internal_value(data)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 497, in to_internal_value
+    for field in fields:
+                 ^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 380, in _writable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ~~~~~~~~~^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 374, in fields
+    for key, value in self.get_fields().items():
+                      ~~~~~~~~~~~~~~~^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 1105, in get_fields
+    field_class, field_kwargs = self.build_field(
+                                ~~~~~~~~~~~~~~~~^
+        source, info, model, depth
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 1251, in build_field
+    return self.build_unknown_field(field_name, model_class)
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/serializers.py", line 1369, in build_unknown_field
+    raise ImproperlyConfigured(
+    ...<2 lines>...
+    )
+django.core.exceptions.ImproperlyConfigured: Field name `validation_regex` is not valid for model `EventCustomField` in `events.serializers.EventCustomFieldCreateSerializer`.
+__________________ TestEventCreate.test_create_event_success ___________________
+src/events/tests/test_events.py:95: in test_create_event_success
+    assert response.status_code == status.HTTP_201_CREATED
+E   assert 400 == 201
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+E    +  and   201 = status.HTTP_201_CREATED
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/events/
+__________________ TestEventCreate.test_create_event_minimal ___________________
+src/events/tests/test_events.py:107: in test_create_event_minimal
+    assert response.status_code == status.HTTP_201_CREATED
+E   assert 400 == 201
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+E    +  and   201 = status.HTTP_201_CREATED
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/events/
+________________ TestEventRecordingViewSet.test_list_recordings ________________
+src/integrations/tests/test_integrations.py:31: in test_list_recordings
+    assert response.status_code == status.HTTP_200_OK
+E   assert 404 == 200
+E    +  where 404 = <HttpResponseNotFound status_code=404, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/events/0011fef1-8c14-4feb-b8d4-425e860a3702/recordings/
+____________ TestEventRecordingViewSet.test_update_recording_access ____________
+src/integrations/tests/test_integrations.py:35: in test_update_recording_access
+    from integrations.models import EventRecording
+E   ImportError: cannot import name 'EventRecording' from 'integrations.models' (/home/beyonder/projects/cpd_events/backend/src/integrations/models.py)
+_______________ TestMyRecordingsViewSet.test_list_my_recordings ________________
+src/integrations/tests/test_integrations.py:64: in test_list_my_recordings
+    assert response.status_code == status.HTTP_200_OK
+E   assert 404 == 200
+E    +  where 404 = <HttpResponseNotFound status_code=404, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/users/me/recordings/
+____________________ TestZoomOAuth.test_initiate_zoom_oauth ____________________
+src/integrations/tests/test_integrations.py:79: in test_initiate_zoom_oauth
+    assert response.status_code == status.HTTP_200_OK
+E   assert 400 == 200
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+ERROR    accounts.services:services.py:74 DEBUG ZOOM CONFIG CHECK: configured=False
+ERROR    accounts.services:services.py:75 DEBUG CLIENT_ID: 'None' (Type: <class 'NoneType'>)
+ERROR    accounts.services:services.py:76 DEBUG REDIRECT_URI: 'None' (Type: <class 'NoneType'>)
+WARNING  django.request:log.py:249 Bad Request: /api/v1/integrations/zoom/initiate/
+_______________________ TestZoomOAuth.test_zoom_callback _______________________
+/usr/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/usr/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/usr/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/usr/lib/python3.13/unittest/mock.py:1481: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+/usr/lib/python3.13/pkgutil.py:528: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'integrations.views' has no attribute 'requests'
+______________________ TestZoomOAuth.test_get_zoom_status ______________________
+src/integrations/tests/test_integrations.py:111: in test_get_zoom_status
+    assert 'connected' in response.data
+E   assert 'connected' in {'is_connected': False, 'zoom_email': None}
+E    +  where {'is_connected': False, 'zoom_email': None} = <Response status_code=200, "application/json">.data
+______________________ TestZoomOAuth.test_disconnect_zoom ______________________
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:105: in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/sqlite3/base.py:359: in execute
+    return super().execute(query, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   sqlite3.IntegrityError: NOT NULL constraint failed: zoom_connections.token_expires_at
+
+The above exception was the direct cause of the following exception:
+src/integrations/tests/test_integrations.py:117: in test_disconnect_zoom
+    ZoomConnection.objects.create(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:669: in create
+    obj.save(force_insert=True, using=self.db)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:874: in save
+    self.save_base(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:966: in save_base
+    updated = self._save_table(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:1167: in _save_table
+    results = self._do_insert(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:1218: in _do_insert
+    return manager._insert(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:1918: in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/sql/compiler.py:1925: in execute_sql
+    cursor.execute(sql, params)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:79: in execute
+    return self._execute_with_wrappers(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:92: in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:100: in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/utils.py:94: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:105: in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/sqlite3/base.py:359: in execute
+    return super().execute(query, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.IntegrityError: NOT NULL constraint failed: zoom_connections.token_expires_at
+_________________ TestZoomMeetingsList.test_list_zoom_meetings _________________
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:105: in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/sqlite3/base.py:359: in execute
+    return super().execute(query, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   sqlite3.IntegrityError: NOT NULL constraint failed: zoom_connections.token_expires_at
+
+The above exception was the direct cause of the following exception:
+src/integrations/tests/test_integrations.py:141: in test_list_zoom_meetings
+    ZoomConnection.objects.create(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:669: in create
+    obj.save(force_insert=True, using=self.db)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:874: in save
+    self.save_base(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:966: in save_base
+    updated = self._save_table(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:1167: in _save_table
+    results = self._do_insert(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:1218: in _do_insert
+    return manager._insert(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:1918: in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/sql/compiler.py:1925: in execute_sql
+    cursor.execute(sql, params)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:79: in execute
+    return self._execute_with_wrappers(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:92: in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:100: in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/utils.py:94: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:105: in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/sqlite3/base.py:359: in execute
+    return super().execute(query, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.IntegrityError: NOT NULL constraint failed: zoom_connections.token_expires_at
+_____________________ TestZoomWebhook.test_url_validation ______________________
+src/integrations/tests/test_integrations.py:175: in test_url_validation
+    response = api_client.post(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:299: in post
+    response = super().post(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:213: in post
+    return self.generic('POST', path, data, content_type, **extra)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:237: in generic
+    return super().generic(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:671: in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:289: in request
+    return super().request(**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:241: in request
+    request = super().request(**kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:1087: in request
+    self.check_exception(response)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:802: in check_exception
+    raise exc_value
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/exception.py:55: in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py:198: in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/decorators/csrf.py:65: in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/generic/base.py:106: in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:515: in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:475: in handle_exception
+    self.raise_uncaught_exception(exc)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:486: in raise_uncaught_exception
+    raise exc
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:512: in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/integrations/views.py:210: in post
+    return self._handle_url_validation(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/integrations/views.py:268: in _handle_url_validation
+    hash_obj = hmac.new(secret_token.encode('utf-8'), plain_token.encode('utf-8'), hashlib.sha256)
+                        ^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'encode'
+------------------------------ Captured log call -------------------------------
+ERROR    django.request:log.py:249 Internal Server Error: /api/v1/integrations/webhooks/zoom/
+Traceback (most recent call last):
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/generic/base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "/home/beyonder/projects/cpd_events/backend/src/integrations/views.py", line 210, in post
+    return self._handle_url_validation(request)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/home/beyonder/projects/cpd_events/backend/src/integrations/views.py", line 268, in _handle_url_validation
+    hash_obj = hmac.new(secret_token.encode('utf-8'), plain_token.encode('utf-8'), hashlib.sha256)
+                        ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'encode'
+________________ TestZoomWebhook.test_recording_completed_event ________________
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:105: in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/sqlite3/base.py:359: in execute
+    return super().execute(query, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   sqlite3.IntegrityError: NOT NULL constraint failed: zoom_webhook_logs.event_timestamp
+
+The above exception was the direct cause of the following exception:
+src/integrations/tests/test_integrations.py:203: in test_recording_completed_event
+    response = api_client.post(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:299: in post
+    response = super().post(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:213: in post
+    return self.generic('POST', path, data, content_type, **extra)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:237: in generic
+    return super().generic(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:671: in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:289: in request
+    return super().request(**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/test.py:241: in request
+    request = super().request(**kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:1087: in request
+    self.check_exception(response)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/test/client.py:802: in check_exception
+    raise exc_value
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/exception.py:55: in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py:198: in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/decorators/csrf.py:65: in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/generic/base.py:106: in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:515: in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:475: in handle_exception
+    self.raise_uncaught_exception(exc)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:486: in raise_uncaught_exception
+    raise exc
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py:512: in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/integrations/views.py:214: in post
+    ZoomWebhookLog.objects.create(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:669: in create
+    obj.save(force_insert=True, using=self.db)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:874: in save
+    self.save_base(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:966: in save_base
+    updated = self._save_table(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:1167: in _save_table
+    results = self._do_insert(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py:1218: in _do_insert
+    return manager._insert(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py:1918: in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/sql/compiler.py:1925: in execute_sql
+    cursor.execute(sql, params)
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:79: in execute
+    return self._execute_with_wrappers(
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:92: in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:100: in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/utils.py:94: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py:105: in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/sqlite3/base.py:359: in execute
+    return super().execute(query, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.IntegrityError: NOT NULL constraint failed: zoom_webhook_logs.event_timestamp
+------------------------------ Captured log call -------------------------------
+ERROR    django.request:log.py:249 Internal Server Error: /api/v1/integrations/webhooks/zoom/
+Traceback (most recent call last):
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/sqlite3/base.py", line 359, in execute
+    return super().execute(query, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+sqlite3.IntegrityError: NOT NULL constraint failed: zoom_webhook_logs.event_timestamp
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/views/generic/base.py", line 106, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "/home/beyonder/projects/cpd_events/backend/src/integrations/views.py", line 214, in post
+    ZoomWebhookLog.objects.create(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        webhook_id=f"invalid_{timezone.now().timestamp()}",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        error_message='Invalid signature',
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py", line 669, in create
+    obj.save(force_insert=True, using=self.db)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py", line 874, in save
+    self.save_base(
+    ~~~~~~~~~~~~~~^
+        using=using,
+        ^^^^^^^^^^^^
+    ...<2 lines>...
+        update_fields=update_fields,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py", line 966, in save_base
+    updated = self._save_table(
+        raw,
+    ...<4 lines>...
+        update_fields,
+    )
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py", line 1167, in _save_table
+    results = self._do_insert(
+        cls._base_manager, using, insert_fields, returning_fields, raw
+    )
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/base.py", line 1218, in _do_insert
+    return manager._insert(
+           ~~~~~~~~~~~~~~~^
+        [self],
+        ^^^^^^^
+    ...<3 lines>...
+        raw=raw,
+        ^^^^^^^^
+    )
+    ^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/query.py", line 1918, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/models/sql/compiler.py", line 1925, in execute_sql
+    cursor.execute(sql, params)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sql, params, many=False, executor=self._execute
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/utils.py", line 94, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/db/backends/sqlite3/base.py", line 359, in execute
+    return super().execute(query, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+django.db.utils.IntegrityError: NOT NULL constraint failed: zoom_webhook_logs.event_timestamp
+___________________ TestEmailLogViewSet.test_list_email_logs ___________________
+src/integrations/tests/test_integrations.py:227: in test_list_email_logs
+    assert response.status_code == status.HTTP_200_OK
+E   assert 404 == 200
+E    +  where 404 = <HttpResponseNotFound status_code=404, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/events/873d8e82-3d1f-45b7-9b7d-b5c7f17030ad/emails/
+___________ TestEmailLogViewSet.test_attendee_cannot_view_email_logs ___________
+src/integrations/tests/test_integrations.py:233: in test_attendee_cannot_view_email_logs
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+E   assert 404 == 403
+E    +  where 404 = <HttpResponseNotFound status_code=404, "text/html; charset=utf-8">.status_code
+E    +  and   403 = status.HTTP_403_FORBIDDEN
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/events/135fe693-38e3-44a4-8460-1e2df92ce3eb/emails/
+_________________ TestAssignmentViewSet.test_create_assignment _________________
+src/learning/tests/test_learning.py:145: in test_create_assignment
+    assert response.status_code == status.HTTP_201_CREATED
+E   assert 400 == 201
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+E    +  and   201 = status.HTTP_201_CREATED
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/events/e0048414-4974-4f02-a452-f4af2d533c27/modules/7e7a94d7-298f-4772-9c24-3467885e2da2/assignments/
+_________________ TestSubmissionViewSet.test_create_submission _________________
+src/learning/tests/test_learning.py:172: in test_create_submission
+    assert response.status_code in [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST]
+E   assert 404 in [201, 400]
+E    +  where 404 = <Response status_code=404, "application/json">.status_code
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/submissions/
+_____________________ TestCourseViewSet.test_create_course _____________________
+src/learning/tests/test_learning.py:239: in test_create_course
+    assert response.status_code == status.HTTP_201_CREATED
+E   assert 400 == 201
+E    +  where 400 = <Response status_code=400, "application/json">.status_code
+E    +  and   201 = status.HTTP_201_CREATED
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/courses/
+_______________ TestOrganizationViewSet.test_list_organizations ________________
+src/organizations/tests/test_organizations.py:38: in test_list_organizations
+    assert response.status_code == status.HTTP_200_OK
+E   assert 403 == 200
+E    +  where 403 = <Response status_code=403, "application/json">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Forbidden: /api/v1/organizations/
+_______________ TestOrganizationViewSet.test_create_organization _______________
+src/organizations/tests/test_organizations.py:48: in test_create_organization
+    assert response.status_code == status.HTTP_201_CREATED
+E   assert 403 == 201
+E    +  where 403 = <Response status_code=403, "application/json">.status_code
+E    +  and   201 = status.HTTP_201_CREATED
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Forbidden: /api/v1/organizations/
+______________ TestOrganizationViewSet.test_retrieve_organization ______________
+src/organizations/tests/test_organizations.py:54: in test_retrieve_organization
+    assert response.status_code == status.HTTP_200_OK
+E   assert 403 == 200
+E    +  where 403 = <Response status_code=403, "application/json">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Forbidden: /api/v1/organizations/1/
+__________ TestOrganizationViewSet.test_update_organization_as_owner ___________
+src/organizations/tests/test_organizations.py:62: in test_update_organization_as_owner
+    assert response.status_code == status.HTTP_200_OK
+E   assert 403 == 200
+E    +  where 403 = <Response status_code=403, "application/json">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Forbidden: /api/v1/organizations/1/
+__________ TestOrganizationViewSet.test_delete_organization_as_owner ___________
+src/organizations/tests/test_organizations.py:69: in test_delete_organization_as_owner
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+E   assert 403 == 204
+E    +  where 403 = <Response status_code=403, "application/json">.status_code
+E    +  and   204 = status.HTTP_204_NO_CONTENT
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Forbidden: /api/v1/organizations/1/
+______ TestOrganizationViewSet.test_cannot_access_unrelated_organization _______
+src/organizations/tests/test_organizations.py:82: in test_cannot_access_unrelated_organization
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+E   assert 403 == 404
+E    +  where 403 = <Response status_code=403, "application/json">.status_code
+E    +  and   404 = status.HTTP_404_NOT_FOUND
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Forbidden: /api/v1/organizations/1/
+____________________ TestMemberManagement.test_list_members ____________________
+src/organizations/tests/test_organizations.py:97: in test_list_members
+    assert response.status_code == status.HTTP_200_OK
+E   assert 403 == 200
+E    +  where 403 = <Response status_code=403, "application/json">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Forbidden: /api/v1/organizations/1/members/
+___________________ TestMemberManagement.test_invite_member ____________________
+src/organizations/tests/test_organizations.py:108: in test_invite_member
+    assert response.status_code == status.HTTP_201_CREATED
+E   assert 404 == 201
+E    +  where 404 = <HttpResponseNotFound status_code=404, "text/html; charset=utf-8">.status_code
+E    +  and   201 = status.HTTP_201_CREATED
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/organizations/1/invite_member/
+_________________ TestMemberManagement.test_update_member_role _________________
+src/organizations/tests/test_organizations.py:122: in test_update_member_role
+    assert response.status_code == status.HTTP_200_OK
+E   assert 403 == 200
+E    +  where 403 = <Response status_code=403, "application/json">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Forbidden: /api/v1/organizations/1/members/c75eea0d-991b-4799-a091-c72c13a9772e/
+___________________ TestMemberManagement.test_remove_member ____________________
+src/organizations/tests/test_organizations.py:137: in test_remove_member
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+E   assert 403 == 204
+E    +  where 403 = <Response status_code=403, "application/json">.status_code
+E    +  and   204 = status.HTTP_204_NO_CONTENT
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Forbidden: /api/v1/organizations/1/members/996a2f5f-7f4d-4530-a11a-cf5d0d26fa76/
+________________ TestMemberManagement.test_member_cannot_invite ________________
+src/organizations/tests/test_organizations.py:149: in test_member_cannot_invite
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+E   assert 404 == 403
+E    +  where 404 = <HttpResponseNotFound status_code=404, "text/html; charset=utf-8">.status_code
+E    +  and   403 = status.HTTP_403_FORBIDDEN
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/organizations/1/invite_member/
+__________________ TestLinkOrganizer.test_link_organizer_data __________________
+src/organizations/tests/test_organizations.py:239: in test_link_organizer_data
+    assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
+E   assert 404 in [200, 400]
+E    +  where 404 = <HttpResponseNotFound status_code=404, "text/html; charset=utf-8">.status_code
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/organizations/1/link_organizer/
+________________ TestOrganizationPlansAndBilling.test_get_plans ________________
+src/organizations/tests/test_plans_and_billing.py:56: in test_get_plans
+    assert response.data['team']['name'] == 'Team'
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'name'
+__ TestEventRegistrationViewSet.test_cannot_access_other_event_registrations ___
+src/registrations/tests/test_registrations.py:77: in test_cannot_access_other_event_registrations
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+E   assert 200 == 404
+E    +  where 200 = <Response status_code=200, "application/json">.status_code
+E    +  and   404 = status.HTTP_404_NOT_FOUND
+___________________ TestWaitlistManagement.test_promote_next ___________________
+src/registrations/tests/test_registrations.py:121: in test_promote_next
+    assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
+E   assert 405 in [200, 400]
+E    +  where 405 = <Response status_code=405, "application/json">.status_code
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Method Not Allowed: /api/v1/events/5def01bd-9f4c-4e95-9510-de680c915976/registrations/promote_next/
+_______________ TestAttendanceOverride.test_override_attendance ________________
+src/registrations/tests/test_registrations.py:140: in test_override_attendance
+    assert response.status_code == status.HTTP_200_OK
+E   assert 404 == 200
+E    +  where 404 = <HttpResponseNotFound status_code=404, "text/html; charset=utf-8">.status_code
+E    +  and   200 = status.HTTP_200_OK
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Not Found: /api/v1/events/7c737307-902b-4553-87b6-0807730f75db/registrations/f0779abe-9d99-4f18-bd72-5d0278656572/override_attendance/
+______________________________ test_create_event _______________________________
+src/tests/test_smoke.py:27: in test_create_event
+    pytest.fail(f"Failed to create event: {response.data}")
+E   Failed: Failed to create event: {'error': {'code': 'INVALID_REQUEST', 'message': 'Direct assignment to the forward side of a many-to-many set is prohibited. Use speakers.set() instead.', 'details': None}}
+------------------------------ Captured log call -------------------------------
+WARNING  django.request:log.py:249 Bad Request: /api/v1/events/
+=============================== warnings summary ===============================
+src/accounts/tests/test_auth.py: 31 warnings
+src/accounts/tests/test_cpd.py: 7 warnings
+src/accounts/tests/test_users.py: 25 warnings
+src/billing/tests/test_subscriptions.py: 16 warnings
+src/billing/tests/test_webhook_critical_workflows.py: 5 warnings
+src/billing/tests/test_webhooks.py: 8 warnings
+src/certificates/tests/test_certificates.py: 19 warnings
+src/certificates/tests/test_templates.py: 13 warnings
+src/common/tests/test_tasks.py: 4 warnings
+src/contacts/tests/test_contacts.py: 25 warnings
+src/events/tests/test_custom_fields.py: 12 warnings
+src/events/tests/test_events.py: 34 warnings
+src/events/tests/test_public_events.py: 18 warnings
+src/events/tests/test_sessions.py: 15 warnings
+src/integrations/tests/test_integrations.py: 9 warnings
+src/learning/tests/test_learning.py: 21 warnings
+src/organizations/tests/test_organizations.py: 18 warnings
+src/organizations/tests/test_plans_and_billing.py: 4 warnings
+src/registrations/tests/test_registrations.py: 27 warnings
+src/tests/test_smoke.py: 3 warnings
+  /home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /home/beyonder/projects/cpd_events/backend/src/staticfiles/
+    mw_instance = middleware(adapted_handler)
+
+src/accounts/tests/test_auth.py::TestSignupView::test_signup_attendee_success
+  /home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/drf_yasg/views.py:100: DeprecationWarning: SwaggerJSONRenderer & SwaggerYAMLRenderer's `format` has changed to not include a `.` prefix, please silence this warning by setting `SWAGGER_USE_COMPAT_RENDERERS = False` in your Django settings and ensure your application works (check your URLCONF and swagger/redoc URLs).
+    warnings.warn(
+
+src/accounts/tests/test_auth.py: 15 warnings
+src/accounts/tests/test_cpd.py: 11 warnings
+src/accounts/tests/test_users.py: 12 warnings
+src/billing/tests/test_subscriptions.py: 2 warnings
+src/certificates/tests/test_certificates.py: 19 warnings
+src/certificates/tests/test_templates.py: 1 warning
+src/contacts/tests/test_contacts.py: 1 warning
+src/events/tests/test_custom_fields.py: 2 warnings
+src/events/tests/test_events.py: 4 warnings
+src/events/tests/test_public_events.py: 1 warning
+src/events/tests/test_sessions.py: 1 warning
+src/integrations/tests/test_integrations.py: 3 warnings
+src/learning/tests/test_learning.py: 7 warnings
+src/organizations/tests/test_organizations.py: 5 warnings
+src/registrations/tests/test_registrations.py: 21 warnings
+  /home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/factory/django.py:182: DeprecationWarning: UserFactory._after_postgeneration will stop saving the instance after postgeneration hooks in the next major release.
+  If the save call is extraneous, set skip_postgeneration_save=True in the UserFactory.Meta.
+  To keep saving the instance, move the save call to your postgeneration hooks or override _after_postgeneration.
+    warnings.warn(
+
+src/accounts/tests/test_auth.py: 1 warning
+src/accounts/tests/test_cpd.py: 1 warning
+src/accounts/tests/test_users.py: 6 warnings
+src/billing/tests/test_subscriptions.py: 16 warnings
+src/billing/tests/test_webhooks.py: 6 warnings
+src/certificates/tests/test_certificates.py: 19 warnings
+src/certificates/tests/test_templates.py: 13 warnings
+src/contacts/tests/test_contacts.py: 25 warnings
+src/events/tests/test_custom_fields.py: 14 warnings
+src/events/tests/test_events.py: 33 warnings
+src/events/tests/test_public_events.py: 17 warnings
+src/events/tests/test_sessions.py: 18 warnings
+src/events/tests/test_zoom_retry_signal.py: 3 warnings
+src/integrations/tests/test_integrations.py: 11 warnings
+src/learning/tests/test_learning.py: 19 warnings
+src/organizations/tests/test_organizations.py: 19 warnings
+src/organizations/tests/test_plans_and_billing.py: 4 warnings
+src/registrations/tests/test_registrations.py: 24 warnings
+src/tests/test_smoke.py: 1 warning
+  /home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/factory/django.py:182: DeprecationWarning: OrganizerFactory._after_postgeneration will stop saving the instance after postgeneration hooks in the next major release.
+  If the save call is extraneous, set skip_postgeneration_save=True in the OrganizerFactory.Meta.
+  To keep saving the instance, move the save call to your postgeneration hooks or override _after_postgeneration.
+    warnings.warn(
+
+src/billing/tests/test_webhooks.py::TestStripeWebhook::test_invalid_signature
+  /home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/stripe/error.py:5: DeprecationWarning: 
+      The stripe.api_resources.error_object package is deprecated, please change your
+      imports to import from stripe directly.
+      From:
+        from stripe.api_resources.error_object import ErrorObject
+      To:
+        from stripe import ErrorObject
+      
+    warn(
+
+src/certificates/tests/test_templates.py::TestTemplatePreview::test_preview_template
+  /home/beyonder/.cache/pypoetry/virtualenvs/backend-bYf8W1uj-py3.13/lib/python3.13/site-packages/PyPDF2/__init__.py:21: DeprecationWarning: PyPDF2 is deprecated. Please move to the pypdf library instead.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_list_cpd_requirements
+FAILED src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_create_cpd_requirement
+FAILED src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_retrieve_cpd_requirement
+FAILED src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_update_cpd_requirement
+FAILED src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_delete_cpd_requirement
+FAILED src/accounts/tests/test_cpd.py::TestCPDRequirementViewSet::test_cannot_access_others_requirements
+FAILED src/accounts/tests/test_cpd.py::TestCPDProgressView::test_get_cpd_progress
+FAILED src/accounts/tests/test_users.py::TestUpgradeToOrganizerView::test_organizer_cannot_upgrade
+FAILED src/billing/tests/test_subscriptions.py::TestSubscriptionViewSet::test_create_subscription
+FAILED src/billing/tests/test_subscriptions.py::TestSubscriptionViewSet::test_attendee_cannot_access_subscription
+FAILED src/billing/tests/test_subscriptions.py::TestBillingViews::test_create_checkout_session
+FAILED src/billing/tests/test_subscriptions.py::TestBillingViews::test_create_billing_portal_session
+FAILED src/billing/tests/test_subscriptions.py::TestBillingViews::test_attendee_cannot_access_checkout
+FAILED src/billing/tests/test_webhooks.py::TestStripeWebhook::test_subscription_created
+FAILED src/billing/tests/test_webhooks.py::TestStripeWebhook::test_subscription_updated
+FAILED src/billing/tests/test_webhooks.py::TestStripeWebhook::test_subscription_deleted
+FAILED src/billing/tests/test_webhooks.py::TestStripeWebhook::test_invoice_paid
+FAILED src/billing/tests/test_webhooks.py::TestStripeWebhook::test_invoice_payment_failed
+FAILED src/billing/tests/test_webhooks.py::TestStripeWebhook::test_payment_method_attached
+FAILED src/billing/tests/test_webhooks.py::TestStripeWebhook::test_unknown_event_type
+FAILED src/billing/tests/test_webhooks.py::TestStripeWebhook::test_invalid_signature
+FAILED src/certificates/tests/test_certificates.py::TestEventCertificateViewSet::test_issue_bulk_certificates
+FAILED src/certificates/tests/test_certificates.py::TestEventCertificateViewSet::test_revoke_certificate
+FAILED src/certificates/tests/test_certificates.py::TestEventCertificateViewSet::test_cannot_manage_other_event_certificates
+FAILED src/certificates/tests/test_certificates.py::TestMyCertificateViewSet::test_download_certificate
+FAILED src/certificates/tests/test_templates.py::TestSetDefaultTemplate::test_set_default_template
+FAILED src/certificates/tests/test_templates.py::TestSetDefaultTemplate::test_previous_default_unset
+FAILED src/certificates/tests/test_templates.py::TestAvailableTemplates::test_get_available_templates
+FAILED src/certificates/tests/test_templates.py::TestAvailableTemplates::test_includes_shared_org_templates
+FAILED src/contacts/tests/test_contacts.py::TestTagViewSet::test_merge_tags
+FAILED src/contacts/tests/test_contacts.py::TestContactListViewSet::test_set_default_list
+FAILED src/contacts/tests/test_contacts.py::TestContactListViewSet::test_merge_lists
+FAILED src/contacts/tests/test_contacts.py::TestContactValidation::test_duplicate_email_in_list
+FAILED src/events/tests/test_custom_fields.py::TestEventCustomFieldListCreate::test_create_custom_field_text
+FAILED src/events/tests/test_custom_fields.py::TestEventCustomFieldListCreate::test_create_custom_field_select
+FAILED src/events/tests/test_custom_fields.py::TestEventCustomFieldListCreate::test_create_custom_field_other_event_forbidden
+FAILED src/events/tests/test_events.py::TestEventCreate::test_create_event_success
+FAILED src/events/tests/test_events.py::TestEventCreate::test_create_event_minimal
+FAILED src/integrations/tests/test_integrations.py::TestEventRecordingViewSet::test_list_recordings
+FAILED src/integrations/tests/test_integrations.py::TestEventRecordingViewSet::test_update_recording_access
+FAILED src/integrations/tests/test_integrations.py::TestMyRecordingsViewSet::test_list_my_recordings
+FAILED src/integrations/tests/test_integrations.py::TestZoomOAuth::test_initiate_zoom_oauth
+FAILED src/integrations/tests/test_integrations.py::TestZoomOAuth::test_zoom_callback
+FAILED src/integrations/tests/test_integrations.py::TestZoomOAuth::test_get_zoom_status
+FAILED src/integrations/tests/test_integrations.py::TestZoomOAuth::test_disconnect_zoom
+FAILED src/integrations/tests/test_integrations.py::TestZoomMeetingsList::test_list_zoom_meetings
+FAILED src/integrations/tests/test_integrations.py::TestZoomWebhook::test_url_validation
+FAILED src/integrations/tests/test_integrations.py::TestZoomWebhook::test_recording_completed_event
+FAILED src/integrations/tests/test_integrations.py::TestEmailLogViewSet::test_list_email_logs
+FAILED src/integrations/tests/test_integrations.py::TestEmailLogViewSet::test_attendee_cannot_view_email_logs
+FAILED src/learning/tests/test_learning.py::TestAssignmentViewSet::test_create_assignment
+FAILED src/learning/tests/test_learning.py::TestSubmissionViewSet::test_create_submission
+FAILED src/learning/tests/test_learning.py::TestCourseViewSet::test_create_course
+FAILED src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_list_organizations
+FAILED src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_create_organization
+FAILED src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_retrieve_organization
+FAILED src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_update_organization_as_owner
+FAILED src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_delete_organization_as_owner
+FAILED src/organizations/tests/test_organizations.py::TestOrganizationViewSet::test_cannot_access_unrelated_organization
+FAILED src/organizations/tests/test_organizations.py::TestMemberManagement::test_list_members
+FAILED src/organizations/tests/test_organizations.py::TestMemberManagement::test_invite_member
+FAILED src/organizations/tests/test_organizations.py::TestMemberManagement::test_update_member_role
+FAILED src/organizations/tests/test_organizations.py::TestMemberManagement::test_remove_member
+FAILED src/organizations/tests/test_organizations.py::TestMemberManagement::test_member_cannot_invite
+FAILED src/organizations/tests/test_organizations.py::TestLinkOrganizer::test_link_organizer_data
+FAILED src/organizations/tests/test_plans_and_billing.py::TestOrganizationPlansAndBilling::test_get_plans
+FAILED src/registrations/tests/test_registrations.py::TestEventRegistrationViewSet::test_cannot_access_other_event_registrations
+FAILED src/registrations/tests/test_registrations.py::TestWaitlistManagement::test_promote_next
+FAILED src/registrations/tests/test_registrations.py::TestAttendanceOverride::test_override_attendance
+FAILED src/tests/test_smoke.py::test_create_event - Failed: Failed to create ...
+================= 70 failed, 264 passed, 672 warnings in 8.38s =================
