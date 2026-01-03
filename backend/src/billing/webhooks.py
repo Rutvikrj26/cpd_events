@@ -308,7 +308,13 @@ class StripeWebhookView(View):
     # =========================================================================
 
     def _handle_payment_intent_succeeded(self, data):
-        """Handle payment_intent.succeeded."""
+        """
+        Handle payment_intent.succeeded - fallback for sync confirmation.
+
+        This is now a FALLBACK handler. Primary payment confirmation happens
+        via the synchronous /confirm-payment/ endpoint. This webhook ensures
+        payments are eventually confirmed even if frontend call fails.
+        """
         from registrations.models import Registration
 
         metadata = data.get('metadata', {})
@@ -324,23 +330,29 @@ class StripeWebhookView(View):
             logger.error(f"Registration {registration_id} not found for payment {data['id']}")
             return
 
-        # Update registration status
+        # IDEMPOTENT: Skip if already paid (likely confirmed via sync endpoint)
+        if registration.payment_status == Registration.PaymentStatus.PAID:
+            logger.info(f"Registration {registration_id} already PAID, skipping webhook update")
+            return
+
+        # Update registration status (fallback path)
         amount_received = data.get('amount_received', 0)
-        # Convert cents to decimal using currency logic if needed, but simple division by 100 for now (assuming all currencies 2 decimals, which isn't true but ok for now)
-        registration.amount_paid = amount_received / 100.0 
+        registration.amount_paid = amount_received / 100.0
         registration.payment_status = Registration.PaymentStatus.PAID
-        
-        # Determine status. If it was pending payment, verify if confirmed.
-        # Use existing logic or status setting.
-        # If we set it to 'pending' during creation, now 'confirmed'.
+
         if registration.status == 'pending':
             registration.status = 'confirmed'
-        
-        registration.save(update_fields=['amount_paid', 'payment_status', 'status'])
-        logger.info(f"Registration {registration_id} marked as PAID via {data['id']}")
+
+        registration.save(update_fields=['amount_paid', 'payment_status', 'status', 'updated_at'])
+        logger.info(f"Registration {registration_id} marked as PAID via webhook fallback {data['id']}")
 
     def _handle_payment_intent_payment_failed(self, data):
-        """Handle payment_intent.payment_failed."""
+        """
+        Handle payment_intent.payment_failed - fallback for sync confirmation.
+
+        This is now a FALLBACK handler. Primary failure handling happens
+        via the synchronous /confirm-payment/ endpoint.
+        """
         from registrations.models import Registration
 
         metadata = data.get('metadata', {})
@@ -354,12 +366,16 @@ class StripeWebhookView(View):
         except Registration.DoesNotExist:
             return
 
+        # IDEMPOTENT: Skip if already failed or paid
+        if registration.payment_status in [Registration.PaymentStatus.FAILED, Registration.PaymentStatus.PAID]:
+            logger.info(f"Registration {registration_id} already {registration.payment_status}, skipping webhook update")
+            return
+
         registration.payment_status = Registration.PaymentStatus.FAILED
-        # Don't auto-cancel registration immediately? Or do?
-        # Maybe just log it. Admin/User can retry.
-        registration.save(update_fields=['payment_status'])
-        
-        logger.warning(f"Payment failed for registration {registration_id}: {data['last_payment_error']}")
+        registration.save(update_fields=['payment_status', 'updated_at'])
+
+        error_msg = data.get('last_payment_error', {}).get('message', 'Unknown error') if data.get('last_payment_error') else 'Unknown error'
+        logger.warning(f"Payment failed for registration {registration_id} via webhook: {error_msg}")
 
     # =========================================================================
     # Connect Account Handlers

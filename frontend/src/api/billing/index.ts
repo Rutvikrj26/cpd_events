@@ -75,6 +75,18 @@ export const syncSubscription = async (): Promise<Subscription> => {
     return response.data;
 };
 
+/**
+ * Confirm checkout session completion.
+ * Called after returning from Stripe Checkout.
+ * Atomically syncs subscription from Stripe.
+ */
+export const confirmCheckout = async (sessionId: string): Promise<Subscription> => {
+    const response = await client.post<Subscription>('/subscription/confirm-checkout/', {
+        session_id: sessionId,
+    });
+    return response.data;
+};
+
 // Payment Method APIs (view/delete only - adding handled by Stripe Portal)
 export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
     const response = await client.get('/payment-methods/');

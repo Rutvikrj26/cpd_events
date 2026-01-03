@@ -134,5 +134,37 @@ variable "cors_origins" {
   default     = ["*"]
 }
 
+# =============================================================================
+# Application URLs
+# =============================================================================
+
+variable "site_url" {
+  description = "Backend API URL (leave empty to use Cloud Run URL)"
+  type        = string
+  default     = ""
+}
+
+variable "frontend_url" {
+  description = "Frontend application URL"
+  type        = string
+  default     = "https://app.accredit.store"
+}
+
+# =============================================================================
+# Email Configuration
+# =============================================================================
+
+variable "default_from_email" {
+  description = "Default sender email address"
+  type        = string
+  default     = "info@accredit.store"
+}
+
+variable "admin_email" {
+  description = "Admin email for notifications"
+  type        = string
+  default     = "admin@accredit.store"
+}
+
 # Note: Frontend deployment is managed by CLI (accredit cloud frontend deploy)
 # Frontend variables have been removed - use Firebase Hosting or GCS via CLI

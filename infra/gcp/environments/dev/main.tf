@@ -141,6 +141,43 @@ resource "google_secret_manager_secret_version" "db_password" {
   secret_data = random_password.db_password.result
 }
 
+# =============================================================================
+# Application Secrets (uploaded via CLI: accredit cloud secrets upload)
+# These secrets are created by the CLI and referenced here by Cloud Run
+# =============================================================================
+
+locals {
+  # Secret names follow the pattern: {ENV}_{KEY}
+  # These must be uploaded before terraform apply using:
+  #   accredit cloud secrets upload --backend --env dev
+  secret_prefix = upper(var.environment)
+
+  # List of required secrets that must exist in Secret Manager
+  required_secrets = [
+    "DJANGO_SECRET_KEY",
+    "ENCRYPTION_KEY",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_PUBLISHABLE_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "ZOOM_CLIENT_ID",
+    "ZOOM_CLIENT_SECRET",
+    "ZOOM_WEBHOOK_SECRET",
+    "MAILGUN_API_KEY",
+    "MAILGUN_SMTP_LOGIN",
+    "MAILGUN_SMTP_PASSWORD",
+  ]
+
+  # Optional secrets (won't fail if missing)
+  optional_secrets = [
+    "MAILGUN_DOMAIN",
+    "ZOOM_REDIRECT_URI",
+    "SITE_URL",
+    "FRONTEND_URL",
+    "DEFAULT_FROM_EMAIL",
+    "ADMIN_EMAIL",
+  ]
+}
+
 # VPC Network
 resource "google_compute_network" "vpc" {
   name                    = "${local.app_name}-vpc"
@@ -319,6 +356,162 @@ resource "google_cloud_run_service" "backend" {
         env {
           name  = "WEB_CONCURRENCY"
           value = "1"
+        }
+
+        # =================================================================
+        # Application Secrets from Secret Manager
+        # Upload with: accredit cloud secrets upload --backend --env dev
+        # =================================================================
+
+        # Django Core
+        env {
+          name = "DJANGO_SECRET_KEY"
+          value_from {
+            secret_key_ref {
+              name = "${local.secret_prefix}_DJANGO_SECRET_KEY"
+              key  = "latest"
+            }
+          }
+        }
+
+        env {
+          name = "ENCRYPTION_KEY"
+          value_from {
+            secret_key_ref {
+              name = "${local.secret_prefix}_ENCRYPTION_KEY"
+              key  = "latest"
+            }
+          }
+        }
+
+        # Stripe
+        env {
+          name = "STRIPE_SECRET_KEY"
+          value_from {
+            secret_key_ref {
+              name = "${local.secret_prefix}_STRIPE_SECRET_KEY"
+              key  = "latest"
+            }
+          }
+        }
+
+        env {
+          name = "STRIPE_PUBLISHABLE_KEY"
+          value_from {
+            secret_key_ref {
+              name = "${local.secret_prefix}_STRIPE_PUBLISHABLE_KEY"
+              key  = "latest"
+            }
+          }
+        }
+
+        env {
+          name = "STRIPE_WEBHOOK_SECRET"
+          value_from {
+            secret_key_ref {
+              name = "${local.secret_prefix}_STRIPE_WEBHOOK_SECRET"
+              key  = "latest"
+            }
+          }
+        }
+
+        # Zoom
+        env {
+          name = "ZOOM_CLIENT_ID"
+          value_from {
+            secret_key_ref {
+              name = "${local.secret_prefix}_ZOOM_CLIENT_ID"
+              key  = "latest"
+            }
+          }
+        }
+
+        env {
+          name = "ZOOM_CLIENT_SECRET"
+          value_from {
+            secret_key_ref {
+              name = "${local.secret_prefix}_ZOOM_CLIENT_SECRET"
+              key  = "latest"
+            }
+          }
+        }
+
+        env {
+          name = "ZOOM_WEBHOOK_SECRET"
+          value_from {
+            secret_key_ref {
+              name = "${local.secret_prefix}_ZOOM_WEBHOOK_SECRET"
+              key  = "latest"
+            }
+          }
+        }
+
+        # Mailgun
+        env {
+          name = "MAILGUN_API_KEY"
+          value_from {
+            secret_key_ref {
+              name = "${local.secret_prefix}_MAILGUN_API_KEY"
+              key  = "latest"
+            }
+          }
+        }
+
+        env {
+          name = "MAILGUN_SMTP_LOGIN"
+          value_from {
+            secret_key_ref {
+              name = "${local.secret_prefix}_MAILGUN_SMTP_LOGIN"
+              key  = "latest"
+            }
+          }
+        }
+
+        env {
+          name = "MAILGUN_SMTP_PASSWORD"
+          value_from {
+            secret_key_ref {
+              name = "${local.secret_prefix}_MAILGUN_SMTP_PASSWORD"
+              key  = "latest"
+            }
+          }
+        }
+
+        # Static config (not secrets, but needed)
+        env {
+          name  = "MAILGUN_SMTP_SERVER"
+          value = "smtp.mailgun.org"
+        }
+
+        env {
+          name  = "MAILGUN_SMTP_PORT"
+          value = "587"
+        }
+
+        env {
+          name  = "DEFAULT_FROM_EMAIL"
+          value = var.default_from_email
+        }
+
+        env {
+          name  = "ADMIN_EMAIL"
+          value = var.admin_email
+        }
+
+        # URLs - using Cloud Run URL or custom domain
+        env {
+          name  = "SITE_URL"
+          value = var.site_url != "" ? var.site_url : "https://${local.app_name}-${var.project_id}.${var.region}.run.app"
+        }
+
+        env {
+          name  = "FRONTEND_URL"
+          value = var.frontend_url
+        }
+
+        env {
+          name  = "ZOOM_REDIRECT_URI"
+          value = "${var.frontend_url}/integrations/zoom/callback"
         }
       }
 

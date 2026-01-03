@@ -5,6 +5,12 @@
 		},
 		{
 			"path": "docs"
+		},
+		{
+			"path": "frontend"
+		},
+		{
+			"path": "."
 		}
 	]
 }

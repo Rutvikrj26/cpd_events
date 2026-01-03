@@ -56,9 +56,16 @@ staticfiles/
 media/
 mediafiles/
 
-# ----- Env / editor -----
+# ----- Environment files -----
+# Ignore all env files (contain secrets)
 .env
-.env.*
-!.env.example
+.env.dev
+.env.prod
+.env.local
+# Track only templates (contain placeholders only)
+!.env.dev.template
+!.env.prod.template
+
+# ----- Editor -----
 .idea/
 .vscode/

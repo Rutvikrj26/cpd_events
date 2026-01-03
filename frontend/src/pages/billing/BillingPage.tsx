@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { getSubscription, getInvoices, getBillingPortal, createCheckoutSession, cancelSubscription, reactivateSubscription, updateSubscription, getPublicPricing, syncSubscription } from '@/api/billing';
+import { getSubscription, getInvoices, getBillingPortal, createCheckoutSession, cancelSubscription, reactivateSubscription, updateSubscription, getPublicPricing, syncSubscription, confirmCheckout } from '@/api/billing';
 import { Subscription, Invoice, PricingProduct } from '@/api/billing/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -104,28 +104,50 @@ export const BillingPage = () => {
 
     useEffect(() => {
         if (checkoutStatus === 'success') {
-            toast.success("Payment successful! Updating subscription...");
-            // Force a reload of subscription data, potentially with a small delay to allow webhook processing
-            // In a real env, webhooks are fast. Locally, they might not exist. 
-            // We'll try to re-fetch.
-            const timeout = setTimeout(async () => {
-                try {
-                    const synced = await syncSubscription();
-                    setSubscription(synced);
-                    toast.success("Your account has been upgraded!");
-                    // Navigate to /billing without query params to prevent loop and refresh user context
-                    window.location.href = '/billing';
-                } catch (e) {
-                    console.error("Sync failed, falling back to get", e);
-                    const sub = await getSubscription();
-                    setSubscription(sub);
-                }
-            }, 1000);
-            return () => clearTimeout(timeout);
+            const sessionId = searchParams.get('session_id');
+
+            if (sessionId) {
+                // Atomic confirmation via new endpoint
+                toast.success("Payment successful! Confirming subscription...");
+                confirmCheckout(sessionId)
+                    .then(sub => {
+                        setSubscription(sub);
+                        toast.success("Your account has been upgraded!");
+                        // Clear query params and refresh
+                        window.history.replaceState({}, '', '/billing');
+                    })
+                    .catch(async (err) => {
+                        console.error("Checkout confirmation failed, falling back to sync", err);
+                        // Fallback to sync if confirm-checkout fails
+                        try {
+                            const synced = await syncSubscription();
+                            setSubscription(synced);
+                            toast.success("Your account has been upgraded!");
+                            window.history.replaceState({}, '', '/billing');
+                        } catch (syncErr) {
+                            console.error("Sync also failed", syncErr);
+                            toast.error("Failed to confirm subscription. Please refresh the page or contact support.");
+                        }
+                    });
+            } else {
+                // No session_id, try legacy sync approach (backwards compatibility)
+                toast.success("Payment successful! Updating subscription...");
+                syncSubscription()
+                    .then(synced => {
+                        setSubscription(synced);
+                        toast.success("Your account has been upgraded!");
+                        window.history.replaceState({}, '', '/billing');
+                    })
+                    .catch(async (e) => {
+                        console.error("Sync failed, falling back to get", e);
+                        const sub = await getSubscription();
+                        setSubscription(sub);
+                    });
+            }
         } else if (checkoutStatus === 'canceled') {
             toast.info("Checkout was canceled. No changes were made.");
         }
-    }, [checkoutStatus]);
+    }, [checkoutStatus, searchParams]);
 
     useEffect(() => {
         const fetchData = async () => {

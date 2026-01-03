@@ -170,6 +170,39 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         else:
             return error_response(result.get('error', 'Failed to sync subscription'), code='SYNC_FAILED')
 
+    @swagger_auto_schema(
+        operation_summary="Confirm checkout",
+        operation_description="Confirm checkout session completion. Called by frontend after returning from Stripe Checkout. Atomically syncs subscription from Stripe.",
+        responses={
+            200: SubscriptionSerializer,
+            400: '{"error": {"code": "...", "message": "..."}}',
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='confirm-checkout')
+    def confirm_checkout(self, request):
+        """
+        Confirm checkout session completion.
+
+        Called by frontend after returning from Stripe Checkout.
+        Atomically syncs subscription from Stripe.
+
+        Expected request body:
+            {"session_id": "cs_xxx"}
+        """
+        session_id = request.data.get('session_id')
+        if not session_id:
+            return error_response('session_id is required', code='MISSING_SESSION_ID')
+
+        result = stripe_service.confirm_checkout_session(
+            user=request.user,
+            session_id=session_id,
+        )
+
+        if result['success']:
+            return Response(SubscriptionSerializer(result['subscription']).data)
+        else:
+            return error_response(result.get('error', 'Checkout confirmation failed'), code='CHECKOUT_CONFIRMATION_FAILED')
+
 
 @roles('attendee', 'organizer', 'admin', route_name='invoices')
 class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):

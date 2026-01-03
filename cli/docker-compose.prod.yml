@@ -33,55 +33,14 @@ services:
     volumes:
       - backend_static:/app/staticfiles
       - backend_media:/app/mediafiles
+    env_file:
+      - ../backend/.env.prod
     environment:
-      # Django settings
+      # Docker-specific overrides
       DJANGO_SETTINGS_MODULE: config.settings.production
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DEBUG: "False"
-
-      # Database
-      DB_NAME: ${DB_NAME}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
       DB_HOST: db
       DB_PORT: 5432
-
-      # Security
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
-
-      # Site URL
-      SITE_URL: ${SITE_URL}
-
-      # Email (Mailgun)
-      MAILGUN_SMTP_LOGIN: ${MAILGUN_SMTP_LOGIN}
-      MAILGUN_SMTP_PASSWORD: ${MAILGUN_SMTP_PASSWORD}
-      MAILGUN_API_KEY: ${MAILGUN_API_KEY}
-      MAILGUN_DOMAIN: ${MAILGUN_DOMAIN}
-      DEFAULT_FROM_EMAIL: info@accredit.store
-
-      # GCP
-      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
-      GCP_LOCATION: ${GCP_LOCATION}
-      GCP_QUEUE_NAME: ${GCP_QUEUE_NAME}
-      GCP_SA_EMAIL: ${GCP_SA_EMAIL}
-      GCS_BUCKET_NAME: ${GCS_BUCKET_NAME}
-
-      # Stripe
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
-      STRIPE_PRICE_ORGANIZER: ${STRIPE_PRICE_ORGANIZER}
-      STRIPE_PRICE_ORGANIZATION: ${STRIPE_PRICE_ORGANIZATION}
-
-      # Zoom
-      ZOOM_CLIENT_ID: ${ZOOM_CLIENT_ID}
-      ZOOM_CLIENT_SECRET: ${ZOOM_CLIENT_SECRET}
-      ZOOM_REDIRECT_URI: ${ZOOM_REDIRECT_URI}
-      ZOOM_WEBHOOK_SECRET: ${ZOOM_WEBHOOK_SECRET}
-
-      # Encryption
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     depends_on:
       db:
         condition: service_healthy

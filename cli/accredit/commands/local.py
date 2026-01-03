@@ -56,6 +56,20 @@ def local(ctx):
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
+def check_env_files(start_backend, start_frontend):
+    """Check if required .env.dev files exist and warn if missing."""
+    backend_env = BACKEND_DIR / ".env.dev"
+    frontend_env = FRONTEND_DIR / ".env.dev"
+
+    if start_backend and not backend_env.exists():
+        console.print("[yellow]⚠ backend/.env.dev not found - backend may not start correctly[/yellow]")
+        console.print("  Copy from template: [cyan]cp backend/.env.dev.template backend/.env.dev[/cyan]")
+
+    if start_frontend and not frontend_env.exists():
+        console.print("[yellow]⚠ frontend/.env.dev not found - frontend may not start correctly[/yellow]")
+        console.print("  Copy from template: [cyan]cp frontend/.env.dev.template frontend/.env.dev[/cyan]")
+
+
 @local.command()
 @click.option('--backend', is_flag=True, help='Start only the backend service')
 @click.option('--frontend', is_flag=True, help='Start only the frontend service')
@@ -66,6 +80,9 @@ def up(backend, frontend):
     # If no flags specified, start both
     start_backend = backend or (not backend and not frontend)
     start_frontend = frontend or (not backend and not frontend)
+
+    # Check for env files
+    check_env_files(start_backend, start_frontend)
 
     # Backend
     if start_backend:
@@ -221,6 +238,19 @@ def shell():
 def setup():
     """Run initial setup (install dependencies, migrate)."""
     console.print("[bold]Running setup...[/bold]")
+
+    # Check for env files
+    backend_env = BACKEND_DIR / ".env.dev"
+    frontend_env = FRONTEND_DIR / ".env.dev"
+
+    if not backend_env.exists():
+        console.print("\n[yellow]⚠ backend/.env.dev not found[/yellow]")
+        console.print("  Copy from template: [cyan]cp backend/.env.dev.template backend/.env.dev[/cyan]")
+        console.print("  Then fill in your API keys and credentials\n")
+
+    if not frontend_env.exists():
+        console.print("[yellow]⚠ frontend/.env.dev not found[/yellow]")
+        console.print("  Copy from template: [cyan]cp frontend/.env.dev.template frontend/.env.dev[/cyan]\n")
 
     # Backend Setup
     console.print("[cyan]Backend: Installing dependencies...[/cyan]")

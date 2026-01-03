@@ -769,14 +769,53 @@ def deploy(env):
         console.print(f"[red]✗ Frontend directory not found: {FRONTEND_DIR}[/red]")
         sys.exit(1)
 
+    # Get backend URL from Terraform output
+    env_dir = get_env_dir(env)
+    result = subprocess.run(
+        ["terraform", "output", "-raw", "backend_url"],
+        cwd=env_dir,
+        capture_output=True,
+        text=True
+    )
+
+    backend_url = result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else None
+
+    if not backend_url:
+        console.print("[yellow]⚠ Could not get backend_url from Terraform. Using .env.prod if available.[/yellow]")
+
     try:
         # Install dependencies
         console.print("[cyan]Installing dependencies...[/cyan]")
         subprocess.run(["npm", "install"], cwd=FRONTEND_DIR, check=True)
 
-        # Build
+        # Build with environment variables from Terraform
         console.print("[cyan]Building production bundle...[/cyan]")
-        subprocess.run(["npm", "run", "build"], cwd=FRONTEND_DIR, check=True)
+
+        # Set build-time environment variables
+        build_env = os.environ.copy()
+
+        if backend_url:
+            # Auto-set API URL from Terraform output
+            api_url = f"{backend_url}/api/v1"
+            build_env["VITE_API_URL"] = api_url
+            console.print(f"  [dim]VITE_API_URL={api_url}[/dim]")
+
+        # Load additional vars from .env.prod if exists
+        env_prod_file = FRONTEND_DIR / ".env.prod"
+        if env_prod_file.exists():
+            console.print(f"  [dim]Loading additional vars from .env.prod[/dim]")
+            with open(env_prod_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        key = key.strip()
+                        # Don't override VITE_API_URL if we got it from Terraform
+                        if key == "VITE_API_URL" and backend_url:
+                            continue
+                        build_env[key] = value.strip()
+
+        subprocess.run(["npm", "run", "build"], cwd=FRONTEND_DIR, check=True, env=build_env)
 
         # Check for Firebase configuration
         firebase_json = FRONTEND_DIR / "firebase.json"
@@ -986,3 +1025,508 @@ def list_envs():
             )
 
     console.print(table)
+
+
+# =============================================================================
+# SECRETS MANAGEMENT
+# =============================================================================
+
+@cloud.group()
+def secrets():
+    """Manage secrets in Google Secret Manager."""
+    pass
+
+
+def get_secret_name(key: str, env: str) -> str:
+    """Generate secret name with environment prefix."""
+    return f"{env}_{key}".upper()
+
+
+def parse_env_file(env_file: Path) -> dict:
+    """Parse a .env file and return key-value pairs."""
+    secrets = {}
+    if not env_file.exists():
+        return secrets
+
+    with open(env_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            # Skip empty lines and comments
+            if not line or line.startswith('#'):
+                continue
+            # Parse KEY=VALUE
+            if '=' in line:
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                # Remove quotes if present
+                if (value.startswith('"') and value.endswith('"')) or \
+                   (value.startswith("'") and value.endswith("'")):
+                    value = value[1:-1]
+                secrets[key] = value
+    return secrets
+
+
+@secrets.command('list')
+@click.option('--env', '-e', default=None, help='Environment (dev/staging/prod)')
+@click.option('--filter', '-f', 'filter_str', default=None, help='Filter secrets by prefix')
+def secrets_list(env, filter_str):
+    """List all secrets in Secret Manager."""
+    env = env or get_default_env()
+    project_id = get_config_value("project_id")
+
+    if not project_id:
+        console.print("[red]✗ Project ID not configured. Run: accredit setup init[/red]")
+        sys.exit(1)
+
+    console.print(f"[cyan]Listing secrets for {env} in {project_id}...[/cyan]\n")
+
+    prefix = f"{env.upper()}_"
+
+    try:
+        result = subprocess.run(
+            ["gcloud", "secrets", "list", "--project", project_id, "--format", "value(name)"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        secrets_list = result.stdout.strip().split('\n') if result.stdout.strip() else []
+
+        # Filter by environment prefix
+        env_secrets = [s for s in secrets_list if s.startswith(prefix)]
+
+        # Apply additional filter if provided
+        if filter_str:
+            env_secrets = [s for s in env_secrets if filter_str.upper() in s]
+
+        if not env_secrets:
+            console.print(f"[yellow]No secrets found for {env} environment[/yellow]")
+            console.print(f"\n[dim]Upload secrets with: accredit cloud secrets upload --env {env}[/dim]")
+            return
+
+        table = Table(title=f"Secrets - {env.upper()}")
+        table.add_column("Secret Name", style="cyan")
+        table.add_column("Key (without prefix)", style="white")
+
+        for secret in sorted(env_secrets):
+            # Remove prefix to show original key name
+            key = secret[len(prefix):] if secret.startswith(prefix) else secret
+            table.add_row(secret, key)
+
+        console.print(table)
+        console.print(f"\n[dim]Total: {len(env_secrets)} secrets[/dim]")
+
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]✗ Failed to list secrets: {e.stderr}[/red]")
+        sys.exit(1)
+
+
+@secrets.command('set')
+@click.argument('key')
+@click.argument('value', required=False)
+@click.option('--env', '-e', default=None, help='Environment (dev/staging/prod)')
+@click.option('--from-stdin', is_flag=True, help='Read value from stdin')
+def secrets_set(key, value, env, from_stdin):
+    """Set a secret in Secret Manager.
+
+    Examples:
+        accredit cloud secrets set DJANGO_SECRET_KEY "my-secret-key"
+        accredit cloud secrets set API_KEY --from-stdin
+        echo "secret" | accredit cloud secrets set API_KEY --from-stdin
+    """
+    env = env or get_default_env()
+    project_id = get_config_value("project_id")
+
+    if not project_id:
+        console.print("[red]✗ Project ID not configured. Run: accredit setup init[/red]")
+        sys.exit(1)
+
+    # Get value from stdin if requested
+    if from_stdin:
+        import sys as sys_module
+        value = sys_module.stdin.read().strip()
+
+    if not value:
+        console.print("[red]✗ Value is required. Provide as argument or use --from-stdin[/red]")
+        sys.exit(1)
+
+    secret_name = get_secret_name(key, env)
+
+    console.print(f"[cyan]Setting secret: {secret_name}[/cyan]")
+
+    try:
+        # Check if secret exists
+        result = subprocess.run(
+            ["gcloud", "secrets", "describe", secret_name, "--project", project_id],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0:
+            # Secret exists, add new version
+            process = subprocess.Popen(
+                ["gcloud", "secrets", "versions", "add", secret_name,
+                 "--project", project_id, "--data-file=-"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            _, stderr = process.communicate(input=value)
+
+            if process.returncode != 0:
+                console.print(f"[red]✗ Failed to update secret: {stderr}[/red]")
+                sys.exit(1)
+
+            console.print(f"[green]✓ Secret updated: {secret_name}[/green]")
+        else:
+            # Create new secret
+            subprocess.run(
+                ["gcloud", "secrets", "create", secret_name, "--project", project_id,
+                 "--replication-policy", "automatic"],
+                check=True,
+                capture_output=True
+            )
+
+            # Add the value
+            process = subprocess.Popen(
+                ["gcloud", "secrets", "versions", "add", secret_name,
+                 "--project", project_id, "--data-file=-"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            _, stderr = process.communicate(input=value)
+
+            if process.returncode != 0:
+                console.print(f"[red]✗ Failed to set secret value: {stderr}[/red]")
+                sys.exit(1)
+
+            console.print(f"[green]✓ Secret created: {secret_name}[/green]")
+
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]✗ Failed to set secret: {e}[/red]")
+        sys.exit(1)
+
+
+@secrets.command('get')
+@click.argument('key')
+@click.option('--env', '-e', default=None, help='Environment (dev/staging/prod)')
+@click.option('--version', '-v', default='latest', help='Secret version (default: latest)')
+def secrets_get(key, env, version):
+    """Get a secret value from Secret Manager."""
+    env = env or get_default_env()
+    project_id = get_config_value("project_id")
+
+    if not project_id:
+        console.print("[red]✗ Project ID not configured. Run: accredit setup init[/red]")
+        sys.exit(1)
+
+    secret_name = get_secret_name(key, env)
+
+    try:
+        result = subprocess.run(
+            ["gcloud", "secrets", "versions", "access", version,
+             "--secret", secret_name, "--project", project_id],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        # Print raw value (useful for piping)
+        print(result.stdout, end='')
+
+    except subprocess.CalledProcessError as e:
+        if "NOT_FOUND" in e.stderr:
+            console.print(f"[red]✗ Secret not found: {secret_name}[/red]")
+        else:
+            console.print(f"[red]✗ Failed to get secret: {e.stderr}[/red]")
+        sys.exit(1)
+
+
+@secrets.command('delete')
+@click.argument('key')
+@click.option('--env', '-e', default=None, help='Environment (dev/staging/prod)')
+@click.option('--force', '-f', is_flag=True, help='Skip confirmation')
+def secrets_delete(key, env, force):
+    """Delete a secret from Secret Manager."""
+    env = env or get_default_env()
+    project_id = get_config_value("project_id")
+
+    if not project_id:
+        console.print("[red]✗ Project ID not configured. Run: accredit setup init[/red]")
+        sys.exit(1)
+
+    secret_name = get_secret_name(key, env)
+
+    if not force:
+        if not click.confirm(f"Delete secret '{secret_name}'? This cannot be undone."):
+            console.print("[yellow]Cancelled[/yellow]")
+            return
+
+    try:
+        subprocess.run(
+            ["gcloud", "secrets", "delete", secret_name, "--project", project_id, "--quiet"],
+            check=True,
+            capture_output=True
+        )
+        console.print(f"[green]✓ Secret deleted: {secret_name}[/green]")
+
+    except subprocess.CalledProcessError as e:
+        if "NOT_FOUND" in e.stderr.decode() if isinstance(e.stderr, bytes) else e.stderr:
+            console.print(f"[red]✗ Secret not found: {secret_name}[/red]")
+        else:
+            console.print(f"[red]✗ Failed to delete secret: {e}[/red]")
+        sys.exit(1)
+
+
+@secrets.command('upload')
+@click.option('--env', '-e', default=None, help='Environment (dev/staging/prod)')
+@click.option('--file', '-f', 'env_file', type=click.Path(exists=True), help='Path to .env file')
+@click.option('--backend', is_flag=True, help='Upload backend/.env.prod')
+@click.option('--frontend', is_flag=True, help='Upload frontend/.env.prod')
+@click.option('--dry-run', is_flag=True, help='Show what would be uploaded without uploading')
+@click.option('--skip-existing', is_flag=True, help='Skip secrets that already exist')
+def secrets_upload(env, env_file, backend, frontend, dry_run, skip_existing):
+    """Upload secrets from .env file to Secret Manager.
+
+    Examples:
+        accredit cloud secrets upload --backend --env dev
+        accredit cloud secrets upload --file ./secrets.env --env prod
+        accredit cloud secrets upload --backend --frontend --env dev
+    """
+    env = env or get_default_env()
+    project_id = get_config_value("project_id")
+
+    if not project_id:
+        console.print("[red]✗ Project ID not configured. Run: accredit setup init[/red]")
+        sys.exit(1)
+
+    files_to_upload = []
+
+    if env_file:
+        files_to_upload.append(Path(env_file))
+    if backend:
+        files_to_upload.append(BACKEND_DIR / ".env.prod")
+    if frontend:
+        files_to_upload.append(FRONTEND_DIR / ".env.prod")
+
+    if not files_to_upload:
+        console.print("[yellow]No files specified. Use --backend, --frontend, or --file[/yellow]")
+        console.print("\nExamples:")
+        console.print("  accredit cloud secrets upload --backend --env dev")
+        console.print("  accredit cloud secrets upload --file ./secrets.env")
+        return
+
+    # Collect all secrets from files
+    all_secrets = {}
+    for file_path in files_to_upload:
+        if not file_path.exists():
+            console.print(f"[yellow]⚠ File not found: {file_path}[/yellow]")
+            continue
+
+        console.print(f"[cyan]Reading: {file_path}[/cyan]")
+        secrets = parse_env_file(file_path)
+        all_secrets.update(secrets)
+        console.print(f"  Found {len(secrets)} variables")
+
+    if not all_secrets:
+        console.print("[yellow]No secrets found in files[/yellow]")
+        return
+
+    # Get existing secrets
+    existing_secrets = set()
+    if skip_existing:
+        result = subprocess.run(
+            ["gcloud", "secrets", "list", "--project", project_id, "--format", "value(name)"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            existing_secrets = set(result.stdout.strip().split('\n'))
+
+    # Show what will be uploaded
+    console.print(f"\n[cyan]{'Would upload' if dry_run else 'Uploading'} {len(all_secrets)} secrets to {env}:[/cyan]\n")
+
+    table = Table()
+    table.add_column("Key", style="white")
+    table.add_column("Secret Name", style="cyan")
+    table.add_column("Value Preview", style="dim")
+    table.add_column("Status", style="yellow")
+
+    secrets_to_upload = []
+    for key, value in sorted(all_secrets.items()):
+        secret_name = get_secret_name(key, env)
+        # Mask sensitive values
+        preview = value[:20] + "..." if len(value) > 20 else value
+        if any(sensitive in key.upper() for sensitive in ['SECRET', 'PASSWORD', 'KEY', 'TOKEN']):
+            preview = "****" + value[-4:] if len(value) > 4 else "****"
+
+        status = "skip (exists)" if secret_name in existing_secrets else "upload"
+
+        if secret_name not in existing_secrets or not skip_existing:
+            secrets_to_upload.append((key, value, secret_name))
+            status = "upload" if not dry_run else "would upload"
+
+        table.add_row(key, secret_name, preview, status)
+
+    console.print(table)
+
+    if dry_run:
+        console.print(f"\n[yellow]Dry run - no changes made[/yellow]")
+        console.print(f"[dim]Remove --dry-run to upload secrets[/dim]")
+        return
+
+    if not secrets_to_upload:
+        console.print("\n[yellow]No new secrets to upload[/yellow]")
+        return
+
+    # Confirm upload
+    if not click.confirm(f"\nUpload {len(secrets_to_upload)} secrets to {project_id}?"):
+        console.print("[yellow]Cancelled[/yellow]")
+        return
+
+    # Upload secrets
+    console.print(f"\n[cyan]Uploading secrets...[/cyan]")
+    success = 0
+    failed = 0
+
+    for key, value, secret_name in secrets_to_upload:
+        try:
+            # Check if secret exists
+            result = subprocess.run(
+                ["gcloud", "secrets", "describe", secret_name, "--project", project_id],
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode == 0:
+                # Update existing secret
+                process = subprocess.Popen(
+                    ["gcloud", "secrets", "versions", "add", secret_name,
+                     "--project", project_id, "--data-file=-"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                process.communicate(input=value)
+                if process.returncode != 0:
+                    raise Exception("Failed to add version")
+            else:
+                # Create new secret
+                subprocess.run(
+                    ["gcloud", "secrets", "create", secret_name, "--project", project_id,
+                     "--replication-policy", "automatic"],
+                    check=True,
+                    capture_output=True
+                )
+
+                process = subprocess.Popen(
+                    ["gcloud", "secrets", "versions", "add", secret_name,
+                     "--project", project_id, "--data-file=-"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                process.communicate(input=value)
+                if process.returncode != 0:
+                    raise Exception("Failed to add version")
+
+            console.print(f"  [green]✓[/green] {secret_name}")
+            success += 1
+
+        except Exception as e:
+            console.print(f"  [red]✗[/red] {secret_name}: {e}")
+            failed += 1
+
+    console.print(f"\n[bold green]✓ Upload complete: {success} succeeded, {failed} failed[/bold green]")
+
+    if success > 0:
+        console.print(f"\n[dim]Secrets are available in Secret Manager with prefix '{env.upper()}_'[/dim]")
+        console.print(f"[dim]View secrets: accredit cloud secrets list --env {env}[/dim]")
+
+
+@secrets.command('download')
+@click.option('--env', '-e', default=None, help='Environment (dev/staging/prod)')
+@click.option('--output', '-o', type=click.Path(), help='Output file path')
+@click.option('--backend', is_flag=True, help='Download to backend/.env.prod')
+@click.option('--format', 'fmt', type=click.Choice(['env', 'json']), default='env', help='Output format')
+def secrets_download(env, output, backend, fmt):
+    """Download secrets from Secret Manager to a file.
+
+    Examples:
+        accredit cloud secrets download --env dev --output .env
+        accredit cloud secrets download --env prod --backend
+        accredit cloud secrets download --env dev --format json
+    """
+    import json as json_module
+
+    env = env or get_default_env()
+    project_id = get_config_value("project_id")
+
+    if not project_id:
+        console.print("[red]✗ Project ID not configured. Run: accredit setup init[/red]")
+        sys.exit(1)
+
+    prefix = f"{env.upper()}_"
+
+    console.print(f"[cyan]Downloading secrets for {env}...[/cyan]")
+
+    try:
+        # Get list of secrets
+        result = subprocess.run(
+            ["gcloud", "secrets", "list", "--project", project_id, "--format", "value(name)"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        all_secrets = result.stdout.strip().split('\n') if result.stdout.strip() else []
+        env_secrets = [s for s in all_secrets if s.startswith(prefix)]
+
+        if not env_secrets:
+            console.print(f"[yellow]No secrets found for {env} environment[/yellow]")
+            return
+
+        # Download each secret
+        secrets_dict = {}
+        for secret_name in env_secrets:
+            result = subprocess.run(
+                ["gcloud", "secrets", "versions", "access", "latest",
+                 "--secret", secret_name, "--project", project_id],
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode == 0:
+                # Remove prefix to get original key
+                key = secret_name[len(prefix):]
+                secrets_dict[key] = result.stdout
+
+        console.print(f"[green]✓ Downloaded {len(secrets_dict)} secrets[/green]")
+
+        # Determine output path
+        if backend:
+            output = str(BACKEND_DIR / ".env.prod")
+
+        # Format output
+        if fmt == 'json':
+            content = json_module.dumps(secrets_dict, indent=2)
+        else:
+            lines = [f"{key}={value}" for key, value in sorted(secrets_dict.items())]
+            content = '\n'.join(lines) + '\n'
+
+        if output:
+            with open(output, 'w') as f:
+                f.write(content)
+            console.print(f"[green]✓ Written to: {output}[/green]")
+        else:
+            print(content)
+
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]✗ Failed to download secrets: {e.stderr}[/red]")
+        sys.exit(1)

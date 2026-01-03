@@ -61,43 +61,14 @@ services:
       - backend_media:/app/mediafiles
     ports:
       - "8000:8000"
+    env_file:
+      - ../backend/.env.dev
     environment:
-      # Django settings
-      DJANGO_SETTINGS_MODULE: config.settings.development
-      DJANGO_SECRET_KEY: dev-secret-key-change-in-production
-      DEBUG: "True"
-
-      # Database
-      DB_NAME: cpd_events
-      DB_USER: cpd_user
-      DB_PASSWORD: cpd_password
+      # Docker-specific overrides (DB host points to container)
       DB_HOST: db
-      DB_PORT: 5432
-
-      # Site URL
-      SITE_URL: http://localhost:8000
-
-      # GCP (local emulators)
-      GCP_PROJECT_ID: dev-project
-      GCP_LOCATION: us-central1
-      GCP_QUEUE_NAME: default
+      # GCP emulators for local development
       CLOUD_TASKS_EMULATOR_HOST: cloud-tasks-emulator:8123
       GCS_EMULATOR_HOST: http://gcs-emulator:4443
-      GCS_BUCKET_NAME: cpd-events-local
-
-      # Email (console backend for dev)
-      EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
-      DEFAULT_FROM_EMAIL: info@accredit.store
-
-      # Stripe (add your test keys)
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder}
-      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-pk_test_placeholder}
-
-      # Zoom (add your credentials)
-      ZOOM_CLIENT_ID: ${ZOOM_CLIENT_ID:-}
-      ZOOM_CLIENT_SECRET: ${ZOOM_CLIENT_SECRET:-}
-      ZOOM_REDIRECT_URI: ${ZOOM_REDIRECT_URI:-http://localhost:8000/api/integrations/zoom/callback/}
-      ZOOM_WEBHOOK_SECRET: ${ZOOM_WEBHOOK_SECRET:-}
     depends_on:
       db:
         condition: service_healthy

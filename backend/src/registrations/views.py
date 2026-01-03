@@ -307,6 +307,59 @@ class PublicRegistrationView(generics.CreateAPIView):
             return error_response("An unexpected error occurred.", code='INTERNAL_ERROR', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@roles('public', route_name='confirm_payment')
+class ConfirmPaymentView(generics.GenericAPIView):
+    """
+    POST /api/v1/public/registrations/{uuid}/confirm-payment/
+
+    Called by frontend after Stripe.js payment confirmation.
+    Synchronously verifies payment status with Stripe and updates registration.
+    """
+
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        operation_summary="Confirm registration payment",
+        operation_description="Synchronously confirms payment status with Stripe after frontend payment completion.",
+        responses={
+            200: '{"status": "paid", "registration_uuid": "...", "amount_paid": 99.00}',
+            400: '{"error": {"code": "...", "message": "..."}}',
+            404: '{"error": {"code": "NOT_FOUND", "message": "Registration not found"}}'
+        },
+    )
+    def post(self, request, uuid=None):
+        from .services import payment_confirmation_service
+
+        # Get registration
+        try:
+            registration = Registration.objects.get(uuid=uuid, deleted_at__isnull=True)
+        except Registration.DoesNotExist:
+            return error_response('Registration not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+
+        # Check if already paid (idempotent)
+        if registration.payment_status == Registration.PaymentStatus.PAID:
+            return Response({
+                'status': 'paid',
+                'registration_uuid': str(registration.uuid),
+                'amount_paid': float(registration.amount_paid),
+                'message': 'Payment already confirmed.'
+            })
+
+        # Check if payment is expected
+        if registration.payment_status == Registration.PaymentStatus.NA:
+            return error_response('This registration does not require payment.', code='NO_PAYMENT_REQUIRED')
+
+        # Confirm payment with Stripe
+        result = payment_confirmation_service.confirm_registration_payment(registration)
+
+        if result['status'] == 'paid':
+            return Response(result, status=status.HTTP_200_OK)
+        elif result['status'] == 'processing':
+            return Response(result, status=status.HTTP_202_ACCEPTED)
+        elif result['status'] == 'failed':
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return error_response(result.get('message', 'Payment confirmation failed'), code='PAYMENT_ERROR')
 
 
 # =============================================================================

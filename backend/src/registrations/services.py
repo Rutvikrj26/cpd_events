@@ -202,3 +202,108 @@ class RegistrationService:
 
 # Singleton instance
 registration_service = RegistrationService()
+
+
+class PaymentConfirmationService:
+    """
+    Synchronous payment confirmation with retry logic.
+    Replaces webhook-dependent payment confirmation for registrations.
+    """
+
+    def __init__(self):
+        self._stripe = None
+
+    @property
+    def stripe(self):
+        """Lazy load Stripe SDK."""
+        if self._stripe is None:
+            try:
+                import stripe
+                from django.conf import settings
+                stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+                self._stripe = stripe
+            except ImportError:
+                logger.warning("Stripe SDK not installed")
+                return None
+        return self._stripe
+
+    @property
+    def is_configured(self) -> bool:
+        """Check if Stripe is properly configured."""
+        from django.conf import settings
+        return bool(getattr(settings, 'STRIPE_SECRET_KEY', None))
+
+    def confirm_registration_payment(self, registration, max_retries: int = 3, retry_delay: float = 1.0) -> dict:
+        """
+        Confirm payment status directly with Stripe.
+
+        Args:
+            registration: The Registration instance with payment_intent_id
+            max_retries: Number of retries for processing payments
+            retry_delay: Delay between retries in seconds
+
+        Returns:
+            dict with status ('paid', 'processing', 'failed', 'error') and details
+        """
+        import time
+
+        if not self.is_configured:
+            return {'status': 'error', 'message': 'Payment system not configured'}
+
+        if not registration.payment_intent_id:
+            return {'status': 'error', 'message': 'No payment intent found for this registration'}
+
+        for attempt in range(max_retries):
+            try:
+                intent = self.stripe.PaymentIntent.retrieve(registration.payment_intent_id)
+
+                if intent.status == 'succeeded':
+                    # Update registration immediately
+                    registration.payment_status = Registration.PaymentStatus.PAID
+                    registration.amount_paid = Decimal(str(intent.amount_received / 100))
+                    registration.save(update_fields=['payment_status', 'amount_paid', 'updated_at'])
+
+                    logger.info(f"Registration {registration.uuid} payment confirmed: PAID")
+                    return {
+                        'status': 'paid',
+                        'registration_uuid': str(registration.uuid),
+                        'amount_paid': float(registration.amount_paid),
+                    }
+
+                elif intent.status == 'processing':
+                    # Payment still processing, retry after delay
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        continue
+                    logger.info(f"Registration {registration.uuid} payment still processing after {max_retries} attempts")
+                    return {'status': 'processing', 'message': 'Payment is still being processed. Please wait.'}
+
+                elif intent.status in ['requires_payment_method', 'requires_confirmation', 'canceled']:
+                    # Payment failed
+                    registration.payment_status = Registration.PaymentStatus.FAILED
+                    registration.save(update_fields=['payment_status', 'updated_at'])
+
+                    error_msg = 'Payment failed'
+                    if intent.last_payment_error:
+                        error_msg = intent.last_payment_error.get('message', 'Payment failed')
+
+                    logger.warning(f"Registration {registration.uuid} payment failed: {error_msg}")
+                    return {'status': 'failed', 'message': error_msg}
+
+                else:
+                    # Unknown status
+                    logger.warning(f"Registration {registration.uuid} has unknown payment status: {intent.status}")
+                    return {'status': 'error', 'message': f'Unknown payment status: {intent.status}'}
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                logger.error(f"Failed to confirm payment for registration {registration.uuid}: {e}")
+                return {'status': 'error', 'message': str(e)}
+
+        return {'status': 'error', 'message': 'Could not confirm payment status after retries'}
+
+
+# Singleton instance
+payment_confirmation_service = PaymentConfirmationService()
