@@ -100,13 +100,7 @@ class StripeService:
         Get trial period days for a plan.
 
         Reads from database (StripeProduct.trial_period_days).
-        Falls back to global setting if not configured.
-
-        Args:
-            plan: The plan name
-
-        Returns:
-            Number of trial days
+        Returns 0 if product not found or configured.
         """
         try:
             from .models import StripeProduct
@@ -118,8 +112,8 @@ class StripeService:
         except Exception as e:
             logger.error(f"Error getting trial days from database: {e}")
 
-        # Fallback to global setting
-        return getattr(settings, 'BILLING_TRIAL_DAYS', 14)
+        # Default to 0 (no trial) if not explicitly configured in DB
+        return 0
 
     # =========================================================================
     # Customer Management
@@ -519,6 +513,17 @@ class StripeService:
         # Get trial days from database (per-plan configuration)
         trial_days = self.get_trial_days(plan)
 
+        # Check if user is currently in a trial (local) and adjust Stripe trial to match remaining time
+        # This prevents "double trial" (e.g. 30 days local + 30 days Stripe)
+        existing_sub = getattr(user, 'subscription', None)
+        if existing_sub and existing_sub.is_trialing and existing_sub.trial_ends_at:
+            from django.utils import timezone
+            remaining = (existing_sub.trial_ends_at - timezone.now()).days
+            # Only override if remaining time is LESS than the plan's default trial
+            # (e.g. if they have 5 days left, give them 5 days on Stripe. If they have -5, give 0).
+            if remaining < trial_days:
+                trial_days = max(0, remaining)
+        
         try:
             customer_id = self.create_customer(user)
 

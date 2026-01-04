@@ -96,7 +96,7 @@ export function PricingPage() {
             question: "Is there a free trial?",
             answer: loading
                 ? "Loading trial information..."
-                : `The Attendee plan is completely free forever. All paid plans include a ${products[0]?.trial_days || 90}-day free trial with full access to all features - no credit card required to start!`,
+                : `The Attendee plan is completely free forever. All paid plans include a ${products[0]?.trial_days || 30}-day free trial with full access to all features - no credit card required to start!`,
         },
         {
             question: "What happens to my data if I downgrade?",
@@ -184,7 +184,7 @@ export function PricingPage() {
                             Simple, Transparent Pricing
                         </h1>
                         <p className="text-xl text-muted-foreground mb-8">
-                            Choose the perfect plan for your CPD events. All plans include a {allPlans[1]?.trialDays || 90}-day free trial.
+                            Choose the perfect plan for your CPD events. All plans include a {allPlans[1]?.trialDays || 30}-day free trial.
                         </p>
                     </div>
                 </div>

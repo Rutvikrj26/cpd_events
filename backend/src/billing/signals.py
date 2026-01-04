@@ -37,7 +37,15 @@ def create_subscription_for_organizer(sender, instance, created, **kwargs):
         return
 
     # Organizers get PROFESSIONAL plan with trial period
-    trial_days = getattr(settings, 'BILLING_TRIAL_DAYS', 14)
+    from billing.models import StripeProduct
+    
+    # Try to find configured trial days for Professional plan
+    try:
+        product = StripeProduct.objects.filter(plan=Subscription.Plan.PROFESSIONAL, is_active=True).first()
+        trial_days = product.trial_period_days if product else 30  # Default to 30 if product missing
+    except Exception:
+        trial_days = 30  # Safe fallback
+        
     Subscription.objects.get_or_create(
         user=instance,
         defaults={

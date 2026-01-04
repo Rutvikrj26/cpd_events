@@ -228,7 +228,7 @@ export default function App() {
               <Route element={<ProtectedRoute />}>
 
                 {/* Integrations */}
-                <Route path="/zoom/callback" element={<ZoomCallbackPage />} />
+                <Route path="/integrations/zoom/callback" element={<ZoomCallbackPage />} />
 
                 {/* Onboarding Wizard - Full Screen */}
                 <Route path="/onboarding" element={<OnboardingWizard />} />

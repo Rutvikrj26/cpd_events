@@ -25,7 +25,6 @@ Modules:
 
 # Billing configuration
 from .billing import (
-    TrialConfig,
     PlatformFees,
     IndividualPlanLimits,
     OrganizationPlanLimits,
@@ -78,7 +77,6 @@ from .api import (
 
 __all__ = [
     # Billing
-    'TrialConfig',
     'PlatformFees',
     'IndividualPlanLimits',
     'OrganizationPlanLimits',

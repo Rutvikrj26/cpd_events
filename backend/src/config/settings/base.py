@@ -230,7 +230,6 @@ STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
 # Billing configuration imported from common.config.billing
 # These are re-exported here for backward compatibility with code that imports from settings
 from common.config.billing import (
-    TrialConfig,
     PlatformFees,
     PricingConfig,
     StripePriceIds,
@@ -239,10 +238,6 @@ from common.config.billing import (
 
 # Stripe Price IDs for each plan (set in Stripe Dashboard)
 STRIPE_PRICE_IDS = StripePriceIds.as_dict()
-
-# Trial Configuration (from common.config.billing)
-BILLING_TRIAL_DAYS = TrialConfig.TRIAL_DAYS
-BILLING_GRACE_PERIOD_DAYS = TrialConfig.GRACE_PERIOD_DAYS
 
 # Platform fee for paid event registrations (percentage of transaction)
 PLATFORM_FEE_PERCENT = PlatformFees.FEE_PERCENT

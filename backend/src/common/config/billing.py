@@ -41,27 +41,6 @@ def _validate_percentage(value: float, name: str) -> float:
 
 
 # =============================================================================
-# Trial & Grace Period Configuration
-# =============================================================================
-
-class TrialConfig:
-    """
-    Trial and grace period settings.
-
-    - TRIAL_DAYS: Number of days for free trial (no credit card required)
-    - GRACE_PERIOD_DAYS: Days after trial expiry before access is blocked
-    """
-    TRIAL_DAYS: int = _validate_non_negative(
-        int(os.environ.get('BILLING_TRIAL_DAYS', 14)),
-        'BILLING_TRIAL_DAYS'
-    )
-    GRACE_PERIOD_DAYS: int = _validate_non_negative(
-        int(os.environ.get('BILLING_GRACE_PERIOD_DAYS', 30)),
-        'BILLING_GRACE_PERIOD_DAYS'
-    )
-
-
-# =============================================================================
 # Platform Fees
 # =============================================================================
 
@@ -311,7 +290,6 @@ class DefaultPlan:
 # =============================================================================
 
 __all__ = [
-    'TrialConfig',
     'PlatformFees',
     'IndividualPlanLimits',
     'OrganizationPlanLimits',

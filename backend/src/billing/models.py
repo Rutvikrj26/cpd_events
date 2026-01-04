@@ -13,7 +13,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from common.config import IndividualPlanLimits, TrialConfig
+from common.config import IndividualPlanLimits
 from common.models import BaseModel
 
 
@@ -213,11 +213,19 @@ class Subscription(BaseModel):
         delta = self.trial_ends_at - timezone.now()
         return max(0, delta.days)
 
+    def get_grace_period_days(self):
+        """Get grace period days for this subscription's plan."""
+        try:
+            product = StripeProduct.objects.filter(plan=self.plan, is_active=True).first()
+            return product.grace_period_days if product else 14
+        except Exception:
+            return 14  # Safe fallback
+
     @property
     def is_in_grace_period(self):
         """
         Check if subscription is in grace period after trial.
-        Grace period = trial_ends_at + TrialConfig.GRACE_PERIOD_DAYS
+        Grace period = trial_ends_at + grace_period_days
         During grace period: can't create events, but can still access dashboard
         After grace period: complete access block
         """
@@ -226,7 +234,7 @@ class Subscription(BaseModel):
         if not self.trial_ends_at:
             return False
 
-        grace_end = self.trial_ends_at + timedelta(days=TrialConfig.GRACE_PERIOD_DAYS)
+        grace_end = self.trial_ends_at + timedelta(days=self.get_grace_period_days())
         now = timezone.now()
 
         return self.trial_ends_at <= now < grace_end
@@ -248,7 +256,7 @@ class Subscription(BaseModel):
         if not self.trial_ends_at:
             return False
 
-        grace_end = self.trial_ends_at + timedelta(days=TrialConfig.GRACE_PERIOD_DAYS)
+        grace_end = self.trial_ends_at + timedelta(days=self.get_grace_period_days())
 
         return timezone.now() >= grace_end
 
@@ -343,6 +351,8 @@ class Invoice(BaseModel):
     @property
     def amount_display(self):
         """Format amount for display."""
+        if self.amount_cents is None:
+            return f"$0.00 {self.currency.upper()}"
         return f"${self.amount_cents / 100:.2f} {self.currency.upper()}"
 
     @property
@@ -440,11 +450,21 @@ class StripeProduct(BaseModel):
         help_text="Which subscription plan this product represents"
     )
 
-    # Trial period configuration (overrides global setting)
+    # Tax Codes (Hardcoded per plan)
+    PLAN_TAX_CODES = {
+        'professional': 'txcd_10103000',  # SaaS/Digital Service
+        'organization': 'txcd_10103001',  # SaaS/Digital Service (Business)
+    }
+
+    # Trial period configuration
     trial_period_days = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        help_text="Trial period in days (null = use global default)"
+        default=30,
+        help_text="Trial period in days"
+    )
+
+    grace_period_days = models.PositiveIntegerField(
+        default=14,
+        help_text="Grace period in days (after trial/subscription ends)"
     )
 
     # Contact Sales flag - hides pricing and shows "Contact Sales" button
@@ -487,21 +507,26 @@ class StripeProduct(BaseModel):
             return {'success': False, 'error': 'Stripe not configured'}
 
         try:
+            params = {
+                'name': self.name,
+                'description': self.description,
+                'active': self.is_active,
+            }
+            
+            # Add tax code from constants
+            tax_code = self.PLAN_TAX_CODES.get(self.plan)
+            if tax_code:
+                params['tax_code'] = tax_code
+
             if self.stripe_product_id:
                 # Update existing product
                 product = stripe_service.stripe.Product.modify(
                     self.stripe_product_id,
-                    name=self.name,
-                    description=self.description,
-                    active=self.is_active,
+                    **params
                 )
             else:
                 # Create new product
-                product = stripe_service.stripe.Product.create(
-                    name=self.name,
-                    description=self.description,
-                    active=self.is_active,
-                )
+                product = stripe_service.stripe.Product.create(**params)
                 self.stripe_product_id = product.id
                 self.save(update_fields=['stripe_product_id', 'updated_at'])
 
@@ -515,10 +540,7 @@ class StripeProduct(BaseModel):
 
     def get_trial_days(self):
         """Get trial period days for this product."""
-        if self.trial_period_days is not None:
-            return self.trial_period_days
-        # Fallback to global config
-        return TrialConfig.TRIAL_DAYS
+        return self.trial_period_days
 
     def get_feature_limits(self):
         """Get feature limits for this product."""
@@ -626,6 +648,8 @@ class StripePrice(BaseModel):
     @property
     def amount_display(self):
         """Format amount as dollars."""
+        if self.amount_cents is None:
+            return "0.00"
         return f"{self.amount_cents / 100:.2f}"
 
     def sync_to_stripe(self):
