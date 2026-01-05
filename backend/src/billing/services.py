@@ -673,6 +673,12 @@ class StripeService:
                         user.upgrade_to_organizer()
                         logger.info(f"User {user.email} upgraded to organizer via checkout confirmation")
 
+                sync_result = self.sync_payment_methods(user, customer_id=session.customer)
+                if not sync_result['success']:
+                    logger.warning(
+                        f"Checkout session {session_id} confirmed, but payment method sync failed: {sync_result['error']}"
+                    )
+
                 logger.info(f"Checkout session {session_id} confirmed for user {user.email}, subscription {stripe_sub.id}")
                 return {'success': True, 'subscription': subscription}
 
@@ -684,6 +690,85 @@ class StripeService:
                 return {'success': False, 'error': str(e)}
 
         return {'success': False, 'error': 'Max retries exceeded'}
+
+    def sync_payment_methods(self, user, customer_id: str | None = None) -> dict[str, Any]:
+        """
+        Sync Stripe payment methods into local PaymentMethod records.
+
+        Intended to be called after checkout/portal flows; webhooks are fallback.
+        """
+        from billing.models import PaymentMethod
+        from django.db import transaction
+
+        if not self.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        subscription = getattr(user, 'subscription', None)
+        customer_id = customer_id or (subscription.stripe_customer_id if subscription else None)
+
+        if not customer_id:
+            try:
+                customers = self.stripe.Customer.list(email=user.email, limit=1)
+                if customers and customers.data:
+                    customer_id = customers.data[0].id
+                    if subscription:
+                        subscription.stripe_customer_id = customer_id
+                        subscription.save(update_fields=['stripe_customer_id'])
+            except Exception as e:
+                logger.error(f"Failed to lookup Stripe customer for {user.email}: {e}")
+                return {'success': False, 'error': 'Failed to lookup Stripe customer'}
+
+        if not customer_id:
+            return {'success': False, 'error': 'No Stripe customer found'}
+
+        try:
+            customer = self.stripe.Customer.retrieve(customer_id)
+            invoice_settings = (
+                customer.get('invoice_settings', {}) if isinstance(customer, dict) else getattr(customer, 'invoice_settings', {})
+            )
+            default_pm_id = (
+                invoice_settings.get('default_payment_method')
+                if isinstance(invoice_settings, dict)
+                else getattr(invoice_settings, 'default_payment_method', None)
+            )
+
+            pm_list = self.stripe.PaymentMethod.list(customer=customer_id, type='card')
+            pm_data = pm_list.data if hasattr(pm_list, 'data') else pm_list.get('data', [])
+
+            stripe_ids: set[str] = set()
+            with transaction.atomic():
+                PaymentMethod.objects.filter(user=user).update(is_default=False)
+
+                for pm in pm_data:
+                    stripe_ids.add(pm.id)
+                    card = pm.card if hasattr(pm, 'card') else pm.get('card', {})
+                    card_brand = card.brand if hasattr(card, 'brand') else card.get('brand', '')
+                    card_last4 = card.last4 if hasattr(card, 'last4') else card.get('last4', '')
+                    card_exp_month = card.exp_month if hasattr(card, 'exp_month') else card.get('exp_month')
+                    card_exp_year = card.exp_year if hasattr(card, 'exp_year') else card.get('exp_year')
+
+                    payment_method, _ = PaymentMethod.objects.update_or_create(
+                        stripe_payment_method_id=pm.id,
+                        defaults={
+                            'user': user,
+                            'card_brand': card_brand or '',
+                            'card_last4': card_last4 or '',
+                            'card_exp_month': card_exp_month,
+                            'card_exp_year': card_exp_year,
+                            'is_default': pm.id == default_pm_id,
+                        },
+                    )
+
+                    if pm.id == default_pm_id:
+                        payment_method.set_as_default()
+
+                if stripe_ids:
+                    PaymentMethod.objects.filter(user=user).exclude(stripe_payment_method_id__in=stripe_ids).delete()
+
+            return {'success': True, 'count': len(stripe_ids)}
+        except Exception as e:
+            logger.error(f"Failed to sync payment methods for {user.email}: {e}")
+            return {'success': False, 'error': str(e)}
 
     def create_portal_session(self, user, return_url: str) -> dict[str, Any]:
         """Create Stripe Customer Portal session."""

@@ -166,6 +166,10 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         result = stripe_service.sync_subscription(request.user)
 
         if result['success']:
+            stripe_service.sync_payment_methods(
+                user=request.user,
+                customer_id=result['subscription'].stripe_customer_id,
+            )
             return Response(SubscriptionSerializer(result['subscription']).data)
         else:
             return error_response(result.get('error', 'Failed to sync subscription'), code='SYNC_FAILED')
@@ -261,6 +265,13 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         payment_method = self.get_object()
+        subscription = getattr(request.user, 'subscription', None)
+        if (
+            subscription
+            and subscription.status in [Subscription.Status.ACTIVE, Subscription.Status.TRIALING]
+            and PaymentMethod.objects.filter(user=request.user).count() <= 1
+        ):
+            return error_response('Cannot delete the only payment method', code='LAST_PAYMENT_METHOD')
         success = stripe_service.detach_payment_method(payment_method)
 
         if success:

@@ -206,8 +206,15 @@ class TestPaymentMethodViewSet:
 
     def test_cannot_delete_only_payment_method(self, organizer_client, organizer, db):
         """Cannot delete the only payment method if subscription active."""
-        # This depends on business logic
-        pass  # TODO: Add if applicable
+        from factories import PaymentMethodFactory
+        from billing.models import Subscription
+        subscription = Subscription.objects.get(user=organizer)
+        subscription.status = Subscription.Status.ACTIVE
+        subscription.save(update_fields=['status', 'updated_at'])
+        pm = PaymentMethodFactory(user=organizer, is_default=True)
+
+        response = organizer_client.delete(f'{self.endpoint}{pm.uuid}/')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 # =============================================================================
@@ -263,6 +270,8 @@ class TestCheckoutConfirmation:
     def test_confirm_checkout_session_success(self, auth_client, user, mock_stripe, stripe_products):
         """Confirm checkout updates subscription and upgrades user."""
         from django.utils import timezone
+        from billing.models import PaymentMethod
+        from types import SimpleNamespace
 
         session = MagicMock()
         session.customer = 'cus_test123'
@@ -277,12 +286,21 @@ class TestCheckoutConfirmation:
         stripe_sub.current_period_end = int((timezone.now() + timezone.timedelta(days=30)).timestamp())
         stripe_sub.trial_end = None
         mock_stripe.Subscription.retrieve.return_value = stripe_sub
+        mock_stripe.Customer.retrieve.return_value = SimpleNamespace(
+            invoice_settings={'default_payment_method': 'pm_test123'}
+        )
+        pm = SimpleNamespace(
+            id='pm_test123',
+            card=SimpleNamespace(brand='visa', last4='4242', exp_month=12, exp_year=2030),
+        )
+        mock_stripe.PaymentMethod.list.return_value = SimpleNamespace(data=[pm])
 
         response = auth_client.post('/api/v1/subscription/confirm-checkout/', {'session_id': 'cs_test123'})
         assert response.status_code == status.HTTP_200_OK
 
         user.refresh_from_db()
         assert user.account_type == 'organizer'
+        assert PaymentMethod.objects.filter(user=user, stripe_payment_method_id='pm_test123').exists()
 
     def test_sync_subscription_updates_plan(self, auth_client, user, mock_stripe, stripe_products, monkeypatch):
         """Sync pulls subscription details from Stripe and updates plan."""
@@ -324,6 +342,14 @@ class TestCheckoutConfirmation:
         mock_stripe.Subscription.retrieve.return_value = StripeSub()
         mock_stripe.Subscription.list.return_value = SimpleNamespace(data=[StripeSub()])
         mock_stripe.Customer.list.return_value = SimpleNamespace(data=[SimpleNamespace(id='cus_sync123')])
+        mock_stripe.Customer.retrieve.return_value = SimpleNamespace(
+            invoice_settings={'default_payment_method': 'pm_sync123'}
+        )
+        pm = SimpleNamespace(
+            id='pm_sync123',
+            card=SimpleNamespace(brand='visa', last4='4242', exp_month=1, exp_year=2031),
+        )
+        mock_stripe.PaymentMethod.list.return_value = SimpleNamespace(data=[pm])
 
         response = auth_client.post('/api/v1/subscription/sync/')
         assert response.status_code == status.HTTP_200_OK
