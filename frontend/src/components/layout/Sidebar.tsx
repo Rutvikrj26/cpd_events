@@ -75,13 +75,16 @@ export const Sidebar = () => {
         // SECOND: If manifest is loaded, use it for additional fine-grained control
         if (manifest && manifest.routes.length > 0) {
             // Items always visible (not in RBAC registry)
-            if (['dashboard', 'profile', 'my_events'].includes(item.routeKey)) {
+            if (['dashboard', 'profile', 'my_events', 'browse_events'].includes(item.routeKey)) {
                 return true;
             }
 
             // Use feature flag for certificates since it's not a distinct backend view
             if (item.routeKey === 'certificates') {
                 return hasFeature('view_own_certificates');
+            }
+            if (item.routeKey === 'browse_events') {
+                return hasFeature('browse_events');
             }
             return hasRoute(item.routeKey);
         }
