@@ -2,9 +2,12 @@
 Registrations app models - Registration, AttendanceRecord, CustomFieldResponse.
 """
 
+from decimal import Decimal
+
 from django.db import models
 from django.utils import timezone
 
+from common.config.billing import PlatformFees
 from common.fields import LowercaseEmailField
 from common.models import BaseModel, SoftDeleteModel
 from events.models import Event  # Moved from inside update_attendance_summary
@@ -29,6 +32,7 @@ class Registration(SoftDeleteModel):
     """
 
     class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending Payment'
         CONFIRMED = 'confirmed', 'Confirmed'
         WAITLISTED = 'waitlisted', 'Waitlisted'
         CANCELLED = 'cancelled', 'Cancelled'
@@ -91,6 +95,18 @@ class Registration(SoftDeleteModel):
     )
     payment_intent_id = models.CharField(max_length=255, blank=True, db_index=True)
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    platform_fee_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Platform service fee charged to attendee"
+    )
+    total_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Total amount charged (ticket + platform fee)"
+    )
 
     source = models.CharField(
         max_length=20, choices=Source.choices, default=Source.SELF, help_text="How this registration was created"
@@ -136,6 +152,20 @@ class Registration(SoftDeleteModel):
     # Privacy
     # =========================================
     allow_public_verification = models.BooleanField(default=True, help_text="Allow certificate to be publicly verified")
+
+    # =========================================
+    # Zoom Meeting Registration (unique per registrant)
+    # =========================================
+    zoom_registrant_join_url = models.URLField(
+        blank=True,
+        max_length=2000,
+        help_text="Unique Zoom join URL for this registrant"
+    )
+    zoom_registrant_id = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Zoom registrant ID from Zoom API"
+    )
 
     class Meta:
         db_table = 'registrations'
@@ -230,12 +260,47 @@ class Registration(SoftDeleteModel):
         if self.status != self.Status.WAITLISTED:
             return
 
-        self.status = self.Status.CONFIRMED
+        if self.event.is_free:
+            self.status = self.Status.CONFIRMED
+            self.payment_status = self.PaymentStatus.NA
+        else:
+            self.status = self.Status.PENDING
+            self.payment_status = self.PaymentStatus.PENDING
+            from decimal import ROUND_HALF_UP
+
+            ticket_price = Decimal(str(self.event.price or 0))
+            fee_percent = Decimal(str(PlatformFees.FEE_PERCENT))
+            platform_fee = Decimal('0.00')
+            if ticket_price > 0:
+                platform_fee = (ticket_price * fee_percent / Decimal('100')).quantize(
+                    Decimal('0.01'),
+                    rounding=ROUND_HALF_UP,
+                )
+            self.amount_paid = ticket_price
+            self.platform_fee_amount = platform_fee
+            self.total_amount = ticket_price + platform_fee
+
         self.promoted_from_waitlist_at = timezone.now()
         self.waitlist_position = None
-        self.save(update_fields=['status', 'promoted_from_waitlist_at', 'waitlist_position', 'updated_at'])
+        self.save(
+            update_fields=[
+                'status',
+                'payment_status',
+                'amount_paid',
+                'platform_fee_amount',
+                'total_amount',
+                'promoted_from_waitlist_at',
+                'waitlist_position',
+                'updated_at',
+            ]
+        )
 
         # Update event counts handled by signals
+
+        # Add to Zoom meeting if confirmed
+        if self.status == self.Status.CONFIRMED:
+            from registrations.tasks import add_zoom_registrant
+            add_zoom_registrant.delay(self.id)
 
 
         # Send email notification to attendee

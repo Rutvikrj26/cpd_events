@@ -911,82 +911,121 @@ class StripePaymentService:
     def is_configured(self) -> bool:
         return stripe_service.is_configured
 
-    def create_payment_intent(self, registration, amount_cents: int = None) -> dict[str, Any]:
+    def get_payee_account_id(self, event) -> str | None:
+        """Resolve the connected account to charge for this event."""
+        payee_account_id = None
+        if event.organization and event.organization.stripe_connect_id:
+            payee_account_id = event.organization.stripe_connect_id
+            if not event.organization.stripe_charges_enabled:
+                return None
+        elif event.owner.stripe_connect_id:
+            payee_account_id = event.owner.stripe_connect_id
+            if not event.owner.stripe_charges_enabled:
+                return None
+        return payee_account_id
+
+    def _calculate_platform_fee_cents(self, ticket_amount_cents: int) -> int:
+        """Calculate platform fee in cents based on ticket price."""
+        from decimal import Decimal, ROUND_HALF_UP
+        from common.config.billing import PlatformFees
+
+        if ticket_amount_cents <= 0:
+            return 0
+
+        fee_percent = Decimal(str(PlatformFees.FEE_PERCENT))
+        fee_cents = (Decimal(ticket_amount_cents) * fee_percent / Decimal('100')).quantize(
+            Decimal('1'),
+            rounding=ROUND_HALF_UP,
+        )
+        return int(fee_cents)
+
+    def create_payment_intent(self, registration, ticket_amount_cents: int | None = None) -> dict[str, Any]:
         """
         Create a PaymentIntent for a registration.
 
-        Uses Destination Charges (on_behalf_of) or Transfer logic.
-        Destination Charges: Platform is responsible.
-        Direct Charges: Connected account is responsible.
-
-        We will use Destination Charges with `transfer_data`.
+        Uses Direct Charges on the organizer's connected account with
+        an application fee for the platform.
 
         Args:
             registration: The Registration instance
-            amount_cents: Optional custom amount (e.g., after discount).
-                          If not provided, uses event.price.
+            ticket_amount_cents: Optional custom ticket amount (after discount).
+                                 If not provided, uses registration.amount_paid or event.price.
         """
         if not self.is_configured:
             return {'success': False, 'error': 'Stripe not configured'}
 
         event = registration.event
 
-        # Determine payee
-        payee_account_id = None
-        if event.organization and event.organization.stripe_connect_id:
-            payee_account_id = event.organization.stripe_connect_id
-            if not event.organization.stripe_charges_enabled:
-                return {'success': False, 'error': 'Organizer payment setup incomplete (charges disabled)'}
-        elif event.owner.stripe_connect_id:
-            payee_account_id = event.owner.stripe_connect_id
-            if not event.owner.stripe_charges_enabled:
-                return {'success': False, 'error': 'Organizer payment setup incomplete (charges disabled)'}
-
+        payee_account_id = self.get_payee_account_id(event)
         if not payee_account_id:
-            return {'success': False, 'error': 'Event organizer is not connected to Stripe'}
+            return {'success': False, 'error': 'Event organizer is not connected to Stripe or charges are disabled'}
 
         try:
-            # Calculate amount in cents (use custom amount if provided, otherwise event price)
-            if amount_cents is None:
-                amount_cents = int(event.price * 100)
+            # Calculate ticket amount (use custom amount if provided, otherwise stored price)
+            if ticket_amount_cents is None:
+                if registration.amount_paid:
+                    ticket_amount_cents = int(registration.amount_paid * 100)
+                else:
+                    ticket_amount_cents = int(event.price * 100)
 
-            # Platform fee (application_fee_amount goes to the platform)
-            from django.conf import settings as django_settings
-            fee_percent = getattr(django_settings, 'PLATFORM_FEE_PERCENT', 2.0)
-            application_fee_cents = int(amount_cents * fee_percent / 100)
+            application_fee_cents = self._calculate_platform_fee_cents(ticket_amount_cents)
+            total_amount_cents = ticket_amount_cents + application_fee_cents
 
             intent = self._stripe.PaymentIntent.create(
-                amount=amount_cents,
-                currency=event.currency,
+                amount=total_amount_cents,
+                currency=event.currency.lower(),
                 payment_method_types=['card'],
-                transfer_data={
-                    'destination': payee_account_id,
-                },
                 application_fee_amount=application_fee_cents,
                 metadata={
                     'registration_id': str(registration.uuid),
                     'event_id': str(event.uuid),
                     'event_title': event.title,
-                }
+                    'ticket_amount_cents': str(ticket_amount_cents),
+                    'platform_fee_cents': str(application_fee_cents),
+                },
+                stripe_account=payee_account_id,
             )
 
             return {
                 'success': True,
                 'client_secret': intent.client_secret,
                 'payment_intent_id': intent.id,
+                'ticket_amount_cents': ticket_amount_cents,
+                'platform_fee_cents': application_fee_cents,
+                'total_amount_cents': total_amount_cents,
             }
 
         except Exception as e:
             logger.error(f"Failed to create payment intent: {e}")
             return {'success': False, 'error': str(e)}
 
-    def retrieve_payment_intent(self, payment_intent_id: str):
+    def retrieve_payment_intent(self, payment_intent_id: str, payee_account_id: str | None = None):
         """Retrieve a payment intent."""
         if not self.is_configured:
             return None
-        return self._stripe.PaymentIntent.retrieve(payment_intent_id)
+        try:
+            if payee_account_id:
+                return self._stripe.PaymentIntent.retrieve(payment_intent_id, stripe_account=payee_account_id)
+            return self._stripe.PaymentIntent.retrieve(payment_intent_id)
+        except Exception as e:
+            logger.warning(f"Failed to retrieve payment intent {payment_intent_id}: {e}")
+            return None
+
+    def refund_payment_intent(self, payment_intent_id: str, payee_account_id: str | None = None) -> dict[str, Any]:
+        """Refund a payment intent on the connected account."""
+        if not self.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        try:
+            refund = self._stripe.Refund.create(
+                payment_intent=payment_intent_id,
+                stripe_account=payee_account_id,
+            )
+            return {'success': True, 'refund_id': refund.id}
+        except Exception as e:
+            logger.error(f"Failed to refund payment intent {payment_intent_id}: {e}")
+            return {'success': False, 'error': str(e)}
 
 # Singleton instances
 stripe_connect_service = StripeConnectService()
 stripe_payment_service = StripePaymentService()
-

@@ -75,7 +75,7 @@ export const Sidebar = () => {
         // SECOND: If manifest is loaded, use it for additional fine-grained control
         if (manifest && manifest.routes.length > 0) {
             // Items always visible (not in RBAC registry)
-            if (['dashboard', 'profile'].includes(item.routeKey)) {
+            if (['dashboard', 'profile', 'my_events'].includes(item.routeKey)) {
                 return true;
             }
 

@@ -15,8 +15,11 @@ export interface MinimalEvent {
 export interface Registration {
     uuid: string;
     event: MinimalEvent;
-    status: 'confirmed' | 'waitlisted' | 'cancelled';
+    status: 'pending' | 'confirmed' | 'waitlisted' | 'cancelled';
     payment_status: 'pending' | 'paid' | 'failed' | 'refunded' | 'na';
+    amount_paid?: number;
+    platform_fee_amount?: number;
+    total_amount?: number;
     email: string;
     full_name: string;
     attended: boolean;
@@ -48,13 +51,24 @@ export interface RegistrationCreateRequest {
  * For paid events, includes client_secret for Stripe payment.
  */
 export interface RegistrationResponse extends Registration {
+    registration_uuid?: string;
     client_secret?: string;
     amount?: number;
     currency?: string;
     requires_payment?: boolean;
+    ticket_price?: number;
+    platform_fee?: number;
+    stripe_account_id?: string;
     // Promo code info
     promo_code?: string;
     original_price?: string;
     discount_amount?: string;
     final_price?: string;
+}
+
+export interface ConfirmPaymentResponse {
+    status: 'paid' | 'processing' | 'failed' | 'event_full' | 'error';
+    registration_uuid?: string;
+    amount_paid?: number;
+    message?: string;
 }

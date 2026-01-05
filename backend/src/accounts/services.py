@@ -311,6 +311,8 @@ class ZoomService:
                 'timezone': event.timezone,
                 'password': password,
                 'agenda': event.short_description or event.title,
+                'approval_type': 0,  # Auto-approve registrants
+                'registration_type': 1,  # Register once for all occurrences
                 'settings': {
                     'host_video': True,
                     'participant_video': False,
@@ -376,5 +378,84 @@ class ZoomService:
         except Exception as e:
             logger.error(f"Create meeting failed: {e}")
             return {'success': False, 'error': str(e)}
+
+    def add_meeting_registrant(
+        self,
+        event,
+        email: str,
+        first_name: str,
+        last_name: str
+    ) -> dict[str, Any]:
+        """
+        Add a registrant to a Zoom meeting.
+
+        Args:
+            event: Event instance with zoom_meeting_id
+            email: Registrant email
+            first_name: Registrant first name
+            last_name: Registrant last name
+
+        Returns:
+            {
+                'success': bool,
+                'join_url': str (if success),
+                'registrant_id': str (if success),
+                'error': str (if failure)
+            }
+        """
+        from accounts.models import ZoomConnection
+
+        try:
+            if not event.zoom_meeting_id:
+                return {'success': False, 'error': 'Event has no Zoom meeting'}
+
+            connection = ZoomConnection.objects.get(user=event.owner, is_active=True)
+            access_token = self.get_access_token(connection)
+
+            if not access_token:
+                return {'success': False, 'error': 'Could not get Zoom access token'}
+
+            payload = {
+                'email': email,
+                'first_name': first_name,
+                'last_name': last_name,
+                'auto_approve': True,
+            }
+
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json',
+            }
+
+            response = requests.post(
+                f"{self.API_URL}/meetings/{event.zoom_meeting_id}/registrants",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+
+            if response.status_code not in [201, 200]:
+                logger.error(
+                    f"Zoom add registrant failed: {response.status_code} - {response.text}"
+                )
+                return {'success': False, 'error': f"Zoom API error: {response.status_code}"}
+
+            data = response.json()
+            connection.record_usage()
+
+            logger.info(f"Added registrant {email} to Zoom meeting {event.zoom_meeting_id}")
+
+            return {
+                'success': True,
+                'join_url': data.get('join_url', ''),
+                'registrant_id': data.get('id', ''),
+            }
+
+        except ZoomConnection.DoesNotExist:
+            return {'success': False, 'error': 'No Zoom connection for event owner'}
+        except Exception as e:
+            logger.error(f"Add meeting registrant failed: {e}")
+            return {'success': False, 'error': str(e)}
+
 # Singleton instance
 zoom_service = ZoomService()

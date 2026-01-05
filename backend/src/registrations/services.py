@@ -10,12 +10,24 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from common.utils import error_response
+from common.config.billing import PlatformFees
 from events.models import Event
 from registrations.models import Registration, CustomFieldResponse
 from promo_codes.services import promo_code_service, PromoCodeError
 from billing.services import stripe_payment_service
 
 logger = logging.getLogger(__name__)
+
+
+def _calculate_platform_fee(amount: Decimal) -> Decimal:
+    """Calculate platform service fee based on ticket price."""
+    from decimal import ROUND_HALF_UP
+
+    if amount <= 0:
+        return Decimal('0.00')
+    fee_percent = Decimal(str(PlatformFees.FEE_PERCENT))
+    fee = (amount * fee_percent / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    return max(Decimal('0.00'), fee)
 
 
 class RegistrationService:
@@ -58,8 +70,7 @@ class RegistrationService:
             raise ValidationError("Already registered for this event.")
 
         # 3. Capacity & Waitlist Check
-        status_to_set = Registration.Status.CONFIRMED
-        
+        # Note: status will be set based on payment requirement later
         if event.max_attendees:
             confirmed_count = event.registrations.filter(status=Registration.Status.CONFIRMED).count()
             if confirmed_count >= event.max_attendees:
@@ -87,6 +98,13 @@ class RegistrationService:
             except PromoCodeError as e:
                 raise ValidationError(str(e))
 
+        # 4.5. Determine Registration Status
+        # For paid events: status = PENDING until payment confirmed
+        # For free events: status = CONFIRMED immediately
+        status_to_set = Registration.Status.PENDING if final_price > 0 else Registration.Status.CONFIRMED
+        platform_fee = _calculate_platform_fee(final_price)
+        total_amount = final_price + platform_fee
+
         # 5. Create Registration (Atomic)
         with transaction.atomic():
             registration = Registration.objects.create(
@@ -100,6 +118,8 @@ class RegistrationService:
                 allow_public_verification=data.get('allow_public_verification', True),
                 source=Registration.Source.SELF,
                 amount_paid=final_price,
+                platform_fee_amount=platform_fee,
+                total_amount=total_amount,
             )
 
             # Apply Promo Code
@@ -122,16 +142,26 @@ class RegistrationService:
             registration.payment_status = Registration.PaymentStatus.PENDING
             registration.save(update_fields=['payment_status', 'updated_at'])
 
-            intent_data = stripe_payment_service.create_payment_intent(registration, amount_cents=int(final_price * 100))
+            intent_data = stripe_payment_service.create_payment_intent(
+                registration,
+                ticket_amount_cents=int(final_price * 100),
+            )
             
             if intent_data['success']:
                 client_secret = intent_data['client_secret']
                 registration.payment_intent_id = intent_data['payment_intent_id']
-                registration.save(update_fields=['payment_intent_id', 'updated_at'])
+                registration.platform_fee_amount = Decimal(intent_data['platform_fee_cents']) / Decimal('100')
+                registration.total_amount = Decimal(intent_data['total_amount_cents']) / Decimal('100')
+                registration.save(update_fields=['payment_intent_id', 'platform_fee_amount', 'total_amount', 'updated_at'])
             else:
                 registration.delete()
                 raise ValidationError(intent_data['error'])
-        
+
+        # Queue Zoom registrant addition (async)
+        if registration.status == Registration.Status.CONFIRMED:
+            from registrations.tasks import add_zoom_registrant
+            add_zoom_registrant.delay(registration.id)
+
         return {
             'registration': registration,
             'client_secret': client_secret,
@@ -142,6 +172,9 @@ class RegistrationService:
     def _add_to_waitlist(self, event, user, email, full_name, data):
         """Internal method to add to waitlist."""
         waitlist_pos = self._get_next_waitlist_position(event)
+        ticket_price = Decimal(str(event.price or 0))
+        platform_fee = _calculate_platform_fee(ticket_price)
+        total_amount = ticket_price + platform_fee
 
         with transaction.atomic():
             registration = Registration.objects.create(
@@ -155,7 +188,9 @@ class RegistrationService:
                 waitlist_position=waitlist_pos,
                 allow_public_verification=data.get('allow_public_verification', True),
                 source=Registration.Source.SELF,
-                amount_paid=0,
+                amount_paid=ticket_price,
+                platform_fee_amount=platform_fee,
+                total_amount=total_amount,
             )
 
             # Save Custom Fields
@@ -253,15 +288,25 @@ class PaymentConfirmationService:
         if not registration.payment_intent_id:
             return {'status': 'error', 'message': 'No payment intent found for this registration'}
 
+        payee_account_id = stripe_payment_service.get_payee_account_id(registration.event)
+        if not payee_account_id:
+            return {'status': 'error', 'message': 'Event organizer is not connected to Stripe'}
+
         for attempt in range(max_retries):
             try:
-                intent = self.stripe.PaymentIntent.retrieve(registration.payment_intent_id)
+                intent = stripe_payment_service.retrieve_payment_intent(
+                    registration.payment_intent_id,
+                    payee_account_id=payee_account_id,
+                )
+                if not intent:
+                    return {'status': 'error', 'message': 'Payment intent not found'}
 
                 if intent.status == 'succeeded':
                     # Update registration with locking to prevent race conditions
                     with transaction.atomic():
                         # Refetch with lock
                         locked_reg = Registration.objects.select_for_update().get(pk=registration.pk)
+                        event = Event.objects.select_for_update().get(pk=locked_reg.event_id)
                         
                         # Idempotency check inside lock
                         if locked_reg.payment_status == Registration.PaymentStatus.PAID:
@@ -269,22 +314,65 @@ class PaymentConfirmationService:
                             return {
                                 'status': 'paid',
                                 'registration_uuid': str(registration.uuid),
-                                'amount_paid': float(locked_reg.amount_paid),
+                                'amount_paid': float(locked_reg.total_amount),
+                            }
+
+                        confirmed_count = Registration.objects.filter(
+                            event=event,
+                            status=Registration.Status.CONFIRMED,
+                            deleted_at__isnull=True,
+                        ).count()
+                        if event.max_attendees and confirmed_count >= event.max_attendees:
+                            refund_result = stripe_payment_service.refund_payment_intent(
+                                registration.payment_intent_id,
+                                payee_account_id=payee_account_id,
+                            )
+
+                            if refund_result['success']:
+                                locked_reg.payment_status = Registration.PaymentStatus.REFUNDED
+                                locked_reg.total_amount = Decimal(intent.amount_received) / Decimal('100')
+                                locked_reg.save(update_fields=['payment_status', 'total_amount', 'updated_at'])
+                                logger.info(
+                                    f"Registration {registration.uuid} refunded due to capacity limits"
+                                )
+                                return {
+                                    'status': 'event_full',
+                                    'message': 'Event is fully booked. Payment has been refunded.',
+                                }
+
+                            logger.error(
+                                f"Refund failed for registration {registration.uuid}: {refund_result['error']}"
+                            )
+                            return {
+                                'status': 'error',
+                                'message': 'Payment succeeded but refund failed. Please contact support.',
                             }
                         
                         locked_reg.payment_status = Registration.PaymentStatus.PAID
-                        locked_reg.amount_paid = Decimal(str(intent.amount_received / 100))
-                        locked_reg.save(update_fields=['payment_status', 'amount_paid', 'updated_at'])
-                        
+                        locked_reg.total_amount = Decimal(intent.amount_received) / Decimal('100')
+
+                        # Update status to CONFIRMED if it was PENDING
+                        if locked_reg.status == Registration.Status.PENDING:
+                            locked_reg.status = Registration.Status.CONFIRMED
+                            locked_reg.save(update_fields=['payment_status', 'total_amount', 'status', 'updated_at'])
+                        else:
+                            locked_reg.save(update_fields=['payment_status', 'total_amount', 'updated_at'])
+
                         # Update original instance to reflect changes
                         registration.payment_status = locked_reg.payment_status
-                        registration.amount_paid = locked_reg.amount_paid
+                        registration.total_amount = locked_reg.total_amount
+                        registration.status = locked_reg.status
+
+                    # Trigger Zoom registrant addition after payment confirmed
+                    if registration.status == Registration.Status.CONFIRMED:
+                        from registrations.tasks import add_zoom_registrant
+                        add_zoom_registrant.delay(registration.id)
 
                     logger.info(f"Registration {registration.uuid} payment confirmed: PAID")
                     return {
                         'status': 'paid',
                         'registration_uuid': str(registration.uuid),
-                        'amount_paid': float(registration.amount_paid),
+                        'amount_paid': float(registration.total_amount),
                     }
 
                 elif intent.status == 'processing':

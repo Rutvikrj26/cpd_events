@@ -148,7 +148,24 @@ class Event(SoftDeleteModel):
     # =========================================
     # Registration Settings
     # =========================================
-    currency = models.CharField(max_length=3, default='usd', help_text="Currency code (iso 4217)")
+    class Currency(models.TextChoices):
+        """Stripe-supported currencies (ISO 4217)."""
+        USD = 'USD', 'US Dollar ($)'
+        CAD = 'CAD', 'Canadian Dollar (CA$)'
+        EUR = 'EUR', 'Euro (€)'
+        GBP = 'GBP', 'British Pound (£)'
+        AUD = 'AUD', 'Australian Dollar (A$)'
+        JPY = 'JPY', 'Japanese Yen (¥)'
+        INR = 'INR', 'Indian Rupee (₹)'
+        # Add more Stripe-supported currencies as needed
+        # See: https://stripe.com/docs/currencies
+
+    currency = models.CharField(
+        max_length=3,
+        choices=Currency.choices,
+        default=Currency.USD,
+        help_text="Currency code (ISO 4217)"
+    )
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Ticket price (0.00 for free)")
 
     registration_enabled = models.BooleanField(default=True, help_text="Accept new registrations")

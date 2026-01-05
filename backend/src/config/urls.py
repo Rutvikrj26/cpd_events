@@ -7,6 +7,7 @@ from django.urls import include, path, re_path
 from rest_framework import permissions
 
 from billing.webhooks import StripeWebhookView
+from registrations import views as registration_views
 
 # OpenAPI Schema configuration
 # schema_view = get_schema_view(
@@ -36,9 +37,21 @@ urlpatterns = [
     path('api/v1/feedback/', include('feedback.urls')),
     path('api/v1/', include('promo_codes.urls')),
     # Public registration (needs to be at root, not under /registrations/)
-    path('api/v1/public/events/<uuid:event_uuid>/register/', 
-         __import__('registrations.views', fromlist=['PublicRegistrationView']).PublicRegistrationView.as_view(), 
-         name='public_event_register'),
+    path(
+        'api/v1/public/events/<uuid:event_uuid>/register/',
+        registration_views.PublicRegistrationView.as_view(),
+        name='public_event_register',
+    ),
+    path(
+        'api/v1/public/registrations/<uuid:uuid>/payment-intent/',
+        registration_views.RegistrationPaymentIntentView.as_view(),
+        name='public_registration_payment_intent',
+    ),
+    path(
+        'api/v1/public/registrations/<uuid:uuid>/confirm-payment/',
+        registration_views.ConfirmPaymentView.as_view(),
+        name='public_registration_confirm_payment',
+    ),
     # Webhooks
     path('webhooks/stripe/', StripeWebhookView.as_view(), name='stripe_webhook'),
     # Internal & Common

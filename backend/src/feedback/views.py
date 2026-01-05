@@ -18,20 +18,31 @@ class EventFeedbackViewSet(viewsets.ModelViewSet):
     queryset = EventFeedback.objects.all()
     serializer_class = EventFeedbackSerializer
     permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
     
     def get_queryset(self):
         user = self.request.user
         if user.is_staff:
-            return EventFeedback.objects.all()
+            queryset = EventFeedback.objects.all()
+        else:
+            # Combined query:
+            # Feedback for events owned by user OR feedback created by user (via registration)
+            # Handle null registration.user for guest registrations by matching email
+            queryset = EventFeedback.objects.filter(
+                django_models.Q(event__owner=user) |
+                django_models.Q(registration__user=user) |
+                django_models.Q(registration__user__isnull=True, registration__email__iexact=user.email)
+            ).distinct()
 
-        # Combined query:
-        # Feedback for events owned by user OR feedback created by user (via registration)
-        # Handle null registration.user for guest registrations by matching email
-        return EventFeedback.objects.filter(
-            django_models.Q(event__owner=user) |
-            django_models.Q(registration__user=user) |
-            django_models.Q(registration__user__isnull=True, registration__email__iexact=user.email)
-        ).distinct()
+        event_uuid = self.request.query_params.get('event')
+        if event_uuid:
+            queryset = queryset.filter(event__uuid=event_uuid)
+
+        registration_uuid = self.request.query_params.get('registration')
+        if registration_uuid:
+            queryset = queryset.filter(registration__uuid=registration_uuid)
+
+        return queryset
 
     def perform_create(self, serializer):
         # Ensure the user owns the registration they are submitting for

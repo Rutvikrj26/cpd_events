@@ -1,4 +1,8 @@
 from rest_framework import serializers
+
+from events.models import Event
+from registrations.models import Registration
+
 from .models import EventFeedback
 
 class EventFeedbackSerializer(serializers.ModelSerializer):
@@ -6,6 +10,8 @@ class EventFeedbackSerializer(serializers.ModelSerializer):
     Serializer for submitting and viewing event feedback.
     """
     attendee_name = serializers.SerializerMethodField()
+    event = serializers.SlugRelatedField(slug_field='uuid', queryset=Event.objects.all())
+    registration = serializers.SlugRelatedField(slug_field='uuid', queryset=Registration.objects.all())
     
     class Meta:
         model = EventFeedback
@@ -22,7 +28,7 @@ class EventFeedbackSerializer(serializers.ModelSerializer):
             return "Anonymous"
         # Access user name via registration -> user
         if obj.registration and obj.registration.user:
-            return obj.registration.user.get_full_name()
+            return obj.registration.user.full_name or obj.registration.user.email
         return "Unknown"
 
     def validate(self, attrs):

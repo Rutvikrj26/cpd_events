@@ -602,17 +602,25 @@ export function EventDetail() {
                       <div className="flex-1">
                         <p className="font-medium text-foreground">Online Event</p>
                         {isAlreadyRegistered && userRegistration?.zoom_join_url ? (
-                          <a
-                            href={userRegistration.zoom_join_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-2 inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                          >
-                            <Video className="h-4 w-4" />
-                            Join Meeting
-                          </a>
+                          <div className="mt-2 space-y-2">
+                            <a
+                              href={userRegistration.zoom_join_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                            >
+                              <Video className="h-4 w-4" />
+                              Join Meeting
+                            </a>
+                            <p className="text-xs text-muted-foreground">
+                              You'll also receive meeting details and reminders via email from Zoom
+                            </p>
+                          </div>
                         ) : isAlreadyRegistered ? (
-                          <p className="mt-1 text-green-600">Meeting link will be available before the event</p>
+                          <div className="mt-1 space-y-1">
+                            <p className="text-green-600">Meeting link will be available closer to the event date</p>
+                            <p className="text-xs text-muted-foreground">Check your email for the Zoom meeting invitation</p>
+                          </div>
                         ) : (
                           <p className="mt-1">Link provided upon registration</p>
                         )}
@@ -624,17 +632,25 @@ export function EventDetail() {
                       <div className="flex-1">
                         <p className="font-medium text-foreground">Hybrid Event</p>
                         {isAlreadyRegistered && userRegistration?.zoom_join_url ? (
-                          <a
-                            href={userRegistration.zoom_join_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-2 inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                          >
-                            <Video className="h-4 w-4" />
-                            Join Online
-                          </a>
+                          <div className="mt-2 space-y-2">
+                            <a
+                              href={userRegistration.zoom_join_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                            >
+                              <Video className="h-4 w-4" />
+                              Join Online
+                            </a>
+                            <p className="text-xs text-muted-foreground">
+                              You'll also receive meeting details and reminders via email from Zoom
+                            </p>
+                          </div>
                         ) : isAlreadyRegistered ? (
-                          <p className="mt-1 text-green-600">Details will be available before the event</p>
+                          <div className="mt-1 space-y-1">
+                            <p className="text-green-600">Details will be available closer to the event date</p>
+                            <p className="text-xs text-muted-foreground">Check your email for the Zoom meeting invitation</p>
+                          </div>
                         ) : (
                           <p className="mt-1">In-person + Online options available</p>
                         )}

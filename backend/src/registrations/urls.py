@@ -18,6 +18,8 @@ urlpatterns = [
     path('users/me/link-registrations/', views.LinkRegistrationsView.as_view(), name='link_registrations'),
     # Public registration
     path('public/events/<uuid:event_uuid>/register/', views.PublicRegistrationView.as_view(), name='public_register'),
+    # Payment intent (resume payment)
+    path('public/registrations/<uuid:uuid>/payment-intent/', views.RegistrationPaymentIntentView.as_view(), name='payment_intent'),
     # Payment confirmation (sync)
     path('public/registrations/<uuid:uuid>/confirm-payment/', views.ConfirmPaymentView.as_view(), name='confirm_payment'),
 ]

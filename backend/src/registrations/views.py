@@ -2,6 +2,8 @@
 Registrations app views and viewsets.
 """
 
+from decimal import Decimal
+
 from django.db.models import Max
 from django.utils import timezone
 from django_filters import rest_framework as filters
@@ -282,10 +284,22 @@ class PublicRegistrationView(generics.CreateAPIView):
 
             # Map service result to API response
             reg = result['registration']
+            stripe_account_id = None
+            if result.get('client_secret'):
+                from billing.services import stripe_payment_service
+                stripe_account_id = stripe_payment_service.get_payee_account_id(event)
+
             response_data = {
                 'registration_uuid': str(reg.uuid),
+                'uuid': str(reg.uuid),
                 'status': result['status'],
                 'client_secret': result.get('client_secret'),
+                'requires_payment': bool(result.get('client_secret')),  # Payment required if client_secret exists
+                'amount': float(reg.total_amount) if reg.total_amount else None,
+                'ticket_price': float(reg.amount_paid) if reg.amount_paid else None,
+                'platform_fee': float(reg.platform_fee_amount) if reg.platform_fee_amount else None,
+                'currency': event.currency,  # Use event's currency setting
+                'stripe_account_id': stripe_account_id,
                 'waitlist_position': getattr(reg, 'waitlist_position', None),
                 'message': result.get('message', 'Registration successful.'),
             }
@@ -305,6 +319,112 @@ class PublicRegistrationView(generics.CreateAPIView):
         except Exception as e:
             logger.exception("Registration failed")
             return error_response("An unexpected error occurred.", code='INTERNAL_ERROR', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@roles('public', route_name='payment_intent')
+class RegistrationPaymentIntentView(generics.GenericAPIView):
+    """
+    POST /api/v1/public/registrations/{uuid}/payment-intent/
+
+    Returns a client_secret for completing payment on a pending registration.
+    Performs a capacity check before allowing payment.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request, uuid=None):
+        from billing.services import stripe_payment_service
+
+        try:
+            registration = Registration.objects.select_related('event').get(uuid=uuid, deleted_at__isnull=True)
+        except Registration.DoesNotExist:
+            return error_response('Registration not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+
+        if registration.status == Registration.Status.WAITLISTED:
+            return error_response('Registration is waitlisted.', code='WAITLISTED')
+
+        if registration.status == Registration.Status.CANCELLED:
+            return error_response('Registration is cancelled.', code='CANCELLED')
+
+        if registration.payment_status == Registration.PaymentStatus.PAID:
+            return error_response('Payment already completed.', code='ALREADY_PAID')
+
+        if registration.status != Registration.Status.PENDING:
+            return error_response('Registration does not require payment.', code='NO_PAYMENT_REQUIRED')
+
+        event = registration.event
+        if registration.amount_paid <= 0:
+            return error_response('Registration does not require payment.', code='NO_PAYMENT_REQUIRED')
+        confirmed_count = Registration.objects.filter(
+            event=event,
+            status=Registration.Status.CONFIRMED,
+            deleted_at__isnull=True,
+        ).count()
+        if event.max_attendees and confirmed_count >= event.max_attendees:
+            return error_response('Event is fully booked.', code='EVENT_FULL', status_code=status.HTTP_409_CONFLICT)
+
+        if not stripe_payment_service.is_configured:
+            return error_response('Payment system not configured.', code='PAYMENT_NOT_CONFIGURED')
+
+        payee_account_id = stripe_payment_service.get_payee_account_id(event)
+        if not payee_account_id:
+            return error_response('Organizer payment setup incomplete.', code='PAYMENT_NOT_CONFIGURED')
+
+        # Reuse existing payment intent if still valid
+        if registration.payment_intent_id:
+            intent = stripe_payment_service.retrieve_payment_intent(
+                registration.payment_intent_id,
+                payee_account_id=payee_account_id,
+            )
+            if intent and intent.status == 'succeeded':
+                return error_response('Payment already completed.', code='ALREADY_PAID')
+            if intent and intent.status in ['requires_payment_method', 'requires_confirmation', 'requires_action']:
+                return Response(
+                    {
+                        'registration_uuid': str(registration.uuid),
+                        'uuid': str(registration.uuid),
+                        'client_secret': intent.client_secret,
+                        'amount': float(registration.total_amount),
+                        'ticket_price': float(registration.amount_paid),
+                        'platform_fee': float(registration.platform_fee_amount),
+                        'currency': event.currency,
+                        'requires_payment': True,
+                        'status': registration.status,
+                        'stripe_account_id': payee_account_id,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+        intent_data = stripe_payment_service.create_payment_intent(
+            registration,
+            ticket_amount_cents=int(registration.amount_paid * 100),
+        )
+        if not intent_data['success']:
+            return error_response(intent_data['error'], code='PAYMENT_ERROR')
+
+        registration.payment_intent_id = intent_data['payment_intent_id']
+        registration.platform_fee_amount = Decimal(intent_data['platform_fee_cents']) / Decimal('100')
+        registration.total_amount = Decimal(intent_data['total_amount_cents']) / Decimal('100')
+        registration.payment_status = Registration.PaymentStatus.PENDING
+        registration.save(
+            update_fields=['payment_intent_id', 'platform_fee_amount', 'total_amount', 'payment_status', 'updated_at']
+        )
+
+        return Response(
+            {
+                'registration_uuid': str(registration.uuid),
+                'uuid': str(registration.uuid),
+                'client_secret': intent_data['client_secret'],
+                'amount': float(registration.total_amount),
+                'ticket_price': float(registration.amount_paid),
+                'platform_fee': float(registration.platform_fee_amount),
+                'currency': event.currency,
+                'requires_payment': True,
+                'status': registration.status,
+                'stripe_account_id': payee_account_id,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 @roles('public', route_name='confirm_payment')
@@ -354,6 +474,8 @@ class ConfirmPaymentView(generics.GenericAPIView):
 
         if result['status'] == 'paid':
             return Response(result, status=status.HTTP_200_OK)
+        elif result['status'] == 'event_full':
+            return error_response(result.get('message', 'Event is fully booked.'), code='EVENT_FULL', status_code=status.HTTP_409_CONFLICT)
         elif result['status'] == 'processing':
             return Response(result, status=status.HTTP_202_ACCEPTED)
         elif result['status'] == 'failed':

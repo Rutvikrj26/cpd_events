@@ -72,3 +72,74 @@ def send_registration_confirmations(registration_ids: list):
 
     logger.info(f"Queued {count} registration confirmations")
     return count
+
+
+@task()
+def add_zoom_registrant(registration_id: int):
+    """
+    Add registration to Zoom meeting as registrant.
+
+    Background task that adds a confirmed registration to the Zoom meeting
+    as a registrant, giving them a unique join URL.
+
+    Args:
+        registration_id: Registration ID to add to Zoom
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    from registrations.models import Registration
+    from accounts.services import zoom_service
+
+    try:
+        registration = Registration.objects.select_related('event').get(id=registration_id)
+
+        # Skip if no Zoom meeting
+        if not registration.event.zoom_meeting_id:
+            logger.info(f"Skipping Zoom for {registration.uuid}: No meeting")
+            return False
+
+        # Idempotency: Skip if already registered
+        if registration.zoom_registrant_id:
+            logger.info(f"Already registered to Zoom: {registration.uuid}")
+            return True
+
+        # Only add confirmed registrations
+        if registration.status != Registration.Status.CONFIRMED:
+            logger.info(f"Skipping non-confirmed registration: {registration.uuid}")
+            return False
+
+        # Parse name
+        name_parts = registration.full_name.split(' ', 1)
+        first_name = name_parts[0] if name_parts else 'Guest'
+        last_name = name_parts[1] if len(name_parts) > 1 else ''
+
+        # Call Zoom API
+        result = zoom_service.add_meeting_registrant(
+            event=registration.event,
+            email=registration.email,
+            first_name=first_name,
+            last_name=last_name,
+        )
+
+        if result['success']:
+            # Update registration
+            registration.zoom_registrant_join_url = result['join_url']
+            registration.zoom_registrant_id = result['registrant_id']
+            registration.save(
+                update_fields=['zoom_registrant_join_url', 'zoom_registrant_id', 'updated_at']
+            )
+
+            logger.info(f"Added {registration.uuid} to Zoom: {result['registrant_id']}")
+            return True
+        else:
+            # Raise to trigger retry
+            logger.error(f"Zoom registration failed for {registration.uuid}: {result['error']}")
+            raise Exception(f"Zoom API error: {result['error']}")
+
+    except Registration.DoesNotExist:
+        logger.error(f"Registration {registration_id} not found")
+        return False
+    except Exception as e:
+        logger.error(f"Error adding to Zoom: {e}")
+        raise  # Trigger retry

@@ -1,5 +1,5 @@
 import client from '../client';
-import { Registration, RegistrationCreateRequest, RegistrationResponse } from './types';
+import { ConfirmPaymentResponse, Registration, RegistrationCreateRequest, RegistrationResponse } from './types';
 
 // My Registrations (Attendee)
 export const getMyRegistrations = async (): Promise<Registration[]> => {
@@ -24,5 +24,17 @@ export const linkRegistrations = async (): Promise<{ linked_count: number; messa
 export const registerForEvent = async (eventUuid: string, data: RegistrationCreateRequest): Promise<RegistrationResponse> => {
     // path('public/events/<uuid:event_uuid>/register/', ...)
     const response = await client.post<RegistrationResponse>(`/public/events/${eventUuid}/register/`, data);
+    return response.data;
+};
+
+// Resume payment for a pending registration
+export const getRegistrationPaymentIntent = async (registrationUuid: string): Promise<RegistrationResponse> => {
+    const response = await client.post<RegistrationResponse>(`/public/registrations/${registrationUuid}/payment-intent/`);
+    return response.data;
+};
+
+// Confirm payment after Stripe.js succeeds
+export const confirmRegistrationPayment = async (registrationUuid: string): Promise<ConfirmPaymentResponse> => {
+    const response = await client.post<ConfirmPaymentResponse>(`/public/registrations/${registrationUuid}/confirm-payment/`);
     return response.data;
 };

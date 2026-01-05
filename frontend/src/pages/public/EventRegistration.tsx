@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import {
     CheckCircle,
     Award,
@@ -23,7 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { getPublicEvent } from "@/api/events";
-import { registerForEvent } from "@/api/registrations";
+import { confirmRegistrationPayment, getRegistrationPaymentIntent, registerForEvent } from "@/api/registrations";
 import { signup } from "@/api/accounts";
 import { validatePromoCode } from "@/api/promo-codes";
 import { Event } from "@/api/events/types";
@@ -31,7 +31,7 @@ import { RegistrationResponse } from "@/api/registrations/types";
 import { PromoCodeValidationResult } from "@/api/promo-codes/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { PaymentForm, PaymentSuccess } from "@/components/payment/PaymentForm";
+import { PaymentForm } from "@/components/payment/PaymentForm";
 import { CustomFieldsForm } from "@/components/registration/CustomFieldInput";
 
 type RegistrationStep = 'form' | 'payment' | 'success';
@@ -39,12 +39,14 @@ type RegistrationStep = 'form' | 'payment' | 'success';
 export function EventRegistration() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { user } = useAuth();
 
     const [event, setEvent] = useState<Event | null>(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [resumingPayment, setResumingPayment] = useState(false);
 
     // Multi-step state
     const [step, setStep] = useState<RegistrationStep>('form');
@@ -102,6 +104,32 @@ export function EventRegistration() {
         }
         fetchEvent();
     }, [id, user]);
+
+    useEffect(() => {
+        const resumeRegistrationUuid = searchParams.get('resume');
+        if (!resumeRegistrationUuid || !event?.uuid) {
+            return;
+        }
+
+        async function resumePayment() {
+            setResumingPayment(true);
+            setError(null);
+            try {
+                const result = await getRegistrationPaymentIntent(resumeRegistrationUuid);
+                setRegistrationData(result);
+                setStep('payment');
+                toast.info("Complete payment to confirm your registration.");
+            } catch (err: any) {
+                const message = err?.response?.data?.error?.message || "Unable to resume payment.";
+                setError(message);
+                toast.error(message);
+            } finally {
+                setResumingPayment(false);
+            }
+        }
+
+        resumePayment();
+    }, [event?.uuid, searchParams]);
 
     const handleApplyPromoCode = async () => {
         if (!promoCode.trim() || !event?.uuid || !formData.email) {
@@ -165,7 +193,14 @@ export function EventRegistration() {
             setRegistrationData(response);
 
             // 2. Check if payment is required
-            if (response.requires_payment && response.client_secret) {
+            if (response.requires_payment) {
+                const registrationUuid = response.registration_uuid || response.uuid;
+                if (!registrationUuid) {
+                    throw new Error("Registration reference missing for payment.");
+                }
+
+                const paymentIntent = await getRegistrationPaymentIntent(registrationUuid);
+                setRegistrationData(paymentIntent);
                 setStep('payment');
                 toast.info("Please complete payment to confirm your registration.");
             } else {
@@ -201,9 +236,29 @@ export function EventRegistration() {
     };
 
     const handlePaymentSuccess = async () => {
-        await handleAccountCreation();
-        setStep('success');
-        toast.success("Payment successful! You're registered.");
+        const registrationUuid = registrationData?.registration_uuid || registrationData?.uuid;
+        if (!registrationUuid) {
+            toast.error("Registration not found for payment confirmation.");
+            return;
+        }
+
+        try {
+            const result = await confirmRegistrationPayment(registrationUuid);
+            if (result.status === 'paid') {
+                await handleAccountCreation();
+                setStep('success');
+                toast.success("Payment successful! You're registered.");
+            } else if (result.status === 'processing') {
+                toast.info("Payment is still processing. We'll update your registration shortly.");
+            } else if (result.status === 'event_full') {
+                toast.error("This event is fully booked. Your payment was refunded.");
+            } else {
+                toast.error(result.message || "Payment confirmation failed.");
+            }
+        } catch (err: any) {
+            const message = err?.response?.data?.error?.message || "Payment confirmation failed.";
+            toast.error(message);
+        }
     };
 
     const handlePaymentError = (error: string) => {
@@ -219,7 +274,7 @@ export function EventRegistration() {
         }).format(Number(price));
     };
 
-    if (loading) {
+    if (loading || resumingPayment) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -306,6 +361,7 @@ export function EventRegistration() {
                                 clientSecret={registrationData.client_secret}
                                 amount={registrationData.amount || Number(event?.price) || 0}
                                 currency={registrationData.currency || event?.currency || 'USD'}
+                                stripeAccountId={registrationData.stripe_account_id}
                                 onSuccess={handlePaymentSuccess}
                                 onError={handlePaymentError}
                             />

@@ -51,6 +51,7 @@ class StripeWebhookView(View):
         # Handle the event
         event_type = event['type']
         event_data = event['data']['object']
+        self._event_account = event.get('account')
 
         handler = self._get_handler(event_type)
         if handler:
@@ -317,6 +318,9 @@ class StripeWebhookView(View):
         payments are eventually confirmed even if frontend call fails.
         """
         from registrations.models import Registration
+        from billing.services import stripe_payment_service
+        from events.models import Event
+        from decimal import Decimal
 
         metadata = data.get('metadata', {})
         registration_id = metadata.get('registration_id')
@@ -336,6 +340,7 @@ class StripeWebhookView(View):
             with transaction.atomic():
                 # Lock the row
                 locked_reg = Registration.objects.select_for_update().get(pk=registration.pk)
+                event = Event.objects.select_for_update().get(pk=locked_reg.event_id)
                 
                 # Check idempotency again under lock
                 if locked_reg.payment_status == Registration.PaymentStatus.PAID:
@@ -343,17 +348,52 @@ class StripeWebhookView(View):
                     return
 
                 amount_received = data.get('amount_received', 0)
-                locked_reg.amount_paid = amount_received / 100.0
+                confirmed_count = Registration.objects.filter(
+                    event=event,
+                    status=Registration.Status.CONFIRMED,
+                    deleted_at__isnull=True,
+                ).count()
+
+                if event.max_attendees and confirmed_count >= event.max_attendees:
+                    account_id = getattr(self, '_event_account', None)
+                    if not account_id:
+                        account_id = stripe_payment_service.get_payee_account_id(event)
+
+                    refund_result = stripe_payment_service.refund_payment_intent(
+                        data['id'],
+                        payee_account_id=account_id,
+                    )
+
+                    if refund_result['success']:
+                        locked_reg.payment_status = Registration.PaymentStatus.REFUNDED
+                        locked_reg.total_amount = Decimal(amount_received) / Decimal('100')
+                        locked_reg.save(update_fields=['payment_status', 'total_amount', 'updated_at'])
+                        logger.info(
+                            f"Registration {registration_id} refunded due to capacity limits via webhook"
+                        )
+                        return
+
+                    logger.error(
+                        f"Refund failed for registration {registration_id} via webhook: {refund_result['error']}"
+                    )
+                    return
+
+                locked_reg.total_amount = Decimal(amount_received) / Decimal('100')
                 locked_reg.payment_status = Registration.PaymentStatus.PAID
 
-                # If it was just a pending reservation, confirm it
-                # Note: Currently registration creation sets status to CONFIRMED or WAITLISTED immediately
-                # but if we add a 'pending_payment' status later, this handles it.
-                if locked_reg.status == 'pending':
-                    locked_reg.status = 'confirmed'
+                # Update status from PENDING to CONFIRMED after payment
+                status_changed = False
+                if locked_reg.status == Registration.Status.PENDING:
+                    locked_reg.status = Registration.Status.CONFIRMED
+                    status_changed = True
 
-                locked_reg.save(update_fields=['amount_paid', 'payment_status', 'status', 'updated_at'])
+                locked_reg.save(update_fields=['total_amount', 'payment_status', 'status', 'updated_at'])
                 logger.info(f"Registration {registration_id} marked as PAID via webhook fallback {data['id']}")
+
+                # Trigger Zoom registrant addition if status changed to CONFIRMED
+                if status_changed:
+                    from registrations.tasks import add_zoom_registrant
+                    add_zoom_registrant.delay(locked_reg.id)
         except Exception as e:
             logger.error(f"Error locking registration {registration_id} in webhook: {e}")
             raise
@@ -434,4 +474,3 @@ class StripeWebhookView(View):
             return
         except User.DoesNotExist:
             logger.warning(f"Received account.updated for unknown Connect account: {account_id}")
-

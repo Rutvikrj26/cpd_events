@@ -114,6 +114,7 @@ export const MyRegistrationsPage = () => {
             case 'attended': return <span className="inline-flex items-center text-blue-700 bg-blue-50 px-2 py-1 rounded-md text-xs font-medium"><CheckCircle size={12} className="mr-1" /> Attended</span>;
             case 'cancelled': return <span className="inline-flex items-center text-red-700 bg-red-50 px-2 py-1 rounded-md text-xs font-medium"><XCircle size={12} className="mr-1" /> Cancelled</span>;
             case 'waitlisted': return <span className="inline-flex items-center text-yellow-700 bg-yellow-50 px-2 py-1 rounded-md text-xs font-medium"><Clock size={12} className="mr-1" /> Waitlisted</span>;
+            case 'pending': return <span className="inline-flex items-center text-amber-700 bg-amber-50 px-2 py-1 rounded-md text-xs font-medium"><Clock size={12} className="mr-1" /> Pending Payment</span>;
             default: return <span className="inline-flex items-center text-muted-foreground bg-muted px-2 py-1 rounded-md text-xs font-medium"><Clock size={12} className="mr-1" /> Pending</span>;
         }
     };
@@ -136,7 +137,7 @@ export const MyRegistrationsPage = () => {
 
     const handleCompletePayment = (reg: Registration) => {
         // Navigate to the event registration page to complete payment
-        navigate(`/events/${reg.event.uuid}/register`);
+        navigate(`/events/${reg.event.uuid}/register?resume=${reg.uuid}`);
     };
 
     if (loading) return <div className="p-8">Loading registrations...</div>;
@@ -186,7 +187,7 @@ export const MyRegistrationsPage = () => {
                                             <Link to={`/events/${reg.event.slug || reg.event.uuid}`} className="text-primary hover:text-primary/80 font-medium text-xs">
                                                 View Event
                                             </Link>
-                                            {reg.payment_status === 'pending' && (
+                                            {reg.status === 'pending' && (reg.payment_status === 'pending' || reg.payment_status === 'refunded') && (
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
@@ -197,7 +198,7 @@ export const MyRegistrationsPage = () => {
                                                     Pay Now
                                                 </Button>
                                             )}
-                                            {reg.payment_status === 'failed' && (
+                                            {reg.status === 'pending' && reg.payment_status === 'failed' && (
                                                 <Button
                                                     size="sm"
                                                     variant="destructive"

@@ -206,8 +206,22 @@ class PromoCodeService:
         promo_code.increment_usage()
 
         # Update registration's amount
+        from common.config.billing import PlatformFees
+
+        from decimal import ROUND_HALF_UP
+
+        fee_percent = Decimal(str(PlatformFees.FEE_PERCENT))
+        platform_fee = Decimal('0.00')
+        if final_price > 0:
+            platform_fee = (final_price * fee_percent / Decimal('100')).quantize(
+                Decimal('0.01'),
+                rounding=ROUND_HALF_UP,
+            )
+
         registration.amount_paid = final_price
-        registration.save(update_fields=['amount_paid', 'updated_at'])
+        registration.platform_fee_amount = platform_fee
+        registration.total_amount = final_price + platform_fee
+        registration.save(update_fields=['amount_paid', 'platform_fee_amount', 'total_amount', 'updated_at'])
 
         return usage
 

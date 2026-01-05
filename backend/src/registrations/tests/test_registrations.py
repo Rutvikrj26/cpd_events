@@ -18,6 +18,8 @@ Endpoints tested:
 """
 
 import pytest
+from decimal import Decimal
+from unittest.mock import MagicMock, patch, PropertyMock
 from rest_framework import status
 
 
@@ -106,6 +108,27 @@ class TestWaitlistManagement:
         assert response.status_code == status.HTTP_200_OK
         waitlisted_registration.refresh_from_db()
         assert waitlisted_registration.status == 'confirmed'
+
+    def test_promote_from_waitlist_paid_event_sets_pending(self, organizer_client, organizer, db):
+        """Paid event promotions move to pending payment."""
+        from factories import EventFactory, RegistrationFactory
+
+        event = EventFactory(
+            owner=organizer,
+            status='published',
+            price=Decimal('50.00'),
+        )
+        waitlisted = RegistrationFactory(
+            event=event,
+            status='waitlisted',
+        )
+
+        endpoint = f'/api/v1/events/{event.uuid}/registrations/{waitlisted.uuid}/promote/'
+        response = organizer_client.post(endpoint)
+        assert response.status_code == status.HTTP_200_OK
+        waitlisted.refresh_from_db()
+        assert waitlisted.status == 'pending'
+        assert waitlisted.payment_status == 'pending'
 
     def test_promote_next(self, organizer_client, published_event, user, db):
         """Organizer can promote next person in waitlist."""
@@ -240,6 +263,208 @@ class TestPublicRegistration:
         })
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
+
+# =============================================================================
+# Payment Workflow Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestRegistrationPaymentFlow:
+    """Tests for paid registration workflows."""
+
+    def test_paid_registration_requires_payment(self, api_client, organizer, db):
+        """Paid registration returns payment details and remains pending."""
+        from factories import EventFactory
+        from registrations.models import Registration
+
+        event = EventFactory(
+            owner=organizer,
+            status='published',
+            price=Decimal('100.00'),
+        )
+
+        with patch('billing.services.StripePaymentService.is_configured', new_callable=PropertyMock) as mock_config, \
+             patch('registrations.services.stripe_payment_service.create_payment_intent') as mock_create:
+            mock_config.return_value = True
+            mock_create.return_value = {
+                'success': True,
+                'client_secret': 'cs_test',
+                'payment_intent_id': 'pi_test',
+                'platform_fee_cents': 200,
+                'total_amount_cents': 10200,
+            }
+
+            response = api_client.post(
+                f'/api/v1/public/events/{event.uuid}/register/',
+                {'email': 'paid@example.com', 'full_name': 'Paid User'},
+            )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['requires_payment'] is True
+        assert response.data['amount'] == 102.0
+        assert response.data['ticket_price'] == 100.0
+        assert response.data['platform_fee'] == 2.0
+
+        registration = Registration.objects.get(email='paid@example.com', event=event)
+        assert registration.status == Registration.Status.PENDING
+        assert registration.payment_status == Registration.PaymentStatus.PENDING
+        assert registration.total_amount == Decimal('102.00')
+        assert registration.platform_fee_amount == Decimal('2.00')
+
+    def test_payment_intent_blocks_full_event(self, api_client, organizer, db):
+        """Payment intent endpoint blocks payment when event is full."""
+        from factories import EventFactory, RegistrationFactory
+        from registrations.models import Registration
+
+        event = EventFactory(
+            owner=organizer,
+            status='published',
+            price=Decimal('50.00'),
+            max_attendees=1,
+        )
+        RegistrationFactory(event=event, status='confirmed')
+
+        pending = RegistrationFactory(
+            event=event,
+            status='pending',
+            payment_status='pending',
+            amount_paid=Decimal('50.00'),
+            platform_fee_amount=Decimal('1.00'),
+            total_amount=Decimal('51.00'),
+        )
+
+        response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/payment-intent/')
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert response.data['error']['code'] == 'EVENT_FULL'
+
+    def test_payment_intent_reuses_existing_intent(self, api_client, organizer, db):
+        """Payment intent endpoint reuses existing intent if still payable."""
+        from factories import EventFactory, RegistrationFactory
+
+        event = EventFactory(
+            owner=organizer,
+            status='published',
+            price=Decimal('80.00'),
+            max_attendees=10,
+        )
+        pending = RegistrationFactory(
+            event=event,
+            status='pending',
+            payment_status='pending',
+            amount_paid=Decimal('80.00'),
+            platform_fee_amount=Decimal('1.60'),
+            total_amount=Decimal('81.60'),
+        )
+        pending.payment_intent_id = 'pi_existing'
+        pending.save(update_fields=['payment_intent_id'])
+
+        mock_intent = MagicMock()
+        mock_intent.status = 'requires_payment_method'
+        mock_intent.client_secret = 'cs_existing'
+
+        with patch('billing.services.StripePaymentService.is_configured', new_callable=PropertyMock) as mock_config, \
+             patch('billing.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'), \
+             patch('billing.services.stripe_payment_service.retrieve_payment_intent', return_value=mock_intent):
+            mock_config.return_value = True
+            response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/payment-intent/')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['client_secret'] == 'cs_existing'
+        assert response.data['amount'] == 81.6
+
+    def test_confirm_payment_refunds_when_full(self, api_client, organizer, db):
+        """Confirm payment refunds when capacity is already full."""
+        from factories import EventFactory, RegistrationFactory
+        from registrations.models import Registration
+        from registrations.services import PaymentConfirmationService
+
+        organizer.stripe_connect_id = 'acct_test'
+        organizer.stripe_charges_enabled = True
+        organizer.save(update_fields=['stripe_connect_id', 'stripe_charges_enabled'])
+
+        event = EventFactory(
+            owner=organizer,
+            status='published',
+            price=Decimal('100.00'),
+            max_attendees=1,
+        )
+        RegistrationFactory(event=event, status='confirmed')
+
+        pending = RegistrationFactory(
+            event=event,
+            status='pending',
+            payment_status='pending',
+            amount_paid=Decimal('100.00'),
+            platform_fee_amount=Decimal('2.00'),
+            total_amount=Decimal('102.00'),
+        )
+        pending.payment_intent_id = 'pi_paid'
+        pending.save(update_fields=['payment_intent_id'])
+
+        intent = MagicMock()
+        intent.status = 'succeeded'
+        intent.amount_received = 10200
+
+        with patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config, \
+             patch('registrations.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'), \
+             patch('registrations.services.stripe_payment_service.retrieve_payment_intent', return_value=intent), \
+             patch('registrations.services.stripe_payment_service.refund_payment_intent', return_value={'success': True}):
+            mock_config.return_value = True
+            response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/confirm-payment/')
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert response.data['error']['code'] == 'EVENT_FULL'
+
+        pending.refresh_from_db()
+        assert pending.payment_status == Registration.PaymentStatus.REFUNDED
+        assert pending.status == Registration.Status.PENDING
+
+    def test_confirm_payment_success(self, api_client, organizer, db):
+        """Confirm payment succeeds and confirms registration when capacity allows."""
+        from factories import EventFactory, RegistrationFactory
+        from registrations.models import Registration
+        from registrations.services import PaymentConfirmationService
+
+        organizer.stripe_connect_id = 'acct_test'
+        organizer.stripe_charges_enabled = True
+        organizer.save(update_fields=['stripe_connect_id', 'stripe_charges_enabled'])
+
+        event = EventFactory(
+            owner=organizer,
+            status='published',
+            price=Decimal('75.00'),
+            max_attendees=2,
+        )
+
+        pending = RegistrationFactory(
+            event=event,
+            status='pending',
+            payment_status='pending',
+            amount_paid=Decimal('75.00'),
+            platform_fee_amount=Decimal('1.50'),
+            total_amount=Decimal('76.50'),
+        )
+        pending.payment_intent_id = 'pi_success'
+        pending.save(update_fields=['payment_intent_id'])
+
+        intent = MagicMock()
+        intent.status = 'succeeded'
+        intent.amount_received = 7650
+
+        with patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config, \
+             patch('registrations.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'), \
+             patch('registrations.services.stripe_payment_service.retrieve_payment_intent', return_value=intent), \
+             patch('registrations.tasks.add_zoom_registrant.delay'):
+            mock_config.return_value = True
+            response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/confirm-payment/')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['status'] == 'paid'
+
+        pending.refresh_from_db()
+        assert pending.payment_status == Registration.PaymentStatus.PAID
+        assert pending.status == Registration.Status.CONFIRMED
 
 # =============================================================================
 # My Registrations Tests

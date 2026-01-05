@@ -108,6 +108,10 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
             'email',
             'full_name',
             'status',
+            'payment_status',
+            'amount_paid',
+            'platform_fee_amount',
+            'total_amount',
             'attended',
             'check_in_time',
             'total_attendance_minutes',
@@ -139,6 +143,7 @@ class RegistrationDetailSerializer(SoftDeleteModelSerializer):
             'user',
             'event',
             'status',
+            'payment_status',
             # Contact info
             'email',
             'full_name',
@@ -161,8 +166,15 @@ class RegistrationDetailSerializer(SoftDeleteModelSerializer):
             'certificate_issued',
             'certificate_issued_at',
             'can_receive_certificate',
+            # Payment
+            'amount_paid',
+            'platform_fee_amount',
+            'total_amount',
             # Privacy
             'allow_public_verification',
+            # Zoom registrant fields
+            'zoom_registrant_join_url',
+            'zoom_registrant_id',
             # Custom fields
             'custom_field_responses',
             # Waitlist
@@ -240,6 +252,7 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
             'uuid',
             'event',
             'status',
+            'payment_status',
             'email',
             'full_name',
             'attended',
@@ -247,6 +260,9 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
             'attendance_eligible',
             'certificate_issued',
             'certificate_issued_at',
+            'amount_paid',
+            'platform_fee_amount',
+            'total_amount',
             'allow_public_verification',
             'waitlist_position',
             'promoted_from_waitlist_at',
@@ -258,7 +274,19 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
         read_only_fields = fields
 
     def get_zoom_join_url(self, obj):
+        """
+        Return registrant-specific URL if available, otherwise event URL.
+
+        Priority:
+        1. Registrant-specific URL (secure, unique)
+        2. Event-level URL (fallback if Zoom registration failed)
+        3. None (if not confirmed or not published)
+        """
         if obj.status == 'confirmed' and obj.event.status in ['published', 'live']:
+            # Prefer registrant-specific URL
+            if obj.zoom_registrant_join_url:
+                return obj.zoom_registrant_join_url
+            # Fallback to event URL
             return obj.event.zoom_join_url
         return None
 
