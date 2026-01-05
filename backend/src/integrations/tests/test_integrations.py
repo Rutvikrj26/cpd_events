@@ -8,6 +8,7 @@ Endpoints tested:
 """
 
 import pytest
+from django.utils import timezone
 from rest_framework import status
 from unittest.mock import patch, MagicMock
 
@@ -209,6 +210,78 @@ class TestZoomWebhook:
             format='json',
         )
         assert response.status_code == status.HTTP_200_OK
+
+    def test_join_leave_updates_attendance_and_eligibility(self, organizer, db):
+        """Join + leave webhooks update attendance and certificate eligibility."""
+        from factories import EventFactory, RegistrationFactory
+        from integrations.models import ZoomWebhookLog
+        from integrations.tasks import process_zoom_webhook
+
+        event = EventFactory(
+            owner=organizer,
+            status='published',
+            zoom_meeting_id='999999',
+            minimum_attendance_minutes=30,
+            duration_minutes=60,
+        )
+        registration = RegistrationFactory(
+            event=event,
+            status='confirmed',
+            user=None,
+            email='attendee@example.com',
+            full_name='Attendee Example',
+        )
+
+        join_time = timezone.now()
+        leave_time = join_time + timezone.timedelta(minutes=45)
+
+        join_log = ZoomWebhookLog.objects.create(
+            webhook_id='join_1',
+            event_type='meeting.participant_joined',
+            event_timestamp=join_time,
+            zoom_meeting_id='999999',
+            zoom_meeting_uuid='uuid-1',
+            payload={
+                'payload': {
+                    'object': {
+                        'id': 999999,
+                        'participant': {
+                            'id': 'participant-1',
+                            'user_id': 'zoom-user-1',
+                            'user_name': 'Attendee Example',
+                            'email': registration.email,
+                            'join_time': join_time.isoformat(),
+                        }
+                    }
+                }
+            },
+        )
+        process_zoom_webhook(join_log.id)
+
+        leave_log = ZoomWebhookLog.objects.create(
+            webhook_id='leave_1',
+            event_type='meeting.participant_left',
+            event_timestamp=leave_time,
+            zoom_meeting_id='999999',
+            zoom_meeting_uuid='uuid-1',
+            payload={
+                'payload': {
+                    'object': {
+                        'id': 999999,
+                        'participant': {
+                            'id': 'participant-1',
+                            'leave_time': leave_time.isoformat(),
+                        }
+                    }
+                }
+            },
+        )
+        process_zoom_webhook(leave_log.id)
+
+        registration.refresh_from_db()
+        assert registration.total_attendance_minutes >= 45
+        assert registration.attendance_eligible is True
+        assert registration.can_receive_certificate is True
 
 
 # =============================================================================

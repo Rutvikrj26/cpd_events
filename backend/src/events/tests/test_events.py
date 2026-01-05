@@ -96,6 +96,29 @@ class TestEventCreate:
         assert response.data['title'] == event_create_data['title']
         assert response.data['status'] == 'draft'
 
+    def test_create_event_requires_certificate_template_when_enabled(self, organizer_client):
+        """Certificate template is required when certificates are enabled."""
+        data = {
+            'title': 'Certificate Event',
+            'starts_at': (timezone.now() + timedelta(days=7)).isoformat(),
+            'certificates_enabled': True,
+        }
+        response = organizer_client.post(self.endpoint, data)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'certificate_template' in response.data['error']['details']
+
+    def test_create_event_with_certificate_template(self, organizer_client, certificate_template):
+        """Can create event when certificates are enabled with a template."""
+        data = {
+            'title': 'Certificate Event',
+            'starts_at': (timezone.now() + timedelta(days=7)).isoformat(),
+            'certificates_enabled': True,
+            'certificate_template': str(certificate_template.uuid),
+        }
+        response = organizer_client.post(self.endpoint, data)
+        assert response.status_code == status.HTTP_201_CREATED
+        assert str(response.data['certificate_template']) == str(certificate_template.uuid)
+
     def test_create_event_minimal(self, organizer_client):
         """Can create event with minimal required fields."""
         data = {
@@ -177,10 +200,23 @@ class TestEventUpdate:
         response = organizer_client.patch(f'/api/v1/events/{event.uuid}/', {
             'title': 'Updated Event Title',
             'description': 'Updated description',
+            'certificates_enabled': False,
         })
         assert response.status_code == status.HTTP_200_OK
         event.refresh_from_db()
         assert event.title == 'Updated Event Title'
+
+    def test_update_event_requires_certificate_template_when_enabled(self, organizer_client, event):
+        """Cannot enable certificates without selecting a template."""
+        event.certificates_enabled = False
+        event.certificate_template = None
+        event.save(update_fields=['certificates_enabled', 'certificate_template', 'updated_at'])
+
+        response = organizer_client.patch(f'/api/v1/events/{event.uuid}/', {
+            'certificates_enabled': True,
+        })
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'certificate_template' in response.data['error']['details']
 
     def test_update_other_organizer_event_forbidden(self, organizer_client, other_organizer_event):
         """Cannot update another organizer's event."""

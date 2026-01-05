@@ -5,9 +5,9 @@ from django.utils import timezone
 
 @pytest.mark.django_db
 def test_swagger_docs_accessible(api_client):
-    """Test that Swagger UI is accessible."""
+    """Swagger UI is disabled by default."""
     response = api_client.get('/api/docs/')
-    assert response.status_code == status.HTTP_200_OK
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 @pytest.mark.django_db
 def test_create_event(organizer_client):

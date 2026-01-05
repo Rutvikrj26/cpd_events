@@ -30,6 +30,11 @@ export const StepSettings = () => {
     const orgStripeConnected = currentOrg?.stripe_charges_enabled || false;
     const stripeConnected = orgStripeConnected || userPayoutsEnabled;
     const isPaidEvent = !formData.is_free;
+    const attendanceMinutes = formData.minimum_attendance_minutes ?? 0;
+    const durationMinutes = formData.duration_minutes ?? 0;
+    const derivedAttendancePercent = durationMinutes
+        ? Math.round((attendanceMinutes / durationMinutes) * 100)
+        : null;
 
     useEffect(() => {
         const fetchTemplates = async () => {
@@ -271,6 +276,9 @@ export const StepSettings = () => {
                                 </SelectContent>
                             </Select>
                             <p className="text-xs text-muted-foreground">The PDF template used for generating certificates.</p>
+                            {formData.certificates_enabled && !formData.certificate_template && (
+                                <p className="text-xs text-red-600">Select a template to enable certificates.</p>
+                            )}
                         </div>
 
                         <div className="flex items-center justify-between max-w-sm">
@@ -290,21 +298,21 @@ export const StepSettings = () => {
                                 <Input
                                     type="number"
                                     min="0"
-                                    value={formData.minimum_attendance_minutes ?? 0}
+                                    value={attendanceMinutes}
                                     onChange={(e) => updateFormData({ minimum_attendance_minutes: parseInt(e.target.value) || 0 })}
                                 />
                                 <p className="text-xs text-muted-foreground">0 for no minimum.</p>
                             </div>
                             <div className="space-y-2">
                                 <Label className="text-sm">Min. Attendance (%)</Label>
-                                <Input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    value={formData.minimum_attendance_percent ?? 80}
-                                    onChange={(e) => updateFormData({ minimum_attendance_percent: parseInt(e.target.value) || 0 })}
-                                />
-                                <p className="text-xs text-muted-foreground">Usually 80%.</p>
+                                <div className="h-10 px-3 flex items-center rounded-md border bg-muted text-sm text-muted-foreground">
+                                    {attendanceMinutes === 0
+                                        ? 'No minimum'
+                                        : durationMinutes
+                                            ? `${derivedAttendancePercent}% of event duration`
+                                            : 'Set a duration to calculate'}
+                                </div>
+                                <p className="text-xs text-muted-foreground">Calculated from minutes and duration.</p>
                             </div>
                         </div>
                     </div>

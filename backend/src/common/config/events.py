@@ -61,8 +61,8 @@ class AttendanceThresholds:
     """
     Attendance requirements for certificate eligibility.
 
-    Attendees must meet EITHER the percentage OR minutes threshold
-    to be eligible for a certificate.
+    Backend eligibility is based on minimum minutes. Percentage is
+    UI-derived only and should not be used for server-side checks.
 
     - DEFAULT_PERCENT: Default minimum attendance percentage (0-100)
     - DEFAULT_MINUTES: Default minimum attendance minutes (0 = no minimum)

@@ -3,6 +3,7 @@ Stripe webhook handlers.
 """
 
 import logging
+from datetime import timezone as dt_timezone
 
 from django.conf import settings
 from django.db import transaction
@@ -106,9 +107,13 @@ class StripeWebhookView(View):
         subscription.status = data.get('status', 'active')
 
         if data.get('current_period_start'):
-            subscription.current_period_start = timezone.datetime.fromtimestamp(data['current_period_start'], tz=timezone.utc)
+            subscription.current_period_start = timezone.datetime.fromtimestamp(
+                data['current_period_start'], tz=dt_timezone.utc
+            )
         if data.get('current_period_end'):
-            subscription.current_period_end = timezone.datetime.fromtimestamp(data['current_period_end'], tz=timezone.utc)
+            subscription.current_period_end = timezone.datetime.fromtimestamp(
+                data['current_period_end'], tz=dt_timezone.utc
+            )
 
         subscription.save()
         
@@ -138,11 +143,17 @@ class StripeWebhookView(View):
         subscription.cancel_at_period_end = data.get('cancel_at_period_end', False)
 
         if data.get('current_period_start'):
-            subscription.current_period_start = timezone.datetime.fromtimestamp(data['current_period_start'], tz=timezone.utc)
+            subscription.current_period_start = timezone.datetime.fromtimestamp(
+                data['current_period_start'], tz=dt_timezone.utc
+            )
         if data.get('current_period_end'):
-            subscription.current_period_end = timezone.datetime.fromtimestamp(data['current_period_end'], tz=timezone.utc)
+            subscription.current_period_end = timezone.datetime.fromtimestamp(
+                data['current_period_end'], tz=dt_timezone.utc
+            )
         if data.get('canceled_at'):
-            subscription.canceled_at = timezone.datetime.fromtimestamp(data['canceled_at'], tz=timezone.utc)
+            subscription.canceled_at = timezone.datetime.fromtimestamp(
+                data['canceled_at'], tz=dt_timezone.utc
+            )
 
         subscription.save()
         
@@ -200,10 +211,18 @@ class StripeWebhookView(View):
                 'hosted_invoice_url': data.get('hosted_invoice_url', ''),
                 'paid_at': timezone.now(),
                 'period_start': (
-                    timezone.datetime.fromtimestamp(data['period_start'], tz=timezone.utc) if data.get('period_start') else None
+                    timezone.datetime.fromtimestamp(
+                        data['period_start'], tz=dt_timezone.utc
+                    )
+                    if data.get('period_start')
+                    else None
                 ),
                 'period_end': (
-                    timezone.datetime.fromtimestamp(data['period_end'], tz=timezone.utc) if data.get('period_end') else None
+                    timezone.datetime.fromtimestamp(
+                        data['period_end'], tz=dt_timezone.utc
+                    )
+                    if data.get('period_end')
+                    else None
                 ),
             },
         )
@@ -285,7 +304,9 @@ class StripeWebhookView(View):
                 'invoice_pdf_url': data.get('invoice_pdf', ''),
                 'hosted_invoice_url': data.get('hosted_invoice_url', ''),
                 'due_date': (
-                    timezone.datetime.fromtimestamp(data['due_date'], tz=timezone.utc).date() if data.get('due_date') else None
+                    timezone.datetime.fromtimestamp(data['due_date'], tz=dt_timezone.utc).date()
+                    if data.get('due_date')
+                    else None
                 ),
             },
         )

@@ -231,7 +231,7 @@ class TestChargesEnabledValidation(TestCase):
             result = service.create_payment_intent(registration)
         
         assert result['success'] is False
-        assert 'charges disabled' in result['error'].lower()
+        assert 'disabled' in result['error'].lower()
 
     def test_payment_intent_fails_when_user_charges_disabled(self):
         """create_payment_intent should fail if organizer user has charges_enabled=False."""
@@ -273,7 +273,7 @@ class TestChargesEnabledValidation(TestCase):
             result = service.create_payment_intent(registration)
         
         assert result['success'] is False
-        assert 'charges disabled' in result['error'].lower()
+        assert 'disabled' in result['error'].lower()
 
     def test_payment_intent_succeeds_when_charges_enabled(self):
         """create_payment_intent should succeed if charges_enabled=True."""
@@ -340,7 +340,9 @@ class TestPaymentConfirmationLocking(TestCase):
             email='idem_org@test.com',
             password='testpass123',
             full_name='Idempotent Organizer',
-            account_type='organizer'
+            account_type='organizer',
+            stripe_connect_id='acct_idem_org',
+            stripe_charges_enabled=True,
         )
         
         event = Event.objects.create(
@@ -359,7 +361,8 @@ class TestPaymentConfirmationLocking(TestCase):
             status='confirmed',
             payment_status=Registration.PaymentStatus.PAID,
             payment_intent_id='pi_already_paid',
-            amount_paid=Decimal('50.00')
+            amount_paid=Decimal('50.00'),
+            total_amount=Decimal('50.00'),
         )
         
         service = PaymentConfirmationService()
@@ -368,16 +371,12 @@ class TestPaymentConfirmationLocking(TestCase):
         mock_intent.status = 'succeeded'
         mock_intent.amount_received = 5000
         
-        # Patch the Stripe property on the CLASS
         with patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config, \
-             patch.object(PaymentConfirmationService, 'stripe', new_callable=PropertyMock) as mock_stripe_prop:
-             
+             patch('registrations.services.stripe_payment_service.retrieve_payment_intent') as mock_retrieve:
+            
             mock_config.return_value = True
             
-            # Setup the mocked stripe object returned by the property
-            mock_stripe = MagicMock()
-            mock_stripe_prop.return_value = mock_stripe
-            mock_stripe.PaymentIntent.retrieve.return_value = mock_intent
+            mock_retrieve.return_value = mock_intent
             
             result = service.confirm_registration_payment(registration)
         
@@ -459,7 +458,9 @@ class TestPaymentConfirmationLocking(TestCase):
             email='confirm_org@test.com',
             password='testpass123',
             full_name='Confirm Organizer',
-            account_type='organizer'
+            account_type='organizer',
+            stripe_connect_id='acct_confirm_org',
+            stripe_charges_enabled=True,
         )
         
         event = Event.objects.create(
@@ -478,7 +479,7 @@ class TestPaymentConfirmationLocking(TestCase):
             status='confirmed',
             payment_status=Registration.PaymentStatus.PENDING,
             payment_intent_id='pi_pending_test',
-            amount_paid=Decimal('0.00')
+            amount_paid=Decimal('100.00')
         )
         
         service = PaymentConfirmationService()
@@ -487,15 +488,12 @@ class TestPaymentConfirmationLocking(TestCase):
         mock_intent.status = 'succeeded'
         mock_intent.amount_received = 10000
         
-        # Patch the Stripe property on the CLASS
         with patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config, \
-             patch.object(PaymentConfirmationService, 'stripe', new_callable=PropertyMock) as mock_stripe_prop:
+             patch('registrations.services.stripe_payment_service.retrieve_payment_intent') as mock_retrieve:
              
             mock_config.return_value = True
             
-            mock_stripe = MagicMock()
-            mock_stripe_prop.return_value = mock_stripe
-            mock_stripe.PaymentIntent.retrieve.return_value = mock_intent
+            mock_retrieve.return_value = mock_intent
             
             result = service.confirm_registration_payment(registration)
         

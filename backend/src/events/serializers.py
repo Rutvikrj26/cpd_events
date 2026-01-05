@@ -265,6 +265,23 @@ class SessionAttendanceOverrideSerializer(serializers.Serializer):
 # Event Serializers
 # =============================================================================
 
+def _validate_certificate_settings(attrs, instance=None):
+    certificates_enabled = attrs.get('certificates_enabled')
+    certificate_template = attrs.get('certificate_template')
+
+    if instance is not None:
+        if certificates_enabled is None:
+            certificates_enabled = instance.certificates_enabled
+        if certificate_template is None:
+            certificate_template = instance.certificate_template
+
+    if certificates_enabled and not certificate_template:
+        raise serializers.ValidationError({
+            'certificate_template': 'Select a certificate template when certificates are enabled.'
+        })
+
+    return attrs
+
 
 class EventListSerializer(SoftDeleteModelSerializer):
     """Lightweight event for list views."""
@@ -460,6 +477,8 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
 class EventCreateSerializer(serializers.ModelSerializer):
     """Create new event with slug uniqueness validation (M1)."""
 
+    certificates_enabled = serializers.BooleanField(required=False, default=False)
+    auto_issue_certificates = serializers.BooleanField(required=False, default=False)
     custom_fields = EventCustomFieldCreateSerializer(many=True, required=False)
     certificate_template = serializers.SlugRelatedField(
         slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
@@ -523,6 +542,9 @@ class EventCreateSerializer(serializers.ModelSerializer):
             'organization',
         ]
         read_only_fields = ['uuid', 'slug']
+
+    def validate(self, attrs):
+        return _validate_certificate_settings(attrs)
 
 
 
@@ -619,7 +641,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
         instance = self.instance
         if instance and instance.starts_at <= timezone.now():
              raise serializers.ValidationError("Cannot edit event details after the event has started.")
-        return attrs
+        return _validate_certificate_settings(attrs, instance=instance)
 
 
 class EventStatusChangeSerializer(serializers.Serializer):
@@ -773,6 +795,3 @@ class EventStatusHistorySerializer(BaseModelSerializer):
             'created_at',
         ]
         read_only_fields = fields
-
-
-

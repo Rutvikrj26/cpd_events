@@ -16,6 +16,12 @@ export function EventCreatePage() {
             if (!uuid) return;
             try {
                 const data = await getEvent(uuid);
+                const durationMinutes = Number(data.duration_minutes || 0);
+                let minimumAttendanceMinutes = Number(data.minimum_attendance_minutes || 0);
+
+                if (!minimumAttendanceMinutes && data.minimum_attendance_percent && durationMinutes) {
+                    minimumAttendanceMinutes = Math.ceil((Number(data.minimum_attendance_percent) / 100) * durationMinutes);
+                }
                 // Map API response fields to form field names
                 setEventData({
                     ...data,
@@ -26,6 +32,8 @@ export function EventCreatePage() {
                     _sessions: data.sessions || [],
                     // Explicitly set is_free based on price, as backend might not return is_free
                     is_free: !data.price || parseFloat(data.price.toString()) === 0,
+                    minimum_attendance_minutes: minimumAttendanceMinutes,
+                    minimum_attendance_percent: 0,
                 });
             } catch (e) {
                 console.error("Failed to fetch event", e);

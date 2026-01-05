@@ -165,6 +165,13 @@ class TestAttendanceOverride:
         registration.refresh_from_db()
         assert registration.attendance_eligible is True
 
+    def test_override_allows_certificate_eligibility(self, registration):
+        """Attendance override should allow certificate eligibility."""
+        registration.attendance_override = True
+        registration.attendance_eligible = False
+        registration.save(update_fields=['attendance_override', 'attendance_eligible', 'updated_at'])
+        assert registration.can_receive_certificate is True
+
 
 # =============================================================================
 # Registration Summary Tests

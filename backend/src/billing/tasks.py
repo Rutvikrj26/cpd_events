@@ -5,6 +5,7 @@ Cloud tasks for billing.
 import logging
 
 from django.utils import timezone
+from datetime import timezone as dt_timezone
 
 from common.cloud_tasks import task
 
@@ -98,8 +99,12 @@ def sync_stripe_subscription(subscription_id: int):
         stripe_sub = stripe_service.get_subscription(sub.stripe_subscription_id)
         if stripe_sub:
             sub.status = stripe_sub.status
-            sub.current_period_start = timezone.datetime.fromtimestamp(stripe_sub.current_period_start, tz=timezone.utc)
-            sub.current_period_end = timezone.datetime.fromtimestamp(stripe_sub.current_period_end, tz=timezone.utc)
+            sub.current_period_start = timezone.datetime.fromtimestamp(
+                stripe_sub.current_period_start, tz=dt_timezone.utc
+            )
+            sub.current_period_end = timezone.datetime.fromtimestamp(
+                stripe_sub.current_period_end, tz=dt_timezone.utc
+            )
             sub.save()
             return True
 

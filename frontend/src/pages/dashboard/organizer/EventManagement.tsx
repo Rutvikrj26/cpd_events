@@ -545,9 +545,11 @@ export function EventManagement() {
                <TabsTrigger value="attendance" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
                   Attendance
                </TabsTrigger>
-               <TabsTrigger value="certificates" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
-                  Certificates
-               </TabsTrigger>
+               {event.certificates_enabled && (
+                  <TabsTrigger value="certificates" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
+                     Certificates
+                  </TabsTrigger>
+               )}
                <TabsTrigger value="feedback" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
                   <MessageSquare className="h-4 w-4 mr-2" />
                   Feedback
@@ -750,68 +752,70 @@ export function EventManagement() {
             </TabsContent>
 
             {/* CERTIFICATES TAB */}
-            <TabsContent value="certificates" className="mt-0">
-               <div className="mb-4 flex justify-between items-center bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg">
-                  <div className="flex gap-3">
-                     <div className="bg-blue-500/20 p-2 rounded-full h-10 w-10 flex items-center justify-center text-blue-600">
-                        <Award className="h-5 w-5" />
+            {event.certificates_enabled && (
+               <TabsContent value="certificates" className="mt-0">
+                  <div className="mb-4 flex justify-between items-center bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg">
+                     <div className="flex gap-3">
+                        <div className="bg-blue-500/20 p-2 rounded-full h-10 w-10 flex items-center justify-center text-blue-600">
+                           <Award className="h-5 w-5" />
+                        </div>
+                        <div>
+                           <h3 className="text-sm font-bold text-blue-600 dark:text-blue-400">Ready to issue?</h3>
+                           <p className="text-sm text-blue-600/80 dark:text-blue-400/80">
+                              You have {stats.checkedIn} verified attendees eligible for certificates.
+                           </p>
+                        </div>
                      </div>
-                     <div>
-                        <h3 className="text-sm font-bold text-blue-600 dark:text-blue-400">Ready to issue?</h3>
-                        <p className="text-sm text-blue-600/80 dark:text-blue-400/80">
-                           You have {stats.checkedIn} verified attendees eligible for certificates.
-                        </p>
-                     </div>
+                     <Button onClick={handleIssueAllCertificates} className="bg-blue-600 hover:bg-blue-700 text-white">
+                        Issue All Certificates
+                     </Button>
                   </div>
-                  <Button onClick={handleIssueAllCertificates} className="bg-blue-600 hover:bg-blue-700 text-white">
-                     Issue All Certificates
-                  </Button>
-               </div>
 
-               <Card>
-                  <div className="overflow-x-auto">
-                     <table className="min-w-full divide-y divide-border">
-                        <thead className="bg-muted/50">
-                           <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Attendee</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Eligibility</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Certificate Status</th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Action</th>
-                           </tr>
-                        </thead>
-                        <tbody className="bg-card divide-y divide-border">
-                           {filteredAttendees.filter(a => a.status !== "cancelled").map((attendee) => (
-                              <tr key={attendee.uuid} className="hover:bg-muted/50">
-                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm font-medium text-foreground">{attendee.full_name}</div>
-                                 </td>
-                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    {attendee.attendance_eligible ? (
-                                       <Badge variant="outline" className="text-green-600 bg-green-500/10 border-green-200">Eligible</Badge>
-                                    ) : (
-                                       <Badge variant="outline" className="text-muted-foreground bg-muted border-border">Not Eligible</Badge>
-                                    )}
-                                 </td>
-                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                                    {attendee.certificate_uuid ? 'Issued' : 'Not Issued'}
-                                 </td>
-                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <Button
-                                       size="sm"
-                                       variant="outline"
-                                       disabled={!attendee.attendance_eligible || !!attendee.certificate_uuid}
-                                       onClick={() => handleIssueCertificate(attendee.uuid)}
-                                    >
-                                       {attendee.certificate_uuid ? 'Issued' : 'Issue'}
-                                    </Button>
-                                 </td>
+                  <Card>
+                     <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-border">
+                           <thead className="bg-muted/50">
+                              <tr>
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Attendee</th>
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Eligibility</th>
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Certificate Status</th>
+                                 <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Action</th>
                               </tr>
-                           ))}
-                        </tbody>
-                     </table>
-                  </div>
-               </Card>
-            </TabsContent>
+                           </thead>
+                           <tbody className="bg-card divide-y divide-border">
+                              {filteredAttendees.filter(a => a.status !== "cancelled").map((attendee) => (
+                                 <tr key={attendee.uuid} className="hover:bg-muted/50">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                       <div className="text-sm font-medium text-foreground">{attendee.full_name}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                       {attendee.attendance_eligible ? (
+                                          <Badge variant="outline" className="text-green-600 bg-green-500/10 border-green-200">Eligible</Badge>
+                                       ) : (
+                                          <Badge variant="outline" className="text-muted-foreground bg-muted border-border">Not Eligible</Badge>
+                                       )}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                                       {attendee.certificate_uuid ? 'Issued' : 'Not Issued'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                       <Button
+                                          size="sm"
+                                          variant="outline"
+                                          disabled={!attendee.attendance_eligible || !!attendee.certificate_uuid}
+                                          onClick={() => handleIssueCertificate(attendee.uuid)}
+                                       >
+                                          {attendee.certificate_uuid ? 'Issued' : 'Issue'}
+                                       </Button>
+                                    </td>
+                                 </tr>
+                              ))}
+                           </tbody>
+                        </table>
+                     </div>
+                  </Card>
+               </TabsContent>
+            )}
 
             {/* FEEDBACK TAB */}
             <TabsContent value="feedback" className="mt-0">

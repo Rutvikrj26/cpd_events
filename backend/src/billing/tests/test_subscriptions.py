@@ -16,6 +16,7 @@ Endpoints tested:
 """
 
 import pytest
+from unittest.mock import MagicMock
 from rest_framework import status
 
 
@@ -71,6 +72,49 @@ class TestSubscriptionViewSet:
         """Attendees can access subscription endpoints."""
         response = auth_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
+
+    def test_update_subscription_same_plan_rejected(self, organizer_client, subscription):
+        """Cannot update to the same plan."""
+        subscription.plan = 'professional'
+        subscription.save(update_fields=['plan', 'updated_at'])
+
+        response = organizer_client.patch(f'{self.endpoint}{subscription.id}/', {'plan': 'professional'})
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_update_subscription_plan_stripe(self, organizer_client, subscription, mock_stripe, stripe_products):
+        """Stripe update flow changes the plan."""
+        subscription.plan = 'attendee'
+        subscription.stripe_subscription_id = 'sub_test123'
+        subscription.save(update_fields=['plan', 'stripe_subscription_id', 'updated_at'])
+
+        mock_stripe.Subscription.retrieve.return_value = {
+            'items': {'data': [MagicMock(id='si_test123')]},
+        }
+        mock_stripe.Subscription.modify.return_value = {'status': 'active'}
+
+        response = organizer_client.patch(
+            f'{self.endpoint}{subscription.id}/',
+            {'plan': 'professional', 'immediate': True},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        subscription.refresh_from_db()
+        assert subscription.plan == 'professional'
+
+    def test_cancel_subscription_already_canceled(self, organizer_client, subscription):
+        """Canceling an already canceled subscription returns an error."""
+        subscription.status = 'canceled'
+        subscription.save(update_fields=['status', 'updated_at'])
+
+        response = organizer_client.post(f'{self.endpoint}cancel/')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_reactivate_subscription_not_scheduled(self, organizer_client, subscription):
+        """Reactivate requires cancel_at_period_end to be set."""
+        subscription.cancel_at_period_end = False
+        subscription.save(update_fields=['cancel_at_period_end', 'updated_at'])
+
+        response = organizer_client.post(f'{self.endpoint}reactivate/')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 # =============================================================================
@@ -205,3 +249,84 @@ class TestBillingViews:
             'cancel_url': 'https://example.com/cancel',
         })
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
+
+
+@pytest.mark.django_db
+class TestCheckoutConfirmation:
+    """Tests for checkout confirmation and sync."""
+
+    def test_confirm_checkout_missing_session_id(self, auth_client, mock_stripe):
+        """session_id is required."""
+        response = auth_client.post('/api/v1/subscription/confirm-checkout/', {})
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_confirm_checkout_session_success(self, auth_client, user, mock_stripe, stripe_products):
+        """Confirm checkout updates subscription and upgrades user."""
+        from django.utils import timezone
+
+        session = MagicMock()
+        session.customer = 'cus_test123'
+        session.metadata = {'user_uuid': str(user.uuid), 'plan': 'professional'}
+        session.subscription = 'sub_test123'
+        mock_stripe.checkout.Session.retrieve.return_value = session
+
+        stripe_sub = MagicMock()
+        stripe_sub.id = 'sub_test123'
+        stripe_sub.status = 'active'
+        stripe_sub.current_period_start = int(timezone.now().timestamp())
+        stripe_sub.current_period_end = int((timezone.now() + timezone.timedelta(days=30)).timestamp())
+        stripe_sub.trial_end = None
+        mock_stripe.Subscription.retrieve.return_value = stripe_sub
+
+        response = auth_client.post('/api/v1/subscription/confirm-checkout/', {'session_id': 'cs_test123'})
+        assert response.status_code == status.HTTP_200_OK
+
+        user.refresh_from_db()
+        assert user.account_type == 'organizer'
+
+    def test_sync_subscription_updates_plan(self, auth_client, user, mock_stripe, stripe_products, monkeypatch):
+        """Sync pulls subscription details from Stripe and updates plan."""
+        from billing.models import Subscription
+        from billing.services import stripe_service
+        from django.utils import timezone
+        from types import SimpleNamespace
+
+        subscription = Subscription.objects.get(user=user)
+        subscription.stripe_subscription_id = 'sub_sync123'
+        subscription.stripe_customer_id = 'cus_sync123'
+        subscription.plan = 'attendee'
+        subscription.save(update_fields=['stripe_subscription_id', 'stripe_customer_id', 'plan', 'updated_at'])
+
+        class StripeSub:
+            def __init__(self):
+                self.id = 'sub_sync123'
+                self.status = 'active'
+                self.current_period_start = int(timezone.now().timestamp())
+                self.current_period_end = int((timezone.now() + timezone.timedelta(days=30)).timestamp())
+                self.trial_end = None
+                self.cancel_at_period_end = False
+                self.canceled_at = None
+                self.items = SimpleNamespace(
+                    data=[SimpleNamespace(price=SimpleNamespace(product='prod_test_prof'))]
+                )
+
+            def get(self, key, default=None):
+                if key == 'items':
+                    return self.items
+                return default
+
+            def __getitem__(self, key):
+                if key == 'items':
+                    return self.items
+                raise KeyError(key)
+
+        monkeypatch.setattr(stripe_service, "_stripe", mock_stripe)
+        mock_stripe.Subscription.retrieve.return_value = StripeSub()
+        mock_stripe.Subscription.list.return_value = SimpleNamespace(data=[StripeSub()])
+        mock_stripe.Customer.list.return_value = SimpleNamespace(data=[SimpleNamespace(id='cus_sync123')])
+
+        response = auth_client.post('/api/v1/subscription/sync/')
+        assert response.status_code == status.HTTP_200_OK
+
+        subscription.refresh_from_db()
+        assert subscription.plan == 'professional'

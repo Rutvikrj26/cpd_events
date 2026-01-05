@@ -203,7 +203,7 @@ class Registration(SoftDeleteModel):
             return False
         if self.status != self.Status.CONFIRMED:
             return False
-        return self.attendance_eligible
+        return self.attendance_eligible or self.attendance_override
 
     @property
     def attendance_percent(self):

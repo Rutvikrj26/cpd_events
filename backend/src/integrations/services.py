@@ -397,29 +397,19 @@ class AttendanceMatcher:
         attendance_records = AttendanceRecord.objects.filter(registration__event=event)
 
         for reg in registrations:
-            # Calculate total attendance
             records = attendance_records.filter(registration=reg)
 
-            total_minutes = sum(r.duration_minutes for r in records)
-
-            # Check eligibility based on event settings
-            required_minutes = event.duration_minutes * (event.minimum_attendance_percent / 100)
-            is_eligible = total_minutes >= required_minutes
-
-            # Update registration
-            reg.attendance_eligible = is_eligible
             if records.exists():
-                reg.status = 'attended'
                 results['matched'] += 1
             else:
                 results['unmatched'] += 1
 
-            if is_eligible:
+            reg.update_attendance_summary()
+
+            if reg.attendance_eligible:
                 results['eligible'] += 1
             else:
                 results['ineligible'] += 1
-
-            reg.save(update_fields=['attendance_eligible', 'status', 'updated_at'])
 
         return results
 

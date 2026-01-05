@@ -47,7 +47,10 @@ const initialFormData: Partial<EventCreateRequest> = {
     cpd_credit_value: 1,
     is_public: true,
     minimum_attendance_minutes: 0,
-    minimum_attendance_percent: 80,
+    minimum_attendance_percent: 0,
+    certificates_enabled: false,
+    auto_issue_certificates: false,
+    certificate_template: null,
 
     // Payment Settings
     price: 0,
@@ -96,6 +99,11 @@ export const EventWizardProvider = ({ children, initialData, isEditMode }: Event
                 return !!formData.starts_at && (formData.duration_minutes || 0) >= 15;
             case WizardStep.Details:
                 return !!formData.description;
+            case WizardStep.Settings:
+                if (formData.certificates_enabled && !formData.certificate_template) {
+                    return false;
+                }
+                return true;
             default:
                 return true;
         }
