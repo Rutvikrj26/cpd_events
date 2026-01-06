@@ -26,6 +26,8 @@ Modules:
 # Billing configuration
 from .billing import (
     PlatformFees,
+    TicketingFees,
+    TicketingTaxCodes,
     IndividualPlanLimits,
     OrganizationPlanLimits,
     PricingConfig,
@@ -78,6 +80,8 @@ from .api import (
 __all__ = [
     # Billing
     'PlatformFees',
+    'TicketingFees',
+    'TicketingTaxCodes',
     'IndividualPlanLimits',
     'OrganizationPlanLimits',
     'PricingConfig',

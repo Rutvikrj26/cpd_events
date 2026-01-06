@@ -27,7 +27,7 @@ import { confirmRegistrationPayment, getRegistrationPaymentIntent, registerForEv
 import { signup } from "@/api/accounts";
 import { validatePromoCode } from "@/api/promo-codes";
 import { Event } from "@/api/events/types";
-import { RegistrationResponse } from "@/api/registrations/types";
+import { RegistrationCreateRequest, RegistrationResponse } from "@/api/registrations/types";
 import { PromoCodeValidationResult } from "@/api/promo-codes/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -47,6 +47,7 @@ export function EventRegistration() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [resumingPayment, setResumingPayment] = useState(false);
+    const [paymentIntentLoading, setPaymentIntentLoading] = useState(false);
 
     // Multi-step state
     const [step, setStep] = useState<RegistrationStep>('form');
@@ -59,6 +60,10 @@ export function EventRegistration() {
         lastName: "",
         professionalTitle: "",
         organizationName: "",
+        billingCountry: "",
+        billingState: "",
+        billingPostalCode: "",
+        billingCity: "",
         createAccount: false,
         password: "",
     });
@@ -96,6 +101,10 @@ export function EventRegistration() {
                         lastName: nameParts.slice(1).join(" ") || "",
                     }));
                 }
+                setFormData(prev => ({
+                    ...prev,
+                    billingCountry: prev.billingCountry || (data.currency?.toUpperCase() === 'USD' ? 'US' : 'CA'),
+                }));
             } catch (e: any) {
                 setError("Event not found or registration is closed.");
             } finally {
@@ -121,6 +130,14 @@ export function EventRegistration() {
                 toast.info("Complete payment to confirm your registration.");
             } catch (err: any) {
                 const message = err?.response?.data?.error?.message || "Unable to resume payment.";
+                const code = err?.response?.data?.error?.code;
+                if (code === 'BILLING_REQUIRED') {
+                    setRegistrationData({ uuid: resumeRegistrationUuid } as RegistrationResponse);
+                    setStep('payment');
+                    setError(message);
+                    toast.info(message);
+                    return;
+                }
                 setError(message);
                 toast.error(message);
             } finally {
@@ -179,8 +196,7 @@ export function EventRegistration() {
         setError(null);
 
         try {
-            // 1. Register for the event (use UUID, not slug)
-            const response = await registerForEvent(event.uuid, {
+            const payload: RegistrationCreateRequest = {
                 email: formData.email,
                 full_name: `${formData.firstName} ${formData.lastName}`.trim(),
                 professional_title: formData.professionalTitle,
@@ -188,21 +204,17 @@ export function EventRegistration() {
                 allow_public_verification: true,
                 custom_field_responses: customFieldValues,
                 promo_code: appliedPromo?.valid ? appliedPromo.code : undefined,
-            });
+            };
+
+            // 1. Register for the event (use UUID, not slug)
+            const response = await registerForEvent(event.uuid, payload);
 
             setRegistrationData(response);
 
             // 2. Check if payment is required
             if (response.requires_payment) {
-                const registrationUuid = response.registration_uuid || response.uuid;
-                if (!registrationUuid) {
-                    throw new Error("Registration reference missing for payment.");
-                }
-
-                const paymentIntent = await getRegistrationPaymentIntent(registrationUuid);
-                setRegistrationData(paymentIntent);
                 setStep('payment');
-                toast.info("Please complete payment to confirm your registration.");
+                toast.info("Add billing details to calculate taxes, then complete payment.");
             } else {
                 // Free event - registration complete
                 await handleAccountCreation();
@@ -215,6 +227,41 @@ export function EventRegistration() {
             toast.error(message);
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleCreatePaymentIntent = async () => {
+        const registrationUuid = registrationData?.registration_uuid || registrationData?.uuid;
+        if (!registrationUuid) {
+            setError("Registration reference missing for payment.");
+            return;
+        }
+
+        const billingCountry = formData.billingCountry.trim().toUpperCase();
+        const billingPostalCode = formData.billingPostalCode.trim();
+
+        if (!billingCountry || !billingPostalCode) {
+            setError("Billing country and postal code are required for payment.");
+            return;
+        }
+
+        setPaymentIntentLoading(true);
+        setError(null);
+
+        try {
+            const paymentIntent = await getRegistrationPaymentIntent(registrationUuid, {
+                billing_country: billingCountry,
+                billing_state: formData.billingState.trim(),
+                billing_postal_code: billingPostalCode,
+                billing_city: formData.billingCity.trim(),
+            });
+            setRegistrationData(paymentIntent);
+        } catch (err: any) {
+            const message = err?.response?.data?.error?.message || "Unable to calculate taxes.";
+            setError(message);
+            toast.error(message);
+        } finally {
+            setPaymentIntentLoading(false);
         }
     };
 
@@ -324,7 +371,9 @@ export function EventRegistration() {
     }
 
     // Payment step
-    if (step === 'payment' && registrationData?.client_secret) {
+    if (step === 'payment') {
+        const showPaymentForm = Boolean(registrationData?.client_secret);
+
         return (
             <div className="min-h-screen bg-gray-50 py-8 px-4">
                 <div className="max-w-lg mx-auto">
@@ -357,14 +406,117 @@ export function EventRegistration() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <PaymentForm
-                                clientSecret={registrationData.client_secret}
-                                amount={registrationData.amount || Number(event?.price) || 0}
-                                currency={registrationData.currency || event?.currency || 'USD'}
-                                stripeAccountId={registrationData.stripe_account_id}
-                                onSuccess={handlePaymentSuccess}
-                                onError={handlePaymentError}
-                            />
+                            {error && (
+                                <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                                    {error}
+                                </div>
+                            )}
+
+                            {!showPaymentForm && (
+                                <div className="space-y-4">
+                                    <p className="text-sm text-muted-foreground">
+                                        Enter a billing address to calculate taxes and fees.
+                                    </p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="billingCountry">Country *</Label>
+                                            <Input
+                                                id="billingCountry"
+                                                placeholder="CA or US"
+                                                value={formData.billingCountry}
+                                                onChange={(e) => setFormData({ ...formData, billingCountry: e.target.value.toUpperCase() })}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="billingState">Province/State</Label>
+                                            <Input
+                                                id="billingState"
+                                                placeholder="e.g., ON"
+                                                value={formData.billingState}
+                                                onChange={(e) => setFormData({ ...formData, billingState: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="billingPostalCode">Postal/ZIP Code *</Label>
+                                            <Input
+                                                id="billingPostalCode"
+                                                placeholder="e.g., M5V 2T6"
+                                                value={formData.billingPostalCode}
+                                                onChange={(e) => setFormData({ ...formData, billingPostalCode: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="billingCity">City</Label>
+                                            <Input
+                                                id="billingCity"
+                                                placeholder="e.g., Toronto"
+                                                value={formData.billingCity}
+                                                onChange={(e) => setFormData({ ...formData, billingCity: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        onClick={handleCreatePaymentIntent}
+                                        disabled={paymentIntentLoading}
+                                        className="w-full"
+                                    >
+                                        {paymentIntentLoading ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Calculating total...
+                                            </>
+                                        ) : (
+                                            "Continue to payment"
+                                        )}
+                                    </Button>
+                                </div>
+                            )}
+
+                            {showPaymentForm && registrationData && (
+                                <>
+                                    <div className="mb-4 rounded-lg border bg-muted/30 p-4 text-sm">
+                                        <div className="flex items-center justify-between">
+                                            <span>Ticket</span>
+                                            <span>{formatPrice(registrationData.ticket_price || 0, registrationData.currency || event?.currency)}</span>
+                                        </div>
+                                        {typeof registrationData.service_fee === 'number' && (
+                                            <div className="flex items-center justify-between mt-2">
+                                                <span>Service fee</span>
+                                                <span>{formatPrice(registrationData.service_fee, registrationData.currency || event?.currency)}</span>
+                                            </div>
+                                        )}
+                                        {typeof registrationData.processing_fee === 'number' && (
+                                            <div className="flex items-center justify-between mt-2">
+                                                <span>Processing fee</span>
+                                                <span>{formatPrice(registrationData.processing_fee, registrationData.currency || event?.currency)}</span>
+                                            </div>
+                                        )}
+                                        {typeof registrationData.tax_amount === 'number' && (
+                                            <div className="flex items-center justify-between mt-2">
+                                                <span>Tax</span>
+                                                <span>{formatPrice(registrationData.tax_amount, registrationData.currency || event?.currency)}</span>
+                                            </div>
+                                        )}
+                                        <Separator className="my-3" />
+                                        <div className="flex items-center justify-between font-medium">
+                                            <span>Total</span>
+                                            <span>{formatPrice(registrationData.total_amount || registrationData.amount || 0, registrationData.currency || event?.currency)}</span>
+                                        </div>
+                                    </div>
+                                    <PaymentForm
+                                        clientSecret={registrationData.client_secret}
+                                        amount={registrationData.total_amount || registrationData.amount || Number(event?.price) || 0}
+                                        currency={registrationData.currency || event?.currency || 'USD'}
+                                        onSuccess={handlePaymentSuccess}
+                                        onError={handlePaymentError}
+                                    />
+                                </>
+                            )}
                         </CardContent>
                     </Card>
                 </div>

@@ -116,15 +116,17 @@ Secrets are stored with environment prefix: `DEV_DJANGO_SECRET_KEY`, `PROD_STRIP
 | `ZOOM_CLIENT_ID` | Zoom OAuth app ID |
 | `ZOOM_CLIENT_SECRET` | Zoom OAuth secret |
 | `ZOOM_WEBHOOK_SECRET` | Zoom webhook validation |
-| `MAILGUN_API_KEY` | Mailgun API key |
-| `MAILGUN_SMTP_LOGIN` | Mailgun SMTP username |
-| `MAILGUN_SMTP_PASSWORD` | Mailgun SMTP password |
+| `SMTP_API_KEY` | SMTP provider API key (Brevo or Mailgun) |
+| `SMTP_LOGIN` | SMTP username |
+| `SMTP_PASSWORD` | SMTP password |
 
 ### Files:
 - `backend/.env.dev` - Local development secrets
-- `backend/.env.prod` - Production secrets to upload (11 keys)
+- `backend/.env.prod` - Optional local file for uploading secrets (gitignored)
 - `frontend/.env.dev` - Local frontend config
-- `frontend/.env.prod` - Production build-time vars (3 keys)
+- `frontend/.env.prod` - Optional local build-time vars (gitignored)
+- `.secrets` - Optional unified secrets file for CLI upload (gitignored)
+- `infra/gcp/environments/<env>/terraform.tfvars` - Production config (not committed)
 
 ## Useful Commands
 
@@ -144,14 +146,14 @@ Secrets are stored with environment prefix: `DEV_DJANGO_SECRET_KEY`, `PROD_STRIP
 backend/
 ├── .env.dev              # Local development (gitignored)
 ├── .env.dev.template     # Template with placeholders (tracked)
-├── .env.prod             # Production secrets (gitignored)
-├── .env.prod.template    # Template (tracked)
+├── .env.prod             # Optional local secrets file (gitignored)
 
 frontend/
 ├── .env.dev              # Local development (gitignored)
 ├── .env.dev.template     # Template (tracked)
-├── .env.prod             # Production (gitignored)
-├── .env.prod.template    # Template (tracked)
+├── .env.prod             # Optional local build-time vars (gitignored)
+
+.secrets                  # Optional unified secrets file (gitignored)
 ```
 
 ### Setup for New Developers

@@ -85,6 +85,95 @@ class TestEventRegistrationViewSet:
         response = auth_client.get(endpoint)
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
+    def test_cancel_unpaid_registration(self, organizer_client, published_event, db):
+        """Organizer can cancel an unpaid registration."""
+        from factories import RegistrationFactory
+        from registrations.models import Registration
+
+        registration = RegistrationFactory(
+            event=published_event,
+            status='pending',
+            payment_status='pending',
+        )
+
+        response = organizer_client.post(
+            f'/api/v1/events/{published_event.uuid}/registrations/{registration.uuid}/cancel/',
+            {'reason': 'Organizer cancelled'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        registration.refresh_from_db()
+        assert registration.status == Registration.Status.CANCELLED
+        assert registration.cancellation_reason == 'Organizer cancelled'
+
+    def test_cancel_paid_registration_rejected(self, organizer_client, published_event, db):
+        """Paid registrations must be refunded instead of cancelled."""
+        from factories import RegistrationFactory
+
+        registration = RegistrationFactory(
+            event=published_event,
+            status='confirmed',
+            payment_status='paid',
+            amount_paid=Decimal('25.00'),
+        )
+
+        response = organizer_client.post(
+            f'/api/v1/events/{published_event.uuid}/registrations/{registration.uuid}/cancel/',
+            {},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['error']['code'] == 'PAID_REGISTRATION'
+
+    def test_refund_paid_registration(self, organizer_client, published_event, db):
+        """Organizer can refund a paid registration."""
+        from factories import RegistrationFactory
+        from registrations.models import Registration
+
+        registration = RegistrationFactory(
+            event=published_event,
+            status='confirmed',
+            payment_status='paid',
+            amount_paid=Decimal('50.00'),
+        )
+        registration.payment_intent_id = 'pi_test_refund'
+        registration.save(update_fields=['payment_intent_id'])
+
+        with patch('billing.services.stripe_payment_service.refund_payment_intent', return_value={'success': True}):
+            response = organizer_client.post(
+                f'/api/v1/events/{published_event.uuid}/registrations/{registration.uuid}/refund/',
+                {'reason': 'Requested by attendee'},
+                format='json',
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+        registration.refresh_from_db()
+        assert registration.payment_status == Registration.PaymentStatus.REFUNDED
+        assert registration.status == Registration.Status.CANCELLED
+        assert registration.cancellation_reason == 'Requested by attendee'
+
+    def test_refund_unpaid_registration_rejected(self, organizer_client, published_event, db):
+        """Unpaid registrations cannot be refunded."""
+        from factories import RegistrationFactory
+
+        registration = RegistrationFactory(
+            event=published_event,
+            status='pending',
+            payment_status='pending',
+            amount_paid=Decimal('0.00'),
+        )
+
+        response = organizer_client.post(
+            f'/api/v1/events/{published_event.uuid}/registrations/{registration.uuid}/refund/',
+            {},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['error']['code'] == 'NOT_PAID'
+
 
 # =============================================================================
 # Waitlist Tests
@@ -298,25 +387,33 @@ class TestRegistrationPaymentFlow:
                 'success': True,
                 'client_secret': 'cs_test',
                 'payment_intent_id': 'pi_test',
-                'platform_fee_cents': 200,
-                'total_amount_cents': 10200,
+                'service_fee_cents': 200,
+                'processing_fee_cents': 300,
+                'tax_cents': 1300,
+                'total_amount_cents': 10600,
             }
 
             response = api_client.post(
                 f'/api/v1/public/events/{event.uuid}/register/',
-                {'email': 'paid@example.com', 'full_name': 'Paid User'},
+                {
+                    'email': 'paid@example.com',
+                    'full_name': 'Paid User',
+                    'billing_country': 'CA',
+                    'billing_postal_code': 'M5V2T6',
+                },
             )
 
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['requires_payment'] is True
-        assert response.data['amount'] == 102.0
+        assert response.data['amount'] == 106.0
         assert response.data['ticket_price'] == 100.0
         assert response.data['platform_fee'] == 2.0
+        assert response.data['stripe_account_id'] is None
 
         registration = Registration.objects.get(email='paid@example.com', event=event)
         assert registration.status == Registration.Status.PENDING
         assert registration.payment_status == Registration.PaymentStatus.PENDING
-        assert registration.total_amount == Decimal('102.00')
+        assert registration.total_amount == Decimal('106.00')
         assert registration.platform_fee_amount == Decimal('2.00')
 
     def test_payment_intent_blocks_full_event(self, api_client, organizer, db):
@@ -379,6 +476,7 @@ class TestRegistrationPaymentFlow:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['client_secret'] == 'cs_existing'
         assert response.data['amount'] == 81.6
+        assert response.data['stripe_account_id'] is None
 
     def test_confirm_payment_refunds_when_full(self, api_client, organizer, db):
         """Confirm payment refunds when capacity is already full."""

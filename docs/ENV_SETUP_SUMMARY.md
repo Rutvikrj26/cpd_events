@@ -17,7 +17,7 @@
 | **Database** | PostgreSQL connection (local) | ✅ Complete |
 | **Redis** | Connection URL | ✅ Complete |
 | **Site** | URL, CORS, Allowed Hosts | ✅ Complete |
-| **Mailgun** | API Key, Domain, SMTP credentials | ✅ Complete (Sandbox) |
+| **SMTP Provider** | API Key, Domain, SMTP credentials | ✅ Complete (Sandbox) |
 | **GCP** | Project ID, Location, Bucket name | ✅ Complete |
 | **Zoom** | All 4 credentials | ✅ Complete |
 | **Security** | Encryption key | ✅ Complete |
@@ -49,16 +49,17 @@ The following were auto-generated securely:
 - **DJANGO_SECRET_KEY**: Random 50-character token
 - **ENCRYPTION_KEY**: Base64-encoded 32-byte key
 
-### 📧 Mailgun (Development)
+### 📧 SMTP Provider (Development)
 
 **Configuration**:
-- Domain: `sandbox6abed37fe7424efcba793b3f8c4724c3.mailgun.org` (Sandbox)
+- Domain: Sandbox domain (example)
 - API Key: Set
 - SMTP: Configured for port 587
 
-**Note**: This is the sandbox domain for development. For production, you'll need to:
-1. Verify your production domain in Mailgun
-2. Update `MAILGUN_DOMAIN` and `MAILGUN_API_KEY`
+**Note**: For production, use your SMTP provider (e.g., Brevo) and set:
+1. `SMTP_SERVER`/`SMTP_PORT` via Terraform tfvars
+2. `SMTP_LOGIN`/`SMTP_PASSWORD` in Secret Manager
+3. Optional: `SMTP_API_KEY` if using provider API features
 
 ### ☁️ GCP Configuration
 
@@ -87,6 +88,7 @@ Quick steps:
 2. Get Price IDs
 3. Set up webhooks (use Stripe CLI for local dev)
 4. Update `.env` with the 3 missing values
+5. Enable Stripe Tax on the **platform** account and add your GST/HST registration (ticketing uses destination charges)
 
 ### 2. Test Local Development
 
@@ -99,7 +101,7 @@ accredit docker up -d
 accredit docker init
 ```
 
-### 3. Verify Email (Mailgun)
+### 3. Verify Email (SMTP)
 
 Test email sending:
 ```python
@@ -109,7 +111,7 @@ python src/manage.py shell
 from django.core.mail import send_mail
 send_mail(
     'Test Email',
-    'Testing Mailgun configuration',
+    'Testing SMTP configuration',
     'info@accredit.store',
     ['your-email@example.com'],
 )
@@ -119,21 +121,24 @@ During development, emails go to console (check backend logs).
 
 ### 4. Production Environment
 
-When ready for production:
+Production configuration now lives in **Terraform tfvars + Secret Manager** (no prod env files in repo).
 
-1. **Create `.env.production`** (or use Cloud Run environment variables)
-2. **Update these for production**:
-   - `DEBUG=False`
-   - `DJANGO_SECRET_KEY` (generate new one)
-   - `ALLOWED_HOSTS` (your production domain)
-   - `SITE_URL` (https://accredit.store)
-   - `CORS_ALLOWED_ORIGINS` (your production frontend URL)
-   - `EMAIL_BACKEND` → Mailgun SMTP backend
-   - `MAILGUN_DOMAIN` → Your verified production domain
-   - `MAILGUN_API_KEY` → Production API key
-   - `STRIPE_*` → Live mode keys and production price IDs
-   - `GCS_BUCKET_NAME` → Production bucket
-   - Generate new `ENCRYPTION_KEY`
+1. **Create `infra/gcp/environments/prod/terraform.tfvars`** (gitignored) with:
+   - `project_id = "accredit-store"`
+   - `frontend_url`, `cors_origins`, optional `site_url`
+   - Email defaults (`default_from_email`, `server_email`, `admin_email`, `smtp_domain`)
+   - Billing overrides (`platform_fee_percent`, `billing_default_plan`, `stripe_price_*`)
+   - Frontend build vars (`frontend_google_maps_api_key`, `frontend_stripe_publishable_key`)
+2. **Upload secrets to Secret Manager**:
+   - `accredit cloud secrets upload --file .secrets --env prod` (from repo root)
+   - or `accredit cloud secrets upload --backend --env prod` (from a local `backend/.env.prod`)
+   - or `accredit cloud secrets set <KEY> <VALUE> --env prod`
+3. **Apply Terraform and deploy**:
+   - `accredit cloud infra apply --env prod`
+   - `accredit cloud backend deploy --env prod`
+   - `accredit cloud frontend deploy --env prod`
+
+Terraform fills in generated values (DB credentials, bucket names, service URLs) at deploy time.
 
 ---
 

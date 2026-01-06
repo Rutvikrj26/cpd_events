@@ -179,11 +179,13 @@ ZOOM_CLIENT_ID=your-zoom-client-id
 ZOOM_CLIENT_SECRET=your-zoom-client-secret
 ZOOM_WEBHOOK_SECRET=your-webhook-secret
 
-# Email (Mailgun)
-MAILGUN_SMTP_LOGIN=postmaster@your-domain.mailgun.org
-MAILGUN_SMTP_PASSWORD=your-password
-MAILGUN_API_KEY=your-api-key
-MAILGUN_DOMAIN=your-domain.mailgun.org
+# Email (SMTP provider, e.g. Brevo or Mailgun)
+SMTP_LOGIN=your-smtp-login
+SMTP_PASSWORD=your-smtp-password
+SMTP_API_KEY=your-provider-api-key
+SMTP_DOMAIN=your-domain.example
+SMTP_SERVER=smtp-relay.brevo.com
+SMTP_PORT=587
 
 # Encryption
 ENCRYPTION_KEY=your-encryption-key

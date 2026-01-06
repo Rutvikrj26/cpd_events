@@ -12,7 +12,7 @@ variable "region" {
 variable "environment" {
   description = "Environment name"
   type        = string
-  default     = "dev"
+  default     = "prod"
 }
 
 variable "app_name" {
@@ -131,7 +131,7 @@ variable "task_queue_max_rate" {
 variable "cloud_tasks_sync" {
   description = "Run Cloud Tasks synchronously (true for dev)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 # Storage variables

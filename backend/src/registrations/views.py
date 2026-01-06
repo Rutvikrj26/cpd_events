@@ -240,6 +240,73 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
             }
         )
 
+    @swagger_auto_schema(
+        operation_summary="Cancel registration",
+        operation_description="Cancel an unpaid registration for this event.",
+        request_body=serializers.RegistrationCancelSerializer,
+        responses={200: serializers.RegistrationDetailSerializer, 400: '{"error": {"code": "CANNOT_CANCEL"}}'},
+    )
+    @action(detail=True, methods=['post'], url_path='cancel')
+    def cancel_registration(self, request, event_uuid=None, uuid=None):
+        """Cancel a registration without refund (unpaid only)."""
+        registration = self.get_object()
+        serializer = serializers.RegistrationCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if registration.status == Registration.Status.CANCELLED:
+            return error_response('Already cancelled.', code='ALREADY_CANCELLED')
+        if registration.payment_status == Registration.PaymentStatus.PAID:
+            return error_response('Paid registrations must be refunded.', code='PAID_REGISTRATION')
+        if registration.payment_status == Registration.PaymentStatus.REFUNDED:
+            return error_response('Registration already refunded.', code='ALREADY_REFUNDED')
+
+        reason = serializer.validated_data.get('reason', 'Organizer cancelled registration')
+        registration.cancel(reason=reason, cancelled_by=request.user)
+
+        return Response(serializers.RegistrationDetailSerializer(registration).data)
+
+    @swagger_auto_schema(
+        operation_summary="Refund registration",
+        operation_description="Refund a paid registration and cancel the attendee.",
+        request_body=serializers.RegistrationRefundSerializer,
+        responses={200: serializers.RegistrationDetailSerializer, 400: '{"error": {"code": "NOT_PAID"}}'},
+    )
+    @action(detail=True, methods=['post'], url_path='refund')
+    def refund_registration(self, request, event_uuid=None, uuid=None):
+        """Refund a registration (paid only)."""
+        from billing.services import stripe_payment_service
+
+        registration = self.get_object()
+        serializer = serializers.RegistrationRefundSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if registration.payment_status == Registration.PaymentStatus.REFUNDED:
+            return error_response('Registration already refunded.', code='ALREADY_REFUNDED')
+        if registration.payment_status != Registration.PaymentStatus.PAID or registration.amount_paid <= 0:
+            return error_response('Registration is not paid.', code='NOT_PAID')
+        if not registration.payment_intent_id:
+            return error_response('No payment intent found for this registration.', code='NO_PAYMENT_INTENT')
+
+        refund_result = stripe_payment_service.refund_payment_intent(
+            registration.payment_intent_id,
+            registration=registration,
+        )
+        if not refund_result['success']:
+            return error_response(refund_result['error'], code='REFUND_FAILED')
+
+        reason = serializer.validated_data.get('reason', 'Organizer refunded registration')
+
+        if registration.status != Registration.Status.CANCELLED:
+            registration.cancel(reason=reason, cancelled_by=request.user)
+        elif reason and not registration.cancellation_reason:
+            registration.cancellation_reason = reason
+            registration.save(update_fields=['cancellation_reason', 'updated_at'])
+
+        registration.payment_status = Registration.PaymentStatus.REFUNDED
+        registration.save(update_fields=['payment_status', 'updated_at'])
+
+        return Response(serializers.RegistrationDetailSerializer(registration).data)
+
 
 # =============================================================================
 # Public Registration
@@ -286,18 +353,21 @@ class PublicRegistrationView(generics.CreateAPIView):
             reg = result['registration']
             stripe_account_id = None
             if result.get('client_secret'):
-                from billing.services import stripe_payment_service
-                stripe_account_id = stripe_payment_service.get_payee_account_id(event)
+                stripe_account_id = None
 
             response_data = {
                 'registration_uuid': str(reg.uuid),
                 'uuid': str(reg.uuid),
                 'status': result['status'],
                 'client_secret': result.get('client_secret'),
-                'requires_payment': bool(result.get('client_secret')),  # Payment required if client_secret exists
+                'requires_payment': result.get('requires_payment', bool(result.get('client_secret'))),
                 'amount': float(reg.total_amount) if reg.total_amount else None,
                 'ticket_price': float(reg.amount_paid) if reg.amount_paid else None,
                 'platform_fee': float(reg.platform_fee_amount) if reg.platform_fee_amount else None,
+                'service_fee': float(reg.service_fee_amount) if reg.service_fee_amount else None,
+                'processing_fee': float(reg.processing_fee_amount) if reg.processing_fee_amount else None,
+                'tax_amount': float(reg.tax_amount) if reg.tax_amount else None,
+                'total_amount': float(reg.total_amount) if reg.total_amount else None,
                 'currency': event.currency,  # Use event's currency setting
                 'stripe_account_id': stripe_account_id,
                 'waitlist_position': getattr(reg, 'waitlist_position', None),
@@ -372,10 +442,7 @@ class RegistrationPaymentIntentView(generics.GenericAPIView):
 
         # Reuse existing payment intent if still valid
         if registration.payment_intent_id:
-            intent = stripe_payment_service.retrieve_payment_intent(
-                registration.payment_intent_id,
-                payee_account_id=payee_account_id,
-            )
+            intent = stripe_payment_service.retrieve_payment_intent(registration.payment_intent_id)
             if intent and intent.status == 'succeeded':
                 return error_response('Payment already completed.', code='ALREADY_PAID')
             if intent and intent.status in ['requires_payment_method', 'requires_confirmation', 'requires_action']:
@@ -387,13 +454,47 @@ class RegistrationPaymentIntentView(generics.GenericAPIView):
                         'amount': float(registration.total_amount),
                         'ticket_price': float(registration.amount_paid),
                         'platform_fee': float(registration.platform_fee_amount),
+                        'service_fee': float(registration.service_fee_amount),
+                        'processing_fee': float(registration.processing_fee_amount),
+                        'tax_amount': float(registration.tax_amount),
+                        'total_amount': float(registration.total_amount),
                         'currency': event.currency,
                         'requires_payment': True,
                         'status': registration.status,
-                        'stripe_account_id': payee_account_id,
+                        'stripe_account_id': None,
                     },
                     status=status.HTTP_200_OK,
                 )
+
+        billing_country = (request.data.get('billing_country') or request.data.get('billingCountry') or '').upper().strip()
+        billing_state = (request.data.get('billing_state') or request.data.get('billingState') or '').strip()
+        billing_postal_code = (
+            request.data.get('billing_postal_code') or request.data.get('billingPostalCode') or ''
+        ).strip()
+        billing_city = (request.data.get('billing_city') or request.data.get('billingCity') or '').strip()
+        updated_fields = []
+
+        if billing_country:
+            registration.billing_country = billing_country
+            updated_fields.append('billing_country')
+        if billing_state:
+            registration.billing_state = billing_state
+            updated_fields.append('billing_state')
+        if billing_postal_code:
+            registration.billing_postal_code = billing_postal_code
+            updated_fields.append('billing_postal_code')
+        if billing_city:
+            registration.billing_city = billing_city
+            updated_fields.append('billing_city')
+
+        if updated_fields:
+            registration.save(update_fields=[*updated_fields, 'updated_at'])
+
+        if not registration.billing_country or not registration.billing_postal_code:
+            return error_response(
+                'Billing country and postal code are required for tax calculation.',
+                code='BILLING_REQUIRED',
+            )
 
         intent_data = stripe_payment_service.create_payment_intent(
             registration,
@@ -403,11 +504,26 @@ class RegistrationPaymentIntentView(generics.GenericAPIView):
             return error_response(intent_data['error'], code='PAYMENT_ERROR')
 
         registration.payment_intent_id = intent_data['payment_intent_id']
-        registration.platform_fee_amount = Decimal(intent_data['platform_fee_cents']) / Decimal('100')
-        registration.total_amount = Decimal(intent_data['total_amount_cents']) / Decimal('100')
+        if intent_data.get('service_fee_cents') is not None:
+            registration.platform_fee_amount = Decimal(intent_data['service_fee_cents']) / Decimal('100')
+            registration.service_fee_amount = Decimal(intent_data['service_fee_cents']) / Decimal('100')
+            registration.processing_fee_amount = Decimal(intent_data.get('processing_fee_cents', 0)) / Decimal('100')
+            registration.tax_amount = Decimal(intent_data.get('tax_cents', 0)) / Decimal('100')
+            registration.total_amount = Decimal(intent_data.get('total_amount_cents', 0)) / Decimal('100')
+            registration.stripe_tax_calculation_id = intent_data.get('tax_calculation_id', '')
         registration.payment_status = Registration.PaymentStatus.PENDING
         registration.save(
-            update_fields=['payment_intent_id', 'platform_fee_amount', 'total_amount', 'payment_status', 'updated_at']
+            update_fields=[
+                'payment_intent_id',
+                'platform_fee_amount',
+                'service_fee_amount',
+                'processing_fee_amount',
+                'tax_amount',
+                'total_amount',
+                'stripe_tax_calculation_id',
+                'payment_status',
+                'updated_at',
+            ]
         )
 
         return Response(
@@ -418,10 +534,14 @@ class RegistrationPaymentIntentView(generics.GenericAPIView):
                 'amount': float(registration.total_amount),
                 'ticket_price': float(registration.amount_paid),
                 'platform_fee': float(registration.platform_fee_amount),
+                'service_fee': float(registration.service_fee_amount),
+                'processing_fee': float(registration.processing_fee_amount),
+                'tax_amount': float(registration.tax_amount),
+                'total_amount': float(registration.total_amount),
                 'currency': event.currency,
                 'requires_payment': True,
                 'status': registration.status,
-                'stripe_account_id': payee_account_id,
+                'stripe_account_id': None,
             },
             status=status.HTTP_200_OK,
         )

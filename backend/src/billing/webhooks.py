@@ -52,8 +52,6 @@ class StripeWebhookView(View):
         # Handle the event
         event_type = event['type']
         event_data = event['data']['object']
-        self._event_account = event.get('account')
-
         handler = self._get_handler(event_type)
         if handler:
             try:
@@ -362,6 +360,11 @@ class StripeWebhookView(View):
                 # Lock the row
                 locked_reg = Registration.objects.select_for_update().get(pk=registration.pk)
                 event = Event.objects.select_for_update().get(pk=locked_reg.event_id)
+
+                charges = data.get('charges', {}).get('data', [])
+                transfer_id = charges[0].get('transfer') if charges else None
+                if not isinstance(transfer_id, str) or not transfer_id.strip():
+                    transfer_id = None
                 
                 # Check idempotency again under lock
                 if locked_reg.payment_status == Registration.PaymentStatus.PAID:
@@ -376,13 +379,9 @@ class StripeWebhookView(View):
                 ).count()
 
                 if event.max_attendees and confirmed_count >= event.max_attendees:
-                    account_id = getattr(self, '_event_account', None)
-                    if not account_id:
-                        account_id = stripe_payment_service.get_payee_account_id(event)
-
                     refund_result = stripe_payment_service.refund_payment_intent(
                         data['id'],
-                        payee_account_id=account_id,
+                        registration=locked_reg,
                     )
 
                     if refund_result['success']:
@@ -408,8 +407,20 @@ class StripeWebhookView(View):
                     locked_reg.status = Registration.Status.CONFIRMED
                     status_changed = True
 
-                locked_reg.save(update_fields=['total_amount', 'payment_status', 'status', 'updated_at'])
+                update_fields = ['total_amount', 'payment_status', 'status', 'updated_at']
+                if transfer_id and not locked_reg.stripe_transfer_id:
+                    locked_reg.stripe_transfer_id = transfer_id
+                    update_fields.append('stripe_transfer_id')
+                locked_reg.save(update_fields=update_fields)
                 logger.info(f"Registration {registration_id} marked as PAID via webhook fallback {data['id']}")
+
+                tax_result = stripe_payment_service.create_tax_transaction_for_registration(locked_reg)
+                if not tax_result.get('success'):
+                    logger.warning(
+                        "Failed to create tax transaction for registration %s via webhook: %s",
+                        registration_id,
+                        tax_result.get('error'),
+                    )
 
                 # Trigger Zoom registrant addition if status changed to CONFIRMED
                 if status_changed:

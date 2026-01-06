@@ -32,7 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { StatusBadge } from "@/components/custom/StatusBadge";
 import { toast } from "sonner";
-import { getEvent, updateEvent, publishEvent, unpublishEvent, getEventRegistrations, checkInAttendee, deleteEvent } from "@/api/events";
+import { getEvent, updateEvent, publishEvent, unpublishEvent, getEventRegistrations, checkInAttendee, deleteEvent, cancelEventRegistration, refundEventRegistration } from "@/api/events";
 import { issueCertificates } from "@/api/certificates";
 import {
    AlertDialog,
@@ -64,6 +64,11 @@ export function EventManagement() {
 
    const [selectedAttendee, setSelectedAttendee] = useState<any>(null);
    const [retryingZoom, setRetryingZoom] = useState(false);
+   const [actionDialogOpen, setActionDialogOpen] = useState(false);
+   const [actionType, setActionType] = useState<'cancel' | 'refund' | null>(null);
+   const [actionReason, setActionReason] = useState('');
+   const [actionLoading, setActionLoading] = useState(false);
+   const [actionAttendee, setActionAttendee] = useState<any>(null);
 
    const fetchEvent = useCallback(async () => {
       if (!uuid) return;
@@ -124,6 +129,70 @@ export function EventManagement() {
    }, [fetchFeedback]);
 
    const hasStarted = event ? new Date(event.starts_at) < new Date() : false;
+
+   const getRegistrationBadge = (attendee: any) => {
+      const paymentStatus = (attendee.payment_status || '').toLowerCase();
+      const registrationStatus = (attendee.status || '').toLowerCase();
+
+      if (paymentStatus === 'refunded') {
+         return { label: 'Refunded', className: 'text-purple-700 border-purple-200 bg-purple-50' };
+      }
+      if (paymentStatus === 'failed') {
+         return { label: 'Payment Failed', className: 'text-red-600 border-red-200 bg-red-50' };
+      }
+      if (paymentStatus === 'pending') {
+         return { label: 'Payment Pending', className: 'text-amber-700 border-amber-200 bg-amber-50' };
+      }
+      if (paymentStatus === 'paid') {
+         return { label: 'Paid', className: 'text-green-700 border-green-200 bg-green-50' };
+      }
+      if (registrationStatus === 'cancelled') {
+         return { label: 'Cancelled', className: 'text-red-600 border-red-200 bg-red-50' };
+      }
+      if (registrationStatus === 'waitlisted') {
+         return { label: 'Waitlisted', className: 'text-amber-700 border-amber-200 bg-amber-50' };
+      }
+      if (registrationStatus === 'pending') {
+         return { label: 'Pending', className: 'text-amber-700 border-amber-200 bg-amber-50' };
+      }
+      return { label: 'Confirmed', className: 'text-green-700 border-green-200 bg-green-50' };
+   };
+
+   const openActionDialog = (attendee: any, type: 'cancel' | 'refund') => {
+      setActionAttendee(attendee);
+      setActionType(type);
+      setActionReason('');
+      setActionDialogOpen(true);
+   };
+
+   const closeActionDialog = () => {
+      setActionDialogOpen(false);
+      setActionType(null);
+      setActionReason('');
+      setActionAttendee(null);
+   };
+
+   const handleActionConfirm = async () => {
+      if (!uuid || !actionAttendee || !actionType) return;
+      setActionLoading(true);
+      try {
+         const reason = actionReason.trim() || undefined;
+         if (actionType === 'refund') {
+            await refundEventRegistration(uuid, actionAttendee.uuid, reason);
+            toast.success('Registration refunded');
+         } else {
+            await cancelEventRegistration(uuid, actionAttendee.uuid, reason);
+            toast.success('Registration cancelled');
+         }
+         await fetchRegistrations();
+         closeActionDialog();
+      } catch (error: any) {
+         const message = error?.response?.data?.error?.message || error?.response?.data?.detail || 'Action failed';
+         toast.error(message);
+      } finally {
+         setActionLoading(false);
+      }
+   };
 
    if (loading || !event) {
       return <div className="p-8">Loading event details...</div>;
@@ -593,58 +662,76 @@ export function EventManagement() {
                            </tr>
                         </thead>
                         <tbody className="bg-card divide-y divide-border">
-                           {filteredAttendees.map((attendee) => (
-                              <tr key={attendee.uuid} className="hover:bg-muted/50">
-                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="flex items-center">
-                                       <Avatar className="h-8 w-8 mr-3">
-                                          <AvatarImage src={`https://ui-avatars.com/api/?name=${encodeURIComponent(attendee.full_name || '')}`} />
-                                          <AvatarFallback>{(attendee.full_name || 'U').charAt(0)}</AvatarFallback>
-                                       </Avatar>
-                                       <div>
-                                          <div className="text-sm font-medium text-foreground">{attendee.full_name}</div>
-                                          <div className="text-xs text-muted-foreground">{attendee.email}</div>
+                           {filteredAttendees.map((attendee) => {
+                              const badge = getRegistrationBadge(attendee);
+                              const paymentStatus = (attendee.payment_status || '').toLowerCase();
+                              const registrationStatus = (attendee.status || '').toLowerCase();
+                              const isRefunded = paymentStatus === 'refunded';
+                              const isCancelled = registrationStatus === 'cancelled';
+                              const canRefund = paymentStatus === 'paid';
+                              const canCancel = !canRefund && !isRefunded && !isCancelled;
+
+                              return (
+                                 <tr key={attendee.uuid} className="hover:bg-muted/50">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                       <div className="flex items-center">
+                                          <Avatar className="h-8 w-8 mr-3">
+                                             <AvatarImage src={`https://ui-avatars.com/api/?name=${encodeURIComponent(attendee.full_name || '')}`} />
+                                             <AvatarFallback>{(attendee.full_name || 'U').charAt(0)}</AvatarFallback>
+                                          </Avatar>
+                                          <div>
+                                             <div className="text-sm font-medium text-foreground">{attendee.full_name}</div>
+                                             <div className="text-xs text-muted-foreground">{attendee.email}</div>
+                                          </div>
                                        </div>
-                                    </div>
-                                 </td>
-                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground capitalize">
-                                    {attendee.status}
-                                 </td>
-                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <Badge
-                                       variant="outline"
-                                       className={
-                                          attendee.status === "Cancelled"
-                                             ? "text-red-600 border-red-200 bg-red-500/10"
-                                             : "text-green-600 border-green-200 bg-green-500/10"
-                                       }
-                                    >
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground capitalize">
                                        {attendee.status}
-                                    </Badge>
-                                 </td>
-                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <DropdownMenu>
-                                       <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" className="h-8 w-8 p-0">
-                                             <MoreVertical className="h-4 w-4" />
-                                          </Button>
-                                       </DropdownMenuTrigger>
-                                       <DropdownMenuContent align="end">
-                                          <DropdownMenuItem>View Profile</DropdownMenuItem>
-                                          <DropdownMenuItem>Send Email</DropdownMenuItem>
-                                          <DropdownMenuItem onClick={() => {
-                                             setSelectedAttendee(attendee);
-                                             setEditAttendanceOpen(true);
-                                          }}>
-                                             Edit Attendance
-                                          </DropdownMenuItem>
-                                          <DropdownMenuSeparator />
-                                          <DropdownMenuItem className="text-red-600">Cancel Registration</DropdownMenuItem>
-                                       </DropdownMenuContent>
-                                    </DropdownMenu>
-                                 </td>
-                              </tr>
-                           ))}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                       <Badge variant="outline" className={badge.className}>
+                                          {badge.label}
+                                       </Badge>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                       <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                             <Button variant="ghost" className="h-8 w-8 p-0">
+                                                <MoreVertical className="h-4 w-4" />
+                                             </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end">
+                                             <DropdownMenuItem>View Profile</DropdownMenuItem>
+                                             <DropdownMenuItem>Send Email</DropdownMenuItem>
+                                             <DropdownMenuItem onClick={() => {
+                                                setSelectedAttendee(attendee);
+                                                setEditAttendanceOpen(true);
+                                             }}>
+                                                Edit Attendance
+                                             </DropdownMenuItem>
+                                             <DropdownMenuSeparator />
+                                             {canRefund ? (
+                                                <DropdownMenuItem
+                                                   onClick={() => openActionDialog(attendee, 'refund')}
+                                                   className="text-amber-700"
+                                                >
+                                                   Refund Registration
+                                                </DropdownMenuItem>
+                                             ) : (
+                                                <DropdownMenuItem
+                                                   onClick={() => openActionDialog(attendee, 'cancel')}
+                                                   disabled={!canCancel}
+                                                   className="text-red-600"
+                                                >
+                                                   {isRefunded ? 'Already Refunded' : isCancelled ? 'Already Cancelled' : 'Cancel Registration'}
+                                                </DropdownMenuItem>
+                                             )}
+                                          </DropdownMenuContent>
+                                       </DropdownMenu>
+                                    </td>
+                                 </tr>
+                              );
+                           })}
                         </tbody>
                      </table>
                   </div>
@@ -659,6 +746,58 @@ export function EventManagement() {
                eventUuid={uuid || ''}
                onSuccess={fetchRegistrations}
             />
+
+            <AlertDialog
+               open={actionDialogOpen}
+               onOpenChange={(open) => {
+                  if (!open) {
+                     closeActionDialog();
+                     return;
+                  }
+                  setActionDialogOpen(true);
+               }}
+            >
+               <AlertDialogContent>
+                  <AlertDialogHeader>
+                     <AlertDialogTitle>
+                        {actionType === 'refund' ? 'Refund Registration' : 'Cancel Registration'}
+                     </AlertDialogTitle>
+                     <AlertDialogDescription>
+                        {actionType === 'refund'
+                           ? 'This will refund the attendee and cancel their registration.'
+                           : 'This will cancel the registration without issuing a refund.'}
+                     </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <div className="space-y-2">
+                     <label className="text-sm font-medium text-foreground">Reason (optional)</label>
+                     <Input
+                        placeholder="Add a reason for the attendee"
+                        value={actionReason}
+                        onChange={(e) => setActionReason(e.target.value)}
+                     />
+                  </div>
+                  <AlertDialogFooter>
+                     <AlertDialogCancel disabled={actionLoading}>Back</AlertDialogCancel>
+                     <AlertDialogAction
+                        onClick={(event) => {
+                           event.preventDefault();
+                           handleActionConfirm();
+                        }}
+                        disabled={actionLoading}
+                        className={actionType === 'refund'
+                           ? 'bg-amber-600 hover:bg-amber-700'
+                           : 'bg-red-600 hover:bg-red-700'
+                        }
+                     >
+                        {actionLoading
+                           ? 'Processing...'
+                           : actionType === 'refund'
+                              ? 'Refund Registration'
+                              : 'Cancel Registration'}
+                     </AlertDialogAction>
+                  </AlertDialogFooter>
+               </AlertDialogContent>
+            </AlertDialog>
 
             {/* ATTENDANCE TAB */}
             <TabsContent value="attendance" className="mt-0">
@@ -695,7 +834,7 @@ export function EventManagement() {
                            </tr>
                         </thead>
                         <tbody className="bg-card divide-y divide-border">
-                           {filteredAttendees.filter(a => a.status !== "Cancelled").map((attendee) => (
+                           {filteredAttendees.filter(a => a.status !== "cancelled").map((attendee) => (
                               <tr key={attendee.uuid} className="hover:bg-muted/50">
                                  {/* Present checkbox - show for in-person and hybrid */}
                                  {event.format !== 'online' && (

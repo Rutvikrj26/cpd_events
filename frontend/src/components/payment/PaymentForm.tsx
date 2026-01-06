@@ -16,7 +16,6 @@ interface PaymentFormProps {
     currency: string;
     onSuccess: () => void;
     onError: (error: string) => void;
-    stripeAccountId?: string;
 }
 
 /**
@@ -120,8 +119,8 @@ function CheckoutForm({ amount, currency, onSuccess, onError }: Omit<PaymentForm
 /**
  * Payment form wrapper that initializes Stripe Elements.
  */
-export function PaymentForm({ clientSecret, amount, currency, onSuccess, onError, stripeAccountId }: PaymentFormProps) {
-    const stripePromise = getStripe(stripeAccountId);
+export function PaymentForm({ clientSecret, amount, currency, onSuccess, onError }: PaymentFormProps) {
+    const stripePromise = getStripe();
 
     const options = {
         clientSecret,

@@ -151,6 +151,7 @@ class UserSerializer(SoftDeleteModelSerializer):
             'organizer_logo_url',
             'organizer_website',
             'organizer_bio',
+            'gst_hst_number',
             # Notification preferences
             'notify_event_reminders',
             'notify_certificate_issued',
@@ -180,6 +181,7 @@ class UserProfileUpdateSerializer(serializers.ModelSerializer):
             'organization_name',
             'profile_photo_url',
             'timezone',
+            'gst_hst_number',
         ]
 
 
@@ -193,6 +195,7 @@ class OrganizerProfileUpdateSerializer(serializers.ModelSerializer):
             'organizer_website',
             'organizer_bio',
             'is_organizer_profile_public',
+            'gst_hst_number',
         ]
 
 

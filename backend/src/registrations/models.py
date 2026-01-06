@@ -7,7 +7,6 @@ from decimal import Decimal
 from django.db import models
 from django.utils import timezone
 
-from common.config.billing import PlatformFees
 from common.fields import LowercaseEmailField
 from common.models import BaseModel, SoftDeleteModel
 from events.models import Event  # Moved from inside update_attendance_summary
@@ -101,12 +100,51 @@ class Registration(SoftDeleteModel):
         default=0,
         help_text="Platform service fee charged to attendee"
     )
+    service_fee_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Service fee charged to attendee"
+    )
+    processing_fee_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Payment processing fee charged to attendee"
+    )
+    tax_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Tax amount charged on ticket and service fee"
+    )
     total_amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text="Total amount charged (ticket + platform fee)"
+        help_text="Total amount charged (ticket + fees + tax)"
     )
+    stripe_tax_calculation_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Stripe Tax Calculation ID used for this charge"
+    )
+    stripe_tax_transaction_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Stripe Tax Transaction ID created from the tax calculation"
+    )
+    stripe_transfer_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Stripe Transfer ID created for organizer payout"
+    )
+
+    # Billing address (for tax calculation)
+    billing_country = models.CharField(max_length=2, blank=True, help_text="Billing country code")
+    billing_state = models.CharField(max_length=100, blank=True, help_text="Billing state/province")
+    billing_postal_code = models.CharField(max_length=20, blank=True, help_text="Billing postal/ZIP code")
+    billing_city = models.CharField(max_length=100, blank=True, help_text="Billing city")
 
     source = models.CharField(
         max_length=20, choices=Source.choices, default=Source.SELF, help_text="How this registration was created"
@@ -266,19 +304,13 @@ class Registration(SoftDeleteModel):
         else:
             self.status = self.Status.PENDING
             self.payment_status = self.PaymentStatus.PENDING
-            from decimal import ROUND_HALF_UP
-
             ticket_price = Decimal(str(self.event.price or 0))
-            fee_percent = Decimal(str(PlatformFees.FEE_PERCENT))
-            platform_fee = Decimal('0.00')
-            if ticket_price > 0:
-                platform_fee = (ticket_price * fee_percent / Decimal('100')).quantize(
-                    Decimal('0.01'),
-                    rounding=ROUND_HALF_UP,
-                )
             self.amount_paid = ticket_price
-            self.platform_fee_amount = platform_fee
-            self.total_amount = ticket_price + platform_fee
+            self.platform_fee_amount = Decimal('0.00')
+            self.service_fee_amount = Decimal('0.00')
+            self.processing_fee_amount = Decimal('0.00')
+            self.tax_amount = Decimal('0.00')
+            self.total_amount = ticket_price
 
         self.promoted_from_waitlist_at = timezone.now()
         self.waitlist_position = None
@@ -288,6 +320,9 @@ class Registration(SoftDeleteModel):
                 'payment_status',
                 'amount_paid',
                 'platform_fee_amount',
+                'service_fee_amount',
+                'processing_fee_amount',
+                'tax_amount',
                 'total_amount',
                 'promoted_from_waitlist_at',
                 'waitlist_position',

@@ -27,6 +27,14 @@ export const initiatePayoutsConnect = async (): Promise<PayoutsConnectResponse> 
 };
 
 /**
+ * Open Stripe Express dashboard for the current user.
+ */
+export const getPayoutsDashboardLink = async (): Promise<PayoutsConnectResponse> => {
+    const response = await client.post<PayoutsConnectResponse>('/users/me/payouts/dashboard/');
+    return response.data;
+};
+
+/**
  * Get the current user's Stripe Connect payouts status.
  */
 export const getPayoutsStatus = async (): Promise<PayoutsStatus> => {

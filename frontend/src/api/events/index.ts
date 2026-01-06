@@ -83,6 +83,16 @@ export const overrideAttendance = async (eventUuid: string, registrationUuid: st
     return response.data;
 };
 
+export const cancelEventRegistration = async (eventUuid: string, registrationUuid: string, reason?: string): Promise<any> => {
+    const response = await client.post<any>(`/events/${eventUuid}/registrations/${registrationUuid}/cancel/`, { reason });
+    return response.data;
+};
+
+export const refundEventRegistration = async (eventUuid: string, registrationUuid: string, reason?: string): Promise<any> => {
+    const response = await client.post<any>(`/events/${eventUuid}/registrations/${registrationUuid}/refund/`, { reason });
+    return response.data;
+};
+
 // Upload event featured image
 export const uploadEventImage = async (eventUuid: string, imageFile: File): Promise<Event> => {
     const formData = new FormData();

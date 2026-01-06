@@ -38,6 +38,7 @@ interface FormData {
     website: string;
     contact_email: string;
     contact_phone: string;
+    gst_hst_number: string;
     primary_color: string;
     secondary_color: string;
 }
@@ -59,6 +60,7 @@ const OrganizationSettingsPage: React.FC = () => {
         website: '',
         contact_email: '',
         contact_phone: '',
+        gst_hst_number: '',
         primary_color: '#0066CC',
         secondary_color: '#004499',
     });
@@ -87,6 +89,7 @@ const OrganizationSettingsPage: React.FC = () => {
                 website: fullOrg.website || '',
                 contact_email: fullOrg.contact_email || '',
                 contact_phone: fullOrg.contact_phone || '',
+                gst_hst_number: fullOrg.gst_hst_number || '',
                 primary_color: fullOrg.primary_color || '#0066CC',
                 secondary_color: fullOrg.secondary_color || '#004499',
             });
@@ -395,6 +398,20 @@ const OrganizationSettingsPage: React.FC = () => {
                             <CardDescription>Manage your plan and payment methods</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="gst_hst_number">GST/HST Number</Label>
+                                <Input
+                                    id="gst_hst_number"
+                                    value={formData.gst_hst_number}
+                                    onChange={(e) => handleInputChange('gst_hst_number', e.target.value)}
+                                    placeholder="Optional (for your records)"
+                                    disabled={!canEdit}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Taxes on ticket sales are calculated by the platform. This is for your records.
+                                </p>
+                            </div>
+
                             {org.subscription && (
                                 <>
                                     <div className="flex items-center justify-between p-4 rounded-lg border bg-accent/50">
@@ -441,6 +458,24 @@ const OrganizationSettingsPage: React.FC = () => {
                                         Billing integration coming soon. Contact support to change your plan.
                                     </p>
                                 </>
+                            )}
+
+                            {canEdit && (
+                                <div className="pt-4">
+                                    <Button onClick={handleSave} disabled={isSaving}>
+                                        {isSaving ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                Saving...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Check className="h-4 w-4 mr-2" />
+                                                Save Changes
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             )}
                         </CardContent>
                     </Card>

@@ -5,7 +5,7 @@
 **Backend `.env`**:
 - ✅ Django (SECRET_KEY, DEBUG, etc.)
 - ✅ Database (PostgreSQL local)
-- ✅ Mailgun (Sandbox for dev)
+- ✅ SMTP provider (Sandbox for dev)
 - ✅ GCP (Project: cpd-events-481919, Bucket: accredit)
 - ✅ Zoom (All credentials)
 - ✅ Stripe (Test keys already there)
@@ -31,6 +31,14 @@ cd backend
 ```
 
 **Full instructions**: See `STRIPE_SETUP.md`
+
+### 1b. Stripe Tax (Ticketing)
+
+Ticketing uses **destination charges**, so Stripe Tax runs on the **platform** account.
+Enable Stripe Tax and add your GST/HST registration in test and live:
+
+- https://dashboard.stripe.com/test/tax
+- https://dashboard.stripe.com/tax
 
 ### 2. Test Everything Works
 
@@ -74,7 +82,7 @@ accredit local up --backend
 When deploying to production:
 1. Generate new DJANGO_SECRET_KEY
 2. Generate new ENCRYPTION_KEY
-3. Get Mailgun production domain & API key
+3. Get SMTP provider domain & API key (Brevo, Mailgun, etc.)
 4. Get Stripe live keys (sk_live_, pk_live_)
 5. Create production Stripe products
 6. Set up production webhooks

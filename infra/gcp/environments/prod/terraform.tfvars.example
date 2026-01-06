@@ -1,15 +1,15 @@
 # GCP Project Configuration
-project_id  = "your-project-id"
+project_id  = "accredit-store"
 region      = "us-central1"
-environment = "dev"
+environment = "prod"
 app_name    = "cpd-events"
 
 # Database Configuration
-db_tier              = "db-f1-micro"  # Smallest for dev
+db_tier              = "db-f1-micro"
 db_name              = "cpd_events"
 db_user              = "cpd_user"
 db_disk_size         = 10
-db_high_availability = false  # Disabled for dev
+db_high_availability = false
 db_max_connections   = "100"
 
 # Networking
@@ -24,24 +24,22 @@ cloud_run_concurrency = 80
 cloud_run_timeout    = 300
 
 # Auto-scaling
-min_instances = 0  # Scale to zero for dev
+min_instances = 1
 max_instances = 10
 
 # Cloud Tasks
 task_queue_max_concurrent = 100
 task_queue_max_rate       = 10
-cloud_tasks_sync          = true
+cloud_tasks_sync          = false
 
-# CORS (for development)
+# CORS (production frontend)
 cors_origins = [
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "https://dev.yourdomain.com"
+  "https://app.accredit.store"
 ]
 
 # Application URLs
 site_url     = ""
-frontend_url = "http://localhost:5173"
+frontend_url = "https://app.accredit.store"
 
 # Email configuration
 default_from_email = "info@accredit.store"
@@ -74,4 +72,4 @@ stripe_price_enterprise          = ""
 
 # Frontend build-time variables (used by CLI deploy)
 frontend_google_maps_api_key     = ""
-frontend_stripe_publishable_key  = ""
+frontend_stripe_publishable_key  = "pk_live_xxx"

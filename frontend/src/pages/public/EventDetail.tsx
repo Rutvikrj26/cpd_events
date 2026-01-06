@@ -41,7 +41,13 @@ export function EventDetail() {
   const [loadingRelated, setLoadingRelated] = useState(false);
 
   // Derived state
-  const isAlreadyRegistered = userRegistration !== null;
+  const hasRegistration = userRegistration !== null;
+  const isPendingPayment = Boolean(
+    userRegistration &&
+    (userRegistration.payment_status === 'pending' || userRegistration.status === 'pending')
+  );
+  const isWaitlisted = userRegistration?.status === 'waitlisted';
+  const isConfirmedRegistration = Boolean(userRegistration && userRegistration.status === 'confirmed' && !isPendingPayment);
 
   useEffect(() => {
     async function fetchEvent() {
@@ -174,7 +180,36 @@ export function EventDetail() {
       return <Button disabled>Event Ended</Button>;
     }
 
-    if (isAlreadyRegistered) {
+    if (hasRegistration) {
+      if (isPendingPayment) {
+        return (
+          <Link to={`/events/${id}/register?resume=${userRegistration?.uuid}`}>
+            <Button
+              size={isLarge ? "lg" : "default"}
+              className={`${isLarge ? 'w-full py-6 text-lg' : ''} bg-amber-500 hover:bg-amber-600`}
+            >
+              <AlertCircle className="mr-2 h-4 w-4" />
+              Complete Payment
+            </Button>
+          </Link>
+        );
+      }
+
+      if (isWaitlisted) {
+        return (
+          <Link to="/registrations">
+            <Button
+              size={isLarge ? "lg" : "default"}
+              variant="outline"
+              className={`${isLarge ? 'w-full py-6 text-lg' : ''} border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100`}
+            >
+              <AlertCircle className="mr-2 h-4 w-4" />
+              On the Waitlist
+            </Button>
+          </Link>
+        );
+      }
+
       return (
         <Link to="/registrations">
           <Button
@@ -221,11 +256,25 @@ export function EventDetail() {
                     {event.cpd_type || 'CPD'} • {event.cpd_credits} Credits
                   </Badge>
                 )}
-                {isAlreadyRegistered && (
-                  <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700">
-                    <CheckCircle className="mr-1 h-3 w-3" />
-                    Registered
-                  </Badge>
+                {hasRegistration && (
+                  <>
+                    {isPendingPayment ? (
+                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                        <AlertCircle className="mr-1 h-3 w-3" />
+                        Payment Pending
+                      </Badge>
+                    ) : isWaitlisted ? (
+                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                        <AlertCircle className="mr-1 h-3 w-3" />
+                        Waitlisted
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700">
+                        <CheckCircle className="mr-1 h-3 w-3" />
+                        Registered
+                      </Badge>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -504,9 +553,13 @@ export function EventDetail() {
                 <CardDescription>
                   {isOrganizer
                     ? "Manage your event details and registrations."
-                    : isAlreadyRegistered
-                      ? "You're registered for this event!"
-                      : "Secure your spot today."}
+                    : isPendingPayment
+                      ? "Payment pending — complete payment to confirm."
+                      : isWaitlisted
+                        ? "You're on the waitlist for this event."
+                        : hasRegistration
+                          ? "You're registered for this event!"
+                          : "Secure your spot today."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -530,7 +583,7 @@ export function EventDetail() {
 
                 {renderRegistrationButton(true)}
 
-                {event.registration_closes_at && !isPast && !isAlreadyRegistered && (
+                {event.registration_closes_at && !isPast && !hasRegistration && (
                   <p className="text-xs text-center text-muted-foreground">
                     Registration closes {new Date(event.registration_closes_at).toLocaleDateString()}
                   </p>
@@ -601,7 +654,7 @@ export function EventDetail() {
                       <Video className="h-4 w-4 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="font-medium text-foreground">Online Event</p>
-                        {isAlreadyRegistered && userRegistration?.zoom_join_url ? (
+                        {isConfirmedRegistration && userRegistration?.zoom_join_url ? (
                           <div className="mt-2 space-y-2">
                             <a
                               href={userRegistration.zoom_join_url}
@@ -616,10 +669,20 @@ export function EventDetail() {
                               You'll also receive meeting details and reminders via email from Zoom
                             </p>
                           </div>
-                        ) : isAlreadyRegistered ? (
+                        ) : isConfirmedRegistration ? (
                           <div className="mt-1 space-y-1">
                             <p className="text-green-600">Meeting link will be available closer to the event date</p>
                             <p className="text-xs text-muted-foreground">Check your email for the Zoom meeting invitation</p>
+                          </div>
+                        ) : isPendingPayment ? (
+                          <div className="mt-1 space-y-1">
+                            <p className="text-amber-600">Complete payment to receive meeting details</p>
+                            <p className="text-xs text-muted-foreground">You'll get the Zoom link once payment is confirmed</p>
+                          </div>
+                        ) : isWaitlisted ? (
+                          <div className="mt-1 space-y-1">
+                            <p className="text-amber-600">You're on the waitlist</p>
+                            <p className="text-xs text-muted-foreground">We'll email you if a spot opens up</p>
                           </div>
                         ) : (
                           <p className="mt-1">Link provided upon registration</p>
@@ -631,7 +694,7 @@ export function EventDetail() {
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="font-medium text-foreground">Hybrid Event</p>
-                        {isAlreadyRegistered && userRegistration?.zoom_join_url ? (
+                        {isConfirmedRegistration && userRegistration?.zoom_join_url ? (
                           <div className="mt-2 space-y-2">
                             <a
                               href={userRegistration.zoom_join_url}
@@ -646,10 +709,20 @@ export function EventDetail() {
                               You'll also receive meeting details and reminders via email from Zoom
                             </p>
                           </div>
-                        ) : isAlreadyRegistered ? (
+                        ) : isConfirmedRegistration ? (
                           <div className="mt-1 space-y-1">
                             <p className="text-green-600">Details will be available closer to the event date</p>
                             <p className="text-xs text-muted-foreground">Check your email for the Zoom meeting invitation</p>
+                          </div>
+                        ) : isPendingPayment ? (
+                          <div className="mt-1 space-y-1">
+                            <p className="text-amber-600">Complete payment to receive event details</p>
+                            <p className="text-xs text-muted-foreground">You'll get the online link once payment is confirmed</p>
+                          </div>
+                        ) : isWaitlisted ? (
+                          <div className="mt-1 space-y-1">
+                            <p className="text-amber-600">You're on the waitlist</p>
+                            <p className="text-xs text-muted-foreground">We'll email you if a spot opens up</p>
                           </div>
                         ) : (
                           <p className="mt-1">In-person + Online options available</p>
@@ -661,8 +734,12 @@ export function EventDetail() {
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
                       <div>
                         <p className="font-medium text-foreground">In-Person Event</p>
-                        {isAlreadyRegistered ? (
+                        {isConfirmedRegistration ? (
                           <p className="mt-1 text-green-600">Location details sent to your email</p>
+                        ) : isPendingPayment ? (
+                          <p className="mt-1 text-amber-600">Complete payment to receive location details</p>
+                        ) : isWaitlisted ? (
+                          <p className="mt-1 text-amber-600">You're on the waitlist for location details</p>
                         ) : (
                           <p className="mt-1">Location details upon registration</p>
                         )}
@@ -756,4 +833,3 @@ export function EventDetail() {
     </div>
   );
 }
-

@@ -707,3 +707,28 @@ class PayoutsStatusView(generics.GenericAPIView):
             'stripe_id': user.stripe_connect_id,
             'details': status_info,
         })
+
+
+@roles('organizer', 'admin', route_name='payouts_dashboard')
+class PayoutsDashboardView(generics.GenericAPIView):
+    """
+    POST /api/v1/users/me/payouts/dashboard/
+
+    Returns a Stripe Express dashboard login link.
+    """
+
+    permission_classes = [IsAuthenticated, IsOrganizer]
+
+    def post(self, request):
+        from billing.services import stripe_connect_service
+
+        user = request.user
+
+        if not user.stripe_connect_id:
+            return error_response('Stripe account not connected.', code='NOT_CONNECTED')
+
+        login_url = stripe_connect_service.create_login_link(user.stripe_connect_id)
+        if not login_url:
+            return error_response('Failed to create Stripe dashboard link.', code='DASHBOARD_LINK_FAILED')
+
+        return Response({'url': login_url})

@@ -58,7 +58,7 @@
 ├───────────────────────────────────┬─────────────────────────────────────────────────┤
 │                                   │                                                 │
 │            ZOOM API               │              EMAIL SERVICE                      │
-│                                   │           (SendGrid/Mailgun)                    │
+│                                   │           (SMTP provider: Brevo/Mailgun)        │
 │  • Meeting creation               │                                                 │
 │  • Webhook events                 │  • Transactional emails                         │
 │  • Attendance data                │  • Event reminders                              │

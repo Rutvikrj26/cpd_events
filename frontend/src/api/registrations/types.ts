@@ -19,6 +19,9 @@ export interface Registration {
     payment_status: 'pending' | 'paid' | 'failed' | 'refunded' | 'na';
     amount_paid?: number;
     platform_fee_amount?: number;
+    service_fee_amount?: number;
+    processing_fee_amount?: number;
+    tax_amount?: number;
     total_amount?: number;
     email: string;
     full_name: string;
@@ -44,6 +47,17 @@ export interface RegistrationCreateRequest {
     custom_field_responses?: Record<string, any>;
     allow_public_verification?: boolean;
     promo_code?: string;
+    billing_country?: string;
+    billing_state?: string;
+    billing_postal_code?: string;
+    billing_city?: string;
+}
+
+export interface RegistrationPaymentIntentRequest {
+    billing_country: string;
+    billing_state?: string;
+    billing_postal_code: string;
+    billing_city?: string;
 }
 
 /**
@@ -64,6 +78,10 @@ export interface RegistrationResponse extends Registration {
     original_price?: string;
     discount_amount?: string;
     final_price?: string;
+    service_fee?: number;
+    processing_fee?: number;
+    tax_amount?: number;
+    total_amount?: number;
 }
 
 export interface ConfirmPaymentResponse {

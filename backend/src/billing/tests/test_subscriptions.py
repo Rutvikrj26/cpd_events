@@ -189,6 +189,7 @@ class TestPaymentMethodViewSet:
     def test_delete_payment_method(self, organizer_client, organizer, mock_stripe, db):
         """Organizer can delete a payment method."""
         from factories import PaymentMethodFactory
+        PaymentMethodFactory(user=organizer, is_default=True)
         pm = PaymentMethodFactory(user=organizer, is_default=False)
         
         response = organizer_client.delete(f'{self.endpoint}{pm.uuid}/')

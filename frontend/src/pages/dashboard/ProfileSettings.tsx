@@ -49,7 +49,7 @@ import { PaymentMethod, Subscription } from "@/api/billing/types";
 import { User as UserType, NotificationPreferences } from "@/api/accounts/types";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { getPayoutsStatus, initiatePayoutsConnect, PayoutsStatus } from "@/api/payouts";
+import { getPayoutsDashboardLink, getPayoutsStatus, initiatePayoutsConnect, PayoutsStatus } from "@/api/payouts";
 
 // Schema for General Profile
 const profileSchema = z.object({
@@ -57,6 +57,7 @@ const profileSchema = z.object({
    professional_title: z.string().optional(),
    organization_name: z.string().optional(),
    timezone: z.string().optional(),
+   gst_hst_number: z.string().optional(),
 });
 
 // Schema for Security (Password)
@@ -92,6 +93,7 @@ export function ProfileSettings() {
    const [payoutsStatus, setPayoutsStatus] = useState<PayoutsStatus | null>(null);
    const [loadingPayouts, setLoadingPayouts] = useState(true);
    const [initiatingConnect, setInitiatingConnect] = useState(false);
+   const [openingDashboard, setOpeningDashboard] = useState(false);
 
    // Forms
    const profileForm = useForm({
@@ -101,6 +103,7 @@ export function ProfileSettings() {
          professional_title: "",
          organization_name: "",
          timezone: "",
+         gst_hst_number: "",
       },
    });
 
@@ -124,6 +127,7 @@ export function ProfileSettings() {
                professional_title: (userData as any).professional_title || "",
                organization_name: userData.organization_name || "",
                timezone: (userData as any).timezone || "",
+               gst_hst_number: userData.gst_hst_number || "",
             });
          } catch (error) {
             console.error("Failed to load profile:", error);
@@ -274,6 +278,22 @@ export function ProfileSettings() {
       }
    };
 
+   const handleOpenPayoutsDashboard = async () => {
+      setOpeningDashboard(true);
+      try {
+         const result = await getPayoutsDashboardLink();
+         if (result?.url) {
+            window.open(result.url, "_blank", "noopener,noreferrer");
+         } else {
+            toast.error("Unable to open Stripe dashboard.");
+         }
+      } catch (error: any) {
+         toast.error(error?.response?.data?.detail || "Failed to open Stripe dashboard.");
+      } finally {
+         setOpeningDashboard(false);
+      }
+   };
+
    const getInitials = (name: string) => {
       return name
          .split(" ")
@@ -399,6 +419,19 @@ export function ProfileSettings() {
                                        </FormItem>
                                     )}
                                  />
+                                 {isOrganizer && (
+                                    <FormField
+                                       control={profileForm.control}
+                                       name="gst_hst_number"
+                                       render={({ field }) => (
+                                          <FormItem>
+                                             <FormLabel>GST/HST Number</FormLabel>
+                                             <FormControl><Input placeholder="Optional (for your records)" {...field} /></FormControl>
+                                             <FormMessage />
+                                          </FormItem>
+                                       )}
+                                    />
+                                 )}
                                  <div className="flex justify-end">
                                     <Button type="submit" disabled={isSubmitting}>
                                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -711,11 +744,18 @@ export function ProfileSettings() {
                                           <Badge variant="default">Active</Badge>
                                        </div>
                                     </div>
-                                    <Button variant="outline" onClick={handleLinkPayouts} disabled={initiatingConnect}>
-                                       {initiatingConnect && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                       <ExternalLink className="mr-2 h-4 w-4" />
-                                       Update Payout Settings
-                                    </Button>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                       <Button onClick={handleOpenPayoutsDashboard} disabled={openingDashboard}>
+                                          {openingDashboard && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                          <ExternalLink className="mr-2 h-4 w-4" />
+                                          Open Stripe Dashboard
+                                       </Button>
+                                       <Button variant="outline" onClick={handleLinkPayouts} disabled={initiatingConnect}>
+                                          {initiatingConnect && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                          <ExternalLink className="mr-2 h-4 w-4" />
+                                          Update Payout Settings
+                                       </Button>
+                                    </div>
                                  </div>
                               ) : payoutsStatus?.status === 'pending_verification' ? (
                                  <div className="space-y-4">

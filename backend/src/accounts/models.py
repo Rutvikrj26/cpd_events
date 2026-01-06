@@ -138,6 +138,11 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         max_length=100, unique=True, null=True, blank=True, help_text="URL-friendly identifier for public profile"
     )
     is_organizer_profile_public = models.BooleanField(default=False, help_text="Make organizer profile visible to public")
+    gst_hst_number = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="GST/HST registration number for tax handling",
+    )
 
     # =========================================
     # Engagement Stats (denormalized)

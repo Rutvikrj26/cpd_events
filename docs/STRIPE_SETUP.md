@@ -183,15 +183,18 @@ STRIPE_PRICE_ORGANIZER=price_xxxxxxxxxxxxx  # From Products
 STRIPE_PRICE_ORGANIZATION=price_xxxxxxxxxxxxx  # From Products
 ```
 
-### Production (.env.production or Cloud Run env vars)
+### Production (Terraform tfvars + Secret Manager)
 
 ```bash
 # Stripe Payment Configuration (LIVE KEYS)
+# Store secrets in Secret Manager (uploaded via CLI)
 STRIPE_SECRET_KEY=sk_live_xxxxxxxxxxxxx
 STRIPE_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxxxx
 STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx  # From webhook endpoint
-STRIPE_PRICE_ORGANIZER=price_xxxxxxxxxxxxx  # Production price ID
-STRIPE_PRICE_ORGANIZATION=price_xxxxxxxxxxxxx  # Production price ID
+
+# Optional: set price IDs via Terraform tfvars (STRIPE_PRICE_* envs)
+STRIPE_PRICE_PROFESSIONAL=price_xxxxxxxxxxxxx
+STRIPE_PRICE_TEAM=price_xxxxxxxxxxxxx
 ```
 
 ### Frontend (.env)
@@ -201,9 +204,9 @@ Already set:
 VITE_STRIPE_PUBLISHABLE_KEY=pk_test_51SUJCj2dJZiu6MtI...
 ```
 
-For production, update to:
+For production, set via `infra/gcp/environments/prod/terraform.tfvars`:
 ```bash
-VITE_STRIPE_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxxxx
+frontend_stripe_publishable_key=pk_live_xxxxxxxxxxxxx
 ```
 
 ---
@@ -236,6 +239,19 @@ Dashboard: https://dashboard.stripe.com/test/webhooks
 - See all webhook deliveries
 - Replay failed webhooks
 - Check event details
+
+---
+
+## Stripe Tax for Ticketing (Platform MoR)
+
+Ticketing uses **destination charges**, which means the platform is the
+merchant of record and Stripe Tax is calculated on the **platform account**.
+
+Do this on the platform Stripe account (test and live):
+1. Enable Stripe Tax: https://dashboard.stripe.com/test/tax
+2. Add your tax registration (e.g., Canada GST/HST).
+
+Connected accounts do **not** need Stripe Tax enabled in this model.
 
 ---
 

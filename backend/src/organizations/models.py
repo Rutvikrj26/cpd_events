@@ -61,6 +61,11 @@ class Organization(SoftDeleteModel):
     # Contact
     contact_email = models.EmailField(blank=True, help_text="Public contact email")
     contact_phone = models.CharField(max_length=20, blank=True, help_text="Public contact phone")
+    gst_hst_number = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="GST/HST registration number for tax handling",
+    )
 
     # Status
     is_active = models.BooleanField(default=True, help_text="Whether organization is active")

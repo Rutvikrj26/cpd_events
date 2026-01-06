@@ -53,6 +53,7 @@ export interface Organization {
     secondary_color: string;
     contact_email: string;
     contact_phone: string;
+    gst_hst_number?: string;
     is_active: boolean;
     is_verified: boolean;
     members_count: number;
@@ -75,6 +76,7 @@ export interface OrganizationCreateRequest {
     website?: string;
     primary_color?: string;
     contact_email?: string;
+    gst_hst_number?: string;
 }
 
 export interface OrganizationUpdateRequest {
@@ -86,6 +88,7 @@ export interface OrganizationUpdateRequest {
     secondary_color?: string;
     contact_email?: string;
     contact_phone?: string;
+    gst_hst_number?: string;
 }
 
 // ============================================================================

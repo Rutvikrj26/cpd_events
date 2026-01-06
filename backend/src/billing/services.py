@@ -213,6 +213,7 @@ class StripeService:
                 'items': [{'price': price_id}],
                 'payment_behavior': 'default_incomplete',
                 'expand': ['latest_invoice.payment_intent'],
+                'automatic_tax': {'enabled': True},
                 'metadata': {
                     'user_uuid': str(user.uuid),
                     'plan': plan,
@@ -548,6 +549,8 @@ class StripeService:
                 mode='subscription',
                 success_url=success_url_with_session,
                 cancel_url=cancel_url,
+                automatic_tax={'enabled': True},
+                customer_update={'address': 'auto'},
                 subscription_data={
                     'trial_period_days': trial_days,
                     'metadata': metadata,
@@ -961,6 +964,18 @@ class StripeConnectService:
             logger.error(f"Failed to create account link: {e}")
             return None
 
+    def create_login_link(self, account_id: str) -> str | None:
+        """Generate a Stripe Express dashboard login link."""
+        if not self.is_configured:
+            return None
+
+        try:
+            login_link = self._stripe.Account.create_login_link(account_id)
+            return login_link.url
+        except Exception as e:
+            logger.error(f"Failed to create login link: {e}")
+            return None
+
     def get_account_status(self, account_id: str) -> dict:
         """
         Check account status.
@@ -997,7 +1012,7 @@ class StripePaymentService:
         return stripe_service.is_configured
 
     def get_payee_account_id(self, event) -> str | None:
-        """Resolve the connected account to charge for this event."""
+        """Resolve the connected account to receive transfers for this event."""
         payee_account_id = None
         if event.organization and event.organization.stripe_connect_id:
             payee_account_id = event.organization.stripe_connect_id
@@ -1009,27 +1024,161 @@ class StripePaymentService:
                 return None
         return payee_account_id
 
-    def _calculate_platform_fee_cents(self, ticket_amount_cents: int) -> int:
-        """Calculate platform fee in cents based on ticket price."""
+    def _calculate_service_fee_cents(self, ticket_amount_cents: int, currency: str) -> int:
+        """Calculate service fee in cents based on ticket price."""
         from decimal import Decimal, ROUND_HALF_UP
-        from common.config.billing import PlatformFees
+        from common.config.billing import TicketingFees
 
         if ticket_amount_cents <= 0:
             return 0
 
-        fee_percent = Decimal(str(PlatformFees.FEE_PERCENT))
-        fee_cents = (Decimal(ticket_amount_cents) * fee_percent / Decimal('100')).quantize(
-            Decimal('1'),
+        percent = Decimal(str(TicketingFees.get_service_fee_percent(currency)))
+        fixed = Decimal(str(TicketingFees.get_service_fee_fixed(currency)))
+        ticket_amount = Decimal(ticket_amount_cents) / Decimal('100')
+        fee = (ticket_amount * percent / Decimal('100')).quantize(
+            Decimal('0.01'),
             rounding=ROUND_HALF_UP,
-        )
+        ) + fixed
+        fee_cents = (fee * Decimal('100')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
         return int(fee_cents)
+
+    def _calculate_processing_fee_cents(self, base_total_cents: int, currency: str) -> int:
+        """Calculate processing fee in cents based on total order."""
+        from decimal import Decimal, ROUND_HALF_UP
+        from common.config.billing import TicketingFees
+
+        if base_total_cents <= 0:
+            return 0
+
+        percent = Decimal(str(TicketingFees.get_processing_fee_percent(currency)))
+        fixed = Decimal(str(TicketingFees.get_processing_fee_fixed(currency)))
+        rate = percent / Decimal('100')
+        if rate >= 1:
+            raise ValueError("Processing fee percent must be less than 100")
+
+        base_total = Decimal(base_total_cents) / Decimal('100')
+        fee = (rate * base_total + fixed) / (Decimal('1') - rate)
+        fee = fee.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        fee_cents = (fee * Decimal('100')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+        return int(fee_cents)
+
+    def _get_ticket_tax_code(self, event) -> str:
+        """Get Stripe Tax code for the event ticket."""
+        from common.config.billing import TicketingTaxCodes
+
+        if event.format == 'online':
+            return TicketingTaxCodes.TICKET_ONLINE
+        return TicketingTaxCodes.TICKET_IN_PERSON
+
+    def _get_service_fee_tax_code(self, event) -> str:
+        """Get Stripe Tax code for the service fee."""
+        from common.config.billing import TicketingTaxCodes
+
+        return TicketingTaxCodes.SERVICE_FEE
+
+    def _build_customer_details(self, registration) -> dict[str, Any]:
+        """Build customer details for Stripe Tax."""
+        if not registration.billing_country or not registration.billing_postal_code:
+            raise ValueError("Billing country and postal code are required for tax calculation")
+
+        address = {
+            'country': registration.billing_country,
+            'postal_code': registration.billing_postal_code,
+        }
+        if registration.billing_state:
+            address['state'] = registration.billing_state
+        if registration.billing_city:
+            address['city'] = registration.billing_city
+
+        return {
+            'address': address,
+            'address_source': 'billing',
+        }
+
+    def _create_tax_calculation(
+        self,
+        currency: str,
+        customer_details: dict[str, Any],
+        line_items: list[dict[str, Any]],
+    ):
+        """Create Stripe Tax calculation on the platform account."""
+        return self._stripe.tax.Calculation.create(
+            currency=currency.lower(),
+            customer_details=customer_details,
+            line_items=line_items,
+            expand=['line_items'],
+        )
+
+    def create_tax_transaction_from_calculation(self, calculation_id: str, reference: str | None = None) -> dict[str, Any]:
+        """Create a Stripe Tax transaction from a calculation."""
+        if not self.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        if not calculation_id:
+            return {'success': False, 'error': 'Missing tax calculation ID'}
+
+        try:
+            transaction = self._stripe.tax.Transaction.create_from_calculation(
+                calculation=calculation_id,
+                reference=reference or calculation_id,
+            )
+            return {'success': True, 'tax_transaction_id': transaction.id}
+        except Exception as e:
+            logger.error(f"Failed to create tax transaction from calculation {calculation_id}: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def create_tax_transaction_for_registration(self, registration) -> dict[str, Any]:
+        """Create a Stripe Tax transaction for a registration if missing."""
+        if registration.stripe_tax_transaction_id:
+            return {
+                'success': True,
+                'tax_transaction_id': registration.stripe_tax_transaction_id,
+                'existing': True,
+            }
+
+        calculation_id = registration.stripe_tax_calculation_id
+        if not calculation_id:
+            return {'success': False, 'error': 'Registration missing tax calculation ID'}
+
+        reference = f"registration_{registration.uuid}"
+        result = self.create_tax_transaction_from_calculation(calculation_id, reference=reference)
+        if result.get('success'):
+            registration.stripe_tax_transaction_id = result['tax_transaction_id']
+            registration.save(update_fields=['stripe_tax_transaction_id', 'updated_at'])
+        return result
+
+    def create_tax_transaction_reversal(self, registration, reference: str | None = None) -> dict[str, Any]:
+        """Create a Stripe Tax transaction reversal for a registration."""
+        if not self.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        if not registration.stripe_tax_transaction_id:
+            create_result = self.create_tax_transaction_for_registration(registration)
+            if not create_result.get('success'):
+                return {
+                    'success': False,
+                    'error': create_result.get('error', 'Tax transaction not available'),
+                }
+
+        try:
+            reversal = self._stripe.tax.Transaction.create_reversal(
+                original_transaction=registration.stripe_tax_transaction_id,
+                mode='full',
+                reference=reference or f"refund_{registration.uuid}",
+            )
+            return {'success': True, 'tax_reversal_id': reversal.id}
+        except Exception as e:
+            logger.error(
+                f"Failed to create tax transaction reversal for registration {registration.uuid}: {e}"
+            )
+            return {'success': False, 'error': str(e)}
 
     def create_payment_intent(self, registration, ticket_amount_cents: int | None = None) -> dict[str, Any]:
         """
         Create a PaymentIntent for a registration.
 
-        Uses Direct Charges on the organizer's connected account with
-        an application fee for the platform.
+        Uses destination charges on the platform account with
+        an application fee for the platform and transfers to the organizer.
 
         Args:
             registration: The Registration instance
@@ -1053,22 +1202,98 @@ class StripePaymentService:
                 else:
                     ticket_amount_cents = int(event.price * 100)
 
-            application_fee_cents = self._calculate_platform_fee_cents(ticket_amount_cents)
-            total_amount_cents = ticket_amount_cents + application_fee_cents
+            service_fee_cents = self._calculate_service_fee_cents(ticket_amount_cents, event.currency)
+            customer_details = self._build_customer_details(registration)
 
-            intent = self._stripe.PaymentIntent.create(
-                amount=total_amount_cents,
-                currency=event.currency.lower(),
-                payment_method_types=['card'],
-                application_fee_amount=application_fee_cents,
-                metadata={
+            base_line_items = [
+                {
+                    'amount': ticket_amount_cents,
+                    'tax_code': self._get_ticket_tax_code(event),
+                    'reference': 'ticket',
+                    'tax_behavior': 'exclusive',
+                }
+            ]
+            if service_fee_cents > 0:
+                base_line_items.append(
+                    {
+                        'amount': service_fee_cents,
+                        'tax_code': self._get_service_fee_tax_code(event),
+                        'reference': 'service_fee',
+                        'tax_behavior': 'exclusive',
+                    }
+                )
+
+            base_tax_calc = self._create_tax_calculation(
+                currency=event.currency,
+                customer_details=customer_details,
+                line_items=base_line_items,
+            )
+            base_total_cents = int(base_tax_calc.amount_total)
+            processing_fee_cents = self._calculate_processing_fee_cents(base_total_cents, event.currency)
+
+            final_line_items = list(base_line_items)
+            if processing_fee_cents > 0:
+                from common.config.billing import TicketingTaxCodes
+
+                final_line_items.append(
+                    {
+                        'amount': processing_fee_cents,
+                        'tax_code': TicketingTaxCodes.NON_TAXABLE,
+                        'reference': 'processing_fee',
+                        'tax_behavior': 'exclusive',
+                    }
+                )
+
+            final_tax_calc = self._create_tax_calculation(
+                currency=event.currency,
+                customer_details=customer_details,
+                line_items=final_line_items,
+            )
+
+            total_amount_cents = int(final_tax_calc.amount_total)
+            tax_cents = int(getattr(final_tax_calc, 'tax_amount_exclusive', 0) or 0)
+
+            intent_params = {
+                'amount': total_amount_cents,
+                'currency': event.currency.lower(),
+                'payment_method_types': ['card'],
+                'metadata': {
                     'registration_id': str(registration.uuid),
                     'event_id': str(event.uuid),
                     'event_title': event.title,
+                    'payee_account_id': payee_account_id,
                     'ticket_amount_cents': str(ticket_amount_cents),
-                    'platform_fee_cents': str(application_fee_cents),
+                    'service_fee_cents': str(service_fee_cents),
+                    'processing_fee_cents': str(processing_fee_cents),
+                    'tax_cents': str(tax_cents),
+                    'tax_calculation_id': final_tax_calc.id,
                 },
-                stripe_account=payee_account_id,
+            }
+            intent_params['transfer_data'] = {
+                'destination': payee_account_id,
+                'amount': ticket_amount_cents,
+            }
+
+            intent = self._stripe.PaymentIntent.create(**intent_params)
+
+            from decimal import Decimal
+
+            registration.platform_fee_amount = Decimal(service_fee_cents) / Decimal('100')
+            registration.service_fee_amount = Decimal(service_fee_cents) / Decimal('100')
+            registration.processing_fee_amount = Decimal(processing_fee_cents) / Decimal('100')
+            registration.tax_amount = Decimal(tax_cents) / Decimal('100')
+            registration.total_amount = Decimal(total_amount_cents) / Decimal('100')
+            registration.stripe_tax_calculation_id = final_tax_calc.id
+            registration.save(
+                update_fields=[
+                    'platform_fee_amount',
+                    'service_fee_amount',
+                    'processing_fee_amount',
+                    'tax_amount',
+                    'total_amount',
+                    'stripe_tax_calculation_id',
+                    'updated_at',
+                ]
             )
 
             return {
@@ -1076,37 +1301,48 @@ class StripePaymentService:
                 'client_secret': intent.client_secret,
                 'payment_intent_id': intent.id,
                 'ticket_amount_cents': ticket_amount_cents,
-                'platform_fee_cents': application_fee_cents,
+                'service_fee_cents': service_fee_cents,
+                'processing_fee_cents': processing_fee_cents,
+                'tax_cents': tax_cents,
                 'total_amount_cents': total_amount_cents,
+                'tax_calculation_id': final_tax_calc.id,
             }
 
         except Exception as e:
             logger.error(f"Failed to create payment intent: {e}")
             return {'success': False, 'error': str(e)}
 
-    def retrieve_payment_intent(self, payment_intent_id: str, payee_account_id: str | None = None):
+    def retrieve_payment_intent(self, payment_intent_id: str):
         """Retrieve a payment intent."""
         if not self.is_configured:
             return None
         try:
-            if payee_account_id:
-                return self._stripe.PaymentIntent.retrieve(payment_intent_id, stripe_account=payee_account_id)
             return self._stripe.PaymentIntent.retrieve(payment_intent_id)
         except Exception as e:
             logger.warning(f"Failed to retrieve payment intent {payment_intent_id}: {e}")
             return None
 
-    def refund_payment_intent(self, payment_intent_id: str, payee_account_id: str | None = None) -> dict[str, Any]:
-        """Refund a payment intent on the connected account."""
+    def refund_payment_intent(self, payment_intent_id: str, registration=None) -> dict[str, Any]:
+        """Refund a payment intent and reverse the transfer + application fee."""
         if not self.is_configured:
             return {'success': False, 'error': 'Stripe not configured'}
 
         try:
             refund = self._stripe.Refund.create(
                 payment_intent=payment_intent_id,
-                stripe_account=payee_account_id,
+                reverse_transfer=True,
             )
-            return {'success': True, 'refund_id': refund.id}
+            result: dict[str, Any] = {'success': True, 'refund_id': refund.id}
+            if registration is not None:
+                reversal_result = self.create_tax_transaction_reversal(
+                    registration,
+                    reference=f"refund_{payment_intent_id}",
+                )
+                if reversal_result.get('success'):
+                    result['tax_reversal_id'] = reversal_result.get('tax_reversal_id')
+                else:
+                    result['tax_reversal_error'] = reversal_result.get('error', 'Tax reversal failed')
+            return result
         except Exception as e:
             logger.error(f"Failed to refund payment intent {payment_intent_id}: {e}")
             return {'success': False, 'error': str(e)}

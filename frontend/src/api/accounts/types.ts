@@ -11,6 +11,7 @@ export interface User {
     organizer_website?: string;
     organizer_logo_url?: string;
     organizer_bio?: string;
+    gst_hst_number?: string;
 }
 
 

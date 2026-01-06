@@ -9,25 +9,12 @@ from django.db.models import Max
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from common.utils import error_response
-from common.config.billing import PlatformFees
 from events.models import Event
 from registrations.models import Registration, CustomFieldResponse
 from promo_codes.services import promo_code_service, PromoCodeError
 from billing.services import stripe_payment_service
 
 logger = logging.getLogger(__name__)
-
-
-def _calculate_platform_fee(amount: Decimal) -> Decimal:
-    """Calculate platform service fee based on ticket price."""
-    from decimal import ROUND_HALF_UP
-
-    if amount <= 0:
-        return Decimal('0.00')
-    fee_percent = Decimal(str(PlatformFees.FEE_PERCENT))
-    fee = (amount * fee_percent / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-    return max(Decimal('0.00'), fee)
 
 
 class RegistrationService:
@@ -102,8 +89,13 @@ class RegistrationService:
         # For paid events: status = PENDING until payment confirmed
         # For free events: status = CONFIRMED immediately
         status_to_set = Registration.Status.PENDING if final_price > 0 else Registration.Status.CONFIRMED
-        platform_fee = _calculate_platform_fee(final_price)
-        total_amount = final_price + platform_fee
+
+        billing_country = data.get('billing_country', '').upper().strip()
+        billing_state = data.get('billing_state', '').strip()
+        billing_postal_code = data.get('billing_postal_code', '').strip()
+        billing_city = data.get('billing_city', '').strip()
+
+        billing_details_provided = bool(billing_country and billing_postal_code)
 
         # 5. Create Registration (Atomic)
         with transaction.atomic():
@@ -118,8 +110,15 @@ class RegistrationService:
                 allow_public_verification=data.get('allow_public_verification', True),
                 source=Registration.Source.SELF,
                 amount_paid=final_price,
-                platform_fee_amount=platform_fee,
-                total_amount=total_amount,
+                platform_fee_amount=Decimal('0.00'),
+                service_fee_amount=Decimal('0.00'),
+                processing_fee_amount=Decimal('0.00'),
+                tax_amount=Decimal('0.00'),
+                total_amount=final_price,
+                billing_country=billing_country,
+                billing_state=billing_state,
+                billing_postal_code=billing_postal_code,
+                billing_city=billing_city,
             )
 
             # Apply Promo Code
@@ -142,20 +141,39 @@ class RegistrationService:
             registration.payment_status = Registration.PaymentStatus.PENDING
             registration.save(update_fields=['payment_status', 'updated_at'])
 
-            intent_data = stripe_payment_service.create_payment_intent(
-                registration,
-                ticket_amount_cents=int(final_price * 100),
-            )
-            
-            if intent_data['success']:
-                client_secret = intent_data['client_secret']
-                registration.payment_intent_id = intent_data['payment_intent_id']
-                registration.platform_fee_amount = Decimal(intent_data['platform_fee_cents']) / Decimal('100')
-                registration.total_amount = Decimal(intent_data['total_amount_cents']) / Decimal('100')
-                registration.save(update_fields=['payment_intent_id', 'platform_fee_amount', 'total_amount', 'updated_at'])
-            else:
-                registration.delete()
-                raise ValidationError(intent_data['error'])
+            if billing_details_provided:
+                intent_data = stripe_payment_service.create_payment_intent(
+                    registration,
+                    ticket_amount_cents=int(final_price * 100),
+                )
+
+                if intent_data['success']:
+                    client_secret = intent_data['client_secret']
+                    registration.payment_intent_id = intent_data['payment_intent_id']
+                    if intent_data.get('service_fee_cents') is not None:
+                        registration.platform_fee_amount = Decimal(intent_data['service_fee_cents']) / Decimal('100')
+                        registration.service_fee_amount = Decimal(intent_data['service_fee_cents']) / Decimal('100')
+                        registration.processing_fee_amount = Decimal(intent_data.get('processing_fee_cents', 0)) / Decimal('100')
+                        registration.tax_amount = Decimal(intent_data.get('tax_cents', 0)) / Decimal('100')
+                        registration.total_amount = Decimal(intent_data.get('total_amount_cents', 0)) / Decimal('100')
+                        registration.stripe_tax_calculation_id = intent_data.get('tax_calculation_id', '')
+                        registration.save(
+                            update_fields=[
+                                'payment_intent_id',
+                                'platform_fee_amount',
+                                'service_fee_amount',
+                                'processing_fee_amount',
+                                'tax_amount',
+                                'total_amount',
+                                'stripe_tax_calculation_id',
+                                'updated_at',
+                            ]
+                        )
+                    else:
+                        registration.save(update_fields=['payment_intent_id', 'updated_at'])
+                else:
+                    registration.delete()
+                    raise ValidationError(intent_data['error'])
 
         # Queue Zoom registrant addition (async)
         if registration.status == Registration.Status.CONFIRMED:
@@ -166,15 +184,14 @@ class RegistrationService:
             'registration': registration,
             'client_secret': client_secret,
             'status': registration.status,
-            'created': True
+            'created': True,
+            'requires_payment': final_price > 0,
         }
 
     def _add_to_waitlist(self, event, user, email, full_name, data):
         """Internal method to add to waitlist."""
         waitlist_pos = self._get_next_waitlist_position(event)
         ticket_price = Decimal(str(event.price or 0))
-        platform_fee = _calculate_platform_fee(ticket_price)
-        total_amount = ticket_price + platform_fee
 
         with transaction.atomic():
             registration = Registration.objects.create(
@@ -189,8 +206,15 @@ class RegistrationService:
                 allow_public_verification=data.get('allow_public_verification', True),
                 source=Registration.Source.SELF,
                 amount_paid=ticket_price,
-                platform_fee_amount=platform_fee,
-                total_amount=total_amount,
+                platform_fee_amount=Decimal('0.00'),
+                service_fee_amount=Decimal('0.00'),
+                processing_fee_amount=Decimal('0.00'),
+                tax_amount=Decimal('0.00'),
+                total_amount=ticket_price,
+                billing_country=data.get('billing_country', '').upper().strip(),
+                billing_state=data.get('billing_state', '').strip(),
+                billing_postal_code=data.get('billing_postal_code', '').strip(),
+                billing_city=data.get('billing_city', '').strip(),
             )
 
             # Save Custom Fields
@@ -281,6 +305,7 @@ class PaymentConfirmationService:
             dict with status ('paid', 'processing', 'failed', 'error') and details
         """
         import time
+        from typing import Any
 
         if not self.is_configured:
             return {'status': 'error', 'message': 'Payment system not configured'}
@@ -288,20 +313,26 @@ class PaymentConfirmationService:
         if not registration.payment_intent_id:
             return {'status': 'error', 'message': 'No payment intent found for this registration'}
 
-        payee_account_id = stripe_payment_service.get_payee_account_id(registration.event)
-        if not payee_account_id:
-            return {'status': 'error', 'message': 'Event organizer is not connected to Stripe'}
+        def extract_transfer_id(intent_obj: Any) -> str | None:
+            charges = getattr(intent_obj, 'charges', None)
+            if charges and getattr(charges, 'data', None):
+                charge = charges.data[0]
+                if isinstance(charge, dict):
+                    transfer_id = charge.get('transfer')
+                else:
+                    transfer_id = getattr(charge, 'transfer', None)
+                if isinstance(transfer_id, str) and transfer_id.strip():
+                    return transfer_id
+            return None
 
         for attempt in range(max_retries):
             try:
-                intent = stripe_payment_service.retrieve_payment_intent(
-                    registration.payment_intent_id,
-                    payee_account_id=payee_account_id,
-                )
+                intent = stripe_payment_service.retrieve_payment_intent(registration.payment_intent_id)
                 if not intent:
                     return {'status': 'error', 'message': 'Payment intent not found'}
 
                 if intent.status == 'succeeded':
+                    transfer_id = extract_transfer_id(intent)
                     # Update registration with locking to prevent race conditions
                     with transaction.atomic():
                         # Refetch with lock
@@ -325,7 +356,7 @@ class PaymentConfirmationService:
                         if event.max_attendees and confirmed_count >= event.max_attendees:
                             refund_result = stripe_payment_service.refund_payment_intent(
                                 registration.payment_intent_id,
-                                payee_account_id=payee_account_id,
+                                registration=locked_reg,
                             )
 
                             if refund_result['success']:
@@ -352,16 +383,30 @@ class PaymentConfirmationService:
                         locked_reg.total_amount = Decimal(intent.amount_received) / Decimal('100')
 
                         # Update status to CONFIRMED if it was PENDING
+                        updated_fields = ['payment_status', 'total_amount', 'updated_at']
                         if locked_reg.status == Registration.Status.PENDING:
                             locked_reg.status = Registration.Status.CONFIRMED
-                            locked_reg.save(update_fields=['payment_status', 'total_amount', 'status', 'updated_at'])
-                        else:
-                            locked_reg.save(update_fields=['payment_status', 'total_amount', 'updated_at'])
+                            updated_fields.append('status')
+                        if transfer_id and not locked_reg.stripe_transfer_id:
+                            locked_reg.stripe_transfer_id = transfer_id
+                            updated_fields.append('stripe_transfer_id')
+                        locked_reg.save(update_fields=updated_fields)
 
-                        # Update original instance to reflect changes
-                        registration.payment_status = locked_reg.payment_status
-                        registration.total_amount = locked_reg.total_amount
-                        registration.status = locked_reg.status
+                    # Update original instance to reflect changes
+                    registration.payment_status = locked_reg.payment_status
+                    registration.total_amount = locked_reg.total_amount
+                    registration.status = locked_reg.status
+                    registration.stripe_transfer_id = locked_reg.stripe_transfer_id
+
+                    tax_result = stripe_payment_service.create_tax_transaction_for_registration(registration)
+                    if tax_result.get('success'):
+                        registration.stripe_tax_transaction_id = tax_result.get('tax_transaction_id')
+                    else:
+                        logger.warning(
+                            "Failed to create tax transaction for registration %s: %s",
+                            registration.uuid,
+                            tax_result.get('error'),
+                        )
 
                     # Trigger Zoom registrant addition after payment confirmed
                     if registration.status == Registration.Status.CONFIRMED:

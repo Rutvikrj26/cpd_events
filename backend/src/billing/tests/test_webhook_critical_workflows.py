@@ -306,7 +306,9 @@ class TestChargesEnabledValidation(TestCase):
             email='attendee3@test.com',
             full_name='Test Attendee 3',
             status='confirmed',
-            payment_status='pending'
+            payment_status='pending',
+            billing_country='US',
+            billing_postal_code='94105',
         )
         
         service = StripePaymentService()
@@ -318,11 +320,26 @@ class TestChargesEnabledValidation(TestCase):
         with patch.object(StripePaymentService, 'is_configured', new_callable=PropertyMock) as mock_config, \
              patch.object(service, '_stripe') as mock_stripe:
             mock_config.return_value = True
+            base_calc = MagicMock()
+            base_calc.amount_total = 10000
+            base_calc.tax_amount_exclusive = 1300
+            base_calc.id = 'tax_base'
+
+            final_calc = MagicMock()
+            final_calc.amount_total = 10500
+            final_calc.tax_amount_exclusive = 1300
+            final_calc.id = 'tax_final'
+
+            mock_stripe.tax.Calculation.create.side_effect = [base_calc, final_calc]
             mock_stripe.PaymentIntent.create.return_value = mock_intent
             result = service.create_payment_intent(registration)
-        
+
         assert result['success'] is True
         assert result['client_secret'] == 'pi_test_secret'
+        call_kwargs = mock_stripe.PaymentIntent.create.call_args.kwargs
+        assert call_kwargs['transfer_data']['destination'] == 'acct_enabled_user'
+        assert call_kwargs['transfer_data']['amount'] == 7500
+        assert 'application_fee_amount' not in call_kwargs
 
 
 @override_settings(STRIPE_WEBHOOK_SECRET='test_webhook_secret')
@@ -372,11 +389,13 @@ class TestPaymentConfirmationLocking(TestCase):
         mock_intent.amount_received = 5000
         
         with patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config, \
-             patch('registrations.services.stripe_payment_service.retrieve_payment_intent') as mock_retrieve:
+             patch('registrations.services.stripe_payment_service.retrieve_payment_intent') as mock_retrieve, \
+             patch('registrations.services.stripe_payment_service.create_tax_transaction_for_registration') as mock_tax:
             
             mock_config.return_value = True
             
             mock_retrieve.return_value = mock_intent
+            mock_tax.return_value = {'success': True, 'tax_transaction_id': 'txn_123'}
             
             result = service.confirm_registration_payment(registration)
         
@@ -386,6 +405,7 @@ class TestPaymentConfirmationLocking(TestCase):
         # Registration should keep original values
         registration.refresh_from_db()
         assert registration.payment_status == Registration.PaymentStatus.PAID
+        mock_tax.assert_not_called()
 
     @patch('stripe.Webhook.construct_event')
     def test_webhook_payment_confirmation_is_idempotent(self, mock_construct_event):
@@ -489,11 +509,13 @@ class TestPaymentConfirmationLocking(TestCase):
         mock_intent.amount_received = 10000
         
         with patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config, \
-             patch('registrations.services.stripe_payment_service.retrieve_payment_intent') as mock_retrieve:
+             patch('registrations.services.stripe_payment_service.retrieve_payment_intent') as mock_retrieve, \
+             patch('registrations.services.stripe_payment_service.create_tax_transaction_for_registration') as mock_tax:
              
             mock_config.return_value = True
             
             mock_retrieve.return_value = mock_intent
+            mock_tax.return_value = {'success': True, 'tax_transaction_id': 'txn_456'}
             
             result = service.confirm_registration_payment(registration)
         
@@ -502,3 +524,65 @@ class TestPaymentConfirmationLocking(TestCase):
         registration.refresh_from_db()
         assert registration.payment_status == Registration.PaymentStatus.PAID
         assert registration.amount_paid == Decimal('100.00')
+        mock_tax.assert_called_once()
+
+    @patch('stripe.Webhook.construct_event')
+    def test_webhook_payment_confirmation_creates_tax_transaction(self, mock_construct_event):
+        """Webhook payment confirmation should create a tax transaction for paid registrations."""
+        from accounts.models import User
+        from events.models import Event
+        from registrations.models import Registration
+
+        organizer = User.objects.create_user(
+            email='webhook_pending@test.com',
+            password='testpass123',
+            full_name='Webhook Pending Organizer',
+            account_type='organizer'
+        )
+
+        event = Event.objects.create(
+            title='Webhook Pending Event',
+            owner=organizer,
+            price=Decimal('60.00'),
+            currency='usd',
+            status='published',
+            starts_at=timezone.now() + timedelta(days=7)
+        )
+
+        registration = Registration.objects.create(
+            event=event,
+            email='pending_webhook@test.com',
+            full_name='Pending Webhook',
+            status='pending',
+            payment_status=Registration.PaymentStatus.PENDING,
+            payment_intent_id='pi_webhook_pending',
+            amount_paid=Decimal('60.00')
+        )
+
+        event_data = {
+            'type': 'payment_intent.succeeded',
+            'data': {
+                'object': {
+                    'id': 'pi_webhook_pending',
+                    'amount_received': 6000,
+                    'metadata': {
+                        'registration_id': str(registration.uuid)
+                    }
+                }
+            }
+        }
+        mock_construct_event.return_value = event_data
+
+        with patch('billing.services.stripe_payment_service.create_tax_transaction_for_registration') as mock_tax:
+            mock_tax.return_value = {'success': True, 'tax_transaction_id': 'txn_789'}
+            response = self.client.post(
+                '/webhooks/stripe/',
+                json.dumps(event_data),
+                content_type='application/json',
+                HTTP_STRIPE_SIGNATURE='test_sig'
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+        registration.refresh_from_db()
+        assert registration.payment_status == Registration.PaymentStatus.PAID
+        mock_tax.assert_called_once()

@@ -36,6 +36,7 @@ urlpatterns = [
     # Payouts (Stripe Connect for individuals)
     path('users/me/payouts/connect/', views.PayoutsConnectView.as_view(), name='payouts_connect'),
     path('users/me/payouts/status/', views.PayoutsStatusView.as_view(), name='payouts_status'),
+    path('users/me/payouts/dashboard/', views.PayoutsDashboardView.as_view(), name='payouts_dashboard'),
     # Public organizer profiles
     path('organizers/<uuid:uuid>/', views.PublicOrganizerView.as_view(), name='public_organizer'),
     path('', include(router.urls)),

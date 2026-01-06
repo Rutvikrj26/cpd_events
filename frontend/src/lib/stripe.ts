@@ -6,7 +6,7 @@ const stripePromises: Record<string, Promise<Stripe | null>> = {};
  * Get the Stripe instance (singleton pattern).
  * Uses VITE_STRIPE_PUBLISHABLE_KEY from environment.
  */
-export function getStripe(stripeAccountId?: string): Promise<Stripe | null> {
+export function getStripe(): Promise<Stripe | null> {
     const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 
     if (!publishableKey) {
@@ -14,12 +14,9 @@ export function getStripe(stripeAccountId?: string): Promise<Stripe | null> {
         return Promise.resolve(null);
     }
 
-    const key = stripeAccountId || 'platform';
+    const key = 'platform';
     if (!stripePromises[key]) {
-        stripePromises[key] = loadStripe(
-            publishableKey,
-            stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
-        );
+        stripePromises[key] = loadStripe(publishableKey);
     }
     return stripePromises[key];
 }

@@ -223,11 +223,13 @@ DB_PASSWORD=your-secure-password
 DB_HOST=db
 DB_PORT=5432
 
-# Email (Mailgun)
-MAILGUN_SMTP_LOGIN=postmaster@your-domain.mailgun.org
-MAILGUN_SMTP_PASSWORD=your-mailgun-password
-MAILGUN_API_KEY=your-api-key
-MAILGUN_DOMAIN=your-domain.mailgun.org
+# Email (SMTP provider)
+SMTP_LOGIN=your-smtp-login
+SMTP_PASSWORD=your-smtp-password
+SMTP_API_KEY=your-api-key
+SMTP_DOMAIN=your-domain.example
+SMTP_SERVER=smtp-relay.brevo.com
+SMTP_PORT=587
 DEFAULT_FROM_EMAIL=info@accredit.store
 
 # Stripe

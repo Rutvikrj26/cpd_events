@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Cloud deployment and management commands for GCP."""
 
+import json
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -793,12 +795,32 @@ def deploy(env):
 
         # Set build-time environment variables
         build_env = os.environ.copy()
+        terraform_keys = set()
 
         if backend_url:
             # Auto-set API URL from Terraform output
             api_url = f"{backend_url}/api/v1"
             build_env["VITE_API_URL"] = api_url
             console.print(f"  [dim]VITE_API_URL={api_url}[/dim]")
+
+        # Load frontend build vars from Terraform outputs (tfvars source of truth)
+        try:
+            result = subprocess.run(
+                ["terraform", "output", "-json", "frontend_env"],
+                cwd=env_dir,
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                frontend_env = json.loads(result.stdout)
+                if isinstance(frontend_env, dict):
+                    for key, value in frontend_env.items():
+                        if value:
+                            build_env[key] = value
+                            terraform_keys.add(key)
+                            console.print(f"  [dim]{key} set from Terraform[/dim]")
+        except (json.JSONDecodeError, TypeError):
+            console.print("[yellow]⚠ Could not parse frontend_env Terraform output[/yellow]")
 
         # Load additional vars from .env.prod if exists
         env_prod_file = FRONTEND_DIR / ".env.prod"
@@ -810,7 +832,9 @@ def deploy(env):
                     if line and not line.startswith('#') and '=' in line:
                         key, value = line.split('=', 1)
                         key = key.strip()
-                        # Don't override VITE_API_URL if we got it from Terraform
+                        # Don't override vars set by Terraform or API URL from Terraform
+                        if key in terraform_keys:
+                            continue
                         if key == "VITE_API_URL" and backend_url:
                             continue
                         build_env[key] = value.strip()

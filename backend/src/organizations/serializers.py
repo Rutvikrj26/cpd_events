@@ -66,6 +66,7 @@ class OrganizationDetailSerializer(serializers.ModelSerializer):
             'secondary_color',
             'contact_email',
             'contact_phone',
+            'gst_hst_number',
             'is_active',
             'is_verified',
             'members_count',
@@ -129,6 +130,7 @@ class OrganizationCreateSerializer(serializers.ModelSerializer):
             'website',
             'primary_color',
             'contact_email',
+            'gst_hst_number',
         ]
 
     def create(self, validated_data):
@@ -172,6 +174,7 @@ class OrganizationUpdateSerializer(serializers.ModelSerializer):
             'secondary_color',
             'contact_email',
             'contact_phone',
+            'gst_hst_number',
         ]
 
 

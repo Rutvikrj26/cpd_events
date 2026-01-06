@@ -37,22 +37,25 @@ DATABASES = {
 }
 
 # =============================================================================
-# Email Configuration (Mailgun)
+# Email Configuration (SMTP provider)
 # =============================================================================
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.environ.get('MAILGUN_SMTP_SERVER', 'smtp.mailgun.org')
-EMAIL_PORT = int(os.environ.get('MAILGUN_SMTP_PORT', '587'))
-EMAIL_HOST_USER = os.environ.get('MAILGUN_SMTP_LOGIN')
-EMAIL_HOST_PASSWORD = os.environ.get('MAILGUN_SMTP_PASSWORD')
+EMAIL_HOST = os.environ.get('SMTP_SERVER') or os.environ.get('MAILGUN_SMTP_SERVER', 'smtp.mailgun.org')
+EMAIL_PORT = int(os.environ.get('SMTP_PORT') or os.environ.get('MAILGUN_SMTP_PORT', '587'))
+EMAIL_HOST_USER = os.environ.get('SMTP_LOGIN') or os.environ.get('MAILGUN_SMTP_LOGIN')
+EMAIL_HOST_PASSWORD = os.environ.get('SMTP_PASSWORD') or os.environ.get('MAILGUN_SMTP_PASSWORD')
 EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'info@accredit.store')
 SERVER_EMAIL = os.environ.get('SERVER_EMAIL', 'server@accredit.store')
 
-# Mailgun API (for advanced features like tracking)
-MAILGUN_API_KEY = os.environ.get('MAILGUN_API_KEY')
-MAILGUN_DOMAIN = os.environ.get('MAILGUN_DOMAIN')
-MAILGUN_API_BASE_URL = os.environ.get('MAILGUN_API_BASE_URL', 'https://api.mailgun.net/v3')
+# SMTP provider API (optional, for advanced features)
+SMTP_API_KEY = os.environ.get('SMTP_API_KEY') or os.environ.get('MAILGUN_API_KEY')
+SMTP_DOMAIN = os.environ.get('SMTP_DOMAIN') or os.environ.get('MAILGUN_DOMAIN')
+SMTP_API_BASE_URL = (
+    os.environ.get('SMTP_API_BASE_URL')
+    or os.environ.get('MAILGUN_API_BASE_URL', 'https://api.mailgun.net/v3')
+)
 
 # CORS Settings
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',')

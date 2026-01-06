@@ -111,7 +111,12 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
             'payment_status',
             'amount_paid',
             'platform_fee_amount',
+            'service_fee_amount',
+            'processing_fee_amount',
+            'tax_amount',
             'total_amount',
+            'stripe_transfer_id',
+            'stripe_tax_transaction_id',
             'attended',
             'check_in_time',
             'total_attendance_minutes',
@@ -169,9 +174,19 @@ class RegistrationDetailSerializer(SoftDeleteModelSerializer):
             # Payment
             'amount_paid',
             'platform_fee_amount',
+            'service_fee_amount',
+            'processing_fee_amount',
+            'tax_amount',
             'total_amount',
+            'stripe_transfer_id',
+            'stripe_tax_transaction_id',
             # Privacy
             'allow_public_verification',
+            # Billing
+            'billing_country',
+            'billing_state',
+            'billing_postal_code',
+            'billing_city',
             # Zoom registrant fields
             'zoom_registrant_join_url',
             'zoom_registrant_id',
@@ -205,6 +220,10 @@ class RegistrationCreateSerializer(serializers.Serializer):
     custom_field_responses = serializers.DictField(required=False)
     allow_public_verification = serializers.BooleanField(default=True)
     promo_code = serializers.CharField(required=False, max_length=50, allow_blank=True)
+    billing_country = serializers.CharField(required=False, max_length=2, allow_blank=True)
+    billing_state = serializers.CharField(required=False, max_length=100, allow_blank=True)
+    billing_postal_code = serializers.CharField(required=False, max_length=20, allow_blank=True)
+    billing_city = serializers.CharField(required=False, max_length=100, allow_blank=True)
 
     def validate(self, attrs):
         request = self.context.get('request')
@@ -270,6 +289,14 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
             'can_join',
             'certificate_url',
             'created_at',
+            'amount_paid',
+            'platform_fee_amount',
+            'service_fee_amount',
+            'processing_fee_amount',
+            'tax_amount',
+            'total_amount',
+            'stripe_transfer_id',
+            'stripe_tax_transaction_id',
         ]
         read_only_fields = fields
 
@@ -313,5 +340,11 @@ class WaitlistPositionSerializer(serializers.Serializer):
 
 class RegistrationCancelSerializer(serializers.Serializer):
     """Cancel registration request."""
+
+    reason = serializers.CharField(required=False, max_length=500, allow_blank=True)
+
+
+class RegistrationRefundSerializer(serializers.Serializer):
+    """Refund registration request."""
 
     reason = serializers.CharField(required=False, max_length=500, allow_blank=True)

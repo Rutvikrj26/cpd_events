@@ -679,6 +679,7 @@ class StripePrice(BaseModel):
                     unit_amount=self.amount_cents,
                     currency=self.currency,
                     recurring={'interval': self.billing_interval},
+                    tax_behavior='exclusive',
                     active=self.is_active,
                 )
                 self.stripe_price_id = price.id

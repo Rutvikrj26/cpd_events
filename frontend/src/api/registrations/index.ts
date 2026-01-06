@@ -1,5 +1,11 @@
 import client from '../client';
-import { ConfirmPaymentResponse, Registration, RegistrationCreateRequest, RegistrationResponse } from './types';
+import {
+    ConfirmPaymentResponse,
+    Registration,
+    RegistrationCreateRequest,
+    RegistrationPaymentIntentRequest,
+    RegistrationResponse,
+} from './types';
 
 // My Registrations (Attendee)
 export const getMyRegistrations = async (): Promise<Registration[]> => {
@@ -28,8 +34,14 @@ export const registerForEvent = async (eventUuid: string, data: RegistrationCrea
 };
 
 // Resume payment for a pending registration
-export const getRegistrationPaymentIntent = async (registrationUuid: string): Promise<RegistrationResponse> => {
-    const response = await client.post<RegistrationResponse>(`/public/registrations/${registrationUuid}/payment-intent/`);
+export const getRegistrationPaymentIntent = async (
+    registrationUuid: string,
+    data?: RegistrationPaymentIntentRequest
+): Promise<RegistrationResponse> => {
+    const response = await client.post<RegistrationResponse>(
+        `/public/registrations/${registrationUuid}/payment-intent/`,
+        data
+    );
     return response.data;
 };
 
