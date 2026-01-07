@@ -40,8 +40,7 @@ const WizardContent = () => {
         setIsSubmitting(true);
         try {
             // Extract frontend-only fields from form data
-            const { _imageFile, _sessions, _isImageRemoved, minimum_attendance_percent, ...eventData } = formData;
-            eventData.minimum_attendance_percent = 0;
+            const { _imageFile, _sessions, _isImageRemoved, ...eventData } = formData;
 
             let savedEvent;
             if (isEditMode && formData.uuid) {

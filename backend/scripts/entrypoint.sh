@@ -15,6 +15,19 @@ python src/manage.py makemigrations --noinput --settings=config.settings.product
 echo "Applying database migrations..."
 python src/manage.py migrate --noinput --settings=config.settings.production
 
+# Create default superuser if it doesn't exist
+echo "Ensuring default admin user exists..."
+python src/manage.py shell --settings=config.settings.production << 'EOF'
+from django.contrib.auth import get_user_model
+User = get_user_model()
+email = "info@accredit.store"
+if not User.objects.filter(email=email).exists():
+    User.objects.create_superuser(email=email, password="Accredit@2026", full_name="Admin")
+    print(f"Created superuser: {email}")
+else:
+    print(f"Superuser {email} already exists, skipping.")
+EOF
+
 # Start Gunicorn
 echo "Starting Gunicorn with ${WEB_CONCURRENCY:-1} worker(s)..."
 exec gunicorn --chdir src --bind 0.0.0.0:${PORT:-8080} --workers ${WEB_CONCURRENCY:-1} --timeout 120 --access-logfile - --error-logfile - config.wsgi:application

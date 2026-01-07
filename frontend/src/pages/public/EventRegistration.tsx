@@ -124,7 +124,7 @@ export function EventRegistration() {
             setResumingPayment(true);
             setError(null);
             try {
-                const result = await getRegistrationPaymentIntent(resumeRegistrationUuid);
+                const result = await getRegistrationPaymentIntent(resumeRegistrationUuid!);
                 setRegistrationData(result);
                 setStep('payment');
                 toast.info("Complete payment to confirm your registration.");
@@ -509,7 +509,7 @@ export function EventRegistration() {
                                         </div>
                                     </div>
                                     <PaymentForm
-                                        clientSecret={registrationData.client_secret}
+                                        clientSecret={registrationData.client_secret!}
                                         amount={registrationData.total_amount || registrationData.amount || Number(event?.price) || 0}
                                         currency={registrationData.currency || event?.currency || 'USD'}
                                         onSuccess={handlePaymentSuccess}
