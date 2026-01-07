@@ -21,7 +21,10 @@ from .models import Contact, ContactList, Tag
 
 
 class TagSerializer(BaseModelSerializer):
-    """Tag with contact count."""
+    """Tag with contact count and org info."""
+    
+    organization_uuid = serializers.UUIDField(source='organization.uuid', read_only=True, allow_null=True)
+    is_shared = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Tag
@@ -31,18 +34,42 @@ class TagSerializer(BaseModelSerializer):
             'color',
             'description',
             'contact_count',
+            'organization_uuid',
+            'is_shared',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['uuid', 'contact_count', 'created_at', 'updated_at']
+        read_only_fields = ['uuid', 'contact_count', 'organization_uuid', 'is_shared', 'created_at', 'updated_at']
 
 
 class TagCreateSerializer(serializers.ModelSerializer):
     """Create/update a tag."""
+    
+    organization_uuid = serializers.UUIDField(required=False, allow_null=True, write_only=True)
 
     class Meta:
         model = Tag
-        fields = ['name', 'color', 'description']
+        fields = ['name', 'color', 'description', 'organization_uuid']
+    
+    def validate_organization_uuid(self, value):
+        """Validate user has access to the organization."""
+        if value:
+            from organizations.models import Organization
+            user_org_ids = self.context.get('user_org_ids', [])
+            try:
+                org = Organization.objects.get(uuid=value)
+                if org.id not in user_org_ids:
+                    raise serializers.ValidationError("You don't have access to this organization.")
+                return org
+            except Organization.DoesNotExist:
+                raise serializers.ValidationError("Organization not found.")
+        return None
+    
+    def create(self, validated_data):
+        org = validated_data.pop('organization_uuid', None)
+        if org:
+            validated_data['organization'] = org
+        return super().create(validated_data)
 
 
 # =============================================================================
@@ -51,7 +78,10 @@ class TagCreateSerializer(serializers.ModelSerializer):
 
 
 class ContactListSerializer(BaseModelSerializer):
-    """Contact list with summary."""
+    """Contact list with summary and org info."""
+    
+    organization_uuid = serializers.UUIDField(source='organization.uuid', read_only=True, allow_null=True)
+    is_shared = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = ContactList
@@ -59,16 +89,20 @@ class ContactListSerializer(BaseModelSerializer):
             'uuid',
             'name',
             'description',
-            'is_default',
             'contact_count',
+            'organization_uuid',
+            'is_shared',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['uuid', 'contact_count', 'created_at', 'updated_at']
+        read_only_fields = ['uuid', 'contact_count', 'organization_uuid', 'is_shared', 'created_at', 'updated_at']
 
 
 class ContactListDetailSerializer(BaseModelSerializer):
-    """Full contact list detail."""
+    """Full contact list detail with org info."""
+    
+    organization_uuid = serializers.UUIDField(source='organization.uuid', read_only=True, allow_null=True)
+    is_shared = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = ContactList
@@ -76,20 +110,43 @@ class ContactListDetailSerializer(BaseModelSerializer):
             'uuid',
             'name',
             'description',
-            'is_default',
             'contact_count',
+            'organization_uuid',
+            'is_shared',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['uuid', 'contact_count', 'created_at', 'updated_at']
+        read_only_fields = ['uuid', 'contact_count', 'organization_uuid', 'is_shared', 'created_at', 'updated_at']
 
 
 class ContactListCreateSerializer(serializers.ModelSerializer):
     """Create/update a contact list."""
+    
+    organization_uuid = serializers.UUIDField(required=False, allow_null=True, write_only=True)
 
     class Meta:
         model = ContactList
-        fields = ['name', 'description', 'is_default']
+        fields = ['name', 'description', 'organization_uuid']
+    
+    def validate_organization_uuid(self, value):
+        """Validate user has access to the organization."""
+        if value:
+            from organizations.models import Organization
+            user_org_ids = self.context.get('user_org_ids', [])
+            try:
+                org = Organization.objects.get(uuid=value)
+                if org.id not in user_org_ids:
+                    raise serializers.ValidationError("You don't have access to this organization.")
+                return org
+            except Organization.DoesNotExist:
+                raise serializers.ValidationError("Organization not found.")
+        return None
+    
+    def create(self, validated_data):
+        org = validated_data.pop('organization_uuid', None)
+        if org:
+            validated_data['organization'] = org
+        return super().create(validated_data)
 
 
 # =============================================================================
@@ -155,7 +212,7 @@ class ContactSerializer(BaseModelSerializer):
 class ContactListItemSerializer(BaseModelSerializer):
     """Lightweight contact for list views."""
 
-    tag_names = serializers.SerializerMethodField()
+    tags = TagSerializer(many=True, read_only=True)
 
     class Meta:
         model = Contact
@@ -169,13 +226,10 @@ class ContactListItemSerializer(BaseModelSerializer):
             'events_attended_count',
             'email_opted_out',
             'email_bounced',
-            'tag_names',
+            'tags',
             'created_at',
         ]
         read_only_fields = fields
-
-    def get_tag_names(self, obj):
-        return [tag.name for tag in obj.tags.all()]
 
 
 class ContactCreateSerializer(serializers.ModelSerializer):
@@ -220,11 +274,22 @@ class ContactCreateSerializer(serializers.ModelSerializer):
         contact = super().create(validated_data)
 
         if tag_uuids:
-            tags = Tag.objects.filter(uuid__in=tag_uuids, owner=contact.contact_list.owner)
+            # Allow personal tags OR org-shared tags
+            from django.db.models import Q
+            user = contact.contact_list.owner
+            
+            # Get user's org IDs
+            user_org_ids = user.organization_memberships.filter(
+                is_active=True
+            ).values_list('organization_id', flat=True)
+            
+            tags = Tag.objects.filter(
+                Q(owner=user, organization__isnull=True) | 
+                Q(organization_id__in=user_org_ids)
+            ).filter(uuid__in=tag_uuids)
+            
             contact.tags.set(tags)
-
-        # Update list count
-        contact.contact_list.update_contact_count()
+            contact.contact_list.update_contact_count()
 
         return contact
 
@@ -251,11 +316,23 @@ class ContactUpdateSerializer(serializers.ModelSerializer):
         contact = super().update(instance, validated_data)
 
         if tag_uuids is not None:
-            tags = Tag.objects.filter(uuid__in=tag_uuids, owner=contact.contact_list.owner)
+            # Allow personal tags OR org-shared tags
+            from django.db.models import Q
+            user = contact.contact_list.owner
+            
+            user_org_ids = user.organization_memberships.filter(
+                is_active=True
+            ).values_list('organization_id', flat=True)
+            
+            tags = Tag.objects.filter(
+                Q(owner=user, organization__isnull=True) | 
+                Q(organization_id__in=user_org_ids)
+            ).filter(uuid__in=tag_uuids)
+            
             contact.tags.set(tags)
 
-            # Update tag counts
-            for tag in Tag.objects.filter(owner=contact.contact_list.owner):
+            # Update tag counts for all involved tags
+            for tag in tags:
                 tag.update_contact_count()
 
         return contact
@@ -274,9 +351,3 @@ class ContactBulkCreateSerializer(serializers.Serializer):
             if 'full_name' not in contact:
                 raise serializers.ValidationError('Each contact requires a full_name.')
         return value
-
-
-class ContactMoveSerializer(serializers.Serializer):
-    """Move contact to another list."""
-
-    target_list_uuid = serializers.UUIDField()

@@ -1,15 +1,15 @@
-
-
 import React, { useState, useEffect } from "react";
 import {
     Search,
     Download,
+    Upload,
     Mail,
     MoreHorizontal,
-    Filter,
     Users,
     Plus,
-    Loader2
+    Loader2,
+    Pencil,
+    Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,48 +34,69 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { getContactLists, getContacts, Contact, ContactList } from "@/api/contacts";
+import {
+    getContacts,
+    getTags,
+    exportContacts,
+    Contact,
+    Tag
+} from "@/api/contacts";
+import {
+    ContactFormDialog,
+    DeleteContactDialog,
+    TagFilter,
+    ImportDialog
+} from "@/components/contacts";
 
 export function ContactsPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [contacts, setContacts] = useState<Contact[]>([]);
+    const [tags, setTags] = useState<Tag[]>([]);
     const [loading, setLoading] = useState(true);
-    const [currentList, setCurrentList] = useState<ContactList | null>(null);
+    const [selectedTagUuids, setSelectedTagUuids] = useState<string[]>([]);
+
+    // Dialog states
+    const [addDialogOpen, setAddDialogOpen] = useState(false);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [importDialogOpen, setImportDialogOpen] = useState(false);
+    const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+    const [exporting, setExporting] = useState(false);
 
     useEffect(() => {
         fetchData();
     }, []);
 
+    useEffect(() => {
+        fetchContacts(searchTerm, selectedTagUuids);
+    }, [selectedTagUuids]);
+
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 1. Get Lists
-            const lists = await getContactLists();
-            if (lists.results.length > 0) {
-                // Use default or first list
-                const defaultList = lists.results.find(l => l.is_default) || lists.results[0];
-                setCurrentList(defaultList);
-
-                // 2. Get Contacts for this list
-                await fetchContacts(defaultList.uuid);
-            } else {
-                setContacts([]);
-                setLoading(false);
-            }
+            const [contactsRes, tagsRes] = await Promise.all([
+                getContacts(),
+                getTags()
+            ]);
+            setContacts(contactsRes.results);
+            setTags(tagsRes.results);
         } catch (error) {
             console.error("Failed to fetch contacts data", error);
             toast.error("Failed to load contacts.");
+        } finally {
             setLoading(false);
         }
     };
 
-    const fetchContacts = async (listUuid: string, search?: string) => {
+    const fetchContacts = async (search?: string, tagUuids?: string[]) => {
         setLoading(true);
         try {
-            const params: any = {};
+            const params: Record<string, string> = {};
             if (search) params.search = search;
-
-            const response = await getContacts(listUuid, params);
+            if (tagUuids && tagUuids.length > 0) {
+                params.tags = tagUuids.join(',');
+            }
+            const response = await getContacts(params);
             setContacts(response.results);
         } catch (error) {
             console.error("Failed to fetch contacts", error);
@@ -86,32 +107,66 @@ export function ContactsPage() {
 
     const handleSearch = (term: string) => {
         setSearchTerm(term);
-        if (currentList) {
-            // Debounce could be added here
-            fetchContacts(currentList.uuid, term);
-        }
+        fetchContacts(term, selectedTagUuids);
     };
 
-    const handleExport = () => {
-        toast.success("Export functionality coming soon");
+    const handleTagsChange = (uuids: string[]) => {
+        setSelectedTagUuids(uuids);
+    };
+
+    const handleExport = async () => {
+        setExporting(true);
+        try {
+            await exportContacts();
+            toast.success('Contacts exported successfully');
+        } catch (error) {
+            console.error('Failed to export contacts:', error);
+        } finally {
+            setExporting(false);
+        }
     };
 
     const handleEmail = (email: string) => {
         window.location.href = `mailto:${email}`;
     };
 
+    const handleEdit = (contact: Contact) => {
+        setSelectedContact(contact);
+        setEditDialogOpen(true);
+    };
+
+    const handleDelete = (contact: Contact) => {
+        setSelectedContact(contact);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleContactSaved = () => {
+        fetchContacts(searchTerm, selectedTagUuids);
+    };
+
+    const handleContactDeleted = () => {
+        fetchContacts(searchTerm, selectedTagUuids);
+    };
+
+    const handleImportComplete = () => {
+        fetchContacts(searchTerm, selectedTagUuids);
+    };
+
     return (
         <div className="space-y-6">
             <PageHeader
-                title="Contacts Manager"
-                description={currentList ? `Managing list: ${currentList.name}` : "Manage your attendee database and view interaction history."}
+                title="Contacts"
+                description="Manage your contacts. Use tags to organize and segment."
                 actions={
                     <div className="flex gap-2">
-                        <Button variant="outline" onClick={fetchData} title="Refresh">
-                            Refresh
+                        <Button onClick={() => setImportDialogOpen(true)} variant="outline" className="flex items-center gap-2">
+                            <Upload className="h-4 w-4" /> Import
                         </Button>
-                        <Button onClick={handleExport} variant="outline" className="flex items-center gap-2">
-                            <Download className="h-4 w-4" /> Export CSV
+                        <Button onClick={handleExport} variant="outline" className="flex items-center gap-2" disabled={exporting}>
+                            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Export
+                        </Button>
+                        <Button onClick={() => setAddDialogOpen(true)} className="flex items-center gap-2">
+                            <Plus className="h-4 w-4" /> Add Contact
                         </Button>
                     </div>
                 }
@@ -119,8 +174,9 @@ export function ContactsPage() {
 
             <Card>
                 <CardContent className="p-0">
+                    {/* Toolbar */}
                     <div className="p-4 border-b flex flex-col sm:flex-row gap-4 items-center justify-between bg-muted/30">
-                        <div className="relative w-full sm:w-96">
+                        <div className="relative flex-1 sm:w-64">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input
                                 placeholder="Search contacts..."
@@ -129,13 +185,15 @@ export function ContactsPage() {
                                 onChange={(e) => handleSearch(e.target.value)}
                             />
                         </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <Button variant="outline" size="sm" className="ml-auto">
-                                <Filter className="h-4 w-4 mr-2" /> Filter
-                            </Button>
-                        </div>
+                        <TagFilter
+                            tags={tags}
+                            selectedTagUuids={selectedTagUuids}
+                            onTagsChange={handleTagsChange}
+                            loading={loading}
+                        />
                     </div>
 
+                    {/* Contact table */}
                     <div className="relative w-full overflow-auto min-h-[400px]">
                         {loading ? (
                             <div className="flex items-center justify-center h-64">
@@ -147,9 +205,9 @@ export function ContactsPage() {
                                     <TableRow>
                                         <TableHead className="w-[250px]">Name</TableHead>
                                         <TableHead>Organization</TableHead>
+                                        <TableHead>Tags</TableHead>
                                         <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">Events Attended</TableHead>
-                                        <TableHead className="text-right">Last Atended</TableHead>
+                                        <TableHead className="text-right">Events</TableHead>
                                         <TableHead className="w-[50px]"></TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -169,6 +227,25 @@ export function ContactsPage() {
                                                 </div>
                                             </TableCell>
                                             <TableCell>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {contact.tags.slice(0, 3).map(tag => (
+                                                        <Badge
+                                                            key={tag.uuid}
+                                                            variant="outline"
+                                                            className="text-xs"
+                                                            style={{ borderColor: tag.color, color: tag.color }}
+                                                        >
+                                                            {tag.name}
+                                                        </Badge>
+                                                    ))}
+                                                    {contact.tags.length > 3 && (
+                                                        <Badge variant="outline" className="text-xs">
+                                                            +{contact.tags.length - 3}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
                                                 {contact.email_bounced ? (
                                                     <Badge variant="destructive">Bounced</Badge>
                                                 ) : contact.email_opted_out ? (
@@ -177,9 +254,11 @@ export function ContactsPage() {
                                                     <Badge variant="outline" className="text-primary border-primary/20 bg-primary/5">Active</Badge>
                                                 )}
                                             </TableCell>
-                                            <TableCell className="text-right font-medium">{contact.events_attended_count}</TableCell>
-                                            <TableCell className="text-right text-muted-foreground text-sm">
-                                                {contact.last_attended_at ? new Date(contact.last_attended_at).toLocaleDateString() : '-'}
+                                            <TableCell className="text-right">
+                                                <div className="flex flex-col text-sm">
+                                                    <span className="font-medium">{contact.events_attended_count} attended</span>
+                                                    <span className="text-xs text-muted-foreground">{contact.events_invited_count} invited</span>
+                                                </div>
                                             </TableCell>
                                             <TableCell>
                                                 <DropdownMenu>
@@ -192,10 +271,19 @@ export function ContactsPage() {
                                                     <DropdownMenuContent align="end">
                                                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                         <DropdownMenuSeparator />
+                                                        <DropdownMenuItem onClick={() => handleEdit(contact)}>
+                                                            <Pencil className="mr-2 h-4 w-4" /> Edit
+                                                        </DropdownMenuItem>
                                                         <DropdownMenuItem onClick={() => handleEmail(contact.email)}>
                                                             <Mail className="mr-2 h-4 w-4" /> Email Contact
                                                         </DropdownMenuItem>
-                                                        {/* Details view could be added later */}
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem
+                                                            onClick={() => handleDelete(contact)}
+                                                            className="text-destructive focus:text-destructive"
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                        </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
@@ -208,10 +296,14 @@ export function ContactsPage() {
                                 <EmptyState
                                     icon={Users}
                                     title="No contacts found"
-                                    description={searchTerm ? `No results for "${searchTerm}"` : "You haven't added any contacts yet."}
+                                    description={
+                                        searchTerm || selectedTagUuids.length > 0
+                                            ? "Try adjusting your search or filters"
+                                            : "You haven't added any contacts yet."
+                                    }
                                     action={
-                                        <Button variant="outline">
-                                            <Plus className="mr-2 h-4 w-4" /> Import Contacts
+                                        <Button onClick={() => setAddDialogOpen(true)}>
+                                            <Plus className="mr-2 h-4 w-4" /> Add Contact
                                         </Button>
                                     }
                                 />
@@ -220,8 +312,36 @@ export function ContactsPage() {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Dialogs */}
+            <ContactFormDialog
+                open={addDialogOpen}
+                onOpenChange={setAddDialogOpen}
+                onSuccess={handleContactSaved}
+            />
+            <ContactFormDialog
+                open={editDialogOpen}
+                onOpenChange={(open) => {
+                    setEditDialogOpen(open);
+                    if (!open) setSelectedContact(null);
+                }}
+                contact={selectedContact}
+                onSuccess={handleContactSaved}
+            />
+            <DeleteContactDialog
+                open={deleteDialogOpen}
+                onOpenChange={(open) => {
+                    setDeleteDialogOpen(open);
+                    if (!open) setSelectedContact(null);
+                }}
+                contact={selectedContact}
+                onSuccess={handleContactDeleted}
+            />
+            <ImportDialog
+                open={importDialogOpen}
+                onOpenChange={setImportDialogOpen}
+                onSuccess={handleImportComplete}
+            />
         </div>
     );
 }
-
-

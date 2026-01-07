@@ -15,7 +15,8 @@ import {
     FileText,
     Video,
     Building2,
-    Search
+    Search,
+    Users
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ export const Sidebar = () => {
         // { routeKey: 'cert_templates', to: '/organizer/certificates/templates', icon: FileText, label: 'Cert. Templates', organizerOnly: true }, // REMOVED
 
         { routeKey: 'zoom_meetings', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', organizerOnly: true },
+        { routeKey: 'contacts', to: '/organizer/contacts', icon: Users, label: 'Contacts', organizerOnly: true },
         { routeKey: 'organizations', to: '/organizations', icon: Building2, label: 'Organizations', organizerOnly: true },
         { routeKey: 'subscriptions', to: '/billing', icon: CreditCard, label: 'Billing', organizerOnly: true },
         { routeKey: 'profile', to: '/settings', icon: UserCircle, label: 'Profile' },
@@ -75,7 +77,7 @@ export const Sidebar = () => {
         // SECOND: If manifest is loaded, use it for additional fine-grained control
         if (manifest && manifest.routes.length > 0) {
             // Items always visible (not in RBAC registry)
-            if (['dashboard', 'profile', 'my_events', 'browse_events'].includes(item.routeKey)) {
+            if (['dashboard', 'profile', 'my_events', 'browse_events', 'contacts'].includes(item.routeKey)) {
                 return true;
             }
 

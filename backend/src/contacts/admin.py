@@ -11,8 +11,8 @@ class ContactInline(admin.TabularInline):
 
 @admin.register(ContactList)
 class ContactListAdmin(admin.ModelAdmin):
-    list_display = ('name', 'owner', 'contact_count', 'is_default')
-    list_filter = ('is_default',)
+    list_display = ('name', 'owner', 'contact_count', 'organization')
+    list_filter = ('organization',)
     search_fields = ('name', 'owner__email')
     inlines = [ContactInline]
 

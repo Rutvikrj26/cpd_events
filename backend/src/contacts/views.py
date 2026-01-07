@@ -52,17 +52,42 @@ class TagViewSet(BaseModelViewSet):
     GET /api/v1/tags/{uuid}/
     PATCH /api/v1/tags/{uuid}/
     DELETE /api/v1/tags/{uuid}/
+    
+    Returns personal tags (organization=NULL) AND org-shared tags
+    for organizations the user belongs to.
     """
 
     permission_classes = [IsAuthenticated, IsOrganizer]
 
     def get_queryset(self):
-        return Tag.objects.filter(owner=self.request.user)
+        from django.db.models import Q
+        user = self.request.user
+        
+        # Personal tags (no org)
+        personal = Q(owner=user, organization__isnull=True)
+        
+        # Org-shared tags (user is member of the org)
+        user_org_ids = user.organization_memberships.filter(
+            is_active=True
+        ).values_list('organization_id', flat=True)
+        org_shared = Q(organization_id__in=user_org_ids)
+        
+        return Tag.objects.filter(personal | org_shared).distinct()
 
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
             return serializers.TagCreateSerializer
         return serializers.TagSerializer
+
+    def get_serializer_context(self):
+        """Add user's org IDs to context for create serializer."""
+        context = super().get_serializer_context()
+        context['user_org_ids'] = list(
+            self.request.user.organization_memberships.filter(
+                is_active=True
+            ).values_list('organization_id', flat=True)
+        )
+        return context
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -82,7 +107,7 @@ class TagViewSet(BaseModelViewSet):
             return error_response('target_uuid required.', code='MISSING_TARGET')
 
         try:
-            target = Tag.objects.get(uuid=target_uuid, owner=request.user)
+            target = self.get_queryset().get(uuid=target_uuid)
         except Tag.DoesNotExist:
             return error_response('Target tag not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
 
@@ -105,12 +130,27 @@ class ContactListViewSet(BaseModelViewSet):
     GET /api/v1/contact-lists/{uuid}/
     PATCH /api/v1/contact-lists/{uuid}/
     DELETE /api/v1/contact-lists/{uuid}/
+    
+    Returns personal lists (organization=NULL) AND org-shared lists
+    for organizations the user belongs to.
     """
 
     permission_classes = [IsAuthenticated, IsOrganizer]
 
     def get_queryset(self):
-        return ContactList.objects.filter(owner=self.request.user)
+        from django.db.models import Q
+        user = self.request.user
+        
+        # Personal lists (no org)
+        personal = Q(owner=user, organization__isnull=True)
+        
+        # Org-shared lists (user is member of the org)
+        user_org_ids = user.organization_memberships.filter(
+            is_active=True
+        ).values_list('organization_id', flat=True)
+        org_shared = Q(organization_id__in=user_org_ids)
+        
+        return ContactList.objects.filter(personal | org_shared).distinct()
 
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
@@ -118,6 +158,16 @@ class ContactListViewSet(BaseModelViewSet):
         if self.action == 'retrieve':
             return serializers.ContactListDetailSerializer
         return serializers.ContactListSerializer
+
+    def get_serializer_context(self):
+        """Add user's org IDs to context for create serializer."""
+        context = super().get_serializer_context()
+        context['user_org_ids'] = list(
+            self.request.user.organization_memberships.filter(
+                is_active=True
+            ).values_list('organization_id', flat=True)
+        )
+        return context
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -163,29 +213,76 @@ class ContactListViewSet(BaseModelViewSet):
             return error_response('target_uuid required.', code='MISSING_TARGET')
 
         try:
-            target = ContactList.objects.get(uuid=target_uuid, owner=request.user)
+            target = self.get_queryset().get(uuid=target_uuid)
         except ContactList.DoesNotExist:
             return error_response('Target list not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
 
         contact_list.merge_into(target)
         return Response(serializers.ContactListDetailSerializer(target).data)
 
+    @swagger_auto_schema(
+        operation_summary="Export contacts as CSV",
+        operation_description="Download all contacts in this list as a CSV file.",
+        responses={200: 'text/csv'},
+    )
+    @action(detail=True, methods=['get'])
+    def export(self, request, uuid=None):
+        """Export contacts in this list as CSV."""
+        import csv
+        from django.http import HttpResponse
+        
+        contact_list = self.get_object()
+        contacts = contact_list.contacts.all().prefetch_related('tags')
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{contact_list.name}_contacts.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            'Email', 'Full Name', 'Professional Title', 'Organization', 
+            'Phone', 'Notes', 'Tags', 'Source', 
+            'Events Invited', 'Events Attended', 'Status'
+        ])
+        
+        for contact in contacts:
+            status_str = 'Bounced' if contact.email_bounced else ('Opted Out' if contact.email_opted_out else 'Active')
+            tags_str = ', '.join(tag.name for tag in contact.tags.all())
+            
+            writer.writerow([
+                contact.email,
+                contact.full_name,
+                contact.professional_title or '',
+                contact.organization_name or '',
+                contact.phone or '',
+                contact.notes or '',
+                tags_str,
+                contact.source or '',
+                contact.events_invited_count,
+                contact.events_attended_count,
+                status_str,
+            ])
+        
+        return response
+
 
 # =============================================================================
-# Contact ViewSet (nested under lists)
+# Contact ViewSet (simplified - auto-resolves user's list)
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='list_contacts')
-class ListContactViewSet(BaseModelViewSet):
+@roles('organizer', 'admin', route_name='contacts')
+class ContactViewSet(BaseModelViewSet):
     """
-    Manage contacts in a list.
+    Manage contacts.
 
-    GET /api/v1/contact-lists/{list_uuid}/contacts/
-    POST /api/v1/contact-lists/{list_uuid}/contacts/
-    GET /api/v1/contact-lists/{list_uuid}/contacts/{uuid}/
-    PATCH /api/v1/contact-lists/{list_uuid}/contacts/{uuid}/
-    DELETE /api/v1/contact-lists/{list_uuid}/contacts/{uuid}/
+    GET /api/v1/contacts/
+    POST /api/v1/contacts/
+    GET /api/v1/contacts/{uuid}/
+    PATCH /api/v1/contacts/{uuid}/
+    DELETE /api/v1/contacts/{uuid}/
+    
+    Automatically uses the user's personal contact list.
+    Tags are used for segmentation instead of multiple lists.
     """
 
     permission_classes = [IsAuthenticated, IsOrganizer]
@@ -194,11 +291,15 @@ class ListContactViewSet(BaseModelViewSet):
     ordering_fields = ['full_name', 'email', 'created_at', 'events_attended_count']
     ordering = ['full_name']
 
+    def _get_user_list(self):
+        """Get or create the user's personal contact list."""
+        return ContactList.get_or_create_for_user(self.request.user)
+
     def get_queryset(self):
-        list_uuid = self.kwargs.get('list_uuid')
-        return Contact.objects.filter(contact_list__uuid=list_uuid, contact_list__owner=self.request.user).prefetch_related(
-            'tags'
-        )
+        contact_list = self._get_user_list()
+        return Contact.objects.filter(
+            contact_list=contact_list
+        ).prefetch_related('tags')
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -212,32 +313,25 @@ class ListContactViewSet(BaseModelViewSet):
     def get_serializer_context(self):
         """Add contact_list to serializer context."""
         context = super().get_serializer_context()
-        list_uuid = self.kwargs.get('list_uuid')
-        if list_uuid:
-            try:
-                contact_list = ContactList.objects.get(uuid=list_uuid, owner=self.request.user)
-                context['contact_list'] = contact_list
-            except ContactList.DoesNotExist:
-                pass
+        context['contact_list'] = self._get_user_list()
         return context
 
     def perform_create(self, serializer):
-        list_uuid = self.kwargs.get('list_uuid')
-        contact_list = ContactList.objects.get(uuid=list_uuid, owner=self.request.user)
+        contact_list = self._get_user_list()
         serializer.save(contact_list=contact_list)
 
     @swagger_auto_schema(
         operation_summary="Bulk create contacts",
-        operation_description="Import multiple contacts into this list.",
+        operation_description="Import multiple contacts.",
         request_body=serializers.ContactBulkCreateSerializer,
     )
     @action(detail=False, methods=['post'])
-    def bulk_create(self, request, list_uuid=None):
+    def bulk_create(self, request):
         """Bulk import contacts."""
         serializer = serializers.ContactBulkCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        contact_list = ContactList.objects.get(uuid=list_uuid, owner=request.user)
+        contact_list = self._get_user_list()
 
         created = []
         skipped = []
@@ -275,26 +369,45 @@ class ListContactViewSet(BaseModelViewSet):
         )
 
     @swagger_auto_schema(
-        operation_summary="Move contact",
-        operation_description="Move a contact to a different list.",
-        request_body=serializers.ContactMoveSerializer,
-        responses={200: serializers.ContactSerializer, 400: '{"error": {}}'},
+        operation_summary="Export contacts",
+        operation_description="Export contacts as CSV.",
     )
-    @action(detail=True, methods=['post'])
-    def move(self, request, list_uuid=None, uuid=None):
-        """Move contact to another list."""
-        contact = self.get_object()
-        serializer = serializers.ContactMoveSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        """Export contacts as CSV."""
+        import csv
+        from django.http import HttpResponse
+        
+        contact_list = self._get_user_list()
+        contacts = contact_list.contacts.all().prefetch_related('tags')
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="contacts.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            'Email', 'Full Name', 'Professional Title', 'Organization', 
+            'Phone', 'Notes', 'Tags', 'Source', 
+            'Events Invited', 'Events Attended', 'Status'
+        ])
+        
+        for contact in contacts:
+            status_str = 'Bounced' if contact.email_bounced else ('Opted Out' if contact.email_opted_out else 'Active')
+            tags_str = ', '.join(tag.name for tag in contact.tags.all())
+            
+            writer.writerow([
+                contact.email,
+                contact.full_name,
+                contact.professional_title or '',
+                contact.organization_name or '',
+                contact.phone or '',
+                contact.notes or '',
+                tags_str,
+                contact.source or '',
+                contact.events_invited_count,
+                contact.events_attended_count,
+                status_str,
+            ])
+        
+        return response
 
-        try:
-            target_list = ContactList.objects.get(uuid=serializer.validated_data['target_list_uuid'], owner=request.user)
-        except ContactList.DoesNotExist:
-            return error_response('Target list not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
-
-        try:
-            contact.move_to_list(target_list)
-        except ValueError as e:
-            return error_response(str(e), code='MOVE_FAILED')
-
-        return Response(serializers.ContactSerializer(contact).data)

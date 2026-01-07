@@ -307,6 +307,71 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 
         return Response(serializers.RegistrationDetailSerializer(registration).data)
 
+    @swagger_auto_schema(
+        operation_summary="Add to contacts",
+        operation_description="Add this registrant to the organizer's contact list.",
+        responses={200: '{"message": "Contact added.", "contact_uuid": "..."}', 400: '{"error": {}}'},
+    )
+    @action(detail=True, methods=['post'], url_path='add-to-contacts')
+    def add_to_contacts(self, request, event_uuid=None, uuid=None):
+        """Add registrant to organizer's contacts."""
+        from contacts.models import Contact, ContactList
+        from django.utils import timezone
+
+        registration = self.get_object()
+        organizer = request.user
+
+        # Get target list from request or use default
+        list_uuid = request.data.get('list_uuid')
+        if list_uuid:
+            try:
+                target_list = ContactList.objects.get(uuid=list_uuid, owner=organizer)
+            except ContactList.DoesNotExist:
+                return error_response('Contact list not found.', code='LIST_NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+        else:
+            # Get or create default list
+            target_list = ContactList.objects.filter(owner=organizer, is_default=True).first()
+            if not target_list:
+                target_list = ContactList.objects.filter(owner=organizer).first()
+            if not target_list:
+                target_list = ContactList.objects.create(
+                    owner=organizer,
+                    name="Default",
+                    is_default=True
+                )
+
+        # Check if contact already exists
+        existing = Contact.objects.filter(
+            contact_list__owner=organizer,
+            email__iexact=registration.email
+        ).first()
+
+        if existing:
+            return Response({
+                'message': 'Contact already exists.',
+                'contact_uuid': str(existing.uuid),
+            })
+
+        # Create new contact
+        contact = Contact.objects.create(
+            contact_list=target_list,
+            email=registration.email,
+            full_name=registration.full_name,
+            professional_title=registration.professional_title or '',
+            organization_name=registration.organization_name or '',
+            user=registration.user,
+            source='registration',
+            added_from_event=registration.event,
+            events_invited_count=1,
+            last_invited_at=timezone.now(),
+        )
+        target_list.update_contact_count()
+
+        return Response({
+            'message': 'Contact added.',
+            'contact_uuid': str(contact.uuid),
+        }, status=status.HTTP_201_CREATED)
+
 
 # =============================================================================
 # Public Registration

@@ -701,7 +701,7 @@ export function EventManagement() {
                                              </Button>
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="end">
-                                             <DropdownMenuItem>View Profile</DropdownMenuItem>
+
                                              <DropdownMenuItem>Send Email</DropdownMenuItem>
                                              <DropdownMenuItem onClick={() => {
                                                 setSelectedAttendee(attendee);
