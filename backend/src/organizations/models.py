@@ -144,21 +144,21 @@ class OrganizationMembership(BaseModel):
     """
     Links users to organizations with role-based permissions.
 
-    Roles (in order of permission level):
-    - owner: Full control, billing, can delete org
-    - admin: Manage members, events, courses, templates
-    - manager: Create/edit events & courses
-    - member: View only, complete assigned tasks
+    Roles:
+    - admin: The organization plan subscriber (1 per org). Can create/manage courses AND events.
+    - instructor: Course instructor (free, unlimited). Can manage course sessions.
+    - organizer: Event organizer (requires organizer subscription). Can create/manage events.
 
-    Individual organizers can be "linked" to an organization while
-    maintaining their individual accounts. The membership tracks this link.
+    Organizer billing:
+    - When adding an organizer, billing can be paid by organization OR organizer
+    - If org pays: Creates organizer subscription as line item on org's Stripe subscription
+    - If organizer pays: Links their existing organizer subscription to the organization
     """
 
     class Role(models.TextChoices):
-        OWNER = 'owner', 'Owner'
         ADMIN = 'admin', 'Admin'
-        MANAGER = 'manager', 'Manager'
-        MEMBER = 'member', 'Member'
+        INSTRUCTOR = 'instructor', 'Course Instructor'
+        ORGANIZER = 'organizer', 'Organizer'
 
     # Relationships
     organization = models.ForeignKey(
@@ -174,7 +174,7 @@ class OrganizationMembership(BaseModel):
 
     # Role
     role = models.CharField(
-        max_length=20, choices=Role.choices, default=Role.MEMBER, help_text="Role within organization"
+        max_length=20, choices=Role.choices, default=Role.ORGANIZER, help_text="Role within organization"
     )
     title = models.CharField(
         max_length=100, blank=True, help_text="Job title in organization (e.g., Training Manager)"
@@ -208,6 +208,31 @@ class OrganizationMembership(BaseModel):
         null=True, blank=True, help_text="When user's data was linked to organization"
     )
 
+    # Organizer billing (only for organizer role)
+    organizer_billing_payer = models.CharField(
+        max_length=20,
+        choices=[
+            ('organization', 'Organization Pays'),
+            ('organizer', 'Organizer Pays'),
+        ],
+        null=True,
+        blank=True,
+        help_text="Who pays for organizer subscription (only for organizer role)",
+    )
+    linked_subscription = models.ForeignKey(
+        'billing.Subscription',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='organization_memberships',
+        help_text="Link to organizer's individual subscription if organizer pays",
+    )
+    stripe_subscription_item_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Stripe subscription item ID if org pays for organizer",
+    )
+
     class Meta:
         db_table = 'organization_memberships'
         verbose_name = 'Organization Membership'
@@ -224,13 +249,38 @@ class OrganizationMembership(BaseModel):
 
     @property
     def is_organizer_role(self):
-        """Check if role has organizer-level permissions (counts toward billing)."""
-        return self.role in [self.Role.OWNER, self.Role.ADMIN, self.Role.MANAGER]
+        """
+        Check if role requires organizer subscription billing.
+
+        Note: Admin is included in the $199 base plan, so doesn't count here.
+        Only additional organizers require organizer subscription billing.
+        """
+        return self.role == self.Role.ORGANIZER
+
+    @property
+    def is_admin(self):
+        """Check if this is the admin role (subscriber)."""
+        return self.role == self.Role.ADMIN
+
+    @property
+    def can_create_courses(self):
+        """Check if role can create courses."""
+        return self.role == self.Role.ADMIN
+
+    @property
+    def can_manage_course_sessions(self):
+        """Check if role can manage course sessions."""
+        return self.role in [self.Role.ADMIN, self.Role.INSTRUCTOR]
+
+    @property
+    def can_create_events(self):
+        """Check if role can create events."""
+        return self.role in [self.Role.ADMIN, self.Role.ORGANIZER]
 
     @property
     def is_pending(self):
         """Check if invitation is pending (not yet accepted)."""
-        return self.invitation_token and not self.accepted_at
+        return bool(self.invitation_token) and not self.accepted_at
 
     def generate_invitation_token(self):
         """Generate a new invitation token."""
@@ -260,23 +310,22 @@ class OrganizationMembership(BaseModel):
 
 class OrganizationSubscription(BaseModel):
     """
-    Billing subscription for an organization with per-seat pricing.
+    Billing subscription for an organization.
 
     Billing Model:
-    - Free tier: 1 organizer seat, limited features
-    - Team: 3 included seats, $15/additional seat
-    - Business: 10 included seats, $12/additional seat
-    - Enterprise: Custom seats and pricing
+    - FREE: $0/month - Trial tier (2 events/mo, 1 course/mo, limited attendees)
+    - ORGANIZATION: $199/month base - Full course platform + admin has organizer capabilities
+      - 1 Admin included (can create courses AND events)
+      - Unlimited Course Instructors (free)
+      - Can add Organizers (requires separate organizer subscription - org-paid or self-paid)
 
-    Only organizer roles (owner, admin, manager) count toward billable seats.
-    Member role is free and unlimited.
+    Note: Organizers added to the organization require their own organizer subscription ($99-$199/mo).
+    The org can choose to pay for these subscriptions (added as line items) or the organizer pays themselves.
     """
 
     class Plan(models.TextChoices):
         FREE = 'free', 'Free'
-        TEAM = 'team', 'Team'
-        BUSINESS = 'business', 'Business'
-        ENTERPRISE = 'enterprise', 'Enterprise'
+        ORGANIZATION = 'organization', 'Organization'
 
     class Status(models.TextChoices):
         ACTIVE = 'active', 'Active'
@@ -331,9 +380,7 @@ class OrganizationSubscription(BaseModel):
     # Plan configuration (imported from common.config.billing)
     PLAN_CONFIG = {
         Plan.FREE: OrganizationPlanLimits.FREE,
-        Plan.TEAM: OrganizationPlanLimits.TEAM,
-        Plan.BUSINESS: OrganizationPlanLimits.BUSINESS,
-        Plan.ENTERPRISE: OrganizationPlanLimits.ENTERPRISE,
+        Plan.ORGANIZATION: OrganizationPlanLimits.ORGANIZATION,
     }
 
     class Meta:
@@ -351,17 +398,55 @@ class OrganizationSubscription(BaseModel):
 
     @property
     def config(self):
-        """Get configuration for current plan."""
-        return self.PLAN_CONFIG.get(self.plan, self.PLAN_CONFIG[self.Plan.FREE])
+        """
+        Get configuration for current plan.
+        Prioritizes database-driven configuration (StripeProduct) over hardcoded defaults.
+        """
+        # Try to get from StripeProduct (database source of truth)
+        try:
+            from billing.models import StripeProduct
+            product = StripeProduct.objects.get(plan=self.plan, is_active=True)
+            
+            # Start with fallback limit structure
+            config = self.PLAN_CONFIG.get(self.plan, self.PLAN_CONFIG[self.Plan.FREE]).copy()
+            
+            # Update with DB values if present
+            feature_limits = product.get_feature_limits()
+            for key, value in feature_limits.items():
+                if value is not None: # Only override if value is set
+                    config[key] = value
+            
+            # Update seat configuration
+            if product.included_seats is not None:
+                config['included_seats'] = product.included_seats
+            
+            if product.seat_price_cents is not None:
+                config['seat_price_cents'] = product.seat_price_cents
+                
+            return config
+            
+        except (ImportError, Exception):
+            # Fallback to hardcoded config
+            return self.PLAN_CONFIG.get(self.plan, self.PLAN_CONFIG[self.Plan.FREE])
 
     @property
     def total_seats(self):
-        """Total available organizer seats."""
+        """
+        Total available organizer seats (legacy property).
+
+        Note: In new model, this represents org-paid organizer slots, not total team size.
+        Admin is included in base $199 plan. Course instructors are unlimited/free.
+        """
         return self.included_seats + self.additional_seats
 
     @property
     def available_seats(self):
-        """Remaining organizer seats."""
+        """
+        Remaining org-paid organizer slots (legacy property).
+
+        Note: In new model, organizers can always be added (either org-paid or self-paid).
+        This tracks only org-paid slots if any are configured.
+        """
         return max(0, self.total_seats - self.active_organizer_seats)
 
     @property
@@ -369,20 +454,36 @@ class OrganizationSubscription(BaseModel):
         """Check if subscription allows usage."""
         return self.status in [self.Status.ACTIVE, self.Status.TRIALING]
 
+    @property
+    def org_paid_organizers_count(self):
+        """Count of organizers paid by the organization."""
+        return self.organization.memberships.filter(
+            role=OrganizationMembership.Role.ORGANIZER,
+            organizer_billing_payer='organization',
+            is_active=True
+        ).count()
+
+    def can_add_instructor(self):
+        """Check if organization can add course instructor (always true, instructors are free)."""
+        return True
+
     def can_add_organizer(self):
-        """Check if organization can add another organizer seat."""
-        return self.available_seats > 0
+        """
+        Check if organization can add another organizer.
+
+        Always true - organizers can be added either as:
+        - Org-paid (requires org to pay for organizer subscription)
+        - Self-paid (organizer pays their own subscription)
+        """
+        return True
 
     def update_seat_usage(self):
-        """Update active organizer seat count from memberships."""
-        organizer_roles = [
-            OrganizationMembership.Role.OWNER,
-            OrganizationMembership.Role.ADMIN,
-            OrganizationMembership.Role.MANAGER,
-        ]
-        self.active_organizer_seats = self.organization.memberships.filter(
-            role__in=organizer_roles, is_active=True
-        ).count()
+        """
+        Update active organizer seat count (for backward compatibility).
+
+        In new model, tracks org-paid organizers only.
+        """
+        self.active_organizer_seats = self.org_paid_organizers_count
         self.save(update_fields=['active_organizer_seats', 'updated_at'])
 
     def check_event_limit(self):
@@ -428,8 +529,8 @@ class OrganizationSubscription(BaseModel):
             defaults={
                 'plan': plan,
                 'status': cls.Status.ACTIVE,
-                'included_seats': config['included_seats'],
-                'seat_price_cents': config['seat_price_cents'],
+                'included_seats': config.get('included_seats', 1),  # Legacy field
+                'seat_price_cents': config.get('seat_price_cents', 0),  # Legacy field
                 'current_period_start': timezone.now(),
             },
         )

@@ -57,12 +57,19 @@ class SignupView(generics.CreateAPIView):
 
         # Link any guest registrations to this new user account
         from registrations.models import Registration
-
         Registration.link_registrations_for_user(user)
+
+        # Generate verification token and send email
+        token = user.generate_email_verification_token()
+        from django.conf import settings
+        from .tasks import send_email_verification
+        
+        verification_url = f"{settings.FRONTEND_URL}/auth/verify-email?token={token}"
+        send_email_verification.delay(user.uuid, verification_url)
 
         return Response(
             {
-                'message': 'Account created successfully.',
+                'message': 'Account created successfully. Please check your email.',
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
                 'user': {
@@ -138,7 +145,13 @@ class PasswordResetRequestView(generics.GenericAPIView):
         try:
             user = User.objects.get(email__iexact=email)
             user.generate_password_reset_token()
-            # In production: send_password_reset_email.delay(user.id)
+            
+            from django.conf import settings
+            from .tasks import send_password_reset
+            
+            # Construct reset URL
+            reset_url = f"{settings.FRONTEND_URL}/auth/reset-password?token={user.password_reset_token}&email={user.email}"
+            send_password_reset.delay(user.uuid, reset_url)
         except User.DoesNotExist:
             pass  # Don't reveal if email exists
 

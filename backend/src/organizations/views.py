@@ -109,9 +109,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         """Invite a new member to the organization."""
         organization = self.get_object()
 
-        # Check admin permission
+        # Check admin permission (only admin can invite members)
         if not organization.memberships.filter(
-            user=request.user, role__in=['owner', 'admin'], is_active=True
+            user=request.user, role__in=['admin', 'owner'], is_active=True  # Include owner for backward compat
         ).exists():
             return Response(
                 {'detail': 'You do not have permission to invite members.'},
@@ -124,6 +124,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         email = serializer.validated_data['email']
         role = serializer.validated_data['role']
         title = serializer.validated_data.get('title', '')
+        billing_payer = serializer.validated_data.get('billing_payer')  # For organizer role
 
         # Check if user already a member
         from accounts.models import User
@@ -131,7 +132,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         try:
             user = User.objects.get(email__iexact=email)
             existing_membership = organization.memberships.filter(user=user).first()
-            
+
             if existing_membership:
                 if existing_membership.is_active:
                     return Response(
@@ -143,28 +144,61 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             user = None
             existing_membership = None
 
-        # Check seat availability for organizer roles
-        if role in ['owner', 'admin', 'manager']:
-            if hasattr(organization, 'subscription'):
-                subscription = organization.subscription
-                # Only check limit if we are adding a NEW active organizer
-                # Reactivating an existing organizer also consumes a seat
-                if not subscription.can_add_organizer():
-                    return Response(
-                        {
-                            'error': {
-                                'code': 'SEAT_LIMIT_REACHED',
-                                'message': f'No available seats. Your {subscription.get_plan_display()} plan includes {subscription.total_seats} organizer seat(s). Upgrade your plan or assign a "Member" role (free).',
-                                'details': {
-                                    'available_seats': subscription.available_seats,
-                                    'total_seats': subscription.total_seats,
-                                    'active_seats': subscription.active_organizer_seats,
-                                    'current_plan': subscription.plan,
+        # Check seat availability for organizers
+        if role == OrganizationMembership.Role.ORGANIZER:
+            # Default to organization paying if not specified
+            payer = billing_payer or 'organization'
+            
+            if payer == 'organization':
+                # Check if we can add another organizer
+                # We count all existing organizer records (active + pending) related to this org
+                # If valid existing membership exists, we skip check (re-invite)
+                
+                is_reinvite = False
+                if existing_membership and existing_membership.role == OrganizationMembership.Role.ORGANIZER:
+                    if existing_membership.organizer_billing_payer == 'organization':
+                         is_reinvite = True
+
+                if not is_reinvite and hasattr(organization, 'subscription'):
+                    # Count occupied slots (active + pending invites)
+                    occupied_seats = organization.memberships.filter(
+                        role=OrganizationMembership.Role.ORGANIZER,
+                        organizer_billing_payer='organization'
+                    ).count()
+                    
+                    if occupied_seats >= organization.subscription.total_seats:
+                         config = organization.subscription.config
+                         return Response(
+                            {
+                                'error': {
+                                    'code': 'SEAT_LIMIT_REACHED',
+                                    'message': 'This organization has used all available seats.',
+                                    'details': {
+                                        'seat_price_cents': config.get('seat_price_cents', 12900),
+                                        'action': 'buy_seat'
+                                    }
                                 }
-                            }
-                        },
-                        status=status.HTTP_402_PAYMENT_REQUIRED,
-                    )
+                            },
+                            status=status.HTTP_402_PAYMENT_REQUIRED
+                         )
+
+        # Check role-specific constraints
+        if role == OrganizationMembership.Role.ADMIN:
+            # Check if organization already has an admin
+            existing_admin = organization.memberships.filter(
+                role=OrganizationMembership.Role.ADMIN,
+                is_active=True
+            ).exclude(pk=existing_membership.pk if existing_membership else None).exists()
+
+            if existing_admin:
+                return Response(
+                    {'detail': 'Organization already has an admin. Only one admin per organization is allowed.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # For organizer role, billing_payer determines next steps
+        # Note: Actual subscription creation will be handled by billing service
+        # For now, we just store the billing_payer preference
 
         # Create or update membership
         if existing_membership:
@@ -174,21 +208,40 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             membership.invited_by = request.user
             membership.invited_at = timezone.now()
             membership.invitation_email = email
-            membership.is_active = False # Keep inactive until accepted if it was pending/inactive
+            membership.is_active = False  # Keep inactive until accepted if it was pending/inactive
+
+            # Set organizer billing info
+            if role == OrganizationMembership.Role.ORGANIZER:
+                membership.organizer_billing_payer = billing_payer
+
             membership.save()
             membership.generate_invitation_token()
         else:
-            membership = OrganizationMembership.objects.create(
-                organization=organization,
-                user=user,
-                role=role,
-                title=title,
-                invited_by=request.user,
-                invited_at=timezone.now(),
-                invitation_email=email,
-                is_active=False,  # Pending until accepted
-            )
+            membership_data = {
+                'organization': organization,
+                'user': user,
+                'role': role,
+                'title': title,
+                'invited_by': request.user,
+                'invited_at': timezone.now(),
+                'invitation_email': email,
+                'is_active': False,  # Pending until accepted
+            }
+
+            # Add organizer billing info
+            if role == OrganizationMembership.Role.ORGANIZER:
+                membership_data['organizer_billing_payer'] = billing_payer
+
+            membership = OrganizationMembership.objects.create(**membership_data)
             membership.generate_invitation_token()
+
+        # TODO: If organizer role and billing_payer='organization':
+        #   - Create organizer subscription (Professional plan)
+        #   - Add as line item to organization's Stripe subscription
+        #   - Store stripe_subscription_item_id
+        # TODO: If organizer role and billing_payer='organizer':
+        #   - Send invite with payment link to create their own subscription
+        #   - Link subscription upon acceptance
 
         # Send invitation email
         from integrations.services import email_service
@@ -478,6 +531,133 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             return Response({'detail': result.get('error')}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({'url': result.get('url')})
+
+    @action(detail=True, methods=['post'], url_path='subscription/add-seats')
+    def add_seats(self, request, pk=None):
+        """
+        Add seats to organization subscription.
+        Updates Stripe subscription quantity immediately.
+        """
+        organization = self.get_object()
+        
+        # Check permissions (Owner/Admin only)
+        if not organization.memberships.filter(
+            user=request.user, role__in=['owner', 'admin'], is_active=True
+        ).exists():
+             return Response(
+                {'detail': 'You do not have permission to manage billing.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not hasattr(organization, 'subscription') or not organization.subscription.stripe_subscription_id:
+            return Response(
+                {'detail': 'Organization has no active Stripe subscription.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            seats_to_add = int(request.data.get('seats', 1))
+            if seats_to_add < 1:
+                return Response({'detail': 'Must add at least 1 seat.'}, status=status.HTTP_400_BAD_REQUEST)
+        except (ValueError, TypeError):
+             return Response({'detail': 'Invalid seat count.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        subscription = organization.subscription
+        new_total_seats = subscription.total_seats + seats_to_add
+        
+        # Update Stripe
+        result = stripe_service.update_subscription_quantity(
+            subscription.stripe_subscription_id, 
+            quantity=new_total_seats
+        )
+        
+        if not result.get('success'):
+            return Response({'detail': result.get('error')}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Update local
+        subscription.additional_seats += seats_to_add
+        subscription.save(update_fields=['additional_seats', 'updated_at'])
+
+        return Response({
+            'detail': f'Added {seats_to_add} seat(s).',
+            'total_seats': subscription.total_seats,
+            'additional_seats': subscription.additional_seats,
+        })
+
+    @action(detail=True, methods=['post'], url_path='subscription/remove-seats')
+    def remove_seats(self, request, pk=None):
+        """
+        Remove seats from organization subscription.
+        Updates Stripe subscription quantity immediately.
+        """
+        organization = self.get_object()
+        
+        # Check permissions (Owner/Admin only)
+        if not organization.memberships.filter(
+            user=request.user, role__in=['owner', 'admin'], is_active=True
+        ).exists():
+             return Response(
+                {'detail': 'You do not have permission to manage billing.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not hasattr(organization, 'subscription') or not organization.subscription.stripe_subscription_id:
+            return Response(
+                {'detail': 'Organization has no active Stripe subscription.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            seats_to_remove = int(request.data.get('seats', 1))
+            if seats_to_remove < 1:
+                return Response({'detail': 'Must remove at least 1 seat.'}, status=status.HTTP_400_BAD_REQUEST)
+        except (ValueError, TypeError):
+             return Response({'detail': 'Invalid seat count.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        subscription = organization.subscription
+        
+        # Check if we can remove
+        # We can't remove seats that are currently occupied
+        # unused_seats = total_seats - active_organizer_seats
+        unused_seats = subscription.available_seats
+        
+        if seats_to_remove > unused_seats:
+             return Response(
+                {
+                    'detail': f'Cannot remove {seats_to_remove} seats. Only {unused_seats} unused seats available.',
+                    'unused_seats': unused_seats,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+            
+        # Also ensure we don't go below included seats
+        # We can only remove 'additional_seats'
+        if seats_to_remove > subscription.additional_seats:
+             return Response(
+                {'detail': 'Cannot check remove included base seats.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_total_seats = subscription.total_seats - seats_to_remove
+        
+        # Update Stripe
+        result = stripe_service.update_subscription_quantity(
+            subscription.stripe_subscription_id, 
+            quantity=new_total_seats
+        )
+        
+        if not result.get('success'):
+            return Response({'detail': result.get('error')}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Update local
+        subscription.additional_seats -= seats_to_remove
+        subscription.save(update_fields=['additional_seats', 'updated_at'])
+
+        return Response({
+            'detail': f'Removed {seats_to_remove} seat(s).',
+            'total_seats': subscription.total_seats,
+            'additional_seats': subscription.additional_seats,
+        })
 
     @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def plans(self, request):

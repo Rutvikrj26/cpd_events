@@ -220,6 +220,17 @@ ZOOM_REDIRECT_URI = os.environ.get('ZOOM_REDIRECT_URI')
 ZOOM_WEBHOOK_SECRET = os.environ.get('ZOOM_WEBHOOK_SECRET')
 
 # =============================================================================
+# Email Settings (Brevo via Anymail)
+# =============================================================================
+EMAIL_BACKEND = "anymail.backends.brevo.EmailBackend"
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@cpdevents.com')
+SERVER_EMAIL = os.environ.get('SERVER_EMAIL', 'noreply@cpdevents.com')
+
+ANYMAIL = {
+    "BREVO_API_KEY": os.environ.get("BREVO_API_KEY"),
+}
+
+# =============================================================================
 # Billing & Subscription Settings
 # =============================================================================
 # Stripe API Keys
@@ -251,11 +262,11 @@ BILLING_PRICES = {
     'professional_annual': PricingConfig.PROFESSIONAL_ANNUAL,
     'premium': PricingConfig.PREMIUM_MONTHLY,
     'premium_annual': PricingConfig.PREMIUM_ANNUAL,
-    'team': PricingConfig.TEAM_MONTHLY,
-    'team_annual': PricingConfig.TEAM_ANNUAL,
-    'enterprise': PricingConfig.ENTERPRISE,
+    'team': PricingConfig.ORGANIZATION_MONTHLY,
+    'team_annual': PricingConfig.ORGANIZATION_ANNUAL,
+    'enterprise': 0, # Custom
     # Legacy plans
-    'organizer': PricingConfig.ORGANIZER_MONTHLY,
+    'organizer': PricingConfig.ORGANIZATION_MONTHLY,
     'organization': PricingConfig.ORGANIZATION_MONTHLY,
 }
 

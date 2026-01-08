@@ -17,7 +17,12 @@ from .views import (
     OrganizerSubmissionsViewSet,
     CourseModuleViewSet,
     CourseModuleContentViewSet,
+    EventModuleViewSet,
+    ModuleContentViewSet,
+    MyLearningViewSet,
+    OrganizerSubmissionsViewSet,
 )
+from .payment_views import CourseCheckoutView
 
 # Main router
 router = DefaultRouter()
@@ -42,6 +47,9 @@ urlpatterns = [
 
     # Progress update
     path('learning/progress/content/<uuid:content_uuid>/', ContentProgressView.as_view(), name='content-progress'),
+
+    # Payments
+    path('courses/<uuid:uuid>/checkout/', CourseCheckoutView.as_view(), name='course-checkout'),
 ]
 
 # Event-nested module routes (to be included in events/urls.py)

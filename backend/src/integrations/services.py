@@ -31,6 +31,7 @@ class EmailService:
         'organization_invitation': 'emails/organization_invitation.html',
         'payment_failed': 'emails/payment_failed.html',
         'waitlist_promotion': 'emails/waitlist_promotion.html',
+        'refund_processed': 'emails/refund_processed.html',
     }
 
     # Subject lines
@@ -45,6 +46,7 @@ class EmailService:
         'organization_invitation': "You're invited to join {organization_name}",
         'payment_failed': "Payment Failed: Invoice #{invoice_number}",
         'waitlist_promotion': "Spot Available: {event_title}",
+        'refund_processed': "Refund Processed: {event_title}",
     }
 
     def send_email(self, template: str, recipient: str, context: dict[str, Any], subject: str | None = None) -> bool:
@@ -86,7 +88,7 @@ class EmailService:
                 recipient_email=recipient,
                 email_type=template,
                 subject=subject,
-                delivery_status='sent' if success else 'failed',
+                status='sent' if success else 'failed',
                 sent_at=timezone.now() if success else None,
             )
 

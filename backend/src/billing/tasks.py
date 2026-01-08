@@ -112,3 +112,35 @@ def sync_stripe_subscription(subscription_id: int):
 
     except Subscription.DoesNotExist:
         return False
+    except Subscription.DoesNotExist:
+        return False
+
+
+@task()
+def send_refund_notification(refund_id: int):
+    """
+    Send email when refund is processed.
+    """
+    from billing.models import RefundRecord
+    from integrations.services import email_service
+
+    try:
+        refund = RefundRecord.objects.select_related('registration', 'registration__event').get(id=refund_id)
+        if not refund.registration:
+            return False
+            
+        registration = refund.registration
+        
+        return email_service.send_email(
+            template='refund_processed',
+            recipient=registration.email,
+            context={
+                'user_name': registration.full_name,
+                'event_title': registration.event.title,
+                'refund': refund,
+                'registration': registration,
+                'event': registration.event,
+            }
+        )
+    except RefundRecord.DoesNotExist:
+        return False

@@ -143,21 +143,21 @@ class CourseModuleInline(admin.TabularInline):
 class CourseAdmin(admin.ModelAdmin):
     """Admin for Course model."""
 
-    list_display = ['title', 'organization', 'status', 'enrollment_count', 'completion_count', 'cpd_credits', 'created_at']
-    list_filter = ['status', 'is_public', 'is_free', 'organization']
+    list_display = ['title', 'organization', 'status', 'format', 'enrollment_count', 'completion_count', 'cpd_credits', 'created_at']
+    list_filter = ['status', 'is_public', 'format', 'organization']
     search_fields = ['title', 'organization__name', 'description']
     ordering = ['-created_at']
-    readonly_fields = ['uuid', 'created_at', 'updated_at', 'enrollment_count', 'completion_count', 'module_count']
+    readonly_fields = ['uuid', 'created_at', 'updated_at', 'enrollment_count', 'completion_count', 'module_count', 'is_free']
     prepopulated_fields = {'slug': ('title',)}
     raw_id_fields = ['organization', 'created_by', 'certificate_template']
     inlines = [CourseModuleInline]
 
     fieldsets = (
-        ('Basic Info', {'fields': ('organization', 'title', 'slug', 'description', 'short_description')}),
-        ('Media', {'fields': ('featured_image', 'featured_image_url')}),
+        ('Basic Info', {'fields': ('organization', 'title', 'slug', 'format', 'description', 'short_description')}),
+        ('Media', {'fields': ('featured_image', 'featured_image_url', 'thumbnail')}),
         ('CPD', {'fields': ('cpd_credits', 'cpd_type')}),
         ('Status', {'fields': ('status', 'is_public')}),
-        ('Pricing', {'fields': ('is_free', 'price_cents', 'currency')}),
+        ('Pricing', {'fields': ('is_free', 'price_cents', 'currency', 'stripe_product_id', 'stripe_price_id')}),
         ('Enrollment', {'fields': ('enrollment_open', 'max_enrollments', 'enrollment_requires_approval')}),
         ('Duration', {'fields': ('estimated_hours', 'passing_score')}),
         ('Certificates', {'fields': ('certificates_enabled', 'certificate_template', 'auto_issue_certificates')}),

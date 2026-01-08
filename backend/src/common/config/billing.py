@@ -206,51 +206,35 @@ class OrganizationPlanLimits:
     """
     Feature limits for organization subscription plans.
 
-    Includes per-seat pricing for team members.
-    Only OWNER, ADMIN, MANAGER roles count toward billable seats.
-    MEMBER role is free and unlimited.
-
-    Plans:
-    - FREE: Basic tier with limited features
-    - TEAM: Small team tier with 5 included seats
-    - BUSINESS: Medium team tier with 15 included seats
-    - ENTERPRISE: Large team tier with 50 included seats
+    Organization plan structure:
+    - $199/month base price
+    - 1 Admin included (can create courses + events)
+    - Unlimited Course Instructors (free)
+    - Can add Organizers (requires separate organizer subscription)
     """
 
     FREE: dict = {
         'name': 'Free',
-        'included_seats': 1,
-        'seat_price_cents': 0,
+        'base_price_cents': 0,
         'events_per_month': 2,
         'courses_per_month': 1,
         'max_attendees_per_event': 50,
+        'course_instructors_limit': None,  # Unlimited free instructors
     }
 
-    TEAM: dict = {
-        'name': 'Team',
-        'included_seats': 5,
-        'seat_price_cents': 4900,  # $49/seat/month
-        'events_per_month': None,  # Unlimited
+    # Organization Plan - $199/month
+    ORGANIZATION: dict = {
+        'name': 'Organization',
+        'base_price_cents': 19900,  # $199/month base
+        'events_per_month': None,  # Unlimited (admin has organizer capabilities)
         'courses_per_month': None,  # Unlimited
         'max_attendees_per_event': None,  # Unlimited
-    }
-
-    BUSINESS: dict = {
-        'name': 'Business',
-        'included_seats': 15,
-        'seat_price_cents': 4500,  # $45/seat/month
-        'events_per_month': None,  # Unlimited
-        'courses_per_month': None,  # Unlimited
-        'max_attendees_per_event': None,  # Unlimited
-    }
-
-    ENTERPRISE: dict = {
-        'name': 'Enterprise',
-        'included_seats': 50,
-        'seat_price_cents': 4000,  # $40/seat/month
-        'events_per_month': None,  # Unlimited
-        'courses_per_month': None,  # Unlimited
-        'max_attendees_per_event': None,  # Unlimited
+        'course_instructors_limit': None,  # Unlimited free instructors
+        'admin_has_organizer_capabilities': True,  # Admin can create events
+        
+        # Seat Configuration
+        'included_seats': 1, # 1 admin included
+        'seat_price_cents': 12900, # $129/seat/month
     }
 
     @classmethod
@@ -258,9 +242,11 @@ class OrganizationPlanLimits:
         """Get limits for a plan by name."""
         limits_map = {
             'free': cls.FREE,
-            'team': cls.TEAM,
-            'business': cls.BUSINESS,
-            'enterprise': cls.ENTERPRISE,
+            'organization': cls.ORGANIZATION,
+            # Legacy fallbacks
+            'team': cls.ORGANIZATION,
+            'business': cls.ORGANIZATION,
+            'enterprise': cls.ORGANIZATION,
         }
         return limits_map.get(plan, cls.FREE)
 
@@ -289,15 +275,9 @@ class PricingConfig:
     PREMIUM_MONTHLY: int = 19900  # $199/month
     PREMIUM_ANNUAL: int = 16600  # $166/month (billed annually at $1,992)
 
-    # Organization/Team Plans
-    TEAM_MONTHLY: int = 29900  # $299/month (base with 5 seats)
-    TEAM_ANNUAL: int = 24900  # $249/month (billed annually at $2,988)
-
-    ENTERPRISE: int = 0  # Custom pricing
-
-    # Legacy plan mappings
-    ORGANIZER_MONTHLY: int = PROFESSIONAL_MONTHLY
-    ORGANIZATION_MONTHLY: int = TEAM_MONTHLY
+    # Organization Plan
+    ORGANIZATION_MONTHLY: int = 19900  # $199/month
+    ORGANIZATION_ANNUAL: int = 16600   # $166/month (~17% off, billed $1992/year)
 
     @classmethod
     def get_price(cls, plan: str, annual: bool = False) -> int:
@@ -307,11 +287,9 @@ class PricingConfig:
             'starter': cls.STARTER_ANNUAL if annual else cls.STARTER_MONTHLY,
             'professional': cls.PROFESSIONAL_ANNUAL if annual else cls.PROFESSIONAL_MONTHLY,
             'premium': cls.PREMIUM_ANNUAL if annual else cls.PREMIUM_MONTHLY,
-            'team': cls.TEAM_ANNUAL if annual else cls.TEAM_MONTHLY,
-            'enterprise': cls.ENTERPRISE,
-            # Legacy
-            'organizer': cls.PROFESSIONAL_ANNUAL if annual else cls.PROFESSIONAL_MONTHLY,
-            'organization': cls.TEAM_ANNUAL if annual else cls.TEAM_MONTHLY,
+            'organization': cls.ORGANIZATION_ANNUAL if annual else cls.ORGANIZATION_MONTHLY,
+            # Legacy mappings
+            'team': cls.ORGANIZATION_ANNUAL if annual else cls.ORGANIZATION_MONTHLY,
         }
         return prices.get(plan, 0)
 
@@ -340,11 +318,22 @@ class StripePriceIds:
     TEAM: Optional[str] = os.environ.get('STRIPE_PRICE_TEAM')
     TEAM_ANNUAL: Optional[str] = os.environ.get('STRIPE_PRICE_TEAM_ANNUAL')
 
+    ORGANIZATION: Optional[str] = os.environ.get('STRIPE_PRICE_ORGANIZATION')
+    ORGANIZATION_ANNUAL: Optional[str] = os.environ.get('STRIPE_PRICE_ORGANIZATION_ANNUAL')
+
     ENTERPRISE: Optional[str] = os.environ.get('STRIPE_PRICE_ENTERPRISE')
 
     # Legacy mappings
     ORGANIZER: Optional[str] = os.environ.get('STRIPE_PRICE_PROFESSIONAL')
-    ORGANIZATION: Optional[str] = os.environ.get('STRIPE_PRICE_TEAM')
+    
+    @classmethod
+    def get_price_id(cls, plan: str, annual: bool = False) -> Optional[str]:
+        """Get Stripe price ID for a plan."""
+        suffix = '_ANNUAL' if annual else ''
+        attr_name = f"{plan.upper()}{suffix}"
+        # Handle 'team' mapping to organization if needed, or leave rigid
+        if plan == 'team': attr_name = f"ORGANIZATION{suffix}"
+        return getattr(cls, attr_name, None)
 
     @classmethod
     def get_price_id(cls, plan: str, annual: bool = False) -> Optional[str]:

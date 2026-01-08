@@ -57,7 +57,7 @@ class OrganizationLinkingService:
         OrganizationMembership.objects.create(
             organization=organization,
             user=user,
-            role=OrganizationMembership.Role.OWNER,
+            role=OrganizationMembership.Role.ADMIN,
             accepted_at=timezone.now(),
             linked_from_individual=True,
             linked_at=timezone.now(),

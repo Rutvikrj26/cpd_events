@@ -134,7 +134,7 @@ class OrganizationCreateSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
-        """Create organization with current user as owner."""
+        """Create organization with current user as admin (subscriber)."""
         user = self.context['request'].user
 
         # Create organization
@@ -143,15 +143,16 @@ class OrganizationCreateSerializer(serializers.ModelSerializer):
             **validated_data,
         )
 
-        # Create owner membership
+        # Create admin membership (the organization plan subscriber)
+        # Admin has full capabilities: can create courses AND events
         OrganizationMembership.objects.create(
             organization=organization,
             user=user,
-            role=OrganizationMembership.Role.OWNER,
+            role=OrganizationMembership.Role.ADMIN,
             accepted_at=__import__('django.utils.timezone', fromlist=['now']).now(),
         )
 
-        # Create subscription
+        # Create FREE subscription (by default)
         OrganizationSubscription.create_for_organization(organization)
 
         # Update counts
@@ -189,6 +190,7 @@ class OrganizationMembershipListSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.full_name', read_only=True)
     user_uuid = serializers.UUIDField(source='user.uuid', read_only=True)
     invited_by_name = serializers.CharField(source='invited_by.full_name', read_only=True)
+    linked_subscription_uuid = serializers.UUIDField(source='linked_subscription.uuid', read_only=True)
 
     class Meta:
         model = OrganizationMembership
@@ -204,6 +206,9 @@ class OrganizationMembershipListSerializer(serializers.ModelSerializer):
             'linked_from_individual',
             'invited_by_name',
             'created_at',
+            # Organizer billing fields
+            'organizer_billing_payer',
+            'linked_subscription_uuid',
         ]
         read_only_fields = fields
 
@@ -214,9 +219,31 @@ class OrganizationMembershipInviteSerializer(serializers.Serializer):
     email = serializers.EmailField()
     role = serializers.ChoiceField(
         choices=OrganizationMembership.Role.choices,
-        default=OrganizationMembership.Role.MEMBER,
+        default=OrganizationMembership.Role.INSTRUCTOR,
     )
     title = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    billing_payer = serializers.ChoiceField(
+        choices=['organization', 'organizer'],
+        required=False,
+        help_text="Who pays for organizer subscription (only for organizer role)",
+    )
+
+    def validate(self, attrs):
+        """Validate that billing_payer is only provided for organizer role."""
+        role = attrs.get('role')
+        billing_payer = attrs.get('billing_payer')
+
+        if role == OrganizationMembership.Role.ORGANIZER and not billing_payer:
+            raise serializers.ValidationError({
+                'billing_payer': 'billing_payer is required for organizer role'
+            })
+
+        if role != OrganizationMembership.Role.ORGANIZER and billing_payer:
+            raise serializers.ValidationError({
+                'billing_payer': 'billing_payer can only be set for organizer role'
+            })
+
+        return attrs
 
 
 class OrganizationMembershipUpdateSerializer(serializers.ModelSerializer):
@@ -236,7 +263,7 @@ class LinkOrganizerSerializer(serializers.Serializer):
     )
     role = serializers.ChoiceField(
         choices=OrganizationMembership.Role.choices,
-        default=OrganizationMembership.Role.MANAGER,
+        default=OrganizationMembership.Role.ORGANIZER,
     )
     transfer_data = serializers.BooleanField(
         default=True,
@@ -264,6 +291,7 @@ class OrganizationSubscriptionSerializer(serializers.ModelSerializer):
 
     total_seats = serializers.IntegerField(read_only=True)
     available_seats = serializers.IntegerField(read_only=True)
+    org_paid_organizers_count = serializers.IntegerField(read_only=True)
     plan_display = serializers.CharField(source='get_plan_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
 
@@ -280,6 +308,7 @@ class OrganizationSubscriptionSerializer(serializers.ModelSerializer):
             'active_organizer_seats',
             'available_seats',
             'seat_price_cents',
+            'org_paid_organizers_count',
             'events_created_this_period',
             'courses_created_this_period',
             'current_period_start',

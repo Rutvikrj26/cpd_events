@@ -395,6 +395,44 @@ class StripeService:
             logger.error(f"Failed to update subscription: {e}")
             return {'success': False, 'error': str(e)}
 
+    def update_subscription_quantity(self, subscription_id: str, quantity: int) -> dict[str, Any]:
+        """
+        Update the quantity (number of seats) of a Stripe subscription.
+        
+        Args:
+            subscription_id: Stripe subscription ID
+            quantity: New total quantity
+            
+        Returns:
+            Dict with success status or error
+        """
+        if not self.is_configured:
+            # If not configured, we assume success for local dev (caller handles local DB)
+            return {'success': True}
+
+        try:
+            # Retrieve subscription to get item ID
+            stripe_sub = self.stripe.Subscription.retrieve(subscription_id)
+            if not stripe_sub or not stripe_sub.get('items'):
+                return {'success': False, 'error': 'Stripe subscription not found or has no items'}
+
+            item_id = stripe_sub['items']['data'][0].id
+
+            # Update quantity
+            # usage_type='licensed' means we set exact quantity
+            # If it were metered, we'd use Usage Records, but here we are scaling seats.
+            self.stripe.SubscriptionItem.modify(
+                item_id,
+                quantity=quantity,
+                proration_behavior='always_invoice',  # Charge immediately for adds, credit for removes
+            )
+            
+            return {'success': True}
+
+        except Exception as e:
+            logger.error(f"Failed to update subscription quantity: {e}")
+            return {'success': False, 'error': str(e)}
+
     def sync_subscription(self, user) -> dict[str, Any]:
         """
         Sync local subscription with Stripe atomically.
@@ -563,6 +601,55 @@ class StripeService:
         except Exception as e:
             logger.error(f"Failed to create checkout session: {e}")
             return {'success': False, 'error': str(e)}
+
+    def create_one_time_checkout_session(
+        self, 
+        user, 
+        price_id: str, 
+        success_url: str, 
+        cancel_url: str, 
+        metadata: dict[str, Any] = None,
+        client_reference_id: str = None
+    ) -> dict[str, Any]:
+        """
+        Create Stripe Checkout Session for one-time payment (e.g. Course).
+        """
+        if not self.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        try:
+            customer_id = self.create_customer(user)
+            
+            # Prepare success URL with session_id
+            success_url_with_session = success_url
+            if '{CHECKOUT_SESSION_ID}' not in success_url:
+                separator = '&' if '?' in success_url else '?'
+                success_url_with_session = f"{success_url}{separator}session_id={{CHECKOUT_SESSION_ID}}"
+
+            session_params = {
+                'customer': customer_id,
+                'payment_method_types': ['card'],
+                'line_items': [{'price': price_id, 'quantity': 1}],
+                'mode': 'payment',
+                'success_url': success_url_with_session,
+                'cancel_url': cancel_url,
+                'automatic_tax': {'enabled': True},
+                'customer_update': {'address': 'auto'},
+                'metadata': metadata or {},
+            }
+            
+            if client_reference_id:
+                session_params['client_reference_id'] = client_reference_id
+
+            session = self.stripe.checkout.Session.create(**session_params)
+
+            return {'success': True, 'session_id': session.id, 'url': session.url}
+
+        except Exception as e:
+            logger.error(f"Failed to create checkout session: {e}")
+            return {'success': False, 'error': str(e)}
+
+
 
     def confirm_checkout_session(self, user, session_id: str, max_retries: int = 3) -> dict[str, Any]:
         """
@@ -997,6 +1084,166 @@ class StripeConnectService:
         except Exception as e:
             logger.error(f"Failed to get account status: {e}")
             return {'error': str(e)}
+
+    def create_payout(self, user, amount_cents: int, currency: str = 'usd') -> dict[str, Any]:
+        """
+        Initiate a manual payout from the connected account to the external bank account.
+        
+        Args:
+            user: The organizer user
+            amount_cents: Amount to pay out
+            currency: Currency code
+            
+        Returns:
+            Dict with success status and payout details
+        """
+        from billing.models import PayoutRequest
+        
+        if not self.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        subscription = getattr(user, 'subscription', None)
+        if not subscription or not subscription.stripe_connect_account_id:
+            return {'success': False, 'error': 'User has no connected account'}
+            
+        connect_id = subscription.stripe_connect_account_id
+
+        try:
+            # Create Payout in Stripe
+            # For Express accounts, we make the API call *on behalf of* the connected account
+            payout = self._stripe.Payout.create(
+                amount=amount_cents,
+                currency=currency,
+                stripe_account=connect_id, # Important: perform on connected account
+            )
+
+            # Record in DB
+            PayoutRequest.objects.create(
+                user=user,
+                stripe_connect_account_id=connect_id,
+                stripe_payout_id=payout.id,
+                amount_cents=amount_cents,
+                currency=currency,
+                status=PayoutRequest.Status.PENDING, # Will update via webhook
+                arrival_date=datetime.fromtimestamp(payout.arrival_date, tz=dt_timezone.utc) if payout.arrival_date else None,
+                destination_bank_last4=getattr(payout.destination, 'last4', '')
+            )
+            
+            return {'success': True, 'payout_id': payout.id}
+
+        except Exception as e:
+            logger.error(f"Failed to create payout for {user.email}: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def get_available_balance(self, user) -> int:
+        """Get available balance in cents for connected account."""
+        if not self.is_configured:
+            return 0
+            
+        subscription = getattr(user, 'subscription', None)
+        if not subscription or not subscription.stripe_connect_account_id:
+            return 0
+            
+        try:
+            balance = self._stripe.Balance.retrieve(stripe_account=subscription.stripe_connect_account_id)
+            # Sum up available funds in default currency
+            total = 0
+            for fund in balance.available:
+                total += fund.amount
+            return total
+        except Exception as e:
+            logger.error(f"Failed to get balance: {e}")
+            return 0
+
+
+class RefundService:
+    """
+    Service for processing refunds.
+    
+    Handles:
+    - Stripe refund creation
+    - Fee reversals
+    - Registration status updates
+    - Audit logging
+    """
+    
+    def __init__(self):
+        self._stripe = stripe_service.stripe
+        
+    @property
+    def is_configured(self) -> bool:
+        return stripe_service.is_configured
+
+    def process_refund(self, registration, amount_cents: int | None = None, reason: str = 'requested_by_customer', processed_by=None) -> dict[str, Any]:
+        """
+        Process a refund for a registration.
+        
+        Args:
+            registration: Registration object
+            amount_cents: Amount to refund (None for full refund)
+            reason: Reason code
+            processed_by: User who initiated the refund (optional)
+            
+        Returns:
+            Dict with success status
+        """
+        from billing.models import RefundRecord
+        from registrations.models import Registration
+        from django.db import transaction
+
+        if not self.is_configured:
+             return {'success': False, 'error': 'Stripe not configured'}
+             
+        if not registration.stripe_payment_intent_id:
+            return {'success': False, 'error': 'Registration has no payment record'}
+
+        # Default to full refund if amount not specified
+        is_full_refund = amount_cents is None
+        
+        try:
+            # 1. Create Refund in Stripe
+            refund_params = {
+                'payment_intent': registration.stripe_payment_intent_id,
+                'reason': reason if reason in ['duplicate', 'fraudulent', 'requested_by_customer'] else 'requested_by_customer',
+            }
+            if not is_full_refund:
+                refund_params['amount'] = amount_cents
+                
+            # If application fee was taken, we might want to refund it too
+            # For now, we accept the default behavior (platform keeps fee unless specified)
+            # To reverse fee: refund_application_fee=True
+            
+            stripe_refund = self._stripe.Refund.create(**refund_params)
+            
+            # 2. Record in DB
+            with transaction.atomic():
+                RefundRecord.objects.create(
+                    registration=registration,
+                    processed_by=processed_by,
+                    stripe_refund_id=stripe_refund.id,
+                    stripe_payment_intent_id=registration.stripe_payment_intent_id,
+                    amount_cents=stripe_refund.amount,
+                    currency=stripe_refund.currency,
+                    status=RefundRecord.Status.SUCCEEDED if stripe_refund.status == 'succeeded' else RefundRecord.Status.PENDING,
+                    reason=reason
+                )
+                
+                # Update Registration Status if full refund
+                if is_full_refund or (amount_cents and amount_cents >= registration.price_cents):
+                    registration.payment_status = Registration.PaymentStatus.REFUNDED
+                    registration.status = Registration.Status.CANCELLED
+                    registration.save(update_fields=['payment_status', 'status', 'updated_at'])
+                    
+                    # Release seat? 
+                    # Logic for seat release is usually handled by signal or explicit method
+                    # But verifying 'CANCELLED' status should trigger it if implemented.
+            
+            return {'success': True, 'refund_id': stripe_refund.id}
+
+        except Exception as e:
+            logger.error(f"Refund failed for registration {registration.uuid}: {e}")
+            return {'success': False, 'error': str(e)}
+
 
 
 class StripePaymentService:

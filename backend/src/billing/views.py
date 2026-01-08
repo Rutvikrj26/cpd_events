@@ -2,12 +2,12 @@
 Billing API views.
 """
 
-from rest_framework import permissions, status, views, viewsets
+from rest_framework import permissions, status, views, viewsets, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from common.rbac import roles
-from .models import Invoice, PaymentMethod, Subscription, StripeProduct
+from .models import Invoice, PaymentMethod, Subscription, StripeProduct, PayoutRequest, RefundRecord
 from .serializers import (
     BillingPortalSerializer,
     CheckoutSessionSerializer,
@@ -20,8 +20,11 @@ from .serializers import (
     SubscriptionSerializer,
     SubscriptionStatusSerializer,
     StripeProductPublicSerializer,
+    RefundRecordSerializer,
+    PayoutRequestSerializer,
 )
-from .services import stripe_service
+from .services import stripe_service, stripe_connect_service, RefundService
+from registrations.models import Registration
 from common.utils import error_response
 from drf_yasg.utils import swagger_auto_schema
 
@@ -385,3 +388,102 @@ class PublicPricingView(views.APIView):
 
         serializer = StripeProductPublicSerializer(products, many=True)
         return Response(serializer.data)
+
+
+@roles('admin', 'organizer', route_name='refunds')
+class RefundView(views.APIView):
+    """
+    Process a refund for a registration.
+    
+    POST /registrations/{uuid}/refund/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="Process refund",
+        operation_description="Refund a registration (full or partial).",
+        request_body=serializers.Serializer(), # Define a proper serializer for request body validation if needed
+        responses={200: RefundRecordSerializer, 400: '{"error": "..."}'},
+    )
+    def post(self, request, registration_uuid):
+        try:
+            registration = Registration.objects.get(uuid=registration_uuid)
+        except Registration.DoesNotExist:
+            return error_response('Registration not found', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+
+        # Permission check: Only admin or event owner can refund
+        is_admin = request.user.role == 'admin' or request.user.is_superuser
+        is_owner = registration.event.owner == request.user or (
+            registration.event.organization and registration.event.organization.members.filter(user=request.user).exists()
+        )
+        
+        if not (is_admin or is_owner):
+            return error_response('Permission denied', code='PERMISSION_DENIED', status_code=status.HTTP_403_FORBIDDEN)
+
+        amount_cents = request.data.get('amount_cents') # Optional, defaults to full
+        reason = request.data.get('reason', 'requested_by_customer')
+
+        refund_service = RefundService()
+        result = refund_service.process_refund(
+            registration=registration,
+            amount_cents=amount_cents,
+            reason=reason,
+            processed_by=request.user
+        )
+
+        if result['success']:
+            # Return the created refund record
+            refund_record = RefundRecord.objects.filter(stripe_refund_id=result['refund_id']).first()
+            return Response(RefundRecordSerializer(refund_record).data)
+        else:
+            return error_response(result.get('error', 'Refund failed'), code='REFUND_FAILED')
+
+
+@roles('organizer', route_name='payouts')
+class PayoutViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Payout management for organizers.
+    
+    GET /payouts/ - List payout history
+    POST /payouts/request/ - Request manual payout
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PayoutRequestSerializer
+
+    def get_queryset(self):
+        return PayoutRequest.objects.filter(user=self.request.user).order_by('-created_at')
+
+    @swagger_auto_schema(
+        operation_summary="Request payout",
+        operation_description="Initiate a manual payout to the external bank account.",
+        request_body=serializers.Serializer(), # Define schema for amount
+        responses={200: PayoutRequestSerializer, 400: '{"error": "..."}'},
+    )
+    @action(detail=False, methods=['post'])
+    def request(self, request):
+        amount_cents = request.data.get('amount_cents')
+        if not amount_cents:
+            return error_response('Amount is required', code='MISSING_AMOUNT')
+            
+        currency = request.data.get('currency', 'usd')
+
+        result = stripe_connect_service.create_payout(
+            user=request.user,
+            amount_cents=int(amount_cents),
+            currency=currency
+        )
+
+        if result['success']:
+            # Return the created payout request
+            # We filter by stripe_payout_id to get the record created in service
+            payout = PayoutRequest.objects.get(stripe_payout_id=result['payout_id'])
+            return Response(PayoutRequestSerializer(payout).data)
+        else:
+            return error_response(result.get('error', 'Payout failed'), code='PAYOUT_FAILED')
+
+    @action(detail=False, methods=['get'])
+    def balance(self, request):
+        """Get available balance for payout."""
+        balance = stripe_connect_service.get_available_balance(request.user)
+        return Response({'available_cents': balance, 'currency': 'usd'})
+

@@ -51,6 +51,7 @@ dependencies = [
     "gunicorn (>=21.2.0,<22.0.0)",
     "whitenoise (>=6.6.0,<7.0.0)",
     "pypdf (>=6.5.0,<7.0.0)",
+    "django-anymail[brevo] (>=14.0,<15.0)",
 ]
 
 [project.optional-dependencies]

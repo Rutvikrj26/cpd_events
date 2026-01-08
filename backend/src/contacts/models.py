@@ -92,11 +92,6 @@ class ContactList(BaseModel):
     def __str__(self):
         return f"{self.name} ({self.contact_count})"
 
-    def set_as_default(self):
-        """Set this list as the default for the owner."""
-        # No longer needed - kept for backwards compat
-        pass
-
     def update_contact_count(self):
         """Update denormalized contact count."""
         self.contact_count = self.contacts.count()

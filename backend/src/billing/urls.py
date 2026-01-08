@@ -12,12 +12,15 @@ from .views import (
     PaymentMethodViewSet,
     PublicPricingView,
     SubscriptionViewSet,
+    RefundView,
+    PayoutViewSet,
 )
 
 router = DefaultRouter()
 router.register(r'subscription', SubscriptionViewSet, basename='subscription')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'payment-methods', PaymentMethodViewSet, basename='payment-method')
+router.register(r'payouts', PayoutViewSet, basename='payout')
 
 # All billing routes
 urlpatterns = [
@@ -28,4 +31,5 @@ urlpatterns = [
     # Checkout and portal
     path('billing/checkout/', CheckoutSessionView.as_view(), name='checkout'),
     path('billing/portal/', BillingPortalView.as_view(), name='portal'),
+    path('registrations/<uuid:registration_uuid>/refund/', RefundView.as_view(), name='refund'),
 ]

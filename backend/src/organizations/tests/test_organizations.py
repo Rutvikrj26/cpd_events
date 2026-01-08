@@ -102,7 +102,7 @@ class TestMemberManagement:
             f'/api/v1/organizations/{organization.uuid}/members/invite/',
             {
                 'email': 'newmember@example.com',
-                'role': 'member',
+                'role': 'instructor',
             }
         )
         assert response.status_code == status.HTTP_201_CREATED

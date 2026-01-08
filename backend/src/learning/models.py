@@ -13,6 +13,7 @@ Models:
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -78,8 +79,12 @@ class EventModule(BaseModel):
     def __str__(self):
         return f"{self.event.title} - {self.title}"
 
-    def is_available_for_registration(self, registration):
-        """Check if module is available for a registration."""
+
+    def is_available_for(self, user, registration=None, course_enrollment=None):
+        """
+        Check if module is available for a user context.
+        Must provide either registration OR course_enrollment.
+        """
         now = timezone.now()
 
         if not self.is_published:
@@ -91,8 +96,17 @@ class EventModule(BaseModel):
         if self.release_type == self.ReleaseType.SCHEDULED:
             return self.release_at and now >= self.release_at
 
+        # Context-aware availability checks
+        created_at = None
+        if registration:
+            created_at = registration.created_at
+        elif course_enrollment:
+            created_at = course_enrollment.enrolled_at
+
         if self.release_type == self.ReleaseType.DAYS_AFTER_REG:
-            release_date = registration.created_at + timezone.timedelta(days=self.release_days_after_registration)
+            if not created_at:
+                return False
+            release_date = created_at + timezone.timedelta(days=self.release_days_after_registration)
             return now >= release_date
 
         if self.release_type == self.ReleaseType.PREREQUISITE:
@@ -100,12 +114,24 @@ class EventModule(BaseModel):
                 return True
             # Check if prerequisite is completed
             try:
-                prereq_progress = ModuleProgress.objects.get(registration=registration, module=self.prerequisite_module)
+                # Polymorphic lookup
+                if registration:
+                    prereq_progress = ModuleProgress.objects.get(registration=registration, module=self.prerequisite_module)
+                elif course_enrollment:
+                    prereq_progress = ModuleProgress.objects.get(course_enrollment=course_enrollment, module=self.prerequisite_module)
+                else:
+                    return False
+                    
                 return prereq_progress.status == 'completed'
             except ModuleProgress.DoesNotExist:
                 return False
 
         return False
+
+    def is_available_for_registration(self, registration):
+        """Legacy helper for events."""
+        return self.is_available_for(registration.user, registration=registration)
+
 
 
 class ModuleContent(BaseModel):
@@ -229,7 +255,12 @@ class AssignmentSubmission(BaseModel):
     # Relationships
     assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='submissions')
     registration = models.ForeignKey(
-        'registrations.Registration', on_delete=models.CASCADE, related_name='assignment_submissions'
+        'registrations.Registration', on_delete=models.CASCADE, related_name='assignment_submissions',
+        null=True, blank=True
+    )
+    course_enrollment = models.ForeignKey(
+        'learning.CourseEnrollment', on_delete=models.CASCADE, related_name='assignment_submissions',
+        null=True, blank=True
     )
     graded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='graded_submissions'
@@ -256,8 +287,20 @@ class AssignmentSubmission(BaseModel):
         ordering = ['-submitted_at']
         indexes = [
             models.Index(fields=['assignment', 'registration']),
+            models.Index(fields=['assignment', 'course_enrollment']),
             models.Index(fields=['status']),
         ]
+
+    def clean(self):
+        super().clean()
+        if self.registration and self.course_enrollment:
+            raise ValidationError("Submission cannot belong to both Registration and Course Enrollment.")
+        if not self.registration and not self.course_enrollment:
+            raise ValidationError("Submission must belong to either Registration or Course Enrollment.")
+
+    def __str__(self):
+        user = self.registration.user if self.registration else self.course_enrollment.user
+        return f"{user.email} - {self.assignment.title}"
 
     def __str__(self):
         return f"{self.registration.user.email} - {self.assignment.title}"
@@ -337,7 +380,15 @@ class ContentProgress(BaseModel):
         COMPLETED = 'completed', 'Completed'
 
     # Relationships
-    registration = models.ForeignKey('registrations.Registration', on_delete=models.CASCADE, related_name='content_progress')
+    # Relationships
+    registration = models.ForeignKey(
+        'registrations.Registration', on_delete=models.CASCADE, related_name='content_progress',
+        null=True, blank=True
+    )
+    course_enrollment = models.ForeignKey(
+        'learning.CourseEnrollment', on_delete=models.CASCADE, related_name='content_progress',
+        null=True, blank=True
+    )
     content = models.ForeignKey(ModuleContent, on_delete=models.CASCADE, related_name='progress_records')
 
     # Progress
@@ -354,10 +405,29 @@ class ContentProgress(BaseModel):
         db_table = 'content_progress'
         verbose_name = 'Content Progress'
         verbose_name_plural = 'Content Progress'
-        unique_together = [['registration', 'content']]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['registration', 'content'], 
+                name='unique_registration_content',
+                condition=models.Q(registration__isnull=False)
+            ),
+             models.UniqueConstraint(
+                fields=['course_enrollment', 'content'], 
+                name='unique_enrollment_content',
+                condition=models.Q(course_enrollment__isnull=False)
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.registration and self.course_enrollment:
+            raise ValidationError("Progress cannot belong to both Registration and Course Enrollment.")
+        if not self.registration and not self.course_enrollment:
+            raise ValidationError("Progress must belong to either Registration or Course Enrollment.")
 
     def __str__(self):
-        return f"{self.registration.user.email} - {self.content.title}"
+        user = self.registration.user if self.registration else self.course_enrollment.user
+        return f"{user.email} - {self.content.title}"
 
     def start(self):
         """Mark content as started."""
@@ -397,7 +467,15 @@ class ModuleProgress(BaseModel):
         COMPLETED = 'completed', 'Completed'
 
     # Relationships
-    registration = models.ForeignKey('registrations.Registration', on_delete=models.CASCADE, related_name='module_progress')
+    # Relationships
+    registration = models.ForeignKey(
+        'registrations.Registration', on_delete=models.CASCADE, related_name='module_progress',
+        null=True, blank=True
+    )
+    course_enrollment = models.ForeignKey(
+        'learning.CourseEnrollment', on_delete=models.CASCADE, related_name='module_progress',
+        null=True, blank=True
+    )
     module = models.ForeignKey(EventModule, on_delete=models.CASCADE, related_name='progress_records')
 
     # Progress
@@ -417,10 +495,29 @@ class ModuleProgress(BaseModel):
         db_table = 'module_progress'
         verbose_name = 'Module Progress'
         verbose_name_plural = 'Module Progress'
-        unique_together = [['registration', 'module']]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['registration', 'module'], 
+                name='unique_registration_module',
+                condition=models.Q(registration__isnull=False)
+            ),
+             models.UniqueConstraint(
+                fields=['course_enrollment', 'module'], 
+                name='unique_enrollment_module',
+                condition=models.Q(course_enrollment__isnull=False)
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.registration and self.course_enrollment:
+            raise ValidationError("Progress cannot belong to both Registration and Course Enrollment.")
+        if not self.registration and not self.course_enrollment:
+            raise ValidationError("Progress must belong to either Registration or Course Enrollment.")
 
     def __str__(self):
-        return f"{self.registration.user.email} - {self.module.title}"
+        user = self.registration.user if self.registration else self.course_enrollment.user
+        return f"{user.email} - {self.module.title}"
 
     @property
     def progress_percent(self):
@@ -434,9 +531,14 @@ class ModuleProgress(BaseModel):
         required_contents = self.module.contents.filter(is_required=True)
         self.contents_total = required_contents.count()
 
-        completed = ContentProgress.objects.filter(
-            registration=self.registration, content__in=required_contents, status=ContentProgress.Status.COMPLETED
-        ).count()
+        # Context-aware lookup
+        query = models.Q(content__in=required_contents, status=ContentProgress.Status.COMPLETED)
+        if self.registration:
+            query &= models.Q(registration=self.registration)
+        else:
+            query &= models.Q(course_enrollment=self.course_enrollment)
+
+        completed = ContentProgress.objects.filter(query).count()
         self.contents_completed = completed
 
         if self.contents_completed >= self.contents_total and self.contents_total > 0:
@@ -495,7 +597,17 @@ class Course(BaseModel):
     # =========================================
     # Basic Info
     # =========================================
+    class CourseFormat(models.TextChoices):
+        ONLINE = 'online', 'Online (Self-Paced)'
+        HYBRID = 'hybrid', 'Hybrid (Includes Live Sessions)'
+
     title = models.CharField(max_length=255, help_text="Course title")
+    format = models.CharField(
+        max_length=20, 
+        choices=CourseFormat.choices, 
+        default=CourseFormat.ONLINE, 
+        help_text="Delivery format"
+    )
     slug = models.SlugField(max_length=100, help_text="URL-friendly identifier")
     description = models.TextField(blank=True, max_length=5000, help_text="Course description")
     short_description = models.CharField(max_length=300, blank=True, help_text="Brief description for listings")
@@ -503,6 +615,20 @@ class Course(BaseModel):
         upload_to='courses/images/', null=True, blank=True, help_text="Featured image"
     )
     featured_image_url = models.URLField(blank=True, help_text="External featured image URL")
+
+    # =========================================
+    # Virtual/Live Session Settings (for Hybrid courses)
+    # =========================================
+    zoom_meeting_id = models.CharField(max_length=100, blank=True, help_text="Zoom Meeting ID")
+    zoom_meeting_url = models.URLField(blank=True, help_text="Zoom Join URL")
+    zoom_meeting_password = models.CharField(max_length=50, blank=True, help_text="Zoom Meeting Password")
+    zoom_webinar_id = models.CharField(max_length=100, blank=True, help_text="Zoom Webinar ID (if webinar)")
+    zoom_registrant_id = models.CharField(max_length=255, blank=True, help_text="Zoom Registrant tracking")
+    
+    # Live session scheduling (for Hybrid format)
+    live_session_start = models.DateTimeField(null=True, blank=True, help_text="Start time for live session")
+    live_session_end = models.DateTimeField(null=True, blank=True, help_text="End time for live session")
+    live_session_timezone = models.CharField(max_length=64, default='UTC', help_text="Timezone for live sessions")
 
     # =========================================
     # CPD Settings
@@ -523,9 +649,15 @@ class Course(BaseModel):
     # =========================================
     # Pricing
     # =========================================
-    is_free = models.BooleanField(default=True, help_text="Is this course free?")
-    price_cents = models.PositiveIntegerField(default=0, help_text="Price in cents")
-    currency = models.CharField(max_length=3, default='USD', help_text="Price currency")
+    thumbnail = models.ImageField(upload_to='courses/thumbnails/', blank=True, null=True)
+    
+    # =========================================
+    # Pricing & Payments
+    # =========================================
+    price_cents = models.PositiveIntegerField(default=0, help_text="Price in cents (0 for free)")
+    currency = models.CharField(max_length=3, default='USD', help_text="Currency code (ISO 4217)")
+    stripe_product_id = models.CharField(max_length=255, blank=True, help_text="Stripe Product ID")
+    stripe_price_id = models.CharField(max_length=255, blank=True, help_text="Stripe Price ID")
 
     # =========================================
     # Enrollment Settings
@@ -586,6 +718,10 @@ class Course(BaseModel):
 
     def __str__(self):
         return self.title
+
+    @property
+    def is_free(self):
+        return self.price_cents == 0
 
     @property
     def effective_image_url(self):

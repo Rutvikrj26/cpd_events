@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2>Verify Your Email</h2>
+        <p>Hello {{ user.first_name }},</p>
+        <p>Thank you for signing up with CPD Events. Please click the button below to verify your email address:</p>
+        <p style="text-align: center; margin: 30px 0;">
+            <a href="{{ verification_url }}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px;">Verify Email</a>
+        </p>
+        <p>Or verify using this link: <a href="{{ verification_url }}">{{ verification_url }}</a></p>
+        <p>If you did not sign up for this account, please ignore this email.</p>
+    </div>
+</body>
+</html>

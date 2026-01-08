@@ -188,24 +188,34 @@ class PromoCodeService:
         Returns:
             PromoCodeUsage instance
         """
-        discount_amount = promo_code.calculate_discount(original_price)
-        final_price = max(Decimal('0.00'), original_price - discount_amount)
+        from django.db import transaction
 
-        # Create usage record
-        usage = PromoCodeUsage.objects.create(
-            promo_code=promo_code,
-            registration=registration,
-            user_email=registration.email,
-            user=registration.user,
-            original_price=original_price,
-            discount_amount=discount_amount,
-            final_price=final_price
-        )
+        with transaction.atomic():
+            # Lock the row to prevent race conditions on max_uses
+            promo_code = PromoCode.objects.select_for_update().get(pk=promo_code.pk)
 
-        # Increment usage count
-        promo_code.increment_usage()
+            # Re-check max uses after acquiring lock
+            if promo_code.max_uses and promo_code.current_uses >= promo_code.max_uses:
+                raise PromoCodeExhaustedError("This promo code has reached its usage limit.")
 
-        return usage
+            discount_amount = promo_code.calculate_discount(original_price)
+            final_price = max(Decimal('0.00'), original_price - discount_amount)
+
+            # Create usage record
+            usage = PromoCodeUsage.objects.create(
+                promo_code=promo_code,
+                registration=registration,
+                user_email=registration.email,
+                user=registration.user,
+                original_price=original_price,
+                discount_amount=discount_amount,
+                final_price=final_price
+            )
+
+            # Increment usage count
+            promo_code.increment_usage()
+
+            return usage
 
     @classmethod
     def validate_and_preview(

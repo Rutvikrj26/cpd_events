@@ -212,15 +212,39 @@ class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         from registrations.models import Registration
+        from learning.models import CourseEnrollment
 
         assignment_uuid = request.data.get('assignment')
         assignment = get_object_or_404(Assignment, uuid=assignment_uuid)
+        
+        # Determine context (Event vs Course)
+        registration = None
+        course_enrollment = None
+        
+        if assignment.module.event:
+            # Event context
+            registration = get_object_or_404(Registration, user=request.user, event=assignment.module.event)
+            previous_submissions = AssignmentSubmission.objects.filter(assignment=assignment, registration=registration)
+        else:
+             # Course context
+             # We need to find the enrollment. Since assignment -> module -> (maybe course module?)
+             # But Module is EventModule. 
+             # If it's a course, we need to find the CourseEnrollment for the user that contains this module.
+             # This is tricky because EventModule doesn't directly link to Course.
+             # CourseModule links Course <-> EventModule.
+             
+             # Try to find a CourseEnrollment for this user that includes this module.
+             # Course -> CourseModule -> EventModule
+             enrollments = CourseEnrollment.objects.filter(
+                 user=request.user,
+                 course__modules__module=assignment.module,
+                 is_active=True
+             )
+             if not enrollments.exists():
+                 return error_response('Not enrolled in the course for this assignment', code='NOT_ENROLLED')
+             course_enrollment = enrollments.first()
+             previous_submissions = AssignmentSubmission.objects.filter(assignment=assignment, course_enrollment=course_enrollment)
 
-        # Find registration for this event
-        registration = get_object_or_404(Registration, user=request.user, event=assignment.module.event)
-
-        # Check attempt limits
-        previous_submissions = AssignmentSubmission.objects.filter(assignment=assignment, registration=registration)
         # Check max attempts
         if assignment.max_attempts and previous_submissions.count() >= assignment.max_attempts:
             return error_response('Maximum attempts reached', code='MAX_ATTEMPTS_REACHED')
@@ -228,7 +252,12 @@ class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        submission = serializer.save(assignment=assignment, registration=registration, attempt_number=previous_submissions.count() + 1)
+        submission = serializer.save(
+            assignment=assignment, 
+            registration=registration, 
+            course_enrollment=course_enrollment,
+            attempt_number=previous_submissions.count() + 1
+        )
 
         return Response(AssignmentSubmissionSerializer(submission).data, status=status.HTTP_201_CREATED)
 
@@ -412,21 +441,40 @@ class ContentProgressView(views.APIView):
 
     def post(self, request, content_uuid):
         from registrations.models import Registration
+        from learning.models import CourseEnrollment
 
         content = get_object_or_404(ModuleContent, uuid=content_uuid)
 
-        # Find registration
-        registration = get_object_or_404(Registration, user=request.user, event=content.module.event)
+        # Determine context
+        registration = None
+        course_enrollment = None
+
+        if content.module.event:
+            # Event Context
+            registration = get_object_or_404(Registration, user=request.user, event=content.module.event)
+            # Verify progress query
+            progress, created = ContentProgress.objects.get_or_create(registration=registration, content=content)
+            module_prog, _ = ModuleProgress.objects.get_or_create(registration=registration, module=content.module)
+        else:
+            # Course Context
+            enrollments = CourseEnrollment.objects.filter(
+                 user=request.user,
+                 course__modules__module=content.module,
+                 is_active=True
+             )
+            if not enrollments.exists():
+                 return error_response('Not enrolled in course', code='NOT_ENROLLED')
+            course_enrollment = enrollments.first()
+            progress, created = ContentProgress.objects.get_or_create(course_enrollment=course_enrollment, content=content)
+            module_prog, _ = ModuleProgress.objects.get_or_create(course_enrollment=course_enrollment, module=content.module)
+
 
         serializer = ContentProgressUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        progress, created = ContentProgress.objects.get_or_create(registration=registration, content=content)
+        data = serializer.validated_data
 
         if created:
             progress.start()
-
-        data = serializer.validated_data
 
         if data.get('completed'):
             progress.complete()
@@ -436,8 +484,8 @@ class ContentProgressView(views.APIView):
             )
 
         # Update module progress
-        module_prog, _ = ModuleProgress.objects.get_or_create(registration=registration, module=content.module)
         module_prog.update_from_content()
+        module_prog.save() # Ensure save
 
         return Response(ContentProgressSerializer(progress).data)
 
@@ -535,6 +583,11 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         course_uuid = self.request.data.get('course_uuid')
         course = get_object_or_404(Course, uuid=course_uuid)
+        
+        if not course.is_free:
+             from rest_framework.exceptions import PermissionDenied
+             raise PermissionDenied("This course requires payment. Please initiate checkout.")
+             
         serializer.save(user=self.request.user, course=course)
 
 
@@ -573,7 +626,8 @@ class CourseModuleViewSet(viewsets.ModelViewSet):
         
         # Verify permissions (basic check, ideally use proper permission class)
         if not course.organization.memberships.filter(user=self.request.user).exists():
-             raise permissions.PermissionDenied("You do not have access to this course.")
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have access to this course.")
 
         # Create the EventModule (orphan)
         module = serializer.save(event=None)
@@ -656,13 +710,14 @@ class CourseModuleContentViewSet(viewsets.ModelViewSet):
         # Verify access
         course = get_object_or_404(Course, uuid=course_uuid)
         if not course.organization.memberships.filter(user=self.request.user).exists():
-             raise permissions.PermissionDenied("You do not have access to this course.")
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have access to this course.")
              
         module = get_object_or_404(EventModule, uuid=module_uuid)
         # Ensure module links to this course to prevent cross-linking attacks
-        # Ensure module links to this course to prevent cross-linking attacks
         if not CourseModule.objects.filter(course=course, module=module).exists():
-            raise serializers.ValidationError("Module does not belong to this course.")
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Module does not belong to this course.")
 
         # Auto-calculate order if we are colliding or it's default 0
         current_data_order = serializer.validated_data.get('order', 0)

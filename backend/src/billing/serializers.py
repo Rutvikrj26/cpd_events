@@ -4,7 +4,7 @@ Serializers for billing API.
 
 from rest_framework import serializers
 
-from .models import Invoice, PaymentMethod, Subscription, StripeProduct, StripePrice
+from .models import Invoice, PaymentMethod, Subscription, StripeProduct, StripePrice, RefundRecord, PayoutRequest
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
@@ -256,3 +256,58 @@ class StripeProductPublicSerializer(serializers.ModelSerializer):
     def get_feature_limits(self, obj):
         """Get feature limits for this product."""
         return obj.get_feature_limits()
+
+
+class RefundRecordSerializer(serializers.ModelSerializer):
+    """Refund record serializer."""
+    
+    amount_display = serializers.CharField(read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    processed_by_email = serializers.EmailField(source='processed_by.email', read_only=True)
+    registration_uuid = serializers.CharField(source='registration.uuid', read_only=True)
+
+    class Meta:
+        model = RefundRecord
+        fields = [
+            'uuid',
+            'registration',
+            'registration_uuid',
+            'stripe_refund_id',
+            'amount_cents',
+            'amount_display',
+            'currency',
+            'status',
+            'status_display',
+            'reason',
+            'description',
+            'error_message',
+            'processed_by',
+            'processed_by_email',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+
+class PayoutRequestSerializer(serializers.ModelSerializer):
+    """Payout request serializer."""
+    
+    amount_display = serializers.CharField(read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = PayoutRequest
+        fields = [
+            'uuid',
+            'stripe_payout_id',
+            'amount_cents',
+            'amount_display',
+            'currency',
+            'status',
+            'status_display',
+            'arrival_date',
+            'destination_bank_last4',
+            'error_message',
+            'created_at',
+        ]
+        read_only_fields = fields
+

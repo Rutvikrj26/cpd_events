@@ -227,7 +227,8 @@ class PromoCode(BaseModel):
 
     def increment_usage(self):
         """Increment usage count."""
-        self.current_uses += 1
+        from django.db.models import F
+        self.current_uses = F('current_uses') + 1
         self.save(update_fields=['current_uses', 'updated_at'])
 
 

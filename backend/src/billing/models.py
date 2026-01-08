@@ -490,6 +490,16 @@ class StripeProduct(BaseModel):
         help_text="Max attendees per event (null = unlimited)"
     )
 
+    # Seat configuration (for Organization plans)
+    included_seats = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of included seats (for organization plans)"
+    )
+    seat_price_cents = models.PositiveIntegerField(
+        default=0,
+        help_text="Price per additional seat in cents"
+    )
+
     class Meta:
         db_table = 'stripe_products'
         ordering = ['plan']
@@ -692,3 +702,181 @@ class StripePrice(BaseModel):
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to sync price to Stripe: {e}")
             return {'success': False, 'error': str(e)}
+
+
+# =============================================================================
+# Financial Models (Refunds, Payouts, Transfers)
+# =============================================================================
+
+
+class RefundRecord(BaseModel):
+    """
+    Record of a processed refund.
+
+    Tracks refunds for registrations or other payments.
+    Ensures fees are tracked and transfers are reversed where possible.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        SUCCEEDED = 'succeeded', 'Succeeded'
+        FAILED = 'failed', 'Failed'
+        CANCELED = 'canceled', 'Canceled'
+
+    class Reason(models.TextChoices):
+        DUPLICATE = 'duplicate', 'Duplicate'
+        FRAUDULENT = 'fraudulent', 'Fraudulent'
+        REQUESTED_BY_CUSTOMER = 'requested_by_customer', 'Requested by Customer'
+        EXPIRED_UNCAPTURED = 'expired_uncaptured', 'Expired Uncaptured Charge'
+        OTHER = 'other', 'Other'
+
+    # Relationships
+    registration = models.ForeignKey(
+        'registrations.Registration',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='refunds'
+    )
+    processed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='processed_refunds'
+    )
+
+    # Stripe Reference
+    stripe_refund_id = models.CharField(max_length=255, unique=True, db_index=True)
+    stripe_payment_intent_id = models.CharField(max_length=255, db_index=True)
+
+    # Financials
+    amount_cents = models.PositiveIntegerField(help_text="Amount refunded in cents")
+    currency = models.CharField(max_length=3, default='usd')
+    
+    # Platform Tracking
+    platform_fee_reversed_cents = models.IntegerField(default=0, help_text="Amount of platform fee returned (if any)")
+    
+    # Status
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    reason = models.CharField(max_length=50, choices=Reason.choices, default=Reason.REQUESTED_BY_CUSTOMER)
+    description = models.TextField(blank=True, help_text="Internal notes or description")
+    
+    # Error tracking
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'refund_records'
+        verbose_name = 'Refund Record'
+        verbose_name_plural = 'Refund Records'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Refund {self.stripe_refund_id} - {self.amount_display}"
+
+    @property
+    def amount_display(self):
+        return f"{self.amount_cents / 100:.2f} {self.currency.upper()}"
+
+
+class PayoutRequest(BaseModel):
+    """
+    Organizer payout request.
+
+    Used when organizers want to withdraw funds from their Stripe Connect account
+    to their external bank account manually (if not on automatic schedule).
+    Also tracks automatic payouts synced from Stripe.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        IN_TRANSIT = 'in_transit', 'In Transit'
+        PAID = 'paid', 'Paid'
+        FAILED = 'failed', 'Failed'
+        CANCELED = 'canceled', 'Canceled'
+
+    # The organizer requesting the payout
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='payouts'
+    )
+
+    # Stripe Connect
+    stripe_connect_account_id = models.CharField(max_length=255, db_index=True)
+    stripe_payout_id = models.CharField(max_length=255, unique=True, blank=True, null=True, db_index=True)
+
+    # Financials
+    amount_cents = models.PositiveIntegerField(help_text="Amount in cents")
+    currency = models.CharField(max_length=3, default='usd')
+    
+    # Status
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    arrival_date = models.DateField(null=True, blank=True, help_text="Expected arrival date")
+    
+    # Methods
+    destination_bank_last4 = models.CharField(max_length=4, blank=True)
+    
+    # Error tracking
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'payout_requests'
+        verbose_name = 'Payout Request'
+        verbose_name_plural = 'Payout Requests'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Payout {self.amount_display} to {self.user.email}"
+
+    @property
+    def amount_display(self):
+        return f"{self.amount_cents / 100:.2f} {self.currency.upper()}"
+
+
+class TransferRecord(BaseModel):
+    """
+    Log of funds transferred from Platform to Organizer (Connect Account).
+    
+    Usually occurs automatically during payment intent processing (destination charge),
+    but good to track explicitly for reconciliation.
+    """
+    
+    event = models.ForeignKey(
+        'events.Event',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='transfers'
+    )
+    registration = models.ForeignKey(
+        'registrations.Registration',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='transfers'
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='received_transfers'
+    )
+    
+    stripe_transfer_id = models.CharField(max_length=255, unique=True, blank=True, null=True)
+    stripe_payment_intent_id = models.CharField(max_length=255, blank=True)
+    
+    amount_cents = models.PositiveIntegerField()
+    currency = models.CharField(max_length=3, default='usd')
+    
+    description = models.CharField(max_length=255, blank=True)
+    reversed = models.BooleanField(default=False, help_text="If transfer was reversed (e.g. refund)")
+    reversed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'transfer_records'
+        verbose_name = 'Transfer Record'
+        verbose_name_plural = 'Transfer Records'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Transfer {self.amount_cents/100:.2f} to {self.recipient.email}"

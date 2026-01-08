@@ -173,18 +173,6 @@ class ContactListViewSet(BaseModelViewSet):
         serializer.save(owner=self.request.user)
 
     @swagger_auto_schema(
-        operation_summary="Set default list",
-        operation_description="Set this contact list as the default.",
-        responses={200: serializers.ContactListDetailSerializer},
-    )
-    @action(detail=True, methods=['post'], url_path='set-default')
-    def set_default(self, request, uuid=None):
-        """Set as default contact list."""
-        contact_list = self.get_object()
-        contact_list.set_as_default()
-        return Response(serializers.ContactListDetailSerializer(contact_list).data)
-
-    @swagger_auto_schema(
         operation_summary="Duplicate list",
         operation_description="Create a copy of this contact list with all contacts.",
         responses={201: serializers.ContactListDetailSerializer},

@@ -503,8 +503,13 @@ class MyCertificateViewSet(ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Certificate.objects.filter(registration__user=self.request.user, deleted_at__isnull=True).select_related(
-            'registration__event', 'registration'
+        # Include certificates from both event registrations and course enrollments
+        return Certificate.objects.filter(
+            Q(registration__user=self.request.user) | Q(course_enrollment__user=self.request.user),
+            deleted_at__isnull=True
+        ).select_related(
+            'registration__event', 'registration',
+            'course_enrollment__course', 'course_enrollment'
         )
 
     @swagger_auto_schema(
