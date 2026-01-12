@@ -7,6 +7,9 @@ import {
   Calendar,
   BookOpen,
   Building2,
+  Shield,
+  Zap,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +45,12 @@ export function LandingPage() {
               <Button variant="outline" size="lg" className="h-14 px-8 text-lg hover:border-accent/50 hover:bg-accent/5">
                 <BookOpen className="mr-2 h-5 w-5 text-accent" />
                 Explore LMS
+              </Button>
+            </Link>
+            <Link to="/products/organizations">
+              <Button variant="outline" size="lg" className="h-14 px-8 text-lg hover:border-foreground/50 hover:bg-foreground/5">
+                <Building2 className="mr-2 h-5 w-5 text-foreground" />
+                Explore Orgs
               </Button>
             </Link>
           </div>
@@ -102,7 +111,7 @@ export function LandingPage() {
                 </div>
                 <h3 className="text-2xl font-bold text-foreground mb-4">Organizations</h3>
                 <p className="text-muted-foreground mb-8 min-h-[80px]">
-                  Manage your entire team, monetize your content, and consolidate billing in one dashboard.
+                  Manage your team, sync contacts, monetize content, and consolidate billing in one dashboard.
                 </p>
                 <div className="flex items-center text-foreground font-medium group-hover:translate-x-1 transition-transform">
                   Learn more <ArrowRight className="ml-2 h-4 w-4" />
@@ -114,17 +123,38 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* Trust Section */}
-      <section className="py-20 bg-background">
-        <div className="container mx-auto px-4 text-center">
-          <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-8">Trusted by professional organizations</p>
-          <div className="flex flex-wrap justify-center gap-12 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
-            {/* Placeholders for logos */}
-            <div className="text-xl font-bold text-foreground/40">ACME Corp</div>
-            <div className="text-xl font-bold text-foreground/40">GlobalHealth</div>
-            <div className="text-xl font-bold text-foreground/40">EduTech</div>
-            <div className="text-xl font-bold text-foreground/40">LawSociety</div>
-            <div className="text-xl font-bold text-foreground/40">MedCertify</div>
+      {/* Why Choose Section */}
+      <section className="py-24 bg-background">
+        <div className="container mx-auto px-4">
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground mb-4">Why professionals choose Accredit</h2>
+            <p className="text-lg text-muted-foreground">Built for reliability, compliance, and speed.</p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 text-center px-4">
+            <div className="space-y-4">
+              <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                <Shield className="h-6 w-6" />
+              </div>
+              <h3 className="text-xl font-semibold text-foreground">Fail-safe Reliability</h3>
+              <p className="text-muted-foreground">99.9% uptime guarantee. Our platform scales automatically to handle events of any size.</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="mx-auto h-12 w-12 rounded-xl bg-accent/10 text-accent flex items-center justify-center">
+                <Zap className="h-6 w-6" />
+              </div>
+              <h3 className="text-xl font-semibold text-foreground">Automated Efficiency</h3>
+              <p className="text-muted-foreground">Save 10+ hours per week. We handle the busywork of attendance tracking and certification.</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="mx-auto h-12 w-12 rounded-xl bg-secondary text-foreground flex items-center justify-center">
+                <Clock className="h-6 w-6" />
+              </div>
+              <h3 className="text-xl font-semibold text-foreground">Global Compliance</h3>
+              <p className="text-muted-foreground">Verifiable digital credentials that meet international CPD/CME standards.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -147,7 +177,7 @@ export function LandingPage() {
           <div className="mt-6 flex items-center justify-center gap-6 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span>14-day free trial</span>
+              <span>free trial</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-500" />

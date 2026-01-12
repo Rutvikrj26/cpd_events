@@ -185,8 +185,8 @@ export default function OrganizationsProductPage() {
                         />
                         <FeatureCard
                             icon={ShieldCheck}
-                            title="Shared Resources"
-                            description="Share certificate templates, speaker profiles, and assets across your entire organization."
+                            title="Contact Sync"
+                            description="Sync your organization's contacts across all activities. Build a unified CRM of all your attendees and learners."
                         />
                     </div>
                 </div>
