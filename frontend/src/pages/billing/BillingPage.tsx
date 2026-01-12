@@ -38,15 +38,23 @@ const PLAN_FEATURES: Record<string, string[]> = {
         'Download certificates',
         'Track CPD credits',
     ],
-    professional: [
+    organizer: [
         '30 events per month',
         '500 certificates/month',
         'Zoom integration',
         'Custom certificate templates',
         'Priority email support',
     ],
+    lms: [
+        '30 courses per month',
+        '500 certificates/month',
+        'Self-paced course builder',
+        'Learner progress tracking',
+        'Priority email support',
+    ],
     organization: [
         'Unlimited events',
+        'Unlimited courses',
         'Unlimited certificates',
         'Multi-user team access',
         'White-label options',
@@ -62,21 +70,26 @@ const PLAN_FEATURES: Record<string, string[]> = {
 const convertProductToPlan = (product: PricingProduct, index: number) => {
     const monthlyPrice = product.prices.find(p => p.billing_interval === 'month');
     const annualPrice = product.prices.find(p => p.billing_interval === 'year');
+    const features = product.features || [];
+    const trialFeature = product.trial_days > 0 ? [`${product.trial_days}-day free trial`] : [];
 
     const iconMap: Record<string, any> = {
-        professional: Users,
+        organizer: Users,
+        lms: FileText,
         organization: Building2,
     };
 
     return {
         id: product.plan,
         name: product.plan_display,
-        price: monthlyPrice ? parseFloat(monthlyPrice.amount_display) : 0,
-        priceAnnual: annualPrice ? parseFloat(annualPrice.amount_display) : 0,
+        priceMonthly: product.show_contact_sales ? null : (monthlyPrice ? parseFloat(monthlyPrice.amount_display) : 0),
+        priceAnnual: product.show_contact_sales ? null : (annualPrice ? parseFloat(annualPrice.amount_display) : null),
         description: product.description,
         icon: iconMap[product.plan] || Users,
-        features: PLAN_FEATURES[product.plan] || [],
-        recommended: index === 0, // First paid plan is recommended
+        features: [...features, ...trialFeature],
+        recommended: index === 0 && !product.show_contact_sales, // First paid plan is recommended
+        showContactSales: product.show_contact_sales,
+        isEnterprise: product.show_contact_sales,
     };
 };
 
@@ -92,13 +105,16 @@ export const BillingPage = () => {
         {
             id: 'attendee',
             name: 'Attendee',
-            price: 0,
+            priceMonthly: 0,
             priceAnnual: 0,
             description: 'For event participants',
             icon: User,
             features: PLAN_FEATURES.attendee,
+            showContactSales: false,
+            isEnterprise: false,
         },
     ]);
+    const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
 
     const checkoutStatus = searchParams.get('checkout');
 
@@ -167,11 +183,13 @@ export const BillingPage = () => {
                         {
                             id: 'attendee',
                             name: 'Attendee',
-                            price: 0,
+                            priceMonthly: 0,
                             priceAnnual: 0,
                             description: 'For event participants',
                             icon: User,
                             features: PLAN_FEATURES.attendee,
+                            showContactSales: false,
+                            isEnterprise: false,
                         },
                         ...pricingData.map((product, index) => convertProductToPlan(product, index)),
                     ];
@@ -186,10 +204,29 @@ export const BillingPage = () => {
         fetchData();
     }, []);
 
+    const getPlanInterval = (plan: any) => {
+        if (plan?.showContactSales) return 'month';
+        if (billingInterval === 'year' && plan?.priceAnnual != null) {
+            return 'year';
+        }
+        return 'month';
+    };
+
+    const getPlanPrice = (plan: any) => {
+        if (!plan || plan.showContactSales) return null;
+        if (billingInterval === 'year' && plan.priceAnnual != null) {
+            return plan.priceAnnual;
+        }
+        return plan.priceMonthly;
+    };
+
     const handleUpgrade = async (planId: string) => {
         setUpgrading(planId);
 
         try {
+            const targetPlan = plans.find(p => p.id === planId);
+            const targetInterval = getPlanInterval(targetPlan);
+
             // Special handling for downgrade to free 'attendee' plan
             if (planId === 'attendee') {
                 if (subscription?.stripe_subscription_id) {
@@ -210,15 +247,30 @@ export const BillingPage = () => {
             // Check if user already has an active Stripe subscription
             if (subscription && subscription.stripe_subscription_id) {
                 // UPDATE existing subscription (upgrade/downgrade)
-                const updated = await updateSubscription(planId, true);
+                const currentPlan = plans.find(p => p.id === (subscription.plan || 'attendee'));
+                const currentInterval = subscription.billing_interval || 'month';
+                const currentPrice =
+                    currentInterval === 'year' && currentPlan?.priceAnnual != null
+                        ? currentPlan.priceAnnual
+                        : currentPlan?.priceMonthly;
+                const targetPrice = getPlanPrice(targetPlan);
+                const isDowngrade = typeof currentPrice === 'number' && typeof targetPrice === 'number'
+                    ? targetPrice < currentPrice
+                    : false;
+                const updated = await updateSubscription(planId, !isDowngrade, targetInterval as 'month' | 'year');
                 setSubscription(updated);
-                toast.success("Plan updated successfully! Prorated charges will appear on your next invoice.");
+                toast.success(
+                    isDowngrade
+                        ? "Plan change scheduled for the end of your billing period."
+                        : "Plan updated successfully! Prorated charges will appear on your next invoice."
+                );
             } else {
                 // CREATE new subscription via Stripe Checkout
                 const result = await createCheckoutSession(
                     planId,
                     `${window.location.origin}/billing?checkout=success`,
-                    `${window.location.origin}/billing?checkout=canceled`
+                    `${window.location.origin}/billing?checkout=canceled`,
+                    targetInterval as 'month' | 'year'
                 );
                 window.location.href = result.url;
             }
@@ -268,8 +320,15 @@ export const BillingPage = () => {
     }
 
     const currentPlan = subscription?.plan || 'attendee';
-    const isOrganizer = currentPlan === 'organizer' || currentPlan === 'organization';
+    const isOrganizerPlan = currentPlan === 'organizer' || currentPlan === 'organization';
+    const isLmsPlan = currentPlan === 'lms' || currentPlan === 'organization';
+    const showUsageMetrics = isOrganizerPlan || isLmsPlan;
+    const gridColsClass = isOrganizerPlan && isLmsPlan ? "md:grid-cols-5" : "md:grid-cols-4";
     const currentPlanData = plans.find(p => p.id === currentPlan);
+    const pendingPlanData = subscription?.pending_plan
+        ? plans.find(p => p.id === subscription.pending_plan)
+        : null;
+    const hasAnnualPricing = plans.some(p => p.priceAnnual != null);
 
     return (
         <div className="space-y-8">
@@ -312,6 +371,11 @@ export const BillingPage = () => {
                                         (Cancels {subscription.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString() : 'soon'})
                                     </span>
                                 )}
+                                {subscription?.pending_plan && subscription.pending_change_at && (
+                                    <span className="ml-2 text-muted-foreground">
+                                        (Changes to {pendingPlanData?.name || subscription.pending_plan} on {new Date(subscription.pending_change_at).toLocaleDateString()})
+                                    </span>
+                                )}
                             </CardDescription>
                         </div>
                         <div className="flex gap-2">
@@ -329,10 +393,32 @@ export const BillingPage = () => {
                                             Select the plan that best fits your needs
                                         </DialogDescription>
                                     </DialogHeader>
+                                    {hasAnnualPricing && (
+                                        <div className="flex justify-center gap-2 mt-2">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={billingInterval === 'month' ? 'default' : 'outline'}
+                                                onClick={() => setBillingInterval('month')}
+                                            >
+                                                Monthly
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={billingInterval === 'year' ? 'default' : 'outline'}
+                                                onClick={() => setBillingInterval('year')}
+                                            >
+                                                Annual
+                                            </Button>
+                                        </div>
+                                    )}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                                         {plans.map(plan => {
                                             const isCurrent = plan.id === currentPlan;
                                             const PlanIcon = plan.icon;
+                                            const planInterval = getPlanInterval(plan);
+                                            const planPrice = getPlanPrice(plan);
 
                                             return (
                                                 <div
@@ -352,10 +438,15 @@ export const BillingPage = () => {
                                                         {isCurrent && <Badge variant="secondary" className="text-xs">Current</Badge>}
                                                     </div>
                                                     <div className="mb-3">
-                                                        {plan.price !== null ? (
+                                                        {planPrice !== null ? (
                                                             <>
-                                                                <span className="text-2xl font-bold">${plan.price}</span>
-                                                                <span className="text-muted-foreground text-sm">/mo</span>
+                                                                <span className="text-2xl font-bold">${planPrice}</span>
+                                                                <span className="text-muted-foreground text-sm">
+                                                                    {planInterval === 'year' ? '/yr' : '/mo'}
+                                                                </span>
+                                                                {planInterval === 'month' && billingInterval === 'year' && plan.priceAnnual == null && (
+                                                                    <span className="text-xs text-muted-foreground block">Monthly only</span>
+                                                                )}
                                                             </>
                                                         ) : (
                                                             <span className="text-lg font-semibold">Custom</span>
@@ -393,7 +484,7 @@ export const BillingPage = () => {
                                                             ) : (
                                                                 <ArrowRight className="h-3 w-3 mr-1" />
                                                             )}
-                                                            {plan.price === 0 ? 'Downgrade' : 'Upgrade'}
+                                                            {planPrice === 0 ? 'Downgrade' : 'Upgrade'}
                                                         </Button>
                                                     )}
                                                 </div>
@@ -410,18 +501,31 @@ export const BillingPage = () => {
                         </div>
                     </div>
                 </CardHeader>
-                {subscription && isOrganizer && (
+                {subscription && showUsageMetrics && (
                     <CardContent>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="p-4 bg-muted/30 rounded-lg">
-                                <div className="text-xs font-medium text-muted-foreground uppercase">Events This Month</div>
-                                <div className="text-2xl font-bold mt-1">
-                                    {subscription.events_created_this_period}
-                                    <span className="text-sm font-normal text-muted-foreground">
-                                        /{subscription.limits?.events_per_month ?? '∞'}
-                                    </span>
+                        <div className={`grid grid-cols-2 ${gridColsClass} gap-4`}>
+                            {isOrganizerPlan && (
+                                <div className="p-4 bg-muted/30 rounded-lg">
+                                    <div className="text-xs font-medium text-muted-foreground uppercase">Events This Month</div>
+                                    <div className="text-2xl font-bold mt-1">
+                                        {subscription.events_created_this_period}
+                                        <span className="text-sm font-normal text-muted-foreground">
+                                            /{subscription.limits?.events_per_month ?? '∞'}
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+                            {isLmsPlan && (
+                                <div className="p-4 bg-muted/30 rounded-lg">
+                                    <div className="text-xs font-medium text-muted-foreground uppercase">Courses This Month</div>
+                                    <div className="text-2xl font-bold mt-1">
+                                        {subscription.courses_created_this_period}
+                                        <span className="text-sm font-normal text-muted-foreground">
+                                            /{subscription.limits?.courses_per_month ?? '∞'}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
                             <div className="p-4 bg-muted/30 rounded-lg">
                                 <div className="text-xs font-medium text-muted-foreground uppercase">Certificates Issued</div>
                                 <div className="text-2xl font-bold mt-1">
@@ -454,7 +558,7 @@ export const BillingPage = () => {
                         <Button variant="outline" onClick={handleReactivate}>
                             Reactivate Subscription
                         </Button>
-                    ) : isOrganizer && subscription?.status === 'active' && (
+                    ) : showUsageMetrics && subscription?.status === 'active' && (
                         <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={handleCancelClick}>
                             Cancel Subscription
                         </Button>
@@ -463,7 +567,7 @@ export const BillingPage = () => {
             </Card>
 
             {/* Payment Methods - Managed via Stripe */}
-            {isOrganizer && (
+            {showUsageMetrics && (
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">

@@ -2,7 +2,7 @@ export interface User {
     uuid: string;
     email: string;
     full_name: string;
-    account_type: 'attendee' | 'organizer' | 'admin';
+    account_type: 'attendee' | 'organizer' | 'course_manager' | 'admin';
     is_active: boolean;
     date_joined: string;
     profile_image?: string;
@@ -25,7 +25,7 @@ export interface SignupRequest {
     password: string;
     password_confirm: string;
     full_name: string;
-    account_type?: 'attendee' | 'organizer';
+    account_type?: 'attendee' | 'organizer' | 'course_manager';
 }
 
 export interface RefreshTokenRequest {

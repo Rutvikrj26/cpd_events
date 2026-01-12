@@ -26,14 +26,14 @@ describe("LandingPage", () => {
         renderLandingPage();
 
         const ctaButton = screen.getByRole("link", { name: /start for free/i });
-        expect(ctaButton).toHaveAttribute("href", "/signup");
+        expect(ctaButton).toHaveAttribute("href", "/signup?role=organizer");
     });
 
-    it("has Request Demo button linking to contact", () => {
+    it("has Contact Us button linking to contact", () => {
         renderLandingPage();
 
-        const demoButton = screen.getByRole("link", { name: /request demo/i });
-        expect(demoButton).toHaveAttribute("href", "/contact");
+        const contactButton = screen.getByRole("link", { name: /contact us/i });
+        expect(contactButton).toHaveAttribute("href", "/contact");
     });
 
     it("renders How It Works section", () => {

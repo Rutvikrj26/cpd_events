@@ -65,9 +65,10 @@ You need to create subscription products for your billing plans.
 ### Plans Needed
 
 Based on your code, you have these plans:
-- **Attendee** (free/default)
-- **Organizer** (paid plan)
-- **Organization** (paid plan)
+- **Attendee** (free/default) - No Stripe product needed
+- **Organizer** (paid plan) - Individual event creators
+- **LMS** (paid plan) - Individual course creators
+- **Organization** (paid plan) - Team plan with $199/month base + $129/seat for additional members
 
 ### Create Products (Test Mode)
 
@@ -75,33 +76,38 @@ Based on your code, you have these plans:
 2. **Click**: "+ Add product"
 
 #### Product 1: Organizer Plan
-- **Name**: Accredit Organizer
-- **Description**: Individual organizer subscription
+- **Name**: CPD Events - Organizer
+- **Description**: Individual event organizer subscription
 - **Pricing**:
   - Model: Recurring
-  - Price: $XX.XX per month (your pricing)
-  - Billing period: Monthly
-  - Currency: CAD (or USD)
+  - Price: $XX.XX per month (set your pricing)
+  - Billing period: Monthly (or Annual)
+  - Currency: CAD, USD, or other
 - **Click**: "Save product"
-- **Copy the Price ID**: `price_xxxxxxxxxxxxx`
 
-#### Product 2: Organization Plan
-- **Name**: Accredit Organization
-- **Description**: Organization/team subscription
+#### Product 2: LMS Plan
+- **Name**: CPD Events - LMS
+- **Description**: Individual course creator subscription
 - **Pricing**:
   - Model: Recurring
-  - Price: $XX.XX per month
-  - Billing period: Monthly
-  - Currency: CAD (or USD)
+  - Price: $XX.XX per month (set your pricing)
+  - Billing period: Monthly (or Annual)
+  - Currency: CAD, USD, or other
 - **Click**: "Save product"
-- **Copy the Price ID**: `price_xxxxxxxxxxxxx`
 
-### Update .env with Price IDs
+#### Product 3: Organization Plan
+- **Name**: CPD Events - Organization
+- **Description**: Team subscription with unlimited events and courses
+- **Pricing**:
+  - Base: $199.00 per month (includes 1 admin)
+  - Additional seats: $129.00 per seat per month
+  - Billing period: Monthly (or Annual)
+  - Currency: CAD, USD, or other
+- **Click**: "Save product"
 
-```bash
-STRIPE_PRICE_ORGANIZER=price_xxxxxxxxxxxxx
-STRIPE_PRICE_ORGANIZATION=price_xxxxxxxxxxxxx
-```
+### Sync Products from Django Admin
+
+Create Stripe Products/Prices in Django Admin (Billing → Stripe Products/Prices) and click **Save** to sync to Stripe.
 
 ### Repeat for Production (Live Mode)
 
@@ -179,8 +185,6 @@ STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx
 STRIPE_SECRET_KEY=sk_test_51SUJCj2dJZiu6MtI...
 STRIPE_PUBLISHABLE_KEY=pk_test_51SUJCj2dJZiu6MtI...
 STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx  # From Stripe CLI
-STRIPE_PRICE_ORGANIZER=price_xxxxxxxxxxxxx  # From Products
-STRIPE_PRICE_ORGANIZATION=price_xxxxxxxxxxxxx  # From Products
 ```
 
 ### Production (Terraform tfvars + Secret Manager)
@@ -191,10 +195,6 @@ STRIPE_PRICE_ORGANIZATION=price_xxxxxxxxxxxxx  # From Products
 STRIPE_SECRET_KEY=sk_live_xxxxxxxxxxxxx
 STRIPE_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxxxx
 STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx  # From webhook endpoint
-
-# Optional: set price IDs via Terraform tfvars (STRIPE_PRICE_* envs)
-STRIPE_PRICE_PROFESSIONAL=price_xxxxxxxxxxxxx
-STRIPE_PRICE_TEAM=price_xxxxxxxxxxxxx
 ```
 
 ### Frontend (.env)
@@ -330,14 +330,11 @@ Common events your app should handle:
 - Publishable key added to frontend `.env`
 
 ⚠️ **TODO** (You need to do these):
-1. Create Products in Stripe Dashboard (Test mode)
-2. Get Price IDs for Organizer and Organization plans
-3. Update `STRIPE_PRICE_ORGANIZER` in backend `.env`
-4. Update `STRIPE_PRICE_ORGANIZATION` in backend `.env`
-5. Set up webhook endpoint (use Stripe CLI for local dev)
-6. Update `STRIPE_WEBHOOK_SECRET` in backend `.env`
-7. Test payment flow with test cards
-8. Repeat for production when ready to launch
+1. Configure Stripe Products/Prices in Django Admin and sync to Stripe
+2. Set up webhook endpoint (use Stripe CLI for local dev)
+3. Update `STRIPE_WEBHOOK_SECRET` in backend `.env`
+4. Test payment flow with test cards
+5. Repeat for production when ready to launch
 
 ---
 

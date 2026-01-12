@@ -16,7 +16,6 @@ Endpoints tested:
 import pytest
 from rest_framework import status
 
-
 # =============================================================================
 # Template List/Create Tests
 # =============================================================================
@@ -76,8 +75,7 @@ class TestCertificateTemplateDetail:
     def test_update_template(self, organizer_client, certificate_template):
         """Organizer can update their template."""
         response = organizer_client.patch(
-            f'/api/v1/certificate-templates/{certificate_template.uuid}/',
-            {'name': 'Updated Template Name'}
+            f'/api/v1/certificate-templates/{certificate_template.uuid}/', {'name': 'Updated Template Name'}
         )
         assert response.status_code == status.HTTP_200_OK
         certificate_template.refresh_from_db()
@@ -91,8 +89,9 @@ class TestCertificateTemplateDetail:
     def test_cannot_access_other_organizer_template(self, organizer_client, other_organizer, db):
         """Cannot access another organizer's template."""
         from factories import CertificateTemplateFactory
+
         other_template = CertificateTemplateFactory(owner=other_organizer)
-        
+
         response = organizer_client.get(f'/api/v1/certificate-templates/{other_template.uuid}/')
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -109,11 +108,10 @@ class TestSetDefaultTemplate:
     def test_set_default_template(self, organizer_client, organizer, db):
         """Organizer can set a template as default."""
         from factories import CertificateTemplateFactory
+
         template = CertificateTemplateFactory(owner=organizer, is_default=False)
-        
-        response = organizer_client.post(
-            f'/api/v1/certificate-templates/{template.uuid}/set-default/'
-        )
+
+        response = organizer_client.post(f'/api/v1/certificate-templates/{template.uuid}/set-default/')
         assert response.status_code == status.HTTP_200_OK
         template.refresh_from_db()
         assert template.is_default is True
@@ -121,13 +119,12 @@ class TestSetDefaultTemplate:
     def test_previous_default_unset(self, organizer_client, certificate_template, organizer, db):
         """Setting new default unsets previous default."""
         from factories import CertificateTemplateFactory
+
         new_template = CertificateTemplateFactory(owner=organizer, is_default=False)
-        
-        response = organizer_client.post(
-            f'/api/v1/certificate-templates/{new_template.uuid}/set-default/'
-        )
+
+        response = organizer_client.post(f'/api/v1/certificate-templates/{new_template.uuid}/set-default/')
         assert response.status_code == status.HTTP_200_OK
-        
+
         certificate_template.refresh_from_db()
         assert certificate_template.is_default is False
 
@@ -152,13 +149,14 @@ class TestAvailableTemplates:
     def test_includes_shared_org_templates(self, organizer_client, organization, organizer, db):
         """Includes shared templates from user's organization."""
         from factories import CertificateTemplateFactory
+
         # Create a shared org template
         shared_template = CertificateTemplateFactory(
             owner=organizer,
             organization=organization,
             is_shared=True,
         )
-        
+
         response = organizer_client.get('/api/v1/certificate-templates/available/')
         assert response.status_code == status.HTTP_200_OK
 
@@ -196,7 +194,7 @@ class TestTemplatePreview:
                 'recipient_name': 'John Doe',
                 'event_title': 'Test Event',
                 'completion_date': '2024-01-01',
-            }
+            },
         )
         # Preview may return URL or file
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]

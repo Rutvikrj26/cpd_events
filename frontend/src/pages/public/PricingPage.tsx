@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ArrowRight, Building2, Users, User, Loader2 } from "lucide-react";
+import { Check, ArrowRight, Building2, Users, User, Loader2, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Accordion,
@@ -22,15 +22,23 @@ const PLAN_FEATURES = {
         "Manage your profile",
         "Email notifications",
     ],
-    professional: [
+    organizer: [
         "30 events per month",
         "500 certificates/month",
         "Zoom integration",
         "Custom certificate templates",
         "Priority email support",
     ],
+    lms: [
+        "30 courses per month",
+        "500 certificates/month",
+        "Self-paced course builder",
+        "Learner progress tracking",
+        "Priority email support",
+    ],
     organization: [
         "Unlimited events",
+        "Unlimited courses",
         "Unlimited certificates",
         "Multi-user team access",
         "White-label options",
@@ -44,7 +52,8 @@ const PLAN_FEATURES = {
 
 const PLAN_ICONS = {
     attendee: User,
-    professional: Users,
+    organizer: Users,
+    lms: BookOpen,
     organization: Building2,
 };
 
@@ -52,6 +61,7 @@ export function PricingPage() {
     const [products, setProducts] = useState<PricingProduct[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
 
     useEffect(() => {
         fetchPricing();
@@ -112,6 +122,10 @@ export function PricingPage() {
         },
     ];
 
+    const hasAnnualPricing = products.some(product =>
+        product.prices.some(price => price.billing_interval === 'year')
+    );
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen">
@@ -130,46 +144,56 @@ export function PricingPage() {
         );
     }
 
+    // Helper to get category label
+    const getCategoryLabel = (planType: string) => {
+        switch (planType) {
+            case 'attendee': return 'For Learners';
+            case 'organizer': return 'For Event Hosts';
+            case 'lms': return 'For Course Creators';
+            case 'organization': return 'For Teams';
+            default: return 'Plan';
+        }
+    };
+
     // Build plans array: Attendee (hardcoded free) + fetched products
     const allPlans = [
         {
             name: "Attendee",
             plan: "attendee",
             icon: PLAN_ICONS.attendee,
-            description: "For event participants who want to track their learning.",
-            price: 0,
+            description: "For professionals who want to attend events and track their learning history.",
+            monthlyPrice: 0,
             annualPrice: null,
-            period: "Free forever",
             features: PLAN_FEATURES.attendee,
             cta: "Get Started",
             ctaLink: "/signup",
             variant: "outline" as const,
             trialDays: 0,
             showContactSales: false,
+            categoryLabel: getCategoryLabel('attendee'),
         },
         ...products.map((product, index) => {
-            // Use backend features if available, otherwise fall back to hardcoded
-            const backendFeatures = product.features || [];
-            const hardcodedFeatures = PLAN_FEATURES[product.plan as keyof typeof PLAN_FEATURES] || [];
-            const features = backendFeatures.length > 0 ? backendFeatures : hardcodedFeatures;
+            const features = product.features || [];
 
             return {
                 name: product.plan_display,
                 plan: product.plan,
                 icon: PLAN_ICONS[product.plan as keyof typeof PLAN_ICONS] || Users,
                 description: product.description,
-                price: product.show_contact_sales ? null : getMonthlyPrice(product),
+                monthlyPrice: product.show_contact_sales ? null : getMonthlyPrice(product),
                 annualPrice: product.show_contact_sales ? null : getAnnualPrice(product),
-                period: "/month",
                 features: [
                     ...features,
                     ...(product.trial_days > 0 ? [`${product.trial_days}-day free trial`] : []),
                 ],
                 cta: product.show_contact_sales ? "Contact Sales" : "Start Free Trial",
-                ctaLink: product.show_contact_sales ? "/contact" : `/signup?role=organizer&plan=${product.plan}`,
+                ctaLink: product.show_contact_sales
+                    ? "/contact"
+                    : `/signup?role=${product.plan === 'lms' ? 'course_manager' : 'organizer'}&plan=${product.plan}`,
                 variant: index === 0 ? ("default" as const) : ("secondary" as const),
                 trialDays: product.trial_days,
                 showContactSales: product.show_contact_sales,
+                categoryLabel: getCategoryLabel(product.plan),
             };
         }),
     ];
@@ -181,11 +205,30 @@ export function PricingPage() {
                 <div className="container mx-auto px-4">
                     <div className="text-center max-w-3xl mx-auto">
                         <h1 className="text-4xl font-bold tracking-tight sm:text-5xl mb-4">
-                            Simple, Transparent Pricing
+                            Plans for Every Stage
                         </h1>
                         <p className="text-xl text-muted-foreground mb-8">
-                            Choose the perfect plan for your CPD events. All plans include a {allPlans[1]?.trialDays || 30}-day free trial.
+                            Whether you're dealing with live events, self-paced courses, or managing a large organization,
+                            we have a plan that fits your needs.
                         </p>
+                        {hasAnnualPricing && (
+                            <div className="flex justify-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant={billingInterval === 'month' ? 'default' : 'outline'}
+                                    onClick={() => setBillingInterval('month')}
+                                >
+                                    Monthly
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={billingInterval === 'year' ? 'default' : 'outline'}
+                                    onClick={() => setBillingInterval('year')}
+                                >
+                                    Annual
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </section>
@@ -196,12 +239,19 @@ export function PricingPage() {
                     <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto">
                         {allPlans.map((plan) => {
                             const Icon = plan.icon;
+                            const planInterval = billingInterval === 'year' && plan.annualPrice != null ? 'year' : 'month';
+                            const displayPrice = planInterval === 'year' ? plan.annualPrice : plan.monthlyPrice;
                             return (
                                 <Card
                                     key={plan.plan}
                                     className="relative flex flex-col"
                                 >
                                     <CardHeader>
+                                        <div className="mb-4">
+                                            <Badge variant="secondary" className="font-medium">
+                                                {plan.categoryLabel}
+                                            </Badge>
+                                        </div>
                                         <div className="flex items-center gap-2 mb-2">
                                             <Icon className="h-6 w-6 text-primary" />
                                             <CardTitle>{plan.name}</CardTitle>
@@ -212,19 +262,23 @@ export function PricingPage() {
                                                 <div className="text-2xl font-bold text-muted-foreground">
                                                     Custom Pricing
                                                 </div>
+                                            ) : plan.plan === 'attendee' || plan.monthlyPrice === 0 ? (
+                                                <div className="text-2xl font-bold text-muted-foreground">
+                                                    Free forever
+                                                </div>
                                             ) : (
                                                 <>
                                                     <div className="flex items-baseline gap-2">
                                                         <span className="text-4xl font-bold">
-                                                            ${plan.price}
+                                                            ${displayPrice}
                                                         </span>
                                                         <span className="text-muted-foreground">
-                                                            {plan.period}
+                                                            {planInterval === 'year' ? '/year' : '/month'}
                                                         </span>
                                                     </div>
-                                                    {plan.annualPrice && (
+                                                    {billingInterval === 'year' && plan.annualPrice == null && (
                                                         <p className="text-sm text-muted-foreground mt-1">
-                                                            ${plan.annualPrice}/mo billed annually
+                                                            Monthly billing only
                                                         </p>
                                                     )}
                                                 </>

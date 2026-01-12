@@ -1,13 +1,16 @@
 import pytest
-from rest_framework import status
-from events.models import Event
 from django.utils import timezone
+from rest_framework import status
+
+from events.models import Event
+
 
 @pytest.mark.django_db
 def test_swagger_docs_accessible(api_client):
     """Swagger UI is disabled by default."""
     response = api_client.get('/api/docs/')
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
 
 @pytest.mark.django_db
 def test_create_event(organizer_client):
@@ -20,7 +23,7 @@ def test_create_event(organizer_client):
         'timezone': 'UTC',
         'max_attendees': 100,
         'registration_enabled': True,
-        'cpd_credit_value': '1.5'
+        'cpd_credit_value': '1.5',
     }
     response = organizer_client.post('/api/v1/events/', data)
     if response.status_code != status.HTTP_201_CREATED:
@@ -28,6 +31,7 @@ def test_create_event(organizer_client):
     assert response.status_code == status.HTTP_201_CREATED
     assert Event.objects.count() == 1
     assert Event.objects.get().title == 'Test Event'
+
 
 @pytest.mark.django_db
 def test_unauthenticated_access_denied(api_client):

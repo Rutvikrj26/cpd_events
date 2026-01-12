@@ -53,6 +53,7 @@ describe("Dialog", () => {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Test Dialog</DialogTitle>
+                        <DialogDescription>Close dialog description</DialogDescription>
                     </DialogHeader>
                 </DialogContent>
             </Dialog>
@@ -85,6 +86,7 @@ describe("Dialog", () => {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Confirm Action</DialogTitle>
+                        <DialogDescription>Confirm action description</DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <DialogClose asChild>
@@ -114,6 +116,7 @@ describe("Dialog", () => {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Test</DialogTitle>
+                        <DialogDescription>Test dialog description</DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <DialogClose asChild>

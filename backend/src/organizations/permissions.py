@@ -36,41 +36,47 @@ class OrganizationRolePermission(BasePermission):
     """
     Check if user has required role in the organization.
 
-    Role hierarchy (each role includes permissions of roles below):
-    - owner: Full control, billing, can delete org
-    - admin: Manage members, events, courses, templates
-    - manager: Create/edit events & courses
-    - member: View only
+    Role hierarchy (no implicit inheritance):
+    - admin: Manage org settings, members, templates
+    - organizer: Create/edit events and contacts
+    - course_manager: Create/edit courses and manage instructors
+    - instructor: Limited to assigned course
     """
 
+    # Role hierarchy: higher roles include permissions of lower roles
+    # Note: Roles are now parallel (admin, organizer, course_manager, instructor)
+    # Each role has specific permissions, no inheritance except all can view
     ROLE_HIERARCHY = {
-        'owner': ['owner', 'admin', 'manager', 'member'],
-        'admin': ['admin', 'manager', 'member'],
-        'manager': ['manager', 'member'],
-        'member': ['member'],
+        'admin': ['admin'],
+        'organizer': ['organizer'],
+        'course_manager': ['course_manager'],
+        'instructor': ['instructor'],
     }
 
     # Action -> required role mapping
+    # Action -> required role mapping
     ACTION_ROLES = {
-        # Organization management
-        'delete_organization': 'owner',
-        'manage_billing': 'owner',
+        # Organization management (Admin only)
         'update_organization': 'admin',
-        # Member management
-        'manage_members': 'admin',
-        'invite_member': 'admin',
-        'update_member_role': 'admin',
-        'remove_member': 'admin',
-        # Content creation
-        'create_event': 'manager',
-        'edit_event': 'manager',
-        'create_course': 'manager',
-        'edit_course': 'manager',
-        'create_template': 'manager',
-        # Viewing
-        'view_reports': 'manager',
-        'view_organization': 'member',
-        'view_members': 'member',
+        'manage_templates': 'admin',
+        # Member management (Admin + Course Manager)
+        # Note: Views must strictly limit Course Manager to only managing 'instructor' role
+        'manage_members': ['admin', 'course_manager'],
+        'invite_member': ['admin', 'course_manager'],
+        'update_member_role': ['admin', 'course_manager'],
+        'remove_member': ['admin', 'course_manager'],
+        # Event management (Organizer only)
+        'create_event': 'organizer',
+        'edit_event': 'organizer',
+        'manage_contacts': 'organizer',
+        # Course management (Course Manager only)
+        'create_course': 'course_manager',
+        'edit_course': 'course_manager',
+        'manage_all_courses': 'course_manager',
+        # Instructor (limited to assigned course)
+        'manage_assigned_course': 'instructor',
+        # Viewing (all roles)
+        'view_organization': ['admin', 'organizer', 'course_manager', 'instructor'],
     }
 
     def has_organization_permission(self, user, organization, action):
@@ -86,20 +92,20 @@ class OrganizationRolePermission(BasePermission):
             bool: True if user has permission
         """
         try:
-            membership = OrganizationMembership.objects.get(
-                organization=organization, user=user, is_active=True
-            )
+            membership = OrganizationMembership.objects.get(organization=organization, user=user, is_active=True)
         except OrganizationMembership.DoesNotExist:
             return False
 
-        required_role = self.ACTION_ROLES.get(action, 'owner')  # Default to owner if unknown
-        allowed_roles = self.ROLE_HIERARCHY.get(membership.role, [])
+        required_roles = self.ACTION_ROLES.get(action, ['admin'])
+        if isinstance(required_roles, str):
+            required_roles = [required_roles]
 
-        return required_role in allowed_roles
+        # Check if user's role is in the required roles list
+        return membership.role in required_roles
 
 
 class IsOrgOwner(BasePermission):
-    """Check if user is an owner of the organization."""
+    """Check if user is an admin of the organization."""
 
     def has_object_permission(self, request, view, obj):
         from .models import Organization
@@ -111,13 +117,11 @@ class IsOrgOwner(BasePermission):
         else:
             return False
 
-        return organization.memberships.filter(
-            user=request.user, role='owner', is_active=True
-        ).exists()
+        return organization.memberships.filter(user=request.user, role='admin', is_active=True).exists()
 
 
 class IsOrgAdmin(BasePermission):
-    """Check if user is an admin or owner of the organization."""
+    """Check if user is an admin of the organization."""
 
     def has_object_permission(self, request, view, obj):
         from .models import Organization
@@ -129,13 +133,11 @@ class IsOrgAdmin(BasePermission):
         else:
             return False
 
-        return organization.memberships.filter(
-            user=request.user, role__in=['owner', 'admin'], is_active=True
-        ).exists()
+        return organization.memberships.filter(user=request.user, role='admin', is_active=True).exists()
 
 
 class IsOrgManager(BasePermission):
-    """Check if user has manager-level access (manager, admin, or owner)."""
+    """Check if user has manager-level access (admin, organizer, or course manager)."""
 
     def has_object_permission(self, request, view, obj):
         from .models import Organization
@@ -148,7 +150,7 @@ class IsOrgManager(BasePermission):
             return False
 
         return organization.memberships.filter(
-            user=request.user, role__in=['owner', 'admin', 'manager'], is_active=True
+            user=request.user, role__in=['admin', 'organizer', 'course_manager'], is_active=True
         ).exists()
 
 

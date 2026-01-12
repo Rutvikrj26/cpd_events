@@ -65,8 +65,9 @@ describe("EventsPage", () => {
         });
     });
 
-    it("shows loading state initially", () => {
+    it("shows loading state initially", async () => {
         renderEventsPage();
         expect(screen.getByText("Loading events...")).toBeInTheDocument();
+        await screen.findByText(/no events found/i);
     });
 });

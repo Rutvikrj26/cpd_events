@@ -2,6 +2,8 @@
  * Organizations API functions.
  */
 import client from '../client';
+import type { Course } from '../courses/types';
+import type { Event } from '../events/types';
 import type {
     Organization,
     OrganizationListItem,
@@ -75,6 +77,26 @@ export const deleteOrganization = async (uuid: string): Promise<void> => {
 };
 
 // ============================================================================
+// Organization Oversight
+// ============================================================================
+
+/**
+ * List all events for an organization (admin oversight).
+ */
+export const getOrganizationEvents = async (orgUuid: string): Promise<Event[]> => {
+    const response = await client.get<any>(`${BASE_URL}/${orgUuid}/events/`);
+    return Array.isArray(response.data) ? response.data : response.data.results || [];
+};
+
+/**
+ * List all courses for an organization (admin oversight).
+ */
+export const getOrganizationCoursesOverview = async (orgUuid: string): Promise<Course[]> => {
+    const response = await client.get<any>(`${BASE_URL}/${orgUuid}/courses/`);
+    return Array.isArray(response.data) ? response.data : response.data.results || [];
+};
+
+// ============================================================================
 // Member Management
 // ============================================================================
 
@@ -93,10 +115,16 @@ export const inviteMember = async (orgUuid: string, data: InviteMemberRequest): 
     const response = await client.post<any>(`${BASE_URL}/${orgUuid}/members/invite/`, data);
     return response.data;
 };
-
 /**
- * Update a member's role or title.
+ * Lookup a user by email before inviting.
  */
+export const lookupUser = async (orgUuid: string, email: string): Promise<{ found: boolean; user?: { email: string; full_name: string } }> => {
+    const response = await client.get<any>(`${BASE_URL}/${orgUuid}/members/lookup/`, {
+        params: { email },
+    });
+    return response.data;
+};
+
 export const updateMember = async (orgUuid: string, memberUuid: string, data: UpdateMemberRequest): Promise<OrganizationMember> => {
     const response = await client.patch<OrganizationMember>(`${BASE_URL}/${orgUuid}/members/${memberUuid}/`, data);
     return response.data;
@@ -110,10 +138,59 @@ export const removeMember = async (orgUuid: string, memberUuid: string): Promise
 };
 
 /**
+ * Get invitation details before accepting.
+ */
+export interface InvitationDetails {
+    organization: {
+        uuid: string;
+        name: string;
+        slug: string;
+        logo_url: string;
+    };
+    role: string;
+    role_display: string;
+    billing_payer?: 'organization' | 'organizer' | null;
+    requires_subscription?: boolean;
+    invited_by: string;
+    invited_by_email: string | null;
+    invitation_email: string;
+}
+
+export const getInvitationDetails = async (token: string): Promise<InvitationDetails> => {
+    const response = await client.get<InvitationDetails>(`${BASE_URL}/accept-invite/${token}/`);
+    return response.data;
+};
+
+/**
  * Accept an organization invitation.
  */
 export const acceptInvitation = async (token: string): Promise<{ detail: string; organization: OrganizationListItem }> => {
     const response = await client.post<any>(`${BASE_URL}/accept-invite/${token}/`);
+    return response.data;
+};
+
+/**
+ * Pending invitation details.
+ */
+export interface PendingInvitation {
+    token: string;
+    organization: {
+        uuid: string;
+        name: string;
+        slug: string;
+        logo_url: string;
+    };
+    role: string;
+    role_display: string;
+    invited_by: string;
+    invited_at: string | null;
+}
+
+/**
+ * Get current user's pending organization invitations.
+ */
+export const getMyInvitations = async (): Promise<PendingInvitation[]> => {
+    const response = await client.get<PendingInvitation[]>(`${BASE_URL}/my-invitations/`);
     return response.data;
 };
 
@@ -192,6 +269,16 @@ export const getPublicOrganizationProfile = async (slug: string): Promise<Organi
     return response.data;
 };
 
+/**
+ * List public organizations (directory).
+ */
+export const getPublicOrganizations = async (query?: string): Promise<Organization[]> => {
+    const response = await client.get<Organization[]>(`${BASE_URL}/public/`, {
+        params: query ? { q: query } : undefined,
+    });
+    return response.data;
+};
+
 // ============================================================================
 // Billing & Plans
 // ============================================================================
@@ -209,6 +296,40 @@ export const getOrganizationPlans = async (): Promise<Record<string, any>> => {
  */
 export const upgradeOrganizationSubscription = async (uuid: string, plan: string): Promise<{ url: string }> => {
     const response = await client.post<{ url: string }>(`${BASE_URL}/${uuid}/subscription/upgrade/`, { plan });
+    return response.data;
+};
+
+/**
+ * Confirm organization subscription checkout.
+ */
+export const confirmOrganizationSubscription = async (uuid: string, sessionId: string): Promise<{ status: string }> => {
+    const response = await client.post<{ status: string }>(`${BASE_URL}/${uuid}/subscription/confirm/`, { session_id: sessionId });
+    return response.data;
+};
+
+/**
+ * Create Stripe customer portal session for organization.
+ */
+export const createOrganizationPortalSession = async (uuid: string): Promise<{ url: string }> => {
+    const response = await client.post<{ url: string }>(`${BASE_URL}/${uuid}/portal/`, {
+        return_url: window.location.href,
+    });
+    return response.data;
+};
+
+/**
+ * Add seats to organization subscription.
+ */
+export const addOrganizationSeats = async (uuid: string, seats: number): Promise<{ detail: string; total_seats: number; additional_seats: number }> => {
+    const response = await client.post<any>(`${BASE_URL}/${uuid}/subscription/add-seats/`, { seats });
+    return response.data;
+};
+
+/**
+ * Remove seats from organization subscription.
+ */
+export const removeOrganizationSeats = async (uuid: string, seats: number): Promise<{ detail: string; total_seats: number; additional_seats: number }> => {
+    const response = await client.post<any>(`${BASE_URL}/${uuid}/subscription/remove-seats/`, { seats });
     return response.data;
 };
 

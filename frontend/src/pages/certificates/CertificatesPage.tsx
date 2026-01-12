@@ -69,7 +69,7 @@ export const CertificatesPage = () => {
                     {
                         action: {
                             label: 'Give Feedback',
-                            onClick: () => navigate('/my-registrations')
+                            onClick: () => navigate('/registrations')
                         }
                     }
                 );
@@ -119,7 +119,7 @@ export const CertificatesPage = () => {
                     <Search className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <Input
-                    placeholder="Search certificates by event or code..."
+                    placeholder="Search certificates by event, course, or code..."
                     className="pl-10 max-w-sm"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -132,7 +132,7 @@ export const CertificatesPage = () => {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/50">
-                                    <TableHead className="w-[300px]">Event</TableHead>
+                                    <TableHead className="w-[300px]">Event/Course</TableHead>
                                     <TableHead>Certificate ID</TableHead>
                                     <TableHead>Issued</TableHead>
                                     <TableHead>CPD Credits</TableHead>
@@ -152,9 +152,14 @@ export const CertificatesPage = () => {
                                                     <p className="font-medium text-foreground truncate">
                                                         {cert.event?.title || cert.certificate_data?.event_title || 'Certificate'}
                                                     </p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        Certificate of Completion
-                                                    </p>
+                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                        <span>Certificate of Completion</span>
+                                                        {cert.event?.event_type && (
+                                                            <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                                                {cert.event.event_type}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </TableCell>

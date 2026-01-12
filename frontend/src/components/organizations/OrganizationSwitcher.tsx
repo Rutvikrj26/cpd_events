@@ -38,6 +38,10 @@ export const OrganizationSwitcher: React.FC<OrganizationSwitcherProps> = ({
 
     const handleSelectOrg = async (org: typeof organizations[0]) => {
         // Navigate to org dashboard - will load org context there
+        if (org.user_role === 'instructor') {
+            navigate(`/org/${org.slug}/instructor`);
+            return;
+        }
         navigate(`/org/${org.slug}`);
     };
 

@@ -30,18 +30,25 @@
 
 ---
 
-## 📊 Pricing Tiers
+## 📊 Pricing & Plans
 
-| Plan | Price | Events/Month | Attendees | Certificates | Best For |
-|------|-------|--------------|-----------|--------------|----------|
-| **Attendee** | Free | - | - | - | Event participants |
-| **Starter** | $49/mo | 10 | 100 | 100 | Solo professionals |
-| **Professional** | $99/mo | 30 | 500 | 500 | Established trainers ⭐ |
-| **Premium** | $199/mo | Unlimited | 2,000 | Unlimited | Power users |
-| **Team** | $299/mo | Unlimited | Unlimited | Unlimited | Organizations (5 seats) |
+Pricing is configured in Django Admin (Stripe Products/Prices) and reflected on the public pricing page.
 
-**Trial**: 14-day free trial on all paid plans
-**Annual Discount**: Save 17% with annual billing
+### Current Plans
+
+**Individual Plans:**
+- **Attendee** (Free) - Attend events and courses
+- **Organizer** (Paid) - Create events, 30/month limit, 500 max attendees
+- **LMS** (Paid) - Create courses, 30/month limit
+
+**Organization Plan:**
+- **Organization** ($199/month base)
+  - Includes 1 Admin (full organizer + course manager capabilities)
+  - Unlimited events and courses
+  - Additional seats: $129/month per seat
+  - Unlimited Course Instructors (free)
+
+Trials (default 30 days), limits, and pricing are all managed in the database per plan.
 
 ---
 
@@ -92,7 +99,7 @@ open http://localhost:8000      # Backend
 open http://localhost:5173      # Frontend
 ```
 
-**Detailed guide**: See [`docs/pricing-implementation/QUICK_START.md`](docs/pricing-implementation/QUICK_START.md)
+**Detailed guide**: See [`docs/ADMIN_PANEL_GUIDE.md`](docs/ADMIN_PANEL_GUIDE.md)
 
 ---
 
@@ -133,7 +140,7 @@ cpd_events/
 │   └── gcp/              # Terraform for Google Cloud
 │
 └── docs/                 # Documentation
-    └── pricing-implementation/
+    └── legacy/           # Archived pricing docs
 ```
 
 ---
@@ -168,17 +175,12 @@ cpd_events/
 ## 📚 Documentation
 
 ### Getting Started
-- **[Quick Start Guide](docs/pricing-implementation/QUICK_START.md)** - Get running in 15 minutes
-- **[Implementation Summary](docs/pricing-implementation/IMPLEMENTATION_SUMMARY.md)** - Complete overview
+- **[Environment Setup](docs/ENV_SETUP_SUMMARY.md)** - Configuration guide
+- **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Local + cloud workflows
 - **[CLI Commands](docs/CLI_COMMAND_TREE.md)** - All available commands
 
 ### Pricing & Billing
-- **[Pricing Implementation](docs/pricing-implementation/PRICING_IMPLEMENTATION.md)** - Complete setup guide
-- **[Stripe Admin Management](docs/pricing-implementation/STRIPE_ADMIN_SETUP.md)** - Manage pricing via Django Admin ⭐ NEW
-- **[Stripe Setup](docs/pricing-implementation/STRIPE_SETUP_NEW_PRICING.md)** - Stripe configuration
-- **[Upgrade/Downgrade](docs/pricing-implementation/UPGRADE_FIX_SUMMARY.md)** - Subscription management
-- **[Workflow Audit](docs/pricing-implementation/UPGRADE_WORKFLOW_AUDIT.md)** - Technical deep dive
-- **[Stripe Admin & Promo Codes](docs/pricing-implementation/STRIPE_ADMIN_AND_PROMO_CODES.md)** - Advanced features
+- **[Admin Pricing Guide](docs/ADMIN_PANEL_GUIDE.md)** - Manage plans, pricing, and trials
 
 ### Infrastructure & Deployment
 - **[Infrastructure Summary](docs/INFRASTRUCTURE_SUMMARY.md)** - GCP architecture
@@ -210,11 +212,11 @@ cpd_events/
 - Email delivery with tracking
 
 ### Billing & Subscriptions
-- Multi-tier pricing with usage limits
-- 14-day free trial (no credit card required)
+- Multi-plan pricing with usage limits
+- Trials configured per plan
 - Stripe integration for payments
 - Automatic proration on upgrades
-- Team plans with per-seat billing
+- Organization plans with per-seat billing
 
 ---
 
@@ -325,18 +327,21 @@ See [`cli/DEPLOYMENT.md`](cli/DEPLOYMENT.md) for detailed deployment guide.
 
 ## 🗺️ Roadmap
 
-### Current Version (v2.0) ✅
-- ✅ Multi-tier pricing with 5 tiers
+### Current Version (v2.1) ✅
+- ✅ Multi-tier pricing (Attendee, Organizer, LMS, Organization)
 - ✅ Subscription upgrade/downgrade
-- ✅ Certificate limit enforcement
-- ✅ 14-day trial period
-- ✅ Annual billing with discount
+- ✅ Database-driven plan limits and pricing
+- ✅ Configurable trial periods
+- ✅ Annual billing support
+- ✅ Organization team management with role-based access
+- ✅ Full LMS with courses, modules, assignments
 
-### Upcoming (v2.1)
-- [ ] Proration preview before upgrade
-- [ ] Plan comparison modal
-- [ ] Upgrade analytics dashboard
-- [ ] Smart upgrade prompts at limits
+### Upcoming (v2.2)
+- [ ] Refund processing automation
+- [ ] Payout reconciliation dashboard
+- [ ] Payment retry logic
+- [ ] Trial expiration automation
+- [ ] Enhanced email notifications
 
 ### Future (v3.0)
 - [ ] Mobile app (React Native)
@@ -349,13 +354,14 @@ See [`cli/DEPLOYMENT.md`](cli/DEPLOYMENT.md) for detailed deployment guide.
 
 ## 📝 Recent Updates
 
-### December 29, 2025 - v2.0 Release
+### January 2026 - v2.1 Release
 
-**New Pricing Structure** 🎯
-- Implemented 5-tier pricing (Attendee, Starter, Professional, Premium, Team)
-- Added annual billing with 17% discount
-- Changed trial period from 30 to 14 days
-- Research-backed pricing aligned with market
+**Pricing Structure** 🎯
+- 4-tier pricing: Attendee (Free), Organizer, LMS, Organization
+- Organization plan: $199/month base + $129/seat for additional organizers/course managers
+- Configurable trial periods (default 30 days)
+- Database-driven pricing via Stripe Products
+- Annual billing support with Stripe integration
 
 **Critical Bug Fixes** 🐛
 - Fixed broken subscription upgrade/downgrade workflow
@@ -388,8 +394,8 @@ Contributions are welcome! Please:
 
 ### Documentation
 - Check [`docs/`](docs/) for detailed guides
-- Read [Quick Start](docs/pricing-implementation/QUICK_START.md)
-- Review [Implementation Summary](docs/pricing-implementation/IMPLEMENTATION_SUMMARY.md)
+- Read the [Admin Pricing Guide](docs/ADMIN_PANEL_GUIDE.md)
+- Review [Environment Setup](docs/ENV_SETUP_SUMMARY.md)
 
 ### Issues
 - GitHub Issues: Report bugs or request features
@@ -419,6 +425,6 @@ Contributions are welcome! Please:
 
 **Built with ❤️ for the CPD community**
 
-[Get Started](docs/pricing-implementation/QUICK_START.md) • [Documentation](docs/) • [Report Bug](../../issues)
+[Get Started](docs/ENV_SETUP_SUMMARY.md) • [Documentation](docs/) • [Report Bug](../../issues)
 
 </div>

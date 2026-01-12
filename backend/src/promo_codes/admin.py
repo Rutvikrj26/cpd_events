@@ -27,6 +27,7 @@ class PromoCodeAdmin(admin.ModelAdmin):
 
     def discount_display(self, obj):
         return obj.get_discount_display()
+
     discount_display.short_description = 'Discount'
 
 

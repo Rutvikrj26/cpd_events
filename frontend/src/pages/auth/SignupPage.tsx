@@ -49,7 +49,8 @@ export function SignupPage() {
   const planFromUrl = searchParams.get('plan') || 'free';
   const roleFromUrl = searchParams.get('role');
   const isOrganizer = roleFromUrl === 'organizer';
-  const isTrialPlan = ['pro', 'professional', 'starter'].includes(planFromUrl.toLowerCase());
+  const isCourseManager = roleFromUrl === 'course_manager';
+  const isTrialPlan = ['organizer', 'lms', 'organization'].includes(planFromUrl.toLowerCase());
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -65,16 +66,19 @@ export function SignupPage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     try {
+      const accountType = isOrganizer ? 'organizer' : isCourseManager ? 'course_manager' : 'attendee';
       await register({
         email: values.email,
         password: values.password,
         password_confirm: values.confirmPassword,
         full_name: values.fullName,
-        account_type: isOrganizer ? 'organizer' : 'attendee',
+        account_type: accountType,
       });
 
       if (isOrganizer) {
-        toast.success("Welcome! Your 30-day Professional trial has started.");
+        toast.success("Welcome! Your 30-day Organizer trial has started.");
+      } else if (isCourseManager) {
+        toast.success("Welcome! Your 30-day LMS trial has started.");
       } else {
         toast.success("Account created! Please check your email to verify.");
       }
@@ -101,7 +105,7 @@ export function SignupPage() {
     <div className="space-y-6">
       <div className="space-y-2 text-center">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          {isOrganizer ? "Create Organizer Account" : "Create Attendee Account"}
+          {isOrganizer ? "Create Organizer Account" : isCourseManager ? "Create Course Manager Account" : "Create Attendee Account"}
         </h1>
         <p className="text-sm text-muted-foreground">
           Already have an account?{" "}
@@ -112,11 +116,11 @@ export function SignupPage() {
       </div>
 
       {/* Trial Banner */}
-      {isOrganizer && isTrialPlan && (
+      {(isOrganizer || isCourseManager) && isTrialPlan && (
         <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 text-center">
           <div className="flex items-center justify-center gap-2 text-primary font-medium mb-1">
             <Crown className="h-4 w-4" />
-            <span>30-Day Professional Trial</span>
+            <span>30-Day Trial</span>
           </div>
           <p className="text-sm text-muted-foreground">
             Full access to all features. No credit card required.
@@ -147,6 +151,33 @@ export function SignupPage() {
             <li className="flex items-center gap-2">
               <div className="h-1.5 w-1.5 rounded-full bg-primary" />
               Accept payments for paid events
+            </li>
+          </ul>
+        </div>
+      )}
+
+      {isCourseManager && (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3 animate-in fade-in slide-in-from-top-2">
+          <div className="font-medium text-sm text-foreground flex items-center gap-2">
+            <Award className="h-4 w-4 text-primary" />
+            LMS account includes:
+          </div>
+          <ul className="text-sm text-muted-foreground space-y-1.5 ml-6">
+            <li className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+              Build self-paced courses and modules
+            </li>
+            <li className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+              Track learner progress and completion
+            </li>
+            <li className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+              Issue course completion certificates
+            </li>
+            <li className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+              Accept payments for paid courses
             </li>
           </ul>
         </div>

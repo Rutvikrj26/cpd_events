@@ -143,7 +143,16 @@ class CourseModuleInline(admin.TabularInline):
 class CourseAdmin(admin.ModelAdmin):
     """Admin for Course model."""
 
-    list_display = ['title', 'organization', 'status', 'format', 'enrollment_count', 'completion_count', 'cpd_credits', 'created_at']
+    list_display = [
+        'title',
+        'organization',
+        'status',
+        'format',
+        'enrollment_count',
+        'completion_count',
+        'cpd_credits',
+        'created_at',
+    ]
     list_filter = ['status', 'is_public', 'format', 'organization']
     search_fields = ['title', 'organization__name', 'description']
     ordering = ['-created_at']
@@ -193,4 +202,3 @@ class CourseEnrollmentAdmin(admin.ModelAdmin):
         ('Certificate', {'fields': ('certificate_issued', 'certificate_issued_at')}),
         ('Metadata', {'fields': ('uuid', 'created_at', 'updated_at'), 'classes': ['collapse']}),
     )
-

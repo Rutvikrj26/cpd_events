@@ -12,12 +12,12 @@ Models:
 """
 
 from django.conf import settings
-from django.core.validators import MaxValueValidator, MinValueValidator
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
-from common.config import AssignmentDefaults, ModuleDefaults, ScoringDefaults
+from common.config import AssignmentDefaults, ModuleDefaults
 from common.models import BaseModel
 
 
@@ -54,8 +54,7 @@ class EventModule(BaseModel):
 
     # Scoring
     passing_score = models.PositiveIntegerField(
-        default=ModuleDefaults.PASSING_SCORE,
-        validators=[MinValueValidator(0), MaxValueValidator(100)]
+        default=ModuleDefaults.PASSING_SCORE, validators=[MinValueValidator(0), MaxValueValidator(100)]
     )
 
     # CPD credits for this module
@@ -78,7 +77,6 @@ class EventModule(BaseModel):
 
     def __str__(self):
         return f"{self.event.title} - {self.title}"
-
 
     def is_available_for(self, user, registration=None, course_enrollment=None):
         """
@@ -118,10 +116,12 @@ class EventModule(BaseModel):
                 if registration:
                     prereq_progress = ModuleProgress.objects.get(registration=registration, module=self.prerequisite_module)
                 elif course_enrollment:
-                    prereq_progress = ModuleProgress.objects.get(course_enrollment=course_enrollment, module=self.prerequisite_module)
+                    prereq_progress = ModuleProgress.objects.get(
+                        course_enrollment=course_enrollment, module=self.prerequisite_module
+                    )
                 else:
                     return False
-                    
+
                 return prereq_progress.status == 'completed'
             except ModuleProgress.DoesNotExist:
                 return False
@@ -131,7 +131,6 @@ class EventModule(BaseModel):
     def is_available_for_registration(self, registration):
         """Legacy helper for events."""
         return self.is_available_for(registration.user, registration=registration)
-
 
 
 class ModuleContent(BaseModel):
@@ -168,7 +167,9 @@ class ModuleContent(BaseModel):
     # quiz: {questions: [...], passing_score}
     # external: {url, open_in_new_tab}
     content_data = models.JSONField(default=dict)
-    file = models.FileField(upload_to='learning/modules/', blank=True, null=True, help_text="Uploaded file (for document/video)")
+    file = models.FileField(
+        upload_to='learning/modules/', blank=True, null=True, help_text="Uploaded file (for document/video)"
+    )
 
     # Requirements
     is_required = models.BooleanField(default=True)
@@ -255,12 +256,10 @@ class AssignmentSubmission(BaseModel):
     # Relationships
     assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='submissions')
     registration = models.ForeignKey(
-        'registrations.Registration', on_delete=models.CASCADE, related_name='assignment_submissions',
-        null=True, blank=True
+        'registrations.Registration', on_delete=models.CASCADE, related_name='assignment_submissions', null=True, blank=True
     )
     course_enrollment = models.ForeignKey(
-        'learning.CourseEnrollment', on_delete=models.CASCADE, related_name='assignment_submissions',
-        null=True, blank=True
+        'learning.CourseEnrollment', on_delete=models.CASCADE, related_name='assignment_submissions', null=True, blank=True
     )
     graded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='graded_submissions'
@@ -382,12 +381,10 @@ class ContentProgress(BaseModel):
     # Relationships
     # Relationships
     registration = models.ForeignKey(
-        'registrations.Registration', on_delete=models.CASCADE, related_name='content_progress',
-        null=True, blank=True
+        'registrations.Registration', on_delete=models.CASCADE, related_name='content_progress', null=True, blank=True
     )
     course_enrollment = models.ForeignKey(
-        'learning.CourseEnrollment', on_delete=models.CASCADE, related_name='content_progress',
-        null=True, blank=True
+        'learning.CourseEnrollment', on_delete=models.CASCADE, related_name='content_progress', null=True, blank=True
     )
     content = models.ForeignKey(ModuleContent, on_delete=models.CASCADE, related_name='progress_records')
 
@@ -407,14 +404,14 @@ class ContentProgress(BaseModel):
         verbose_name_plural = 'Content Progress'
         constraints = [
             models.UniqueConstraint(
-                fields=['registration', 'content'], 
+                fields=['registration', 'content'],
                 name='unique_registration_content',
-                condition=models.Q(registration__isnull=False)
+                condition=models.Q(registration__isnull=False),
             ),
-             models.UniqueConstraint(
-                fields=['course_enrollment', 'content'], 
+            models.UniqueConstraint(
+                fields=['course_enrollment', 'content'],
                 name='unique_enrollment_content',
-                condition=models.Q(course_enrollment__isnull=False)
+                condition=models.Q(course_enrollment__isnull=False),
             ),
         ]
 
@@ -469,12 +466,10 @@ class ModuleProgress(BaseModel):
     # Relationships
     # Relationships
     registration = models.ForeignKey(
-        'registrations.Registration', on_delete=models.CASCADE, related_name='module_progress',
-        null=True, blank=True
+        'registrations.Registration', on_delete=models.CASCADE, related_name='module_progress', null=True, blank=True
     )
     course_enrollment = models.ForeignKey(
-        'learning.CourseEnrollment', on_delete=models.CASCADE, related_name='module_progress',
-        null=True, blank=True
+        'learning.CourseEnrollment', on_delete=models.CASCADE, related_name='module_progress', null=True, blank=True
     )
     module = models.ForeignKey(EventModule, on_delete=models.CASCADE, related_name='progress_records')
 
@@ -497,14 +492,14 @@ class ModuleProgress(BaseModel):
         verbose_name_plural = 'Module Progress'
         constraints = [
             models.UniqueConstraint(
-                fields=['registration', 'module'], 
+                fields=['registration', 'module'],
                 name='unique_registration_module',
-                condition=models.Q(registration__isnull=False)
+                condition=models.Q(registration__isnull=False),
             ),
-             models.UniqueConstraint(
-                fields=['course_enrollment', 'module'], 
+            models.UniqueConstraint(
+                fields=['course_enrollment', 'module'],
                 name='unique_enrollment_module',
-                condition=models.Q(course_enrollment__isnull=False)
+                condition=models.Q(course_enrollment__isnull=False),
             ),
         ]
 
@@ -556,6 +551,7 @@ class ModuleProgress(BaseModel):
 # Self-Paced Courses (Organization-owned)
 # =============================================================================
 
+
 class Course(BaseModel):
     """
     Self-paced learning course, owned by an organization.
@@ -584,7 +580,9 @@ class Course(BaseModel):
         'organizations.Organization',
         on_delete=models.CASCADE,
         related_name='courses',
-        help_text="Organization that owns this course",
+        null=True,
+        blank=True,
+        help_text="Organization that owns this course (null for personal LMS plans)",
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -603,17 +601,12 @@ class Course(BaseModel):
 
     title = models.CharField(max_length=255, help_text="Course title")
     format = models.CharField(
-        max_length=20, 
-        choices=CourseFormat.choices, 
-        default=CourseFormat.ONLINE, 
-        help_text="Delivery format"
+        max_length=20, choices=CourseFormat.choices, default=CourseFormat.ONLINE, help_text="Delivery format"
     )
     slug = models.SlugField(max_length=100, help_text="URL-friendly identifier")
     description = models.TextField(blank=True, max_length=5000, help_text="Course description")
     short_description = models.CharField(max_length=300, blank=True, help_text="Brief description for listings")
-    featured_image = models.ImageField(
-        upload_to='courses/images/', null=True, blank=True, help_text="Featured image"
-    )
+    featured_image = models.ImageField(upload_to='courses/images/', null=True, blank=True, help_text="Featured image")
     featured_image_url = models.URLField(blank=True, help_text="External featured image URL")
 
     # =========================================
@@ -624,7 +617,7 @@ class Course(BaseModel):
     zoom_meeting_password = models.CharField(max_length=50, blank=True, help_text="Zoom Meeting Password")
     zoom_webinar_id = models.CharField(max_length=100, blank=True, help_text="Zoom Webinar ID (if webinar)")
     zoom_registrant_id = models.CharField(max_length=255, blank=True, help_text="Zoom Registrant tracking")
-    
+
     # Live session scheduling (for Hybrid format)
     live_session_start = models.DateTimeField(null=True, blank=True, help_text="Start time for live session")
     live_session_end = models.DateTimeField(null=True, blank=True, help_text="End time for live session")
@@ -633,24 +626,20 @@ class Course(BaseModel):
     # =========================================
     # CPD Settings
     # =========================================
-    cpd_credits = models.DecimalField(
-        max_digits=5, decimal_places=2, default=0, help_text="Total CPD credits for course"
-    )
+    cpd_credits = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Total CPD credits for course")
     cpd_type = models.CharField(max_length=50, blank=True, help_text="Type of CPD credits")
 
     # =========================================
     # Status & Visibility
     # =========================================
-    status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.DRAFT, db_index=True
-    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT, db_index=True)
     is_public = models.BooleanField(default=True, help_text="Visible in public listings")
 
     # =========================================
     # Pricing
     # =========================================
     thumbnail = models.ImageField(upload_to='courses/thumbnails/', blank=True, null=True)
-    
+
     # =========================================
     # Pricing & Payments
     # =========================================
@@ -663,22 +652,15 @@ class Course(BaseModel):
     # Enrollment Settings
     # =========================================
     enrollment_open = models.BooleanField(default=True, help_text="Accept new enrollments")
-    max_enrollments = models.PositiveIntegerField(
-        null=True, blank=True, help_text="Maximum enrollments (null = unlimited)"
-    )
-    enrollment_requires_approval = models.BooleanField(
-        default=False, help_text="Require approval for enrollment"
-    )
+    max_enrollments = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum enrollments (null = unlimited)")
+    enrollment_requires_approval = models.BooleanField(default=False, help_text="Require approval for enrollment")
 
     # =========================================
     # Duration & Completion
     # =========================================
-    estimated_hours = models.DecimalField(
-        max_digits=5, decimal_places=1, default=0, help_text="Estimated hours to complete"
-    )
+    estimated_hours = models.DecimalField(max_digits=5, decimal_places=1, default=0, help_text="Estimated hours to complete")
     passing_score = models.PositiveIntegerField(
-        default=70, validators=[MinValueValidator(0), MaxValueValidator(100)],
-        help_text="Minimum score to pass (0-100)"
+        default=70, validators=[MinValueValidator(0), MaxValueValidator(100)], help_text="Minimum score to pass (0-100)"
     )
 
     # =========================================
@@ -693,9 +675,7 @@ class Course(BaseModel):
         related_name='courses',
         help_text="Template for certificates",
     )
-    auto_issue_certificates = models.BooleanField(
-        default=True, help_text="Auto-issue when course is completed"
-    )
+    auto_issue_certificates = models.BooleanField(default=True, help_text="Auto-issue when course is completed")
 
     # =========================================
     # Stats (denormalized)
@@ -707,7 +687,18 @@ class Course(BaseModel):
     class Meta:
         db_table = 'courses'
         ordering = ['-created_at']
-        unique_together = ['organization', 'slug']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'slug'],
+                condition=models.Q(organization__isnull=False),
+                name='unique_course_slug_per_organization',
+            ),
+            models.UniqueConstraint(
+                fields=['created_by', 'slug'],
+                condition=models.Q(organization__isnull=True),
+                name='unique_course_slug_per_owner',
+            ),
+        ]
         indexes = [
             models.Index(fields=['status']),
             models.Index(fields=['organization', 'status']),
@@ -718,6 +709,33 @@ class Course(BaseModel):
 
     def __str__(self):
         return self.title
+
+    def can_manage(self, user) -> bool:
+        """Check if user can manage this course."""
+        if not user or not getattr(user, 'is_authenticated', False):
+            return False
+        if user.is_staff:
+            return True
+        if self.organization_id:
+            return self.organization.memberships.filter(
+                user=user,
+                role__in=['admin', 'course_manager'],
+                is_active=True,
+            ).exists()
+        return self.created_by_id == user.id
+
+    def can_instruct(self, user) -> bool:
+        """Check if user is an instructor assigned to this course."""
+        if not user or not getattr(user, 'is_authenticated', False):
+            return False
+        if not self.organization_id:
+            return False
+        return self.organization.memberships.filter(
+            user=user,
+            role='instructor',
+            assigned_course=self,
+            is_active=True,
+        ).exists()
 
     @property
     def is_free(self):
@@ -764,11 +782,36 @@ class Course(BaseModel):
         self.enrollment_count = self.enrollments.filter(
             status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED]
         ).count()
-        self.completion_count = self.enrollments.filter(
-            status=CourseEnrollment.Status.COMPLETED
-        ).count()
+        self.completion_count = self.enrollments.filter(status=CourseEnrollment.Status.COMPLETED).count()
         self.module_count = self.modules.count()
         self.save(update_fields=['enrollment_count', 'completion_count', 'module_count', 'updated_at'])
+
+
+class CourseAnnouncement(BaseModel):
+    """
+    Announcements for a course.
+    """
+
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='announcements')
+    title = models.CharField(max_length=255)
+    body = models.TextField()
+    is_published = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='course_announcements',
+    )
+
+    class Meta:
+        db_table = 'course_announcements'
+        ordering = ['-created_at']
+        verbose_name = 'Course Announcement'
+        verbose_name_plural = 'Course Announcements'
+
+    def __str__(self):
+        return f"{self.course.title} - {self.title}"
 
 
 class CourseModule(BaseModel):
@@ -810,14 +853,10 @@ class CourseEnrollment(BaseModel):
 
     # Relationships
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='enrollments')
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='course_enrollments'
-    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='course_enrollments')
 
     # Status
-    status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True
-    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True)
 
     # Timestamps
     enrolled_at = models.DateTimeField(auto_now_add=True, help_text="When user enrolled")
@@ -833,13 +872,22 @@ class CourseEnrollment(BaseModel):
     time_spent_minutes = models.PositiveIntegerField(default=0, help_text="Total time spent")
 
     # Score
-    current_score = models.PositiveIntegerField(
-        null=True, blank=True, help_text="Current aggregate score"
-    )
+    current_score = models.PositiveIntegerField(null=True, blank=True, help_text="Current aggregate score")
 
     # Certificate
     certificate_issued = models.BooleanField(default=False, help_text="Certificate issued")
     certificate_issued_at = models.DateTimeField(null=True, blank=True)
+
+    # Manual completion override
+    manually_completed = models.BooleanField(default=False, help_text="Manually marked complete by instructor/manager")
+    manually_completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='manual_course_completions',
+        help_text="User who manually marked this enrollment complete",
+    )
 
     class Meta:
         db_table = 'course_enrollments'
@@ -884,27 +932,36 @@ class CourseEnrollment(BaseModel):
         self.status = self.Status.COMPLETED
         self.completed_at = timezone.now()
         self.progress_percent = 100
-        
+
         # Issue certificate if enabled
         if not self.certificate_issued:
             if self.course.certificates_enabled and self.course.auto_issue_certificates and self.course.certificate_template:
                 from certificates.models import Certificate
-                
+
                 # Check for existing cert first (avoid duplicates)
                 if not Certificate.objects.filter(course_enrollment=self).exists():
                     cert = Certificate.objects.create(
                         course_enrollment=self,
                         template=self.course.certificate_template,
                         status=Certificate.Status.ACTIVE,
-                        issued_by=self.course.created_by or self.user, # Fallback to user if creator deleted? Or system user?
+                        issued_by=self.course.created_by or self.user,  # Fallback to user if creator deleted? Or system user?
                     )
                     cert.build_certificate_data()
                     cert.save()
-                    
+
                     self.certificate_issued = True
                     self.certificate_issued_at = timezone.now()
-        
-        self.save(update_fields=['status', 'completed_at', 'progress_percent', 'certificate_issued', 'certificate_issued_at', 'updated_at'])
+
+        self.save(
+            update_fields=[
+                'status',
+                'completed_at',
+                'progress_percent',
+                'certificate_issued',
+                'certificate_issued_at',
+                'updated_at',
+            ]
+        )
         self.course.update_counts()
 
     def drop(self):
@@ -924,7 +981,7 @@ class CourseEnrollment(BaseModel):
         for course_module in self.course.modules.filter(is_required=True):
             try:
                 progress = ModuleProgress.objects.get(
-                    registration__user=self.user,
+                    course_enrollment=self,
                     module=course_module.module,
                 )
                 if progress.status == ModuleProgress.Status.COMPLETED:
@@ -935,9 +992,86 @@ class CourseEnrollment(BaseModel):
         self.modules_completed = completed
         self.progress_percent = int((completed / total_modules) * 100)
 
-        # Auto-complete if all modules done
-        if self.progress_percent >= 100 and self.status == self.Status.ACTIVE:
-            self.complete()
-        else:
-            self.save(update_fields=['modules_completed', 'progress_percent', 'updated_at'])
+        # Check completion after updating progress
+        self.check_completion()
 
+    def check_completion(self):
+        """
+        Check if course should be marked complete.
+
+        Business Rule: Course completion requires:
+        - All required quizzes/assignments passed (score >= passing_score)
+        - OR instructor/manager has manually marked complete
+
+        If either condition is met and status is ACTIVE, mark as COMPLETED.
+        """
+        if self.status != self.Status.ACTIVE:
+            return False
+
+        # Check for manual completion override
+        if getattr(self, 'manually_completed', False):
+            self.complete()
+            return True
+
+        # Check if all quizzes/assignments are passed
+        if self._are_all_requirements_passed():
+            self.complete()
+            return True
+
+        # Not complete yet, just save progress
+        self.save(update_fields=['modules_completed', 'progress_percent', 'updated_at'])
+        return False
+
+    def _are_all_requirements_passed(self) -> bool:
+        """
+        Check if all required quizzes/assignments are passed.
+
+        Returns True if:
+        - All required assignments have at least one submission with passing score
+        - OR there are no required assignments (pure content course)
+        """
+        # Get all required modules for this course
+        required_modules = self.course.modules.filter(is_required=True).values_list('module_id', flat=True)
+
+        if not required_modules:
+            # No required modules, check if 100% progress
+            return self.progress_percent >= 100
+
+        # Get all assignments from required modules
+        required_assignments = Assignment.objects.filter(module_id__in=required_modules)
+
+        if not required_assignments.exists():
+            # No assignments, just check module progress
+            return self.progress_percent >= 100
+
+        # Check each required assignment has a passing submission
+        for assignment in required_assignments:
+            has_passing = (
+                AssignmentSubmission.objects.filter(
+                    assignment=assignment,
+                    course_enrollment=self,
+                    status__in=[
+                        AssignmentSubmission.Status.GRADED,
+                        AssignmentSubmission.Status.APPROVED,
+                    ],
+                )
+                .filter(score__gte=assignment.passing_score)
+                .exists()
+            )
+
+            if not has_passing:
+                return False
+
+        return True
+
+    def mark_complete_manually(self, completed_by):
+        """
+        Manually mark course as complete (instructor/manager override).
+
+        Args:
+            completed_by: User who marked completion (instructor or course manager)
+        """
+        self.manually_completed = True
+        self.manually_completed_by = completed_by
+        self.save(update_fields=['manually_completed', 'manually_completed_by', 'updated_at'])
+        self.complete()

@@ -9,6 +9,7 @@ from .models import (
     AssignmentSubmission,
     ContentProgress,
     Course,
+    CourseAnnouncement,
     CourseEnrollment,
     CourseModule,
     EventModule,
@@ -240,6 +241,39 @@ class AssignmentSubmissionSerializer(serializers.ModelSerializer):
         ]
 
 
+class AssignmentSubmissionStaffSerializer(serializers.ModelSerializer):
+    """Submission details for course staff."""
+
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    assignment_title = serializers.CharField(source='assignment.title', read_only=True)
+    user_email = serializers.EmailField(source='course_enrollment.user.email', read_only=True)
+    user_name = serializers.CharField(source='course_enrollment.user.full_name', read_only=True)
+    user_uuid = serializers.UUIDField(source='course_enrollment.user.uuid', read_only=True)
+
+    class Meta:
+        model = AssignmentSubmission
+        fields = [
+            'uuid',
+            'assignment',
+            'assignment_title',
+            'status',
+            'status_display',
+            'attempt_number',
+            'submitted_at',
+            'content',
+            'file_url',
+            'score',
+            'feedback',
+            'graded_at',
+            'user_uuid',
+            'user_email',
+            'user_name',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = fields
+
+
 class AssignmentSubmissionCreateSerializer(serializers.ModelSerializer):
     """Submit assignment."""
 
@@ -349,11 +383,12 @@ class AttendeeLearningDashboardSerializer(serializers.Serializer):
     cpd_credits_earned = serializers.DecimalField(max_digits=5, decimal_places=2)
     modules = ModuleProgressSerializer(many=True)
 
+
 class CourseModuleSerializer(serializers.ModelSerializer):
     """Course module link with nested module details."""
-    
+
     module = EventModuleSerializer(read_only=True)
-    
+
     class Meta:
         model = CourseModule
         fields = ['uuid', 'module', 'order', 'is_required', 'created_at', 'updated_at']
@@ -361,11 +396,12 @@ class CourseModuleSerializer(serializers.ModelSerializer):
 
 class CourseSerializer(serializers.ModelSerializer):
     """Full course details."""
-    
+
     modules = CourseModuleSerializer(many=True, read_only=True)
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.CharField(source='organization.slug', read_only=True)
-    
+    organization_logo_url = serializers.CharField(source='organization.effective_logo_url', read_only=True)
+
     class Meta:
         model = Course
         fields = [
@@ -373,6 +409,7 @@ class CourseSerializer(serializers.ModelSerializer):
             'organization',
             'organization_name',
             'organization_slug',
+            'organization_logo_url',
             'title',
             'slug',
             'description',
@@ -417,17 +454,23 @@ class CourseSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = [
-            'uuid', 'organization', 'enrollment_count', 
-            'completion_count', 'module_count', 'created_at', 'updated_at'
+            'uuid',
+            'organization',
+            'enrollment_count',
+            'completion_count',
+            'module_count',
+            'created_at',
+            'updated_at',
         ]
 
 
 class CourseListSerializer(serializers.ModelSerializer):
     """List view for courses."""
-    
+
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     organization_slug = serializers.CharField(source='organization.slug', read_only=True)
-    
+    organization_logo_url = serializers.CharField(source='organization.effective_logo_url', read_only=True)
+
     class Meta:
         model = Course
         fields = [
@@ -435,6 +478,7 @@ class CourseListSerializer(serializers.ModelSerializer):
             'organization',
             'organization_name',
             'organization_slug',
+            'organization_logo_url',
             'title',
             'slug',
             'short_description',
@@ -455,10 +499,9 @@ class CourseListSerializer(serializers.ModelSerializer):
         ]
 
 
-
 class CourseCreateSerializer(serializers.ModelSerializer):
     """Create/update course."""
-    
+
     class Meta:
         model = Course
         fields = [
@@ -496,9 +539,9 @@ class CourseCreateSerializer(serializers.ModelSerializer):
 
 class CourseEnrollmentSerializer(serializers.ModelSerializer):
     """Enrollment details."""
-    
+
     course = CourseListSerializer(read_only=True)
-    
+
     class Meta:
         model = CourseEnrollment
         fields = [
@@ -515,3 +558,51 @@ class CourseEnrollmentSerializer(serializers.ModelSerializer):
             'certificate_issued_at',
         ]
         read_only_fields = fields
+
+
+class CourseEnrollmentRosterSerializer(serializers.ModelSerializer):
+    """Enrollment details for course staff roster views."""
+
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+    user_uuid = serializers.UUIDField(source='user.uuid', read_only=True)
+
+    class Meta:
+        model = CourseEnrollment
+        fields = [
+            'uuid',
+            'user_uuid',
+            'user_email',
+            'user_name',
+            'status',
+            'enrolled_at',
+            'started_at',
+            'completed_at',
+            'progress_percent',
+            'modules_completed',
+            'certificate_issued',
+            'certificate_issued_at',
+        ]
+        read_only_fields = fields
+
+
+class CourseAnnouncementSerializer(serializers.ModelSerializer):
+    """Course announcement details."""
+
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
+    created_by_email = serializers.EmailField(source='created_by.email', read_only=True)
+
+    class Meta:
+        model = CourseAnnouncement
+        fields = [
+            'uuid',
+            'title',
+            'body',
+            'is_published',
+            'created_by',
+            'created_by_name',
+            'created_by_email',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['uuid', 'created_by', 'created_at', 'updated_at']

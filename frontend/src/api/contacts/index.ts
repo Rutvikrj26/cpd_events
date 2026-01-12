@@ -174,3 +174,13 @@ export async function getContactList(uuid: string): Promise<ContactList> {
     const response = await client.get(`/contact-lists/${uuid}/`);
     return response.data;
 }
+export interface CreateContactListParams {
+    name: string;
+    description?: string;
+    organization_uuid?: string;
+}
+
+export async function createContactList(data: CreateContactListParams): Promise<ContactList> {
+    const response = await client.post("/contact-lists/", data);
+    return response.data;
+}

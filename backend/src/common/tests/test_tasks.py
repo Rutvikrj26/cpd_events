@@ -6,9 +6,7 @@ Endpoints tested:
 """
 
 import pytest
-import json
 from rest_framework import status
-
 
 # =============================================================================
 # Cloud Task Handler Tests

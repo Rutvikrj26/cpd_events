@@ -30,11 +30,11 @@ describe("SignupPage", () => {
     it("renders signup form with all fields", () => {
         renderSignupPage();
 
-        expect(screen.getByText("Create your account")).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: /create .* account/i })).toBeInTheDocument();
         expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
         expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
         expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /create account/i })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /create .* account/i })).toBeInTheDocument();
     });
 
     it("has terms checkbox", () => {

@@ -3,16 +3,16 @@ Contacts app views and viewsets.
 """
 
 from django_filters import rest_framework as filters
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema
 
 from common.permissions import IsOrganizer
 from common.rbac import roles
-from common.viewsets import BaseModelViewSet
 from common.utils import error_response
+from common.viewsets import BaseModelViewSet
 
 from . import serializers
 from .models import Contact, ContactList, Tag
@@ -52,7 +52,7 @@ class TagViewSet(BaseModelViewSet):
     GET /api/v1/tags/{uuid}/
     PATCH /api/v1/tags/{uuid}/
     DELETE /api/v1/tags/{uuid}/
-    
+
     Returns personal tags (organization=NULL) AND org-shared tags
     for organizations the user belongs to.
     """
@@ -61,17 +61,16 @@ class TagViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         from django.db.models import Q
+
         user = self.request.user
-        
+
         # Personal tags (no org)
         personal = Q(owner=user, organization__isnull=True)
-        
+
         # Org-shared tags (user is member of the org)
-        user_org_ids = user.organization_memberships.filter(
-            is_active=True
-        ).values_list('organization_id', flat=True)
+        user_org_ids = user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
         org_shared = Q(organization_id__in=user_org_ids)
-        
+
         return Tag.objects.filter(personal | org_shared).distinct()
 
     def get_serializer_class(self):
@@ -83,9 +82,7 @@ class TagViewSet(BaseModelViewSet):
         """Add user's org IDs to context for create serializer."""
         context = super().get_serializer_context()
         context['user_org_ids'] = list(
-            self.request.user.organization_memberships.filter(
-                is_active=True
-            ).values_list('organization_id', flat=True)
+            self.request.user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
         )
         return context
 
@@ -130,7 +127,7 @@ class ContactListViewSet(BaseModelViewSet):
     GET /api/v1/contact-lists/{uuid}/
     PATCH /api/v1/contact-lists/{uuid}/
     DELETE /api/v1/contact-lists/{uuid}/
-    
+
     Returns personal lists (organization=NULL) AND org-shared lists
     for organizations the user belongs to.
     """
@@ -139,17 +136,16 @@ class ContactListViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         from django.db.models import Q
+
         user = self.request.user
-        
+
         # Personal lists (no org)
         personal = Q(owner=user, organization__isnull=True)
-        
+
         # Org-shared lists (user is member of the org)
-        user_org_ids = user.organization_memberships.filter(
-            is_active=True
-        ).values_list('organization_id', flat=True)
+        user_org_ids = user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
         org_shared = Q(organization_id__in=user_org_ids)
-        
+
         return ContactList.objects.filter(personal | org_shared).distinct()
 
     def get_serializer_class(self):
@@ -163,9 +159,7 @@ class ContactListViewSet(BaseModelViewSet):
         """Add user's org IDs to context for create serializer."""
         context = super().get_serializer_context()
         context['user_org_ids'] = list(
-            self.request.user.organization_memberships.filter(
-                is_active=True
-            ).values_list('organization_id', flat=True)
+            self.request.user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
         )
         return context
 
@@ -217,39 +211,52 @@ class ContactListViewSet(BaseModelViewSet):
     def export(self, request, uuid=None):
         """Export contacts in this list as CSV."""
         import csv
+
         from django.http import HttpResponse
-        
+
         contact_list = self.get_object()
         contacts = contact_list.contacts.all().prefetch_related('tags')
-        
+
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="{contact_list.name}_contacts.csv"'
-        
+
         writer = csv.writer(response)
-        writer.writerow([
-            'Email', 'Full Name', 'Professional Title', 'Organization', 
-            'Phone', 'Notes', 'Tags', 'Source', 
-            'Events Invited', 'Events Attended', 'Status'
-        ])
-        
+        writer.writerow(
+            [
+                'Email',
+                'Full Name',
+                'Professional Title',
+                'Organization',
+                'Phone',
+                'Notes',
+                'Tags',
+                'Source',
+                'Events Invited',
+                'Events Attended',
+                'Status',
+            ]
+        )
+
         for contact in contacts:
             status_str = 'Bounced' if contact.email_bounced else ('Opted Out' if contact.email_opted_out else 'Active')
             tags_str = ', '.join(tag.name for tag in contact.tags.all())
-            
-            writer.writerow([
-                contact.email,
-                contact.full_name,
-                contact.professional_title or '',
-                contact.organization_name or '',
-                contact.phone or '',
-                contact.notes or '',
-                tags_str,
-                contact.source or '',
-                contact.events_invited_count,
-                contact.events_attended_count,
-                status_str,
-            ])
-        
+
+            writer.writerow(
+                [
+                    contact.email,
+                    contact.full_name,
+                    contact.professional_title or '',
+                    contact.organization_name or '',
+                    contact.phone or '',
+                    contact.notes or '',
+                    tags_str,
+                    contact.source or '',
+                    contact.events_invited_count,
+                    contact.events_attended_count,
+                    status_str,
+                ]
+            )
+
         return response
 
 
@@ -268,7 +275,7 @@ class ContactViewSet(BaseModelViewSet):
     GET /api/v1/contacts/{uuid}/
     PATCH /api/v1/contacts/{uuid}/
     DELETE /api/v1/contacts/{uuid}/
-    
+
     Automatically uses the user's personal contact list.
     Tags are used for segmentation instead of multiple lists.
     """
@@ -285,9 +292,7 @@ class ContactViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         contact_list = self._get_user_list()
-        return Contact.objects.filter(
-            contact_list=contact_list
-        ).prefetch_related('tags')
+        return Contact.objects.filter(contact_list=contact_list).prefetch_related('tags')
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -364,38 +369,50 @@ class ContactViewSet(BaseModelViewSet):
     def export(self, request):
         """Export contacts as CSV."""
         import csv
+
         from django.http import HttpResponse
-        
+
         contact_list = self._get_user_list()
         contacts = contact_list.contacts.all().prefetch_related('tags')
-        
+
         response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = f'attachment; filename="contacts.csv"'
-        
+        response['Content-Disposition'] = 'attachment; filename="contacts.csv"'
+
         writer = csv.writer(response)
-        writer.writerow([
-            'Email', 'Full Name', 'Professional Title', 'Organization', 
-            'Phone', 'Notes', 'Tags', 'Source', 
-            'Events Invited', 'Events Attended', 'Status'
-        ])
-        
+        writer.writerow(
+            [
+                'Email',
+                'Full Name',
+                'Professional Title',
+                'Organization',
+                'Phone',
+                'Notes',
+                'Tags',
+                'Source',
+                'Events Invited',
+                'Events Attended',
+                'Status',
+            ]
+        )
+
         for contact in contacts:
             status_str = 'Bounced' if contact.email_bounced else ('Opted Out' if contact.email_opted_out else 'Active')
             tags_str = ', '.join(tag.name for tag in contact.tags.all())
-            
-            writer.writerow([
-                contact.email,
-                contact.full_name,
-                contact.professional_title or '',
-                contact.organization_name or '',
-                contact.phone or '',
-                contact.notes or '',
-                tags_str,
-                contact.source or '',
-                contact.events_invited_count,
-                contact.events_attended_count,
-                status_str,
-            ])
-        
-        return response
 
+            writer.writerow(
+                [
+                    contact.email,
+                    contact.full_name,
+                    contact.professional_title or '',
+                    contact.organization_name or '',
+                    contact.phone or '',
+                    contact.notes or '',
+                    tags_str,
+                    contact.source or '',
+                    contact.events_invited_count,
+                    contact.events_attended_count,
+                    status_str,
+                ]
+            )
+
+        return response

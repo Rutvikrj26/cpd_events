@@ -13,7 +13,6 @@ Endpoints tested:
 import pytest
 from rest_framework import status
 
-
 # =============================================================================
 # Custom Field List/Create Tests
 # =============================================================================
@@ -95,38 +94,31 @@ class TestEventCustomFieldDetail:
     def test_retrieve_custom_field(self, organizer_client, event_with_custom_fields):
         """Organizer can retrieve a specific custom field."""
         field = event_with_custom_fields.custom_fields.first()
-        response = organizer_client.get(
-            f'/api/v1/events/{event_with_custom_fields.uuid}/custom-fields/{field.uuid}/'
-        )
+        response = organizer_client.get(f'/api/v1/events/{event_with_custom_fields.uuid}/custom-fields/{field.uuid}/')
         assert response.status_code == status.HTTP_200_OK
 
     def test_update_custom_field(self, organizer_client, event_with_custom_fields):
         """Organizer can update a custom field."""
         field = event_with_custom_fields.custom_fields.first()
         response = organizer_client.patch(
-            f'/api/v1/events/{event_with_custom_fields.uuid}/custom-fields/{field.uuid}/',
-            {'label': 'Updated Field Label'}
+            f'/api/v1/events/{event_with_custom_fields.uuid}/custom-fields/{field.uuid}/', {'label': 'Updated Field Label'}
         )
         assert response.status_code == status.HTTP_200_OK
 
     def test_delete_custom_field(self, organizer_client, event_with_custom_fields):
         """Organizer can delete a custom field."""
         field = event_with_custom_fields.custom_fields.first()
-        response = organizer_client.delete(
-            f'/api/v1/events/{event_with_custom_fields.uuid}/custom-fields/{field.uuid}/'
-        )
+        response = organizer_client.delete(f'/api/v1/events/{event_with_custom_fields.uuid}/custom-fields/{field.uuid}/')
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
     def test_update_other_event_field_forbidden(self, organizer_client, other_organizer, db):
         """Cannot update custom field on another organizer's event."""
-        from factories import EventFactory, EventCustomFieldFactory
+        from factories import EventCustomFieldFactory, EventFactory
+
         other_event = EventFactory(owner=other_organizer)
         field = EventCustomFieldFactory(event=other_event)
-        
-        response = organizer_client.patch(
-            f'/api/v1/events/{other_event.uuid}/custom-fields/{field.uuid}/',
-            {'label': 'Hacked'}
-        )
+
+        response = organizer_client.patch(f'/api/v1/events/{other_event.uuid}/custom-fields/{field.uuid}/', {'label': 'Hacked'})
         assert response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
 
 
@@ -144,18 +136,13 @@ class TestEventCustomFieldReorder:
         fields = list(event_with_custom_fields.custom_fields.all().order_by('order'))
         # Reverse the order
         new_order = [str(f.uuid) for f in reversed(fields)]
-        
+
         response = organizer_client.post(
-            f'/api/v1/events/{event_with_custom_fields.uuid}/custom-fields/reorder/',
-            {'order': new_order},
-            format='json'
+            f'/api/v1/events/{event_with_custom_fields.uuid}/custom-fields/reorder/', {'order': new_order}, format='json'
         )
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
 
     def test_reorder_attendee_forbidden(self, auth_client, event_with_custom_fields):
         """Attendees cannot reorder custom fields."""
-        response = auth_client.post(
-            f'/api/v1/events/{event_with_custom_fields.uuid}/custom-fields/reorder/',
-            {'order': []}
-        )
+        response = auth_client.post(f'/api/v1/events/{event_with_custom_fields.uuid}/custom-fields/reorder/', {'order': []})
         assert response.status_code == status.HTTP_403_FORBIDDEN

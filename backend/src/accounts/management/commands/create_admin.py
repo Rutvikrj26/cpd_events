@@ -2,8 +2,9 @@
 Custom management command to create a superuser non-interactively.
 Usage: python manage.py create_admin --email=admin@example.com --password=secret
 """
-from django.core.management.base import BaseCommand, CommandError
+
 from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):

@@ -1683,29 +1683,6 @@ if event.assignments_enabled:
 
 ## Plan Limits Extension
 
-Add to subscription limits:
-
-```python
-# In billing/models.py - extend PLAN_LIMITS
-
-PLAN_LIMITS = {
-    'starter': {
-        # ... existing limits ...
-        'modules_per_event': 5,
-        'assignments_per_event': 3,
-        'content_storage_gb': 5,
-    },
-    'professional': {
-        # ... existing limits ...
-        'modules_per_event': 20,
-        'assignments_per_event': 20,
-        'content_storage_gb': 50,
-    },
-    'enterprise': {
-        # ... existing limits ...
-        'modules_per_event': None,  # Unlimited
-        'assignments_per_event': None,
-        'content_storage_gb': None,
-    },
-}
-```
+Plan limits are database-driven via `StripeProduct`. If you add LMS-specific limits
+(e.g., modules per course or storage caps), add fields to `StripeProduct` and
+include them in `Subscription.limits` and `OrganizationSubscription.config`.

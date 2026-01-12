@@ -32,7 +32,7 @@ export function TrialStatusBanner({ subscription }: TrialStatusBannerProps) {
         try {
             // Redirect to Stripe Checkout to add billing and confirm subscription
             const result = await createCheckoutSession(
-                subscription.plan || 'professional',
+                subscription.plan || 'organizer',
                 `${window.location.origin}/billing?checkout=success`,
                 `${window.location.origin}/billing?checkout=canceled`
             );
@@ -43,6 +43,10 @@ export function TrialStatusBanner({ subscription }: TrialStatusBannerProps) {
         }
     };
 
+    const isLmsPlan = subscription.plan === 'lms';
+    const creationNoun = isLmsPlan ? 'courses' : 'events';
+    const planLabel = subscription.plan_display || (isLmsPlan ? 'LMS' : 'Organizer');
+
     // Attendee plan - show upgrade prompt
     if (subscription.plan === 'attendee' && subscription.status === 'active') {
         return (
@@ -51,7 +55,7 @@ export function TrialStatusBanner({ subscription }: TrialStatusBannerProps) {
                 <AlertTitle className="text-sm font-medium">Attendee Plan</AlertTitle>
                 <AlertDescription className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">
-                        Upgrade to create more events and unlock premium features.
+                        Upgrade to create more {creationNoun} and unlock paid features.
                     </span>
                     <Link to="/billing">
                         <Button size="sm" variant="outline" className="ml-4">
@@ -73,7 +77,7 @@ export function TrialStatusBanner({ subscription }: TrialStatusBannerProps) {
             <Alert className={isUrgent ? "bg-warning/10 border-warning/30" : "bg-success/10 border-success/30"}>
                 <Clock className={`h-4 w-4 ${isUrgent ? 'text-warning' : 'text-success'}`} />
                 <AlertTitle className="text-sm font-medium flex items-center gap-2">
-                    Professional Trial
+                    {planLabel} Trial
                     <Badge variant={isUrgent ? "destructive" : "secondary"} className="text-xs">
                         {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
                     </Badge>
@@ -82,7 +86,7 @@ export function TrialStatusBanner({ subscription }: TrialStatusBannerProps) {
                     <span className="text-sm text-muted-foreground">
                         {isUrgent
                             ? "Your trial is ending soon. Add billing details to keep your features."
-                            : "You have full access to all Professional features. Add billing details to continue after trial."
+                            : `You have full access to all ${planLabel} features. Add billing details to continue after trial.`
                         }
                     </span>
                     <Button
@@ -112,7 +116,7 @@ export function TrialStatusBanner({ subscription }: TrialStatusBannerProps) {
                 <AlertTitle className="text-sm font-medium">Trial Expired</AlertTitle>
                 <AlertDescription className="flex items-center justify-between">
                     <span className="text-sm">
-                        Your trial has ended. <strong>You can no longer create new events.</strong>
+                        Your trial has ended. <strong>You can no longer create new {creationNoun}.</strong>
                         Add billing details to restore full access.
                     </span>
                     <Button

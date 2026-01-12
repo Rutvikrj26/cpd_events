@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { getMyRegistrations } from "@/api/registrations";
 import { Registration } from "@/api/registrations/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { PendingInvitationsBanner } from "@/components/PendingInvitationsBanner";
 
 export function AttendeeDashboard() {
   const { user } = useAuth();
@@ -52,6 +53,8 @@ export function AttendeeDashboard() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
+      {/* Pending Invitations Banner */}
+      <PendingInvitationsBanner />
 
       {/* Welcome Header */}
       <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary to-primary/80 p-8 text-white shadow-lg">
@@ -110,7 +113,7 @@ export function AttendeeDashboard() {
             <h2 className="text-xl font-bold tracking-tight text-foreground">Your Upcoming Events</h2>
             {upcomingRegistrations.length > 0 && (
               <Button variant="link" asChild className="text-primary p-0 h-auto font-medium">
-                <Link to="/my-registrations">View All</Link>
+                <Link to="/registrations">View All</Link>
               </Button>
             )}
           </div>

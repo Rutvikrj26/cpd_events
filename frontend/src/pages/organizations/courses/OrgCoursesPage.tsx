@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrganization } from '@/contexts/OrganizationContext';
-import { getOrganizationCourses, deleteCourse, Course } from '@/api/courses';
+import { getOrganizationCourses, getOwnedCourses, deleteCourse, Course } from '@/api/courses';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import {
@@ -40,6 +40,8 @@ const OrgCoursesPage = () => {
     const { slug } = useParams<{ slug: string }>();
     const navigate = useNavigate();
     const { currentOrg, isManager } = useOrganization();
+    const isPersonal = !slug;
+    const isInstructor = Boolean(currentOrg?.user_role === 'instructor');
 
     const [courses, setCourses] = useState<Course[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -48,14 +50,18 @@ const OrgCoursesPage = () => {
     const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
 
     useEffect(() => {
+        if (!isPersonal && !currentOrg) return;
         loadCourses();
-    }, [slug]);
+    }, [slug, currentOrg, isPersonal]);
 
     const loadCourses = async () => {
-        if (!slug) return;
         setIsLoading(true);
         try {
-            const data = await getOrganizationCourses(slug);
+            if (!isPersonal && isInstructor) {
+                setCourses([]);
+                return;
+            }
+            const data = isPersonal ? await getOwnedCourses() : await getOrganizationCourses(slug as string);
             setCourses(data);
         } catch (error) {
             console.error('Failed to load courses', error);
@@ -108,16 +114,38 @@ const OrgCoursesPage = () => {
         );
     }
 
+    if (isInstructor) {
+        return (
+            <div className="container mx-auto py-8 px-4">
+                <Card>
+                    <CardContent className="py-12 text-center">
+                        <BookOpen className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                        <p className="text-muted-foreground mb-4">
+                            Instructors manage their assigned course from the instructor dashboard.
+                        </p>
+                        {slug && (
+                            <Button variant="outline" onClick={() => navigate(`/org/${slug}/instructor`)}>
+                                Go to Instructor Dashboard
+                            </Button>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
     return (
         <div className="container mx-auto py-8 px-4">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Courses</h1>
-                    <p className="text-muted-foreground">Manage your self-paced learning content.</p>
+                    <h1 className="text-3xl font-bold tracking-tight">{isPersonal ? 'My Courses' : 'Courses'}</h1>
+                    <p className="text-muted-foreground">
+                        {isPersonal ? 'Manage your course catalog and content.' : 'Manage your self-paced learning content.'}
+                    </p>
                 </div>
 
-                {isManager() && (
-                    <Button onClick={() => navigate(`/org/${slug}/courses/new`)}>
+                {(isPersonal || isManager()) && (
+                    <Button onClick={() => navigate(isPersonal ? `/courses/manage/new` : `/org/${slug}/courses/new`)}>
                         <Plus className="mr-2 h-4 w-4" />
                         Create Course
                     </Button>
@@ -223,7 +251,7 @@ const OrgCoursesPage = () => {
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onClick={() => navigate(`/org/${slug}/courses/${course.slug}`)}>
+                                                            <DropdownMenuItem onClick={() => navigate(isPersonal ? `/courses/manage/${course.slug}` : `/org/${slug}/courses/${course.slug}`)}>
                                                                 Manage Course
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => navigate(`/courses/${course.slug}`)}>

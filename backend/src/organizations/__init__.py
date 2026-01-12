@@ -1,8 +1,8 @@
 """
-Organizations app - Enterprise accounts with team management.
+Organizations app - Organization accounts with team management.
 
 Models:
-- Organization: Enterprise entity that owns events, courses, and templates
+- Organization: Entity that owns events, courses, and templates
 - OrganizationMembership: Links users to organizations with roles
 - OrganizationSubscription: Per-seat billing for organizations
 """

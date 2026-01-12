@@ -5,14 +5,14 @@ Endpoints tested:
 - POST /webhooks/stripe/
 """
 
-import pytest
-import json
-import hmac
 import hashlib
+import hmac
+import json
 import time
-from unittest.mock import patch, MagicMock
-from rest_framework import status
+from unittest.mock import MagicMock, patch
 
+import pytest
+from rest_framework import status
 
 # =============================================================================
 # Stripe Webhook Tests
@@ -29,19 +29,14 @@ class TestStripeWebhook:
         """Create a valid Stripe webhook signature."""
         timestamp = int(time.time())
         signed_payload = f'{timestamp}.{payload}'
-        signature = hmac.new(
-            secret.encode('utf-8'),
-            signed_payload.encode('utf-8'),
-            hashlib.sha256
-        ).hexdigest()
+        signature = hmac.new(secret.encode('utf-8'), signed_payload.encode('utf-8'), hashlib.sha256).hexdigest()
         return f't={timestamp},v1={signature}'
 
     @patch('stripe.Webhook.construct_event')
     def test_subscription_created(self, mock_construct_event, api_client, organizer, db, settings):
         """Handle subscription.created event."""
-        from billing.models import Subscription
         settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
-        
+
         event_data = {
             'type': 'customer.subscription.created',
             'data': {
@@ -51,15 +46,12 @@ class TestStripeWebhook:
                     'status': 'active',
                     'items': {'data': [{'price': {'id': 'price_team'}}]},
                 }
-            }
+            },
         }
         mock_construct_event.return_value = MagicMock(**event_data)
-        
+
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         # Webhook should return 200 to acknowledge receipt
         assert response.status_code == status.HTTP_200_OK
@@ -67,12 +59,13 @@ class TestStripeWebhook:
     @patch('stripe.Webhook.construct_event')
     def test_subscription_created_updates_subscription(self, mock_construct_event, api_client, user, settings):
         """Subscription created updates local subscription and user role."""
-        from billing.models import Subscription
         from django.utils import timezone
+
+        from billing.models import Subscription
 
         settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         subscription = Subscription.objects.get(user=user)
-        subscription.plan = 'professional'
+        subscription.plan = 'organizer'
         subscription.stripe_customer_id = 'cus_created123'
         subscription.save(update_fields=['plan', 'stripe_customer_id', 'updated_at'])
 
@@ -86,15 +79,12 @@ class TestStripeWebhook:
                     'current_period_start': int(timezone.now().timestamp()),
                     'current_period_end': int((timezone.now() + timezone.timedelta(days=30)).timestamp()),
                 }
-            }
+            },
         }
         mock_construct_event.return_value = event_data
 
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         assert response.status_code == status.HTTP_200_OK
 
@@ -112,31 +102,31 @@ class TestStripeWebhook:
             'type': 'customer.subscription.updated',
             'data': {
                 'object': {
-                    'id': subscription.stripe_subscription_id if hasattr(subscription, 'stripe_subscription_id') else 'sub_test',
+                    'id': (
+                        subscription.stripe_subscription_id if hasattr(subscription, 'stripe_subscription_id') else 'sub_test'
+                    ),
                     'status': 'active',
                 }
-            }
+            },
         }
         mock_construct_event.return_value = MagicMock(**event_data)
-        
+
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         assert response.status_code == status.HTTP_200_OK
 
     @patch('stripe.Webhook.construct_event')
     def test_subscription_updated_sets_cancel_flags(self, mock_construct_event, api_client, user, settings):
         """Subscription updated sets cancel flags."""
-        from billing.models import Subscription
         from django.utils import timezone
+
+        from billing.models import Subscription
 
         settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         subscription = Subscription.objects.get(user=user)
         subscription.stripe_subscription_id = 'sub_update123'
-        subscription.plan = 'professional'
+        subscription.plan = 'organizer'
         subscription.save(update_fields=['stripe_subscription_id', 'plan', 'updated_at'])
 
         event_data = {
@@ -150,15 +140,12 @@ class TestStripeWebhook:
                     'current_period_end': int((timezone.now() + timezone.timedelta(days=30)).timestamp()),
                     'canceled_at': int(timezone.now().timestamp()),
                 }
-            }
+            },
         }
         mock_construct_event.return_value = event_data
 
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         assert response.status_code == status.HTTP_200_OK
 
@@ -174,17 +161,16 @@ class TestStripeWebhook:
             'type': 'customer.subscription.deleted',
             'data': {
                 'object': {
-                    'id': subscription.stripe_subscription_id if hasattr(subscription, 'stripe_subscription_id') else 'sub_test',
+                    'id': (
+                        subscription.stripe_subscription_id if hasattr(subscription, 'stripe_subscription_id') else 'sub_test'
+                    ),
                 }
-            }
+            },
         }
         mock_construct_event.return_value = MagicMock(**event_data)
-        
+
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         assert response.status_code == status.HTTP_200_OK
 
@@ -204,15 +190,12 @@ class TestStripeWebhook:
                 'object': {
                     'id': 'sub_delete123',
                 }
-            }
+            },
         }
         mock_construct_event.return_value = event_data
 
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         assert response.status_code == status.HTTP_200_OK
 
@@ -233,35 +216,35 @@ class TestStripeWebhook:
                     'currency': 'usd',
                     'status': 'paid',
                 }
-            }
+            },
         }
         mock_construct_event.return_value = MagicMock(**event_data)
-        
+
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         assert response.status_code == status.HTTP_200_OK
 
     @patch('stripe.Webhook.construct_event')
     def test_invoice_paid_creates_invoice_and_resets_usage(self, mock_construct_event, api_client, user, settings):
         """invoice.paid creates invoice and resets usage counters."""
-        from billing.models import Subscription, Invoice
         from django.utils import timezone
+
+        from billing.models import Invoice, Subscription
 
         settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         subscription = Subscription.objects.get(user=user)
         subscription.stripe_customer_id = 'cus_paid123'
         subscription.events_created_this_period = 3
         subscription.certificates_issued_this_period = 5
-        subscription.save(update_fields=[
-            'stripe_customer_id',
-            'events_created_this_period',
-            'certificates_issued_this_period',
-            'updated_at',
-        ])
+        subscription.save(
+            update_fields=[
+                'stripe_customer_id',
+                'events_created_this_period',
+                'certificates_issued_this_period',
+                'updated_at',
+            ]
+        )
 
         event_data = {
             'type': 'invoice.paid',
@@ -274,15 +257,12 @@ class TestStripeWebhook:
                     'period_start': int(timezone.now().timestamp()),
                     'period_end': int((timezone.now() + timezone.timedelta(days=30)).timestamp()),
                 }
-            }
+            },
         }
         mock_construct_event.return_value = event_data
 
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         assert response.status_code == status.HTTP_200_OK
 
@@ -304,22 +284,19 @@ class TestStripeWebhook:
                     'customer': 'cus_test123',
                     'attempt_count': 1,
                 }
-            }
+            },
         }
         mock_construct_event.return_value = MagicMock(**event_data)
-        
+
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         assert response.status_code == status.HTTP_200_OK
 
     @patch('stripe.Webhook.construct_event')
     def test_invoice_payment_failed_marks_past_due(self, mock_construct_event, api_client, user, settings):
         """invoice.payment_failed marks subscription past due and creates invoice."""
-        from billing.models import Subscription, Invoice
+        from billing.models import Invoice, Subscription
         from integrations.services import email_service
 
         settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
@@ -336,16 +313,13 @@ class TestStripeWebhook:
                     'amount_due': 1299,
                     'currency': 'usd',
                 }
-            }
+            },
         }
         mock_construct_event.return_value = event_data
 
         with patch.object(email_service, 'send_email') as mock_send:
             response = api_client.post(
-                self.endpoint,
-                json.dumps(event_data),
-                content_type='application/json',
-                HTTP_STRIPE_SIGNATURE='test_sig'
+                self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
             )
 
         assert response.status_code == status.HTTP_200_OK
@@ -358,8 +332,9 @@ class TestStripeWebhook:
     @patch('stripe.Webhook.construct_event')
     def test_invoice_finalized_creates_open_invoice(self, mock_construct_event, api_client, user, settings):
         """invoice.finalized creates an open invoice record."""
-        from billing.models import Subscription, Invoice
         from django.utils import timezone
+
+        from billing.models import Invoice, Subscription
 
         settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         subscription = Subscription.objects.get(user=user)
@@ -376,15 +351,12 @@ class TestStripeWebhook:
                     'currency': 'usd',
                     'due_date': int((timezone.now() + timezone.timedelta(days=7)).timestamp()),
                 }
-            }
+            },
         }
         mock_construct_event.return_value = event_data
 
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         assert response.status_code == status.HTTP_200_OK
         invoice = Invoice.objects.get(stripe_invoice_id='in_finalized123')
@@ -403,17 +375,14 @@ class TestStripeWebhook:
                     'card': {
                         'brand': 'visa',
                         'last4': '4242',
-                    }
+                    },
                 }
-            }
+            },
         }
         mock_construct_event.return_value = MagicMock(**event_data)
-        
+
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         assert response.status_code == status.HTTP_200_OK
 
@@ -432,15 +401,12 @@ class TestStripeWebhook:
                 'object': {
                     'id': 'pm_detached123',
                 }
-            }
+            },
         }
         mock_construct_event.return_value = event_data
 
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         assert response.status_code == status.HTTP_200_OK
         assert not PaymentMethod.objects.filter(id=pm.id).exists()
@@ -449,17 +415,11 @@ class TestStripeWebhook:
     def test_unknown_event_type(self, mock_construct_event, api_client, settings):
         settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         """Unknown event types are acknowledged but not processed."""
-        event_data = {
-            'type': 'unknown.event.type',
-            'data': {'object': {}}
-        }
+        event_data = {'type': 'unknown.event.type', 'data': {'object': {}}}
         mock_construct_event.return_value = MagicMock(**event_data)
-        
+
         response = api_client.post(
-            self.endpoint,
-            json.dumps(event_data),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='test_sig'
+            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
         )
         # Should still return 200 to acknowledge
         assert response.status_code == status.HTTP_200_OK
@@ -469,14 +429,10 @@ class TestStripeWebhook:
         settings.STRIPE_WEBHOOK_SECRET = 'test_webhook_secret'
         """Invalid signature is rejected."""
         from stripe import SignatureVerificationError
-        mock_construct_event.side_effect = SignatureVerificationError(
-            'Invalid signature', 'test_sig'
-        )
-        
+
+        mock_construct_event.side_effect = SignatureVerificationError('Invalid signature', 'test_sig')
+
         response = api_client.post(
-            self.endpoint,
-            json.dumps({'type': 'test'}),
-            content_type='application/json',
-            HTTP_STRIPE_SIGNATURE='invalid_sig'
+            self.endpoint, json.dumps({'type': 'test'}), content_type='application/json', HTTP_STRIPE_SIGNATURE='invalid_sig'
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST

@@ -23,6 +23,9 @@ import {
   NavigationMenu,
   NavigationMenuItem,
   NavigationMenuList,
+  NavigationMenuContent,
+  NavigationMenuTrigger,
+  NavigationMenuLink,
 } from "@/components/ui/navigation-menu";
 import { cn } from "@/lib/utils";
 
@@ -71,8 +74,23 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               {/* Main Nav Links with Dropdowns */}
               <NavigationMenu>
                 <NavigationMenuList>
+                  <NavigationMenuItem>
+                    <NavigationMenuTrigger>Products</NavigationMenuTrigger>
+                    <NavigationMenuContent>
+                      <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px]">
+                        <ListItem href="/products/events" title="Event Management">
+                          Host webinars, workshops, and CPD events.
+                        </ListItem>
+                        <ListItem href="/products/lms" title="LMS & Courses">
+                          Create and sell self-paced online courses.
+                        </ListItem>
+                        <ListItem href="/products/organizations" title="Organizations">
+                          Tools for training agencies and teams.
+                        </ListItem>
+                      </ul>
+                    </NavigationMenuContent>
+                  </NavigationMenuItem>
 
-                  {/* Pricing Link */}
                   <NavigationMenuItem>
                     <Link
                       to="/pricing"
@@ -85,41 +103,24 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     </Link>
                   </NavigationMenuItem>
 
-                  {/* Resources Links (extracted) */}
                   <NavigationMenuItem>
-                    <Link
-                      to="/faq"
-                      className={cn(
-                        "group inline-flex h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground focus:outline-none",
-                        isActive('/faq') ? 'text-foreground bg-muted' : 'text-muted-foreground'
-                      )}
-                    >
-                      FAQ
-                    </Link>
-                  </NavigationMenuItem>
-
-                  <NavigationMenuItem>
-                    <Link
-                      to="/about"
-                      className={cn(
-                        "group inline-flex h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground focus:outline-none",
-                        isActive('/about') ? 'text-foreground bg-muted' : 'text-muted-foreground'
-                      )}
-                    >
-                      About
-                    </Link>
-                  </NavigationMenuItem>
-
-                  <NavigationMenuItem>
-                    <Link
-                      to="/contact"
-                      className={cn(
-                        "group inline-flex h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground focus:outline-none",
-                        isActive('/contact') ? 'text-foreground bg-muted' : 'text-muted-foreground'
-                      )}
-                    >
-                      Contact
-                    </Link>
+                    <NavigationMenuTrigger>Resources</NavigationMenuTrigger>
+                    <NavigationMenuContent>
+                      <ul className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2">
+                        <ListItem href="/faq" title="FAQ">
+                          Common questions and answers.
+                        </ListItem>
+                        <ListItem href="/about" title="About">
+                          Our mission and values.
+                        </ListItem>
+                        <ListItem href="/contact" title="Contact Us">
+                          Get in touch with our team.
+                        </ListItem>
+                        <ListItem href="/verify" title="Verify Certificate">
+                          Check certificate authenticity.
+                        </ListItem>
+                      </ul>
+                    </NavigationMenuContent>
                   </NavigationMenuItem>
                 </NavigationMenuList>
               </NavigationMenu>
@@ -207,37 +208,69 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-border bg-card/95 backdrop-blur-xl px-4 py-6 shadow-lg animate-fade-in-down">
-            <nav className="flex flex-col gap-2">
+            <nav className="flex flex-col gap-6">
+              {/* Products Group */}
+              <div className="flex flex-col gap-1">
+                <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Products
+                </div>
+                <Link
+                  to="/products/events"
+                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Event Management
+                </Link>
+                <Link
+                  to="/products/lms"
+                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  LMS & Courses
+                </Link>
+                <Link
+                  to="/products/organizations"
+                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Organizations
+                </Link>
+              </div>
 
-              <Link
-                to="/pricing"
-                className="px-4 py-3 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Pricing
-              </Link>
-
-              <Link
-                to="/faq"
-                className="px-4 py-3 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                FAQ
-              </Link>
-              <Link
-                to="/about"
-                className="px-4 py-3 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                About
-              </Link>
-              <Link
-                to="/contact"
-                className="px-4 py-3 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Contact
-              </Link>
+              {/* Resources Group */}
+              <div className="flex flex-col gap-1">
+                <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Resources
+                </div>
+                <Link
+                  to="/pricing"
+                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Pricing
+                </Link>
+                <Link
+                  to="/faq"
+                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  FAQ
+                </Link>
+                <Link
+                  to="/about"
+                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  About
+                </Link>
+                <Link
+                  to="/contact"
+                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Contact
+                </Link>
+              </div>
 
               <div className="h-px bg-border my-4" />
 
@@ -351,5 +384,29 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-// List Item Component for Navigation Menu
 
+const ListItem = React.forwardRef<
+  React.ElementRef<"a">,
+  React.ComponentPropsWithoutRef<"a">
+>(({ className, title, children, ...props }, ref) => {
+  return (
+    <li>
+      <NavigationMenuLink asChild>
+        <a
+          ref={ref}
+          className={cn(
+            "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+            className
+          )}
+          {...props}
+        >
+          <div className="text-sm font-medium leading-none">{title}</div>
+          <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
+            {children}
+          </p>
+        </a>
+      </NavigationMenuLink>
+    </li>
+  )
+})
+ListItem.displayName = "ListItem"

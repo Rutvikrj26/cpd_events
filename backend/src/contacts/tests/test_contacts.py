@@ -17,8 +17,8 @@ Endpoints tested:
 
 import pytest
 from rest_framework import status
-from contacts.models import ContactList, Contact
 
+from contacts.models import Contact, ContactList
 
 # =============================================================================
 # Tag Tests
@@ -49,10 +49,13 @@ class TestTagViewSet:
 
     def test_update_tag(self, organizer_client, tag):
         """Organizer can update a tag."""
-        response = organizer_client.patch(f'{self.endpoint}{tag.uuid}/', {
-            'name': 'Updated Tag',
-            'color': '#00FF00',
-        })
+        response = organizer_client.patch(
+            f'{self.endpoint}{tag.uuid}/',
+            {
+                'name': 'Updated Tag',
+                'color': '#00FF00',
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
         tag.refresh_from_db()
         assert tag.name == 'Updated Tag'
@@ -82,11 +85,11 @@ class TestContactList:
     def test_list_auto_created(self, organizer_client, organizer):
         """List is auto-created on first access."""
         assert ContactList.objects.filter(owner=organizer).count() == 0
-        
+
         # Access contacts endpoint should trigger creation
         response = organizer_client.get('/api/v1/contacts/')
         assert response.status_code == status.HTTP_200_OK
-        
+
         assert ContactList.objects.filter(owner=organizer).count() == 1
         contact_list = ContactList.objects.get(owner=organizer)
         assert contact_list.name == 'My Contacts'
@@ -94,7 +97,7 @@ class TestContactList:
     def test_get_contact_lists(self, organizer_client, organizer):
         """Organizer can see their list in the lists endpoint."""
         ContactList.get_or_create_for_user(organizer)
-        
+
         response = organizer_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data['results']) >= 1
@@ -132,9 +135,12 @@ class TestContactViewSet:
 
     def test_update_contact(self, organizer_client, contact):
         """Organizer can update a contact."""
-        response = organizer_client.patch(f'{self.endpoint}{contact.uuid}/', {
-            'full_name': 'Updated Name',
-        })
+        response = organizer_client.patch(
+            f'{self.endpoint}{contact.uuid}/',
+            {
+                'full_name': 'Updated Name',
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
         contact.refresh_from_db()
         assert contact.full_name == 'Updated Name'
@@ -162,7 +168,7 @@ class TestContactViewSet:
         response = organizer_client.get(f'{self.endpoint}export/')
         assert response.status_code == status.HTTP_200_OK
         assert response['Content-Type'] == 'text/csv'
-        
+
         content = response.content.decode('utf-8')
         assert 'Email,Full Name' in content
         assert contact.email in content

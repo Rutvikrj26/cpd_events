@@ -6,7 +6,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
-from common.config import AttendanceThresholds, EventDuration, EventDuplication, SessionDefaults
+from common.config import AttendanceThresholds, EventDuplication, EventDuration, SessionDefaults
 from common.models import BaseModel, SoftDeleteModel
 from common.validators import validate_zoom_settings_schema
 
@@ -87,13 +87,9 @@ class Event(SoftDeleteModel):
     event_type = models.CharField(
         max_length=20, choices=EventType.choices, default=EventType.WEBINAR, help_text="Type of event"
     )
-    format = models.CharField(
-        max_length=20, choices=EventFormat.choices, default=EventFormat.ONLINE, help_text="Event format"
-    )
+    format = models.CharField(max_length=20, choices=EventFormat.choices, default=EventFormat.ONLINE, help_text="Event format")
 
-    is_multi_session = models.BooleanField(
-        default=False, help_text="Is this a multi-session event?"
-    )
+    is_multi_session = models.BooleanField(default=False, help_text="Is this a multi-session event?")
 
     class MultiSessionCompletionCriteria(models.TextChoices):
         ALL_SESSIONS = 'all_sessions', 'All Sessions'
@@ -104,12 +100,8 @@ class Event(SoftDeleteModel):
     # =========================================
     # CPD & Educational Content
     # =========================================
-    learning_objectives = models.JSONField(
-        default=list, blank=True, help_text="List of learning objectives (strings)"
-    )
-    speakers = models.ManyToManyField(
-        'Speaker', blank=True, related_name='events', help_text="Speakers for this event"
-    )
+    learning_objectives = models.JSONField(default=list, blank=True, help_text="List of learning objectives (strings)")
+    speakers = models.ManyToManyField('Speaker', blank=True, related_name='events', help_text="Speakers for this event")
 
     multi_session_completion_criteria = models.CharField(
         max_length=50,
@@ -138,7 +130,7 @@ class Event(SoftDeleteModel):
     duration_minutes = models.PositiveIntegerField(
         default=EventDuration.DEFAULT,
         validators=[MinValueValidator(EventDuration.MIN), MaxValueValidator(EventDuration.MAX)],
-        help_text=f"Duration in minutes ({EventDuration.MIN}-{EventDuration.MAX})"
+        help_text=f"Duration in minutes ({EventDuration.MIN}-{EventDuration.MAX})",
     )
 
     # Actual timing (set when event runs)
@@ -150,6 +142,7 @@ class Event(SoftDeleteModel):
     # =========================================
     class Currency(models.TextChoices):
         """Stripe-supported currencies (ISO 4217)."""
+
         USD = 'USD', 'US Dollar ($)'
         CAD = 'CAD', 'Canadian Dollar (CA$)'
         EUR = 'EUR', 'Euro (€)'
@@ -161,16 +154,15 @@ class Event(SoftDeleteModel):
         # See: https://stripe.com/docs/currencies
 
     currency = models.CharField(
-        max_length=3,
-        choices=Currency.choices,
-        default=Currency.USD,
-        help_text="Currency code (ISO 4217)"
+        max_length=3, choices=Currency.choices, default=Currency.USD, help_text="Currency code (ISO 4217)"
     )
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Ticket price (0.00 for free)")
 
     registration_enabled = models.BooleanField(default=True, help_text="Accept new registrations")
     max_attendees = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum attendees (null = unlimited)")
-    registration_deadline = models.DateTimeField(null=True, blank=True, help_text="Registration cutoff time") # Deprecated in favor of closes_at? Keeping for back-compat or replacing.
+    registration_deadline = models.DateTimeField(
+        null=True, blank=True, help_text="Registration cutoff time"
+    )  # Deprecated in favor of closes_at? Keeping for back-compat or replacing.
     registration_opens_at = models.DateTimeField(null=True, blank=True, help_text="When registration opens")
     registration_closes_at = models.DateTimeField(null=True, blank=True, help_text="When registration closes")
 
@@ -211,7 +203,7 @@ class Event(SoftDeleteModel):
     minimum_attendance_percent = models.PositiveIntegerField(
         default=AttendanceThresholds.DEFAULT_PERCENT,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
-        help_text="Minimum % attendance for certificate"
+        help_text="Minimum % attendance for certificate",
     )
 
     # =========================================
@@ -228,8 +220,7 @@ class Event(SoftDeleteModel):
     )
     auto_issue_certificates = models.BooleanField(default=False, help_text="Auto-issue when event completes")
     require_feedback_for_certificate = models.BooleanField(
-        default=False,
-        help_text="Require attendees to submit feedback before downloading/accessing certificate"
+        default=False, help_text="Require attendees to submit feedback before downloading/accessing certificate"
     )
 
     # =========================================
@@ -237,20 +228,13 @@ class Event(SoftDeleteModel):
     # =========================================
     cover_image_url = models.URLField(blank=True, help_text="Cover image URL")
     featured_image = models.ImageField(
-        upload_to='events/featured_images/',
-        blank=True,
-        null=True,
-        help_text="Featured image upload"
+        upload_to='events/featured_images/', blank=True, null=True, help_text="Featured image upload"
     )
-    
+
     # =========================================
     # Location (for in-person/hybrid events)
     # =========================================
-    location = models.CharField(
-        max_length=500,
-        blank=True,
-        help_text="Venue address or location description"
-    )
+    location = models.CharField(max_length=500, blank=True, help_text="Venue address or location description")
 
     # =========================================
     # Recording Settings
@@ -331,19 +315,19 @@ class Event(SoftDeleteModel):
             return False
         if self.status not in [self.Status.PUBLISHED]:
             return False
-        
+
         now = timezone.now()
-        
+
         if self.registration_opens_at and now < self.registration_opens_at:
             return False
-            
+
         if self.registration_closes_at and now > self.registration_closes_at:
             return False
 
         # Fallback/Backward compatibility
         if self.registration_deadline and now > self.registration_deadline:
             return False
-            
+
         return True
 
     @property
@@ -455,25 +439,20 @@ class Event(SoftDeleteModel):
 
     def _auto_issue_certificates(self):
         """Auto-issue certificates to all eligible attendees."""
-        from registrations.models import Registration
         from certificates.services import certificate_service
+        from registrations.models import Registration
 
         # Get all eligible registrations
-        eligible = Registration.objects.filter(
-            event=self,
-            status='confirmed',
-            deleted_at__isnull=True
-        ).filter(
-            models.Q(attendance_eligible=True) | models.Q(attendance_override=True)
-        ).exclude(certificate_issued=True)
+        eligible = (
+            Registration.objects.filter(event=self, status='confirmed', deleted_at__isnull=True)
+            .filter(models.Q(attendance_eligible=True) | models.Q(attendance_override=True))
+            .exclude(certificate_issued=True)
+        )
 
         issued_count = 0
         for registration in eligible:
             if registration.can_receive_certificate:
-                result = certificate_service.issue_certificate(
-                    registration=registration,
-                    issued_by=self.owner
-                )
+                result = certificate_service.issue_certificate(registration=registration, issued_by=self.owner)
                 if result.get('success'):
                     issued_count += 1
 
@@ -522,11 +501,11 @@ class Event(SoftDeleteModel):
 
         return new_event
 
-
     @property
     def attendee_count(self):
         """Alias for attendance_count."""
         return self.attendance_count
+
 
 class EventStatusHistory(BaseModel):
     """
@@ -548,14 +527,17 @@ class EventStatusHistory(BaseModel):
     def __str__(self):
         return f"{self.event.title}: {self.from_status} → {self.to_status}"
 
+
 # =============================================================================
 # Multi-session Models (Moved from sessions.py)
 # =============================================================================
+
 
 class EventSession(BaseModel):
     """
     Individual session within a multi-session event.
     """
+
     class SessionType(models.TextChoices):
         LIVE = 'live', 'Live Session'
         RECORDED = 'recorded', 'Recorded/On-demand'
@@ -598,8 +580,10 @@ class EventSession(BaseModel):
     def is_past(self):
         return timezone.now() > self.ends_at
 
+
 class SessionAttendance(BaseModel):
     """Attendance record for a session."""
+
     session = models.ForeignKey(EventSession, on_delete=models.CASCADE, related_name='attendance_records')
     registration = models.ForeignKey('registrations.Registration', on_delete=models.CASCADE, related_name='session_attendance')
     duration_minutes = models.PositiveIntegerField(default=0)
@@ -661,29 +645,29 @@ class EventCustomField(BaseModel):
 class Speaker(BaseModel):
     """
     Speaker profile for events.
-    
+
     Required for CPD compliance to demonstrate instructor qualifications.
     """
+
     owner = models.ForeignKey(
-        'accounts.User', on_delete=models.PROTECT, related_name='speakers', 
-        help_text="User who manages this speaker profile"
+        'accounts.User', on_delete=models.PROTECT, related_name='speakers', help_text="User who manages this speaker profile"
     )
     organization = models.ForeignKey(
-        'organizations.Organization', 
-        on_delete=models.CASCADE, 
-        null=True, 
-        blank=True, 
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='speakers',
-        help_text="Organization that owns this speaker profile"
+        help_text="Organization that owns this speaker profile",
     )
-    
+
     name = models.CharField(max_length=200, help_text="Speaker full name")
     bio = models.TextField(help_text="Speaker biography")
     qualifications = models.TextField(help_text="Professional qualifications/credentials")
     photo = models.ImageField(upload_to='speakers/photos/', null=True, blank=True)
     email = models.EmailField(blank=True, help_text="Contact email (internal use)")
     linkedin_url = models.URLField(blank=True, help_text="LinkedIn profile URL")
-    
+
     is_active = models.BooleanField(default=True, help_text="Whether this speaker profile is active")
 
     class Meta:

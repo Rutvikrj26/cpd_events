@@ -72,7 +72,7 @@ class ContactList(BaseModel):
     def get_or_create_for_user(cls, user):
         """
         Get or create the single personal contact list for a user.
-        
+
         Each organizer has exactly one personal list, auto-created on first access.
         """
         contact_list, created = cls.objects.get_or_create(
@@ -80,7 +80,7 @@ class ContactList(BaseModel):
             organization__isnull=True,
             defaults={
                 'name': 'My Contacts',
-            }
+            },
         )
         return contact_list
 
@@ -101,9 +101,7 @@ class ContactList(BaseModel):
         """Merge this list into another list."""
         # Must be same owner OR same organization
         same_owner = target_list.owner == self.owner
-        same_org = (
-            self.organization_id and target_list.organization_id and self.organization_id == target_list.organization_id
-        )
+        same_org = self.organization_id and target_list.organization_id and self.organization_id == target_list.organization_id
         if not (same_owner or same_org):
             raise ValueError("Cannot merge lists from different owners or organizations")
 

@@ -45,3 +45,16 @@ global.ResizeObserver = class ResizeObserver {
     unobserve() { }
     disconnect() { }
 };
+
+const suppressedWarnings = [
+    "React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7.",
+    "React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7.",
+];
+const originalWarn = console.warn;
+console.warn = (...args: unknown[]) => {
+    const firstArg = args[0];
+    if (typeof firstArg === "string" && suppressedWarnings.some((msg) => firstArg.includes(msg))) {
+        return;
+    }
+    originalWarn(...args);
+};

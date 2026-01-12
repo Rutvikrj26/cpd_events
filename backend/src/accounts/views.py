@@ -4,6 +4,7 @@ Accounts app views and viewsets.
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -16,8 +17,7 @@ from common.rbac import roles
 from common.utils import error_response
 
 from . import cpd_serializers, serializers
-from .models import CPDRequirement
-from drf_yasg.utils import swagger_auto_schema
+from .models import CPDRequirement, Notification, UserSession
 
 User = get_user_model()
 
@@ -53,17 +53,20 @@ class SignupView(generics.CreateAPIView):
 
         # Generate tokens
         from rest_framework_simplejwt.tokens import RefreshToken
+
         refresh = RefreshToken.for_user(user)
 
         # Link any guest registrations to this new user account
         from registrations.models import Registration
+
         Registration.link_registrations_for_user(user)
 
         # Generate verification token and send email
         token = user.generate_email_verification_token()
         from django.conf import settings
+
         from .tasks import send_email_verification
-        
+
         verification_url = f"{settings.FRONTEND_URL}/auth/verify-email?token={token}"
         send_email_verification.delay(user.uuid, verification_url)
 
@@ -145,10 +148,11 @@ class PasswordResetRequestView(generics.GenericAPIView):
         try:
             user = User.objects.get(email__iexact=email)
             user.generate_password_reset_token()
-            
+
             from django.conf import settings
+
             from .tasks import send_password_reset
-            
+
             # Construct reset URL
             reset_url = f"{settings.FRONTEND_URL}/auth/reset-password?token={user.password_reset_token}&email={user.email}"
             send_password_reset.delay(user.uuid, reset_url)
@@ -176,8 +180,6 @@ class PasswordResetConfirmView(generics.GenericAPIView):
             user = User.objects.get(password_reset_token=token)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
             return error_response('Invalid or expired token.', code='INVALID_TOKEN')
-        except jwt.ExpiredSignatureError:
-            return error_response('Token has expired.', code='TOKEN_EXPIRED')
 
         user.set_password(password)
         user.password_reset_token = ''
@@ -186,7 +188,7 @@ class PasswordResetConfirmView(generics.GenericAPIView):
         return Response({'message': 'Password reset successfully.'})
 
 
-@roles('attendee', 'organizer', 'admin', route_name='password_change')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='password_change')
 class PasswordChangeView(generics.GenericAPIView):
     """POST /api/v1/auth/password-change/ - Change password."""
 
@@ -205,11 +207,53 @@ class PasswordChangeView(generics.GenericAPIView):
 
 
 # =============================================================================
+# Session Management Views
+# =============================================================================
+
+
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='user_sessions')
+class UserSessionListView(generics.ListAPIView):
+    """GET /api/v1/users/me/sessions/ - List active sessions."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = serializers.UserSessionSerializer
+
+    def get_queryset(self):
+        return UserSession.objects.filter(user=self.request.user, is_active=True).order_by('-last_activity_at')
+
+
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='user_session_revoke')
+class UserSessionRevokeView(generics.DestroyAPIView):
+    """DELETE /api/v1/users/me/sessions/{uuid}/ - Revoke a specific session."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = serializers.UserSessionSerializer
+    lookup_field = 'uuid'
+
+    def get_queryset(self):
+        return UserSession.objects.filter(user=self.request.user, is_active=True)
+
+    def perform_destroy(self, instance):
+        instance.deactivate()
+
+
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='user_sessions_logout_all')
+class UserSessionLogoutAllView(generics.GenericAPIView):
+    """POST /api/v1/users/me/sessions/logout-all/ - Logout from all sessions."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        UserSession.deactivate_all_for_user(request.user)
+        return Response({'message': 'Logged out from all sessions.'})
+
+
+# =============================================================================
 # User Profile Views
 # =============================================================================
 
 
-@roles('attendee', 'organizer', 'admin', route_name='current_user')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='current_user')
 class CurrentUserView(generics.RetrieveUpdateAPIView):
     """GET/PATCH /api/v1/users/me/ - Current user profile."""
 
@@ -235,7 +279,7 @@ class OrganizerProfileView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
-@roles('attendee', 'organizer', 'admin', route_name='notification_preferences')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='notification_preferences')
 class NotificationPreferencesView(generics.RetrieveUpdateAPIView):
     """GET/PATCH /api/v1/users/me/notifications/ - Notification preferences."""
 
@@ -244,6 +288,40 @@ class NotificationPreferencesView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='user_notifications')
+class UserNotificationViewSet(viewsets.ModelViewSet):
+    """User notification inbox."""
+
+    serializer_class = serializers.NotificationSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'delete', 'post']
+    lookup_field = 'uuid'
+
+    def get_queryset(self):
+        queryset = Notification.objects.filter(user=self.request.user).order_by('-created_at')
+        status_filter = self.request.query_params.get('status')
+        if status_filter == 'unread':
+            queryset = queryset.filter(read_at__isnull=True)
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        return Response({'detail': 'Method not allowed.'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    @action(detail=False, methods=['post'], url_path='read-all')
+    def read_all(self, request):
+        """Mark all notifications as read."""
+        now = timezone.now()
+        updated = Notification.objects.filter(user=request.user, read_at__isnull=True).update(read_at=now, updated_at=now)
+        return Response({'read_count': updated})
+
+    @action(detail=True, methods=['post'], url_path='read')
+    def read(self, request, pk=None):
+        """Mark a notification as read."""
+        notification = self.get_object()
+        notification.mark_read()
+        return Response(self.get_serializer(notification).data)
 
 
 @roles('public', route_name='public_organizer')
@@ -280,7 +358,7 @@ class UpgradeToOrganizerView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles('attendee', 'organizer', 'admin', route_name='delete_account')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='delete_account')
 class DeleteAccountView(generics.GenericAPIView):
     """POST /api/v1/users/me/delete-account/ - Delete/anonymize account."""
 
@@ -305,7 +383,7 @@ class DeleteAccountView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles('attendee', 'organizer', 'admin', route_name='data_export')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='data_export')
 class DataExportView(generics.GenericAPIView):
     """POST /api/v1/users/me/export-data/ - Request GDPR data export."""
 
@@ -314,6 +392,7 @@ class DataExportView(generics.GenericAPIView):
 
     def post(self, request):
         import json
+
         from django.http import HttpResponse
 
         serializer = self.get_serializer(data=request.data)
@@ -402,11 +481,58 @@ class DataExportView(generics.GenericAPIView):
 
 
 # =============================================================================
+# Account Downgrade
+# =============================================================================
+
+
+@roles('organizer', 'course_manager', 'admin', route_name='downgrade_account')
+class DowngradeToAttendeeView(generics.GenericAPIView):
+    """POST /api/v1/users/me/downgrade/ - Downgrade account to attendee."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if user.account_type == user.AccountType.ATTENDEE:
+            return Response({'message': 'Account is already on attendee plan.'})
+
+        from billing.services import stripe_service
+        from events.models import Event
+        from learning.models import Course
+
+        has_active_events = Event.objects.filter(
+            owner=user,
+            status__in=[Event.Status.DRAFT, Event.Status.PUBLISHED, Event.Status.LIVE],
+            deleted_at__isnull=True,
+        ).exists()
+        has_active_courses = Course.objects.filter(
+            created_by=user,
+            status__in=[Course.Status.DRAFT, Course.Status.PUBLISHED],
+            deleted_at__isnull=True,
+        ).exists()
+
+        if has_active_events or has_active_courses:
+            return error_response(
+                'You must archive or cancel active events/courses before downgrading.',
+                code='ACTIVE_CONTENT',
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        subscription = getattr(user, 'subscription', None)
+        if subscription and subscription.plan != 'attendee':
+            if not stripe_service.cancel_subscription(subscription, immediate=True, reason='user_downgrade'):
+                return error_response('Failed to cancel subscription.', code='CANCEL_FAILED')
+
+        user.downgrade_to_attendee()
+        return Response({'message': 'Account downgraded to attendee.'})
+
+
+# =============================================================================
 # CPD Requirement Views
 # =============================================================================
 
 
-@roles('attendee', 'organizer', 'admin', route_name='cpd_requirements')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='cpd_requirements')
 class CPDRequirementViewSet(viewsets.ModelViewSet):
     """
     CRUD for user CPD requirements.
@@ -456,7 +582,7 @@ class CPDRequirementViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
-@roles('attendee', 'organizer', 'admin', route_name='manifest')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='manifest')
 class ManifestView(generics.GenericAPIView):
     """
     GET /api/v1/auth/manifest/
@@ -475,16 +601,16 @@ class ManifestView(generics.GenericAPIView):
         from common.rbac import get_allowed_routes_for_user, get_features_for_user
 
         user = request.user
-        
+
         data = {
             'routes': get_allowed_routes_for_user(user),
             'features': get_features_for_user(user),
             'user': {
                 'account_type': getattr(user, 'account_type', 'attendee'),
                 'is_staff': user.is_staff,
-            }
+            },
         }
-        
+
         return Response(data)
 
 
@@ -604,7 +730,7 @@ class ZoomCallbackView(generics.GenericAPIView):
 
             # Ensure user is active
             if not user.is_active:
-                 return error_response("Account is disabled.", code='ACCOUNT_DISABLED')
+                return error_response("Account is disabled.", code='ACCOUNT_DISABLED')
 
             # Record login
             user.record_login()
@@ -617,6 +743,7 @@ class ZoomCallbackView(generics.GenericAPIView):
             redirect_url = f"{frontend_url}/auth/callback?access={str(refresh.access_token)}&refresh={str(refresh)}"
 
             from django.http import HttpResponseRedirect
+
             return HttpResponseRedirect(redirect_url)
 
 
@@ -625,7 +752,7 @@ class ZoomCallbackView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='payouts_connect')
+@roles('organizer', 'course_manager', 'admin', route_name='payouts_connect')
 class PayoutsConnectView(generics.GenericAPIView):
     """
     POST /api/v1/users/me/payouts/connect/
@@ -638,6 +765,7 @@ class PayoutsConnectView(generics.GenericAPIView):
 
     def post(self, request):
         from django.conf import settings
+
         from billing.services import stripe_connect_service
 
         user = request.user
@@ -672,7 +800,7 @@ class PayoutsConnectView(generics.GenericAPIView):
         return Response({'url': onboarding_url})
 
 
-@roles('organizer', 'admin', route_name='payouts_status')
+@roles('organizer', 'course_manager', 'admin', route_name='payouts_status')
 class PayoutsStatusView(generics.GenericAPIView):
     """
     GET /api/v1/users/me/payouts/status/
@@ -688,11 +816,13 @@ class PayoutsStatusView(generics.GenericAPIView):
         user = request.user
 
         if not user.stripe_connect_id:
-            return Response({
-                'connected': False,
-                'status': 'not_connected',
-                'charges_enabled': False,
-            })
+            return Response(
+                {
+                    'connected': False,
+                    'status': 'not_connected',
+                    'charges_enabled': False,
+                }
+            )
 
         status_info = stripe_connect_service.get_account_status(user.stripe_connect_id)
 
@@ -713,16 +843,18 @@ class PayoutsStatusView(generics.GenericAPIView):
 
         user.save(update_fields=['stripe_charges_enabled', 'stripe_account_status', 'updated_at'])
 
-        return Response({
-            'connected': True,
-            'status': user.stripe_account_status,
-            'charges_enabled': user.stripe_charges_enabled,
-            'stripe_id': user.stripe_connect_id,
-            'details': status_info,
-        })
+        return Response(
+            {
+                'connected': True,
+                'status': user.stripe_account_status,
+                'charges_enabled': user.stripe_charges_enabled,
+                'stripe_id': user.stripe_connect_id,
+                'details': status_info,
+            }
+        )
 
 
-@roles('organizer', 'admin', route_name='payouts_dashboard')
+@roles('organizer', 'course_manager', 'admin', route_name='payouts_dashboard')
 class PayoutsDashboardView(generics.GenericAPIView):
     """
     POST /api/v1/users/me/payouts/dashboard/

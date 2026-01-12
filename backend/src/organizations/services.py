@@ -25,7 +25,7 @@ class OrganizationLinkingService:
         Create a new organization from an individual organizer's account.
 
         Transfers all their events and certificate templates to the new organization.
-        The user becomes the owner of the new organization.
+        The user becomes the admin of the new organization.
 
         Args:
             user: The organizer User instance
@@ -53,7 +53,7 @@ class OrganizationLinkingService:
             created_by=user,
         )
 
-        # Create owner membership
+        # Create admin membership
         OrganizationMembership.objects.create(
             organization=organization,
             user=user,
@@ -75,7 +75,7 @@ class OrganizationLinkingService:
         return organization
 
     @staticmethod
-    def link_organizer_to_org(user, organization, role='manager', invited_by=None):
+    def link_organizer_to_org(user, organization, role='organizer', invited_by=None):
         """
         Link an individual organizer's data to an existing organization.
 
@@ -85,7 +85,7 @@ class OrganizationLinkingService:
         Args:
             user: The organizer User instance
             organization: The Organization to link to
-            role: Role to assign (default: 'manager')
+            role: Role to assign (default: 'organizer')
             invited_by: User who invited/added this organizer
 
         Returns:
@@ -145,9 +145,7 @@ class OrganizationLinkingService:
         try:
             from events.models import Event
 
-            events_transferred = Event.objects.filter(
-                owner=user, organization__isnull=True
-            ).update(organization=organization)
+            events_transferred = Event.objects.filter(owner=user, organization__isnull=True).update(organization=organization)
         except (ImportError, Exception):
             # Event model may not have organization field yet
             pass
@@ -156,9 +154,9 @@ class OrganizationLinkingService:
         try:
             from certificates.models import CertificateTemplate
 
-            templates_transferred = CertificateTemplate.objects.filter(
-                owner=user, organization__isnull=True
-            ).update(organization=organization)
+            templates_transferred = CertificateTemplate.objects.filter(owner=user, organization__isnull=True).update(
+                organization=organization
+            )
         except (ImportError, Exception):
             # CertificateTemplate may not have organization field yet
             pass
@@ -191,18 +189,14 @@ class OrganizationLinkingService:
         try:
             from events.models import Event
 
-            events_count = Event.objects.filter(
-                owner=user, organization__isnull=True
-            ).count()
+            events_count = Event.objects.filter(owner=user, organization__isnull=True).count()
         except (ImportError, Exception):
             pass
 
         try:
             from certificates.models import CertificateTemplate
 
-            templates_count = CertificateTemplate.objects.filter(
-                owner=user, organization__isnull=True
-            ).count()
+            templates_count = CertificateTemplate.objects.filter(owner=user, organization__isnull=True).count()
         except (ImportError, Exception):
             pass
 

@@ -10,11 +10,12 @@
 import client from '../client';
 
 export interface Manifest {
-    role: 'attendee' | 'organizer' | 'admin';
+    role: 'attendee' | 'organizer' | 'course_manager' | 'admin';
     is_admin: boolean;
     routes: string[];
     features: {
         create_events: boolean;
+        create_courses: boolean;
         manage_certificates: boolean;
         view_billing: boolean;
         browse_events: boolean;

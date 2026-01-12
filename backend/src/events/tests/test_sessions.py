@@ -10,11 +10,11 @@ Endpoints tested:
 - POST /api/v1/events/{event_uuid}/sessions/reorder/
 """
 
-import pytest
-from rest_framework import status
-from django.utils import timezone
 from datetime import timedelta
 
+import pytest
+from django.utils import timezone
+from rest_framework import status
 
 # =============================================================================
 # Session List/Create Tests
@@ -113,9 +113,7 @@ class TestEventSessionDetail:
     def test_retrieve_session(self, organizer_client, event_with_sessions):
         """Organizer can retrieve a specific session."""
         session = event_with_sessions.sessions.first()
-        response = organizer_client.get(
-            f'/api/v1/events/{event_with_sessions.uuid}/sessions/{session.uuid}/'
-        )
+        response = organizer_client.get(f'/api/v1/events/{event_with_sessions.uuid}/sessions/{session.uuid}/')
         assert response.status_code == status.HTTP_200_OK
         assert response.data['uuid'] == str(session.uuid)
 
@@ -124,7 +122,7 @@ class TestEventSessionDetail:
         session = event_with_sessions.sessions.first()
         response = organizer_client.patch(
             f'/api/v1/events/{event_with_sessions.uuid}/sessions/{session.uuid}/',
-            {'title': 'Updated Session Title', 'description': 'New description'}
+            {'title': 'Updated Session Title', 'description': 'New description'},
         )
         assert response.status_code == status.HTTP_200_OK
         session.refresh_from_db()
@@ -134,23 +132,20 @@ class TestEventSessionDetail:
         """Organizer can delete a session."""
         session = event_with_sessions.sessions.first()
         session_uuid = session.uuid
-        response = organizer_client.delete(
-            f'/api/v1/events/{event_with_sessions.uuid}/sessions/{session.uuid}/'
-        )
+        response = organizer_client.delete(f'/api/v1/events/{event_with_sessions.uuid}/sessions/{session.uuid}/')
         assert response.status_code == status.HTTP_204_NO_CONTENT
         from events.models import EventSession
+
         assert not EventSession.objects.filter(uuid=session_uuid).exists()
 
     def test_update_other_event_session_forbidden(self, organizer_client, other_organizer, db):
         """Cannot update session on another organizer's event."""
         from factories import EventFactory, EventSessionFactory
+
         other_event = EventFactory(owner=other_organizer)
         session = EventSessionFactory(event=other_event)
-        
-        response = organizer_client.patch(
-            f'/api/v1/events/{other_event.uuid}/sessions/{session.uuid}/',
-            {'title': 'Hacked'}
-        )
+
+        response = organizer_client.patch(f'/api/v1/events/{other_event.uuid}/sessions/{session.uuid}/', {'title': 'Hacked'})
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -168,23 +163,18 @@ class TestEventSessionReorder:
         sessions = list(event_with_sessions.sessions.all().order_by('order'))
         # Reverse the order
         new_order = [str(s.uuid) for s in reversed(sessions)]
-        
-        response = organizer_client.post(
-            f'/api/v1/events/{event_with_sessions.uuid}/sessions/reorder/',
-            {'order': new_order}
-        )
+
+        response = organizer_client.post(f'/api/v1/events/{event_with_sessions.uuid}/sessions/reorder/', {'order': new_order})
         assert response.status_code == status.HTTP_200_OK
 
     def test_reorder_other_event_forbidden(self, organizer_client, other_organizer, db):
         """Cannot reorder sessions on another organizer's event."""
         from factories import EventFactory, EventSessionFactory
+
         other_event = EventFactory(owner=other_organizer)
         session = EventSessionFactory(event=other_event)
-        
-        response = organizer_client.post(
-            f'/api/v1/events/{other_event.uuid}/sessions/reorder/',
-            {'order': [str(session.uuid)]}
-        )
+
+        response = organizer_client.post(f'/api/v1/events/{other_event.uuid}/sessions/reorder/', {'order': [str(session.uuid)]})
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -202,7 +192,7 @@ class TestSessionOrdering:
         endpoint = f'/api/v1/events/{event_with_sessions.uuid}/sessions/'
         response = organizer_client.get(endpoint)
         assert response.status_code == status.HTTP_200_OK
-        
+
         results = response.data['results']
         # Check ordering
         for i in range(len(results) - 1):
@@ -212,7 +202,7 @@ class TestSessionOrdering:
         """New session is added at the end with correct order."""
         # Get current max order
         max_order = event_with_sessions.sessions.count()
-        
+
         endpoint = f'/api/v1/events/{event_with_sessions.uuid}/sessions/'
         data = {
             'title': 'New Session',

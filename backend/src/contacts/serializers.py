@@ -22,7 +22,7 @@ from .models import Contact, ContactList, Tag
 
 class TagSerializer(BaseModelSerializer):
     """Tag with contact count and org info."""
-    
+
     organization_uuid = serializers.UUIDField(source='organization.uuid', read_only=True, allow_null=True)
     is_shared = serializers.BooleanField(read_only=True)
 
@@ -44,17 +44,18 @@ class TagSerializer(BaseModelSerializer):
 
 class TagCreateSerializer(serializers.ModelSerializer):
     """Create/update a tag."""
-    
+
     organization_uuid = serializers.UUIDField(required=False, allow_null=True, write_only=True)
 
     class Meta:
         model = Tag
         fields = ['name', 'color', 'description', 'organization_uuid']
-    
+
     def validate_organization_uuid(self, value):
         """Validate user has access to the organization."""
         if value:
             from organizations.models import Organization
+
             user_org_ids = self.context.get('user_org_ids', [])
             try:
                 org = Organization.objects.get(uuid=value)
@@ -64,7 +65,7 @@ class TagCreateSerializer(serializers.ModelSerializer):
             except Organization.DoesNotExist:
                 raise serializers.ValidationError("Organization not found.")
         return None
-    
+
     def create(self, validated_data):
         org = validated_data.pop('organization_uuid', None)
         if org:
@@ -79,7 +80,7 @@ class TagCreateSerializer(serializers.ModelSerializer):
 
 class ContactListSerializer(BaseModelSerializer):
     """Contact list with summary and org info."""
-    
+
     organization_uuid = serializers.UUIDField(source='organization.uuid', read_only=True, allow_null=True)
     is_shared = serializers.BooleanField(read_only=True)
 
@@ -100,7 +101,7 @@ class ContactListSerializer(BaseModelSerializer):
 
 class ContactListDetailSerializer(BaseModelSerializer):
     """Full contact list detail with org info."""
-    
+
     organization_uuid = serializers.UUIDField(source='organization.uuid', read_only=True, allow_null=True)
     is_shared = serializers.BooleanField(read_only=True)
 
@@ -121,17 +122,18 @@ class ContactListDetailSerializer(BaseModelSerializer):
 
 class ContactListCreateSerializer(serializers.ModelSerializer):
     """Create/update a contact list."""
-    
+
     organization_uuid = serializers.UUIDField(required=False, allow_null=True, write_only=True)
 
     class Meta:
         model = ContactList
         fields = ['name', 'description', 'organization_uuid']
-    
+
     def validate_organization_uuid(self, value):
         """Validate user has access to the organization."""
         if value:
             from organizations.models import Organization
+
             user_org_ids = self.context.get('user_org_ids', [])
             try:
                 org = Organization.objects.get(uuid=value)
@@ -141,7 +143,7 @@ class ContactListCreateSerializer(serializers.ModelSerializer):
             except Organization.DoesNotExist:
                 raise serializers.ValidationError("Organization not found.")
         return None
-    
+
     def create(self, validated_data):
         org = validated_data.pop('organization_uuid', None)
         if org:
@@ -254,19 +256,14 @@ class ContactCreateSerializer(serializers.ModelSerializer):
         """Validate that email is unique within the contact list."""
         email = attrs.get('email')
         contact_list = self.context.get('contact_list')
-        
+
         if email and contact_list:
             # Check for duplicate email in same list
-            exists = Contact.objects.filter(
-                contact_list=contact_list,
-                email__iexact=email
-            ).exists()
-            
+            exists = Contact.objects.filter(contact_list=contact_list, email__iexact=email).exists()
+
             if exists:
-                raise serializers.ValidationError({
-                    'email': 'A contact with this email already exists in this list.'
-                })
-        
+                raise serializers.ValidationError({'email': 'A contact with this email already exists in this list.'})
+
         return attrs
 
     def create(self, validated_data):
@@ -276,18 +273,16 @@ class ContactCreateSerializer(serializers.ModelSerializer):
         if tag_uuids:
             # Allow personal tags OR org-shared tags
             from django.db.models import Q
+
             user = contact.contact_list.owner
-            
+
             # Get user's org IDs
-            user_org_ids = user.organization_memberships.filter(
-                is_active=True
-            ).values_list('organization_id', flat=True)
-            
-            tags = Tag.objects.filter(
-                Q(owner=user, organization__isnull=True) | 
-                Q(organization_id__in=user_org_ids)
-            ).filter(uuid__in=tag_uuids)
-            
+            user_org_ids = user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
+
+            tags = Tag.objects.filter(Q(owner=user, organization__isnull=True) | Q(organization_id__in=user_org_ids)).filter(
+                uuid__in=tag_uuids
+            )
+
             contact.tags.set(tags)
             contact.contact_list.update_contact_count()
 
@@ -318,17 +313,15 @@ class ContactUpdateSerializer(serializers.ModelSerializer):
         if tag_uuids is not None:
             # Allow personal tags OR org-shared tags
             from django.db.models import Q
+
             user = contact.contact_list.owner
-            
-            user_org_ids = user.organization_memberships.filter(
-                is_active=True
-            ).values_list('organization_id', flat=True)
-            
-            tags = Tag.objects.filter(
-                Q(owner=user, organization__isnull=True) | 
-                Q(organization_id__in=user_org_ids)
-            ).filter(uuid__in=tag_uuids)
-            
+
+            user_org_ids = user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
+
+            tags = Tag.objects.filter(Q(owner=user, organization__isnull=True) | Q(organization_id__in=user_org_ids)).filter(
+                uuid__in=tag_uuids
+            )
+
             contact.tags.set(tags)
 
             # Update tag counts for all involved tags

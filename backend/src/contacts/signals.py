@@ -1,6 +1,7 @@
 """
 Contacts app signals - handle registration-to-contact linking.
 """
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -9,35 +10,33 @@ from django.dispatch import receiver
 def link_registration_to_contact(sender, instance, created, **kwargs):
     """
     When a registration is confirmed, find or create a contact record.
-    
+
     Contacts are created in the organizer's default contact list.
     If a contact with matching email already exists, just update invite counts.
     """
-    from contacts.models import Contact, ContactList
     from django.utils import timezone
-    
+
+    from contacts.models import Contact, ContactList
+
     # Only process confirmed registrations
     if instance.status != 'confirmed':
         return
-    
+
     # Get the event organizer
     organizer = instance.event.owner
     if not organizer:
         return
-    
+
     # Get or create default contact list for organizer
     default_list = ContactList.get_or_create_for_user(organizer)
-    
+
     # Check if contact already exists in any of organizer's lists
-    existing_contact = Contact.objects.filter(
-        contact_list__owner=organizer,
-        email__iexact=instance.email
-    ).first()
-    
+    existing_contact = Contact.objects.filter(contact_list__owner=organizer, email__iexact=instance.email).first()
+
     if existing_contact:
         # Update invite count
         existing_contact.record_invite()
-        
+
         # Link to user if not already linked
         if instance.user and not existing_contact.user:
             existing_contact.link_to_user(instance.user)
@@ -62,25 +61,22 @@ def link_registration_to_contact(sender, instance, created, **kwargs):
 def update_contact_attendance(sender, instance, created, **kwargs):
     """
     Update contact attendance stats when registration attendance is confirmed.
-    
+
     This is called when a registration's attendance_eligible changes to True.
     """
     from contacts.models import Contact
-    
+
     # Skip if not eligible for attendance
     if not instance.attendance_eligible:
         return
-    
+
     # Find contact by email in organizer's lists
     organizer = instance.event.owner
     if not organizer:
         return
-    
-    contact = Contact.objects.filter(
-        contact_list__owner=organizer,
-        email__iexact=instance.email
-    ).first()
-    
+
+    contact = Contact.objects.filter(contact_list__owner=organizer, email__iexact=instance.email).first()
+
     if contact:
         # Check if this is a new attendance (not already counted)
         # We use a simple approach: check if last_attended_at < event start

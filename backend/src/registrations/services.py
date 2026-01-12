@@ -1,18 +1,16 @@
-
-import logging
 import json
+import logging
 from decimal import Decimal
-from typing import Any, Dict
+from typing import Any
 
 from django.db import transaction
 from django.db.models import Max
-from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from events.models import Event
-from registrations.models import Registration, CustomFieldResponse
-from promo_codes.services import promo_code_service, PromoCodeError
 from billing.services import stripe_payment_service
+from events.models import Event
+from promo_codes.services import PromoCodeError, promo_code_service
+from registrations.models import CustomFieldResponse, Registration
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +21,7 @@ class RegistrationService:
     Handles validation, capacity checks, promo codes, and payments.
     """
 
-    def register_participant(self, event: Event, data: Dict[str, Any], user=None) -> Dict[str, Any]:
+    def register_participant(self, event: Event, data: dict[str, Any], user=None) -> dict[str, Any]:
         """
         Register a participant for an event.
 
@@ -41,7 +39,7 @@ class RegistrationService:
 
         email = data.get('email', '').lower()
         full_name = data.get('full_name', '')
-        
+
         if user:
             email = user.email
             full_name = full_name or user.full_name
@@ -70,15 +68,15 @@ class RegistrationService:
         promo_code_str = data.get('promo_code', '').strip()
         validated_promo_code = None
         final_price = event.price
-        
+
         if promo_code_str and not event.is_free:
             try:
                 promo_code = promo_code_service.find_code(promo_code_str, event)
                 if not promo_code:
                     raise ValidationError("Invalid promo code.")
-                
+
                 promo_code_service.validate_code(promo_code, event, email, user)
-                
+
                 discount_amount = promo_code.calculate_discount(event.price)
                 final_price = max(Decimal('0.00'), event.price - discount_amount)
                 validated_promo_code = promo_code
@@ -153,7 +151,9 @@ class RegistrationService:
                     if intent_data.get('service_fee_cents') is not None:
                         registration.platform_fee_amount = Decimal(intent_data['service_fee_cents']) / Decimal('100')
                         registration.service_fee_amount = Decimal(intent_data['service_fee_cents']) / Decimal('100')
-                        registration.processing_fee_amount = Decimal(intent_data.get('processing_fee_cents', 0)) / Decimal('100')
+                        registration.processing_fee_amount = Decimal(intent_data.get('processing_fee_cents', 0)) / Decimal(
+                            '100'
+                        )
                         registration.tax_amount = Decimal(intent_data.get('tax_cents', 0)) / Decimal('100')
                         registration.total_amount = Decimal(intent_data.get('total_amount_cents', 0)) / Decimal('100')
                         registration.stripe_tax_calculation_id = intent_data.get('tax_calculation_id', '')
@@ -178,6 +178,7 @@ class RegistrationService:
         # Queue Zoom registrant addition (async)
         if registration.status == Registration.Status.CONFIRMED:
             from registrations.tasks import add_zoom_registrant
+
             add_zoom_registrant.delay(registration.id)
 
         return {
@@ -219,15 +220,10 @@ class RegistrationService:
 
             # Save Custom Fields
             self._save_custom_fields(event, registration, data.get('custom_field_responses', {}))
-        
-        return {
-            'registration': registration,
-            'status': 'waitlisted',
-            'message': 'Added to waitlist',
-            'created': True
-        }
 
-    def _save_custom_fields(self, event, registration, responses: Dict[str, Any]):
+        return {'registration': registration, 'status': 'waitlisted', 'message': 'Added to waitlist', 'created': True}
+
+    def _save_custom_fields(self, event, registration, responses: dict[str, Any]):
         """Save custom field responses."""
         if not responses:
             return
@@ -240,22 +236,20 @@ class RegistrationService:
 
         # Get valid field UUIDs for this event
         valid_fields = {str(f.uuid): f for f in event.custom_fields.all()}
-        
+
         for field_uuid, value in responses.items():
             field_obj = valid_fields.get(field_uuid)
             if field_obj:
-                CustomFieldResponse.objects.create(
-                    registration=registration,
-                    field=field_obj,
-                    value=serialize_val(value)
-                )
+                CustomFieldResponse.objects.create(registration=registration, field=field_obj, value=serialize_val(value))
 
     def _get_next_waitlist_position(self, event):
         """Get next available waitlist position."""
-        max_pos = Registration.objects.filter(
-            event=event, 
-            status=Registration.Status.WAITLISTED
-        ).aggregate(Max('waitlist_position'))['waitlist_position__max'] or 0
+        max_pos = (
+            Registration.objects.filter(event=event, status=Registration.Status.WAITLISTED).aggregate(Max('waitlist_position'))[
+                'waitlist_position__max'
+            ]
+            or 0
+        )
         return max_pos + 1
 
 
@@ -279,6 +273,7 @@ class PaymentConfirmationService:
             try:
                 import stripe
                 from django.conf import settings
+
                 stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
                 self._stripe = stripe
             except ImportError:
@@ -290,6 +285,7 @@ class PaymentConfirmationService:
     def is_configured(self) -> bool:
         """Check if Stripe is properly configured."""
         from django.conf import settings
+
         return bool(getattr(settings, 'STRIPE_SECRET_KEY', None))
 
     def confirm_registration_payment(self, registration, max_retries: int = 3, retry_delay: float = 1.0) -> dict:
@@ -338,7 +334,7 @@ class PaymentConfirmationService:
                         # Refetch with lock
                         locked_reg = Registration.objects.select_for_update().get(pk=registration.pk)
                         event = Event.objects.select_for_update().get(pk=locked_reg.event_id)
-                        
+
                         # Idempotency check inside lock
                         if locked_reg.payment_status == Registration.PaymentStatus.PAID:
                             logger.info(f"Registration {registration.uuid} already confirmed (idempotent skip)")
@@ -363,22 +359,24 @@ class PaymentConfirmationService:
                                 locked_reg.payment_status = Registration.PaymentStatus.REFUNDED
                                 locked_reg.total_amount = Decimal(intent.amount_received) / Decimal('100')
                                 locked_reg.save(update_fields=['payment_status', 'total_amount', 'updated_at'])
-                                logger.info(
-                                    f"Registration {registration.uuid} refunded due to capacity limits"
-                                )
+                                try:
+                                    from promo_codes.models import PromoCodeUsage
+
+                                    PromoCodeUsage.release_for_registration(locked_reg)
+                                except Exception as e:
+                                    logger.warning("Failed to release promo code usage for %s: %s", locked_reg.uuid, e)
+                                logger.info(f"Registration {registration.uuid} refunded due to capacity limits")
                                 return {
                                     'status': 'event_full',
                                     'message': 'Event is fully booked. Payment has been refunded.',
                                 }
 
-                            logger.error(
-                                f"Refund failed for registration {registration.uuid}: {refund_result['error']}"
-                            )
+                            logger.error(f"Refund failed for registration {registration.uuid}: {refund_result['error']}")
                             return {
                                 'status': 'error',
                                 'message': 'Payment succeeded but refund failed. Please contact support.',
                             }
-                        
+
                         locked_reg.payment_status = Registration.PaymentStatus.PAID
                         locked_reg.total_amount = Decimal(intent.amount_received) / Decimal('100')
 
@@ -391,6 +389,32 @@ class PaymentConfirmationService:
                             locked_reg.stripe_transfer_id = transfer_id
                             updated_fields.append('stripe_transfer_id')
                         locked_reg.save(update_fields=updated_fields)
+
+                        if transfer_id:
+                            try:
+                                from billing.models import TransferRecord
+
+                                ticket_amount_cents = None
+                                metadata = getattr(intent, 'metadata', {}) or {}
+                                if isinstance(metadata, dict):
+                                    ticket_amount_cents = metadata.get('ticket_amount_cents')
+                                if ticket_amount_cents is None:
+                                    ticket_amount_cents = int((locked_reg.amount_paid or 0) * 100)
+
+                                TransferRecord.objects.get_or_create(
+                                    stripe_transfer_id=transfer_id,
+                                    defaults={
+                                        'event': event,
+                                        'registration': locked_reg,
+                                        'recipient': event.owner,
+                                        'stripe_payment_intent_id': locked_reg.payment_intent_id,
+                                        'amount_cents': int(ticket_amount_cents),
+                                        'currency': event.currency.lower(),
+                                        'description': f"Transfer for {event.title}",
+                                    },
+                                )
+                            except Exception as exc:
+                                logger.warning("Failed to create transfer record for %s: %s", locked_reg.uuid, exc)
 
                     # Update original instance to reflect changes
                     registration.payment_status = locked_reg.payment_status
@@ -411,6 +435,7 @@ class PaymentConfirmationService:
                     # Trigger Zoom registrant addition after payment confirmed
                     if registration.status == Registration.Status.CONFIRMED:
                         from registrations.tasks import add_zoom_registrant
+
                         add_zoom_registrant.delay(registration.id)
 
                     logger.info(f"Registration {registration.uuid} payment confirmed: PAID")
@@ -432,6 +457,12 @@ class PaymentConfirmationService:
                     # Payment failed
                     registration.payment_status = Registration.PaymentStatus.FAILED
                     registration.save(update_fields=['payment_status', 'updated_at'])
+                    try:
+                        from promo_codes.models import PromoCodeUsage
+
+                        PromoCodeUsage.release_for_registration(registration)
+                    except Exception as e:
+                        logger.warning("Failed to release promo code usage for %s: %s", registration.uuid, e)
 
                     error_msg = 'Payment failed'
                     if intent.last_payment_error:

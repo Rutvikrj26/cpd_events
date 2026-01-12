@@ -584,25 +584,6 @@ resource "google_cloud_run_service" "backend" {
           value = "${var.frontend_url}/integrations/zoom/callback"
         }
 
-        dynamic "env" {
-          for_each = {
-            for key, value in {
-              STRIPE_PRICE_STARTER             = var.stripe_price_starter
-              STRIPE_PRICE_STARTER_ANNUAL      = var.stripe_price_starter_annual
-              STRIPE_PRICE_PROFESSIONAL        = var.stripe_price_professional
-              STRIPE_PRICE_PROFESSIONAL_ANNUAL = var.stripe_price_professional_annual
-              STRIPE_PRICE_PREMIUM             = var.stripe_price_premium
-              STRIPE_PRICE_PREMIUM_ANNUAL      = var.stripe_price_premium_annual
-              STRIPE_PRICE_TEAM                = var.stripe_price_team
-              STRIPE_PRICE_TEAM_ANNUAL         = var.stripe_price_team_annual
-              STRIPE_PRICE_ENTERPRISE          = var.stripe_price_enterprise
-            } : key => value if value != ""
-          }
-          content {
-            name  = env.key
-            value = env.value
-          }
-        }
       }
 
       # Cloud SQL connection

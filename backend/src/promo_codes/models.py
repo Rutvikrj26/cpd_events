@@ -3,7 +3,8 @@ Promo Codes app models - PromoCode, PromoCodeUsage.
 """
 
 from decimal import Decimal
-from django.core.validators import MinValueValidator, MaxValueValidator
+
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -31,10 +32,7 @@ class PromoCode(BaseModel):
     # Ownership
     # =========================================
     owner = models.ForeignKey(
-        'accounts.User',
-        on_delete=models.CASCADE,
-        related_name='promo_codes',
-        help_text="Organizer who created this code"
+        'accounts.User', on_delete=models.CASCADE, related_name='promo_codes', help_text="Organizer who created this code"
     )
     organization = models.ForeignKey(
         'organizations.Organization',
@@ -42,36 +40,29 @@ class PromoCode(BaseModel):
         null=True,
         blank=True,
         related_name='promo_codes',
-        help_text="Organization that owns this code"
+        help_text="Organization that owns this code",
     )
 
     # =========================================
     # Code Details
     # =========================================
-    code = models.CharField(
-        max_length=50,
-        db_index=True,
-        help_text="The promo code string (case-insensitive)"
-    )
-    description = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Internal description/notes"
-    )
+    code = models.CharField(max_length=50, db_index=True, help_text="The promo code string (case-insensitive)")
+    description = models.CharField(max_length=255, blank=True, help_text="Internal description/notes")
 
     # =========================================
     # Discount Configuration
     # =========================================
-    discount_type = models.CharField(
-        max_length=20,
-        choices=DiscountType.choices,
-        default=DiscountType.PERCENTAGE
+    currency = models.CharField(
+        max_length=3,
+        default='USD',
+        help_text="Currency code for fixed-amount discounts",
     )
+    discount_type = models.CharField(max_length=20, choices=DiscountType.choices, default=DiscountType.PERCENTAGE)
     discount_value = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
-        help_text="Discount amount (percentage 0-100 or fixed amount in currency)"
+        help_text="Discount amount (percentage 0-100 or fixed amount in currency)",
     )
 
     # For percentage discounts, optionally cap the discount
@@ -80,40 +71,22 @@ class PromoCode(BaseModel):
         decimal_places=2,
         null=True,
         blank=True,
-        help_text="Max discount amount for percentage codes (e.g., '20% off up to $50')"
+        help_text="Max discount amount for percentage codes (e.g., '20% off up to $50')",
     )
 
     # =========================================
     # Validity
     # =========================================
     is_active = models.BooleanField(default=True, help_text="Whether code can be used")
-    valid_from = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When code becomes valid (null = immediately)"
-    )
-    valid_until = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When code expires (null = never)"
-    )
+    valid_from = models.DateTimeField(null=True, blank=True, help_text="When code becomes valid (null = immediately)")
+    valid_until = models.DateTimeField(null=True, blank=True, help_text="When code expires (null = never)")
 
     # =========================================
     # Usage Limits
     # =========================================
-    max_uses = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        help_text="Maximum total uses (null = unlimited)"
-    )
-    max_uses_per_user = models.PositiveIntegerField(
-        default=1,
-        help_text="Max uses per user/email"
-    )
-    current_uses = models.PositiveIntegerField(
-        default=0,
-        help_text="Current usage count (denormalized)"
-    )
+    max_uses = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum total uses (null = unlimited)")
+    max_uses_per_user = models.PositiveIntegerField(default=1, help_text="Max uses per user/email")
+    current_uses = models.PositiveIntegerField(default=0, help_text="Current usage count (denormalized)")
 
     # =========================================
     # Applicability
@@ -123,24 +96,18 @@ class PromoCode(BaseModel):
         'events.Event',
         blank=True,
         related_name='promo_codes',
-        help_text="Specific events this code applies to (empty = all organizer events)"
+        help_text="Specific events this code applies to (empty = all organizer events)",
     )
 
     # Minimum order value
     minimum_order_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        help_text="Minimum ticket price to use this code"
+        max_digits=10, decimal_places=2, default=Decimal('0.00'), help_text="Minimum ticket price to use this code"
     )
 
     # =========================================
     # First-time buyer only
     # =========================================
-    first_time_only = models.BooleanField(
-        default=False,
-        help_text="Only for users who haven't registered for any event before"
-    )
+    first_time_only = models.BooleanField(default=False, help_text="Only for users who haven't registered for any event before")
 
     class Meta:
         db_table = 'promo_codes'
@@ -198,10 +165,10 @@ class PromoCode(BaseModel):
         if self.discount_type == self.DiscountType.PERCENTAGE:
             s = f"{self.discount_value}% off"
             if self.max_discount_amount:
-                s += f" (max ${self.max_discount_amount})"
+                s += f" (max {self.max_discount_amount} {self.currency.upper()})"
             return s
         else:
-            return f"${self.discount_value} off"
+            return f"{self.discount_value} {self.currency.upper()} off"
 
     # =========================================
     # Methods
@@ -228,8 +195,18 @@ class PromoCode(BaseModel):
     def increment_usage(self):
         """Increment usage count."""
         from django.db.models import F
+
         self.current_uses = F('current_uses') + 1
         self.save(update_fields=['current_uses', 'updated_at'])
+
+    def decrement_usage(self, count: int = 1):
+        """Decrement usage count (used when a payment fails or is refunded)."""
+        from django.db.models import F
+
+        PromoCode.objects.filter(pk=self.pk, current_uses__gte=count).update(
+            current_uses=F('current_uses') - count,
+            updated_at=timezone.now(),
+        )
 
 
 class PromoCodeUsage(BaseModel):
@@ -239,29 +216,18 @@ class PromoCodeUsage(BaseModel):
     Tracks which registration used which code for audit and limit enforcement.
     """
 
-    promo_code = models.ForeignKey(
-        PromoCode,
-        on_delete=models.CASCADE,
-        related_name='usages'
-    )
-    registration = models.ForeignKey(
-        'registrations.Registration',
-        on_delete=models.CASCADE,
-        related_name='promo_code_usages'
-    )
+    promo_code = models.ForeignKey(PromoCode, on_delete=models.CASCADE, related_name='usages')
+    registration = models.ForeignKey('registrations.Registration', on_delete=models.CASCADE, related_name='promo_code_usages')
 
     # Denormalized for easy querying
-    user_email = models.EmailField(
-        db_index=True,
-        help_text="Email used for registration"
-    )
+    user_email = models.EmailField(db_index=True, help_text="Email used for registration")
     user = models.ForeignKey(
         'accounts.User',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='promo_code_usages',
-        help_text="User account if registered"
+        help_text="User account if registered",
     )
 
     # Record the discount applied
@@ -278,6 +244,22 @@ class PromoCodeUsage(BaseModel):
         ]
         verbose_name = 'Promo Code Usage'
         verbose_name_plural = 'Promo Code Usages'
+
+    @classmethod
+    def release_for_registration(cls, registration) -> int:
+        """
+        Release promo code usage for a registration when payment fails or is refunded.
+
+        Returns:
+            Number of usages released
+        """
+        usages = cls.objects.filter(registration=registration).select_related('promo_code')
+        count = 0
+        for usage in usages:
+            usage.promo_code.decrement_usage()
+            count += 1
+        usages.delete()
+        return count
 
     def __str__(self):
         return f"{self.promo_code.code} used by {self.user_email}"

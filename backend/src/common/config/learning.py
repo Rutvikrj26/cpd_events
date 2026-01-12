@@ -9,10 +9,10 @@ Centralizes all learning management system magic numbers including:
 
 from django.core.exceptions import ImproperlyConfigured
 
-
 # =============================================================================
 # Validation Helpers
 # =============================================================================
+
 
 def _validate_positive(value: int, name: str) -> int:
     """Validate value is positive (> 0)."""
@@ -32,6 +32,7 @@ def _validate_percentage(value: int, name: str) -> int:
 # Scoring Defaults
 # =============================================================================
 
+
 class ScoringDefaults:
     """
     Default scoring settings for modules, assignments, and courses.
@@ -39,6 +40,7 @@ class ScoringDefaults:
     - PASSING_SCORE: Default minimum score to pass (percentage)
     - MAX_SCORE: Default maximum score for assignments
     """
+
     PASSING_SCORE: int = _validate_percentage(70, 'ScoringDefaults.PASSING_SCORE')
     MAX_SCORE: int = _validate_positive(100, 'ScoringDefaults.MAX_SCORE')
 
@@ -46,6 +48,7 @@ class ScoringDefaults:
 # =============================================================================
 # Assignment Defaults
 # =============================================================================
+
 
 class AssignmentDefaults:
     """
@@ -55,6 +58,7 @@ class AssignmentDefaults:
     - MAX_ATTEMPTS: Maximum number of submission attempts allowed
     - PASSING_SCORE: Default passing score (uses ScoringDefaults if not specified)
     """
+
     DUE_DAYS_AFTER_RELEASE: int = _validate_positive(7, 'AssignmentDefaults.DUE_DAYS_AFTER_RELEASE')
     MAX_ATTEMPTS: int = _validate_positive(3, 'AssignmentDefaults.MAX_ATTEMPTS')
     PASSING_SCORE: int = ScoringDefaults.PASSING_SCORE
@@ -65,12 +69,14 @@ class AssignmentDefaults:
 # Course Defaults
 # =============================================================================
 
+
 class CourseDefaults:
     """
     Default settings for self-paced courses.
 
     - PASSING_SCORE: Minimum score to complete the course (percentage)
     """
+
     PASSING_SCORE: int = ScoringDefaults.PASSING_SCORE
 
 
@@ -78,12 +84,14 @@ class CourseDefaults:
 # Module Defaults
 # =============================================================================
 
+
 class ModuleDefaults:
     """
     Default settings for learning modules.
 
     - PASSING_SCORE: Minimum score to pass the module (percentage)
     """
+
     PASSING_SCORE: int = ScoringDefaults.PASSING_SCORE
 
 

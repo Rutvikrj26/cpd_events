@@ -4,9 +4,11 @@ Accounts app serializers.
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from accounts.models import Notification
 from common.serializers import SoftDeleteModelSerializer
 
 User = get_user_model()
@@ -24,20 +26,22 @@ class SignupSerializer(serializers.ModelSerializer):
         write_only=True, required=True, validators=[validate_password], style={'input_type': 'password'}
     )
     password_confirm = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    
+
     # Optional fields for organizer signup
     account_type = serializers.ChoiceField(
-        choices=['attendee', 'organizer'],
-        default='attendee',
-        required=False
+        choices=['attendee', 'organizer', 'course_manager'], default='attendee', required=False
     )
 
     class Meta:
         model = User
         fields = [
-            'email', 'password', 'password_confirm', 'full_name', 
-            'professional_title', 'organization_name',
-            'account_type'
+            'email',
+            'password',
+            'password_confirm',
+            'full_name',
+            'professional_title',
+            'organization_name',
+            'account_type',
         ]
         extra_kwargs = {
             'email': {'required': True},
@@ -61,6 +65,7 @@ class SignupSerializer(serializers.ModelSerializer):
 
         # Link any guest registrations
         from registrations.models import Registration
+
         Registration.link_registrations_for_user(user)
 
         return user
@@ -80,7 +85,47 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'email_verified': self.user.email_verified,
         }
 
+        request = self.context.get('request')
+        if request:
+            self.user.record_login()
+            self._record_session(request, data.get('refresh'))
+
         return data
+
+    def _record_session(self, request, refresh_token: str | None):
+        from django.conf import settings
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        from accounts.models import UserSession
+
+        session_key = None
+        expires_at = None
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                session_key = token.get('jti')
+                lifetime = settings.SIMPLE_JWT.get('REFRESH_TOKEN_LIFETIME', timezone.timedelta(days=1))
+                expires_at = timezone.now() + lifetime
+            except Exception:
+                session_key = None
+
+        if not session_key:
+            return
+
+        ip_address = request.META.get('REMOTE_ADDR')
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+
+        UserSession.objects.update_or_create(
+            session_key=session_key,
+            defaults={
+                'user': self.user,
+                'ip_address': ip_address,
+                'user_agent': user_agent,
+                'device_type': '',
+                'expires_at': expires_at or timezone.now(),
+                'is_active': True,
+            },
+        )
 
 
 class PasswordChangeSerializer(serializers.Serializer):
@@ -119,6 +164,19 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         if attrs['new_password'] != attrs['new_password_confirm']:
             raise serializers.ValidationError({'new_password_confirm': "Passwords don't match."})
         return attrs
+
+
+class UserSessionSerializer(serializers.Serializer):
+    """Serialize active user sessions."""
+
+    uuid = serializers.UUIDField(read_only=True)
+    session_key = serializers.CharField(read_only=True)
+    ip_address = serializers.CharField(read_only=True)
+    user_agent = serializers.CharField(read_only=True)
+    device_type = serializers.CharField(read_only=True)
+    last_activity_at = serializers.DateTimeField(read_only=True)
+    expires_at = serializers.DateTimeField(read_only=True)
+    is_active = serializers.BooleanField(read_only=True)
 
 
 class EmailVerificationSerializer(serializers.Serializer):
@@ -209,6 +267,27 @@ class NotificationPreferencesSerializer(serializers.ModelSerializer):
             'notify_certificate_issued',
             'notify_marketing',
         ]
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    """Serializer for in-app notifications."""
+
+    is_read = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Notification
+        fields = [
+            'uuid',
+            'notification_type',
+            'title',
+            'message',
+            'action_url',
+            'metadata',
+            'read_at',
+            'is_read',
+            'created_at',
+        ]
+        read_only_fields = fields
 
 
 class PublicOrganizerSerializer(serializers.ModelSerializer):

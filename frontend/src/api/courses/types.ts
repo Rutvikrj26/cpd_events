@@ -1,7 +1,10 @@
+export type CourseFormat = 'online' | 'hybrid';
+
 export interface Course {
     uuid: string;
-    organization: string;
+    organization: string | null;
     organization_name?: string;
+    organization_logo_url?: string;
     title: string;
     slug: string;
     description: string;
@@ -12,9 +15,28 @@ export interface Course {
     cpd_type: string;
     status: 'draft' | 'published' | 'archived';
     is_public: boolean;
-    is_free: boolean;
+
+    // Pricing & Payments
     price_cents: number;
     currency: string;
+    stripe_product_id?: string;
+    stripe_price_id?: string;
+
+    // Computed property (from backend)
+    is_free: boolean;
+
+    // Format (Self-Paced vs Hybrid)
+    format: CourseFormat;
+
+    // Virtual/Live Session Settings (for Hybrid courses)
+    zoom_meeting_id?: string;
+    zoom_meeting_url?: string;
+    zoom_meeting_password?: string;
+    zoom_webinar_id?: string;
+    zoom_registrant_id?: string;
+    live_session_start?: string;
+    live_session_end?: string;
+    live_session_timezone?: string;
 
     // Limits
     enrollment_open: boolean;
@@ -44,7 +66,7 @@ export interface Course {
 }
 
 export interface CourseCreateRequest {
-    organization_slug: string;
+    organization_slug?: string;
     title: string;
     slug?: string;
     description?: string;
@@ -54,7 +76,6 @@ export interface CourseCreateRequest {
     cpd_type?: string;
     status?: 'draft' | 'published';
     is_public?: boolean;
-    is_free?: boolean;
     price_cents?: number;
     enrollment_open?: boolean;
     max_enrollments?: number;
@@ -62,6 +83,67 @@ export interface CourseCreateRequest {
     passing_score?: number;
     certificates_enabled?: boolean;
     certificate_template?: string;
+    // Format & Virtual fields
+    format?: CourseFormat;
+    zoom_meeting_id?: string;
+    zoom_meeting_url?: string;
+    zoom_meeting_password?: string;
+    zoom_webinar_id?: string;
+    live_session_start?: string;
+    live_session_end?: string;
+    live_session_timezone?: string;
+}
+
+export interface Assignment {
+    uuid: string;
+    title: string;
+    description?: string;
+    instructions?: string;
+    due_days_after_release?: number;
+    max_score?: number;
+    passing_score?: number;
+    allow_resubmission?: boolean;
+    max_attempts?: number;
+    submission_type?: 'text' | 'file' | 'url' | 'mixed';
+    submission_type_display?: string;
+    rubric?: Record<string, any>;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface AssignmentSubmission {
+    uuid: string;
+    assignment: string;
+    assignment_title?: string;
+    status: 'draft' | 'submitted' | 'in_review' | 'needs_revision' | 'graded' | 'approved';
+    status_display?: string;
+    attempt_number: number;
+    submitted_at?: string;
+    content?: Record<string, any>;
+    file_url?: string;
+    score?: number;
+    feedback?: string;
+    graded_at?: string;
+    is_passing?: boolean;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface AssignmentSubmissionStaff extends AssignmentSubmission {
+    user_uuid: string;
+    user_email: string;
+    user_name?: string;
+}
+
+export interface CourseAnnouncement {
+    uuid: string;
+    title: string;
+    body: string;
+    is_published: boolean;
+    created_by_name?: string;
+    created_by_email?: string;
+    created_at: string;
+    updated_at?: string;
 }
 
 export interface EventModule {
@@ -71,7 +153,8 @@ export interface EventModule {
     content_count: number;
     assignment_count: number;
     cpd_credits: string | number;
-    contents?: any[]; // Allow contents here
+    contents?: any[];
+    assignments?: Assignment[];
 }
 
 export interface CourseModule {

@@ -261,60 +261,6 @@ variable "billing_default_plan" {
   default     = "attendee"
 }
 
-variable "stripe_price_starter" {
-  description = "Stripe price ID for Starter (monthly)"
-  type        = string
-  default     = ""
-}
-
-variable "stripe_price_starter_annual" {
-  description = "Stripe price ID for Starter (annual)"
-  type        = string
-  default     = ""
-}
-
-variable "stripe_price_professional" {
-  description = "Stripe price ID for Professional (monthly)"
-  type        = string
-  default     = ""
-}
-
-variable "stripe_price_professional_annual" {
-  description = "Stripe price ID for Professional (annual)"
-  type        = string
-  default     = ""
-}
-
-variable "stripe_price_premium" {
-  description = "Stripe price ID for Premium (monthly)"
-  type        = string
-  default     = ""
-}
-
-variable "stripe_price_premium_annual" {
-  description = "Stripe price ID for Premium (annual)"
-  type        = string
-  default     = ""
-}
-
-variable "stripe_price_team" {
-  description = "Stripe price ID for Team (monthly)"
-  type        = string
-  default     = ""
-}
-
-variable "stripe_price_team_annual" {
-  description = "Stripe price ID for Team (annual)"
-  type        = string
-  default     = ""
-}
-
-variable "stripe_price_enterprise" {
-  description = "Stripe price ID for Enterprise"
-  type        = string
-  default     = ""
-}
-
 # =============================================================================
 # Frontend build-time variables (used by CLI deploy)
 # =============================================================================

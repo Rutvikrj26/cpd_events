@@ -4,20 +4,17 @@ Billing configuration constants.
 Centralizes all billing-related magic numbers including:
 - Trial and grace period settings
 - Plan limits (individual and organization)
-- Pricing configuration
-- Stripe price IDs
 - Platform fees
 """
 
 import os
-from typing import Optional
 
 from django.core.exceptions import ImproperlyConfigured
-
 
 # =============================================================================
 # Validation Helpers
 # =============================================================================
+
 
 def _validate_non_negative(value: int, name: str) -> int:
     """Validate value is non-negative (>= 0)."""
@@ -40,11 +37,10 @@ def _validate_percentage(value: float, name: str) -> float:
     return value
 
 
-
-
 # =============================================================================
 # Platform Fees
 # =============================================================================
+
 
 class PlatformFees:
     """
@@ -52,15 +48,14 @@ class PlatformFees:
 
     - FEE_PERCENT: Percentage of transaction sent to platform via Stripe Connect
     """
-    FEE_PERCENT: float = _validate_percentage(
-        float(os.environ.get('PLATFORM_FEE_PERCENT', 2.0)),
-        'PLATFORM_FEE_PERCENT'
-    )
+
+    FEE_PERCENT: float = _validate_percentage(float(os.environ.get('PLATFORM_FEE_PERCENT', 2.0)), 'PLATFORM_FEE_PERCENT')
 
 
 # =============================================================================
 # Ticketing Fees (Eventbrite-style)
 # =============================================================================
+
 
 class TicketingFees:
     """
@@ -77,20 +72,16 @@ class TicketingFees:
     """
 
     DEFAULT_SERVICE_FEE_PERCENT: float = _validate_percentage(
-        float(os.environ.get('TICKETING_SERVICE_FEE_PERCENT', 0.0)),
-        'TICKETING_SERVICE_FEE_PERCENT'
+        float(os.environ.get('TICKETING_SERVICE_FEE_PERCENT', 0.0)), 'TICKETING_SERVICE_FEE_PERCENT'
     )
     DEFAULT_SERVICE_FEE_FIXED: float = _validate_non_negative(
-        float(os.environ.get('TICKETING_SERVICE_FEE_FIXED', 0.0)),
-        'TICKETING_SERVICE_FEE_FIXED'
+        float(os.environ.get('TICKETING_SERVICE_FEE_FIXED', 0.0)), 'TICKETING_SERVICE_FEE_FIXED'
     )
     DEFAULT_PROCESSING_FEE_PERCENT: float = _validate_percentage(
-        float(os.environ.get('TICKETING_PROCESSING_FEE_PERCENT', 0.0)),
-        'TICKETING_PROCESSING_FEE_PERCENT'
+        float(os.environ.get('TICKETING_PROCESSING_FEE_PERCENT', 0.0)), 'TICKETING_PROCESSING_FEE_PERCENT'
     )
     DEFAULT_PROCESSING_FEE_FIXED: float = _validate_non_negative(
-        float(os.environ.get('TICKETING_PROCESSING_FEE_FIXED', 0.0)),
-        'TICKETING_PROCESSING_FEE_FIXED'
+        float(os.environ.get('TICKETING_PROCESSING_FEE_FIXED', 0.0)), 'TICKETING_PROCESSING_FEE_FIXED'
     )
 
     @classmethod
@@ -144,6 +135,7 @@ class TicketingFees:
 # Ticketing Tax Codes
 # =============================================================================
 
+
 class TicketingTaxCodes:
     """Stripe Tax codes for ticketing line items."""
 
@@ -157,6 +149,7 @@ class TicketingTaxCodes:
 # Individual Subscription Plan Limits
 # =============================================================================
 
+
 class IndividualPlanLimits:
     """
     Feature limits for individual user subscription plans.
@@ -165,24 +158,34 @@ class IndividualPlanLimits:
 
     Plans:
     - ATTENDEE: Free tier, can only attend events (no creation)
-    - PROFESSIONAL: Paid tier for individual organizers
+    - ORGANIZER: Paid tier for individual organizers
     - ORGANIZATION: Paid tier with team features
     """
 
     ATTENDEE: dict = {
         'events_per_month': 0,
+        'courses_per_month': 0,
         'certificates_per_month': 0,
         'max_attendees_per_event': 0,
     }
 
-    PROFESSIONAL: dict = {
+    ORGANIZER: dict = {
         'events_per_month': 30,
+        'courses_per_month': 0,
         'certificates_per_month': 500,
         'max_attendees_per_event': 500,
     }
 
+    LMS: dict = {
+        'events_per_month': 0,
+        'courses_per_month': 30,
+        'certificates_per_month': 500,
+        'max_attendees_per_event': 0,
+    }
+
     ORGANIZATION: dict = {
         'events_per_month': None,  # Unlimited
+        'courses_per_month': None,  # Unlimited
         'certificates_per_month': None,  # Unlimited
         'max_attendees_per_event': 2000,
     }
@@ -192,7 +195,8 @@ class IndividualPlanLimits:
         """Get limits for a plan by name."""
         limits_map = {
             'attendee': cls.ATTENDEE,
-            'professional': cls.PROFESSIONAL,
+            'organizer': cls.ORGANIZER,
+            'lms': cls.LMS,
             'organization': cls.ORGANIZATION,
         }
         return limits_map.get(plan, cls.ATTENDEE)
@@ -201,6 +205,7 @@ class IndividualPlanLimits:
 # =============================================================================
 # Organization Subscription Plan Limits
 # =============================================================================
+
 
 class OrganizationPlanLimits:
     """
@@ -213,157 +218,33 @@ class OrganizationPlanLimits:
     - Can add Organizers (requires separate organizer subscription)
     """
 
-    FREE: dict = {
-        'name': 'Free',
-        'base_price_cents': 0,
-        'events_per_month': 2,
-        'courses_per_month': 1,
-        'max_attendees_per_event': 50,
-        'course_instructors_limit': None,  # Unlimited free instructors
-    }
-
     # Organization Plan - $199/month
     ORGANIZATION: dict = {
         'name': 'Organization',
-        'base_price_cents': 19900,  # $199/month base
+        'price_cents': 19900,  # $199/month base
         'events_per_month': None,  # Unlimited (admin has organizer capabilities)
         'courses_per_month': None,  # Unlimited
         'max_attendees_per_event': None,  # Unlimited
         'course_instructors_limit': None,  # Unlimited free instructors
         'admin_has_organizer_capabilities': True,  # Admin can create events
-        
         # Seat Configuration
-        'included_seats': 1, # 1 admin included
-        'seat_price_cents': 12900, # $129/seat/month
+        'included_seats': 1,  # 1 admin included
+        'seat_price_cents': 12900,  # $129/seat/month
     }
 
     @classmethod
     def get_limits(cls, plan: str) -> dict:
         """Get limits for a plan by name."""
         limits_map = {
-            'free': cls.FREE,
-            'organization': cls.ORGANIZATION,
-            # Legacy fallbacks
-            'team': cls.ORGANIZATION,
-            'business': cls.ORGANIZATION,
-            'enterprise': cls.ORGANIZATION,
-        }
-        return limits_map.get(plan, cls.FREE)
-
-
-# =============================================================================
-# Pricing Configuration (in cents)
-# =============================================================================
-
-class PricingConfig:
-    """
-    Plan pricing in cents.
-
-    For display purposes - actual pricing is managed in Stripe.
-    Annual prices reflect ~17% discount from monthly.
-    """
-
-    # Individual Plans
-    ATTENDEE: int = 0  # Free
-
-    STARTER_MONTHLY: int = 4900  # $49/month
-    STARTER_ANNUAL: int = 4100  # $41/month (billed annually at $492)
-
-    PROFESSIONAL_MONTHLY: int = 9900  # $99/month
-    PROFESSIONAL_ANNUAL: int = 8300  # $83/month (billed annually at $996)
-
-    PREMIUM_MONTHLY: int = 19900  # $199/month
-    PREMIUM_ANNUAL: int = 16600  # $166/month (billed annually at $1,992)
-
-    # Organization Plan
-    ORGANIZATION_MONTHLY: int = 19900  # $199/month
-    ORGANIZATION_ANNUAL: int = 16600   # $166/month (~17% off, billed $1992/year)
-
-    @classmethod
-    def get_price(cls, plan: str, annual: bool = False) -> int:
-        """Get price for a plan."""
-        prices = {
-            'attendee': cls.ATTENDEE,
-            'starter': cls.STARTER_ANNUAL if annual else cls.STARTER_MONTHLY,
-            'professional': cls.PROFESSIONAL_ANNUAL if annual else cls.PROFESSIONAL_MONTHLY,
-            'premium': cls.PREMIUM_ANNUAL if annual else cls.PREMIUM_MONTHLY,
-            'organization': cls.ORGANIZATION_ANNUAL if annual else cls.ORGANIZATION_MONTHLY,
-            # Legacy mappings
-            'team': cls.ORGANIZATION_ANNUAL if annual else cls.ORGANIZATION_MONTHLY,
-        }
-        return prices.get(plan, 0)
-
-
-# =============================================================================
-# Stripe Price IDs (from environment)
-# =============================================================================
-
-class StripePriceIds:
-    """
-    Stripe Price IDs loaded from environment variables.
-
-    These map to prices configured in the Stripe Dashboard.
-    If not set, billing will use database-driven pricing (StripeProduct model).
-    """
-
-    STARTER: Optional[str] = os.environ.get('STRIPE_PRICE_STARTER')
-    STARTER_ANNUAL: Optional[str] = os.environ.get('STRIPE_PRICE_STARTER_ANNUAL')
-
-    PROFESSIONAL: Optional[str] = os.environ.get('STRIPE_PRICE_PROFESSIONAL')
-    PROFESSIONAL_ANNUAL: Optional[str] = os.environ.get('STRIPE_PRICE_PROFESSIONAL_ANNUAL')
-
-    PREMIUM: Optional[str] = os.environ.get('STRIPE_PRICE_PREMIUM')
-    PREMIUM_ANNUAL: Optional[str] = os.environ.get('STRIPE_PRICE_PREMIUM_ANNUAL')
-
-    TEAM: Optional[str] = os.environ.get('STRIPE_PRICE_TEAM')
-    TEAM_ANNUAL: Optional[str] = os.environ.get('STRIPE_PRICE_TEAM_ANNUAL')
-
-    ORGANIZATION: Optional[str] = os.environ.get('STRIPE_PRICE_ORGANIZATION')
-    ORGANIZATION_ANNUAL: Optional[str] = os.environ.get('STRIPE_PRICE_ORGANIZATION_ANNUAL')
-
-    ENTERPRISE: Optional[str] = os.environ.get('STRIPE_PRICE_ENTERPRISE')
-
-    # Legacy mappings
-    ORGANIZER: Optional[str] = os.environ.get('STRIPE_PRICE_PROFESSIONAL')
-    
-    @classmethod
-    def get_price_id(cls, plan: str, annual: bool = False) -> Optional[str]:
-        """Get Stripe price ID for a plan."""
-        suffix = '_ANNUAL' if annual else ''
-        attr_name = f"{plan.upper()}{suffix}"
-        # Handle 'team' mapping to organization if needed, or leave rigid
-        if plan == 'team': attr_name = f"ORGANIZATION{suffix}"
-        return getattr(cls, attr_name, None)
-
-    @classmethod
-    def get_price_id(cls, plan: str, annual: bool = False) -> Optional[str]:
-        """Get Stripe price ID for a plan."""
-        suffix = '_ANNUAL' if annual else ''
-        attr_name = f"{plan.upper()}{suffix}"
-        return getattr(cls, attr_name, None)
-
-    @classmethod
-    def as_dict(cls) -> dict:
-        """Return all price IDs as a dictionary (for backward compatibility)."""
-        return {
-            'starter': cls.STARTER,
-            'starter_annual': cls.STARTER_ANNUAL,
-            'professional': cls.PROFESSIONAL,
-            'professional_annual': cls.PROFESSIONAL_ANNUAL,
-            'premium': cls.PREMIUM,
-            'premium_annual': cls.PREMIUM_ANNUAL,
-            'team': cls.TEAM,
-            'team_annual': cls.TEAM_ANNUAL,
-            'enterprise': cls.ENTERPRISE,
-            # Legacy
-            'organizer': cls.ORGANIZER,
             'organization': cls.ORGANIZATION,
         }
+        return limits_map.get(plan, cls.ORGANIZATION)
 
 
 # =============================================================================
 # Default Plan
 # =============================================================================
+
 
 class DefaultPlan:
     """Default plan for new users."""
@@ -381,7 +262,5 @@ __all__ = [
     'TicketingTaxCodes',
     'IndividualPlanLimits',
     'OrganizationPlanLimits',
-    'PricingConfig',
-    'StripePriceIds',
     'DefaultPlan',
 ]

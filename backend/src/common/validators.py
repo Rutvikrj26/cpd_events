@@ -77,9 +77,9 @@ def validate_field_positions_schema(value):
         if 'font_size' in config:
             if not isinstance(config['font_size'], (int, float)):
                 raise ValidationError(f"Field {field_name}: font_size must be a number")
-        
+
         if 'fontSize' in config:
-             if not isinstance(config['fontSize'], (int, float)):
+            if not isinstance(config['fontSize'], (int, float)):
                 raise ValidationError(f"Field {field_name}: fontSize must be a number")
 
 

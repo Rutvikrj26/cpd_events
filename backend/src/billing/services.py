@@ -3,7 +3,7 @@ Stripe integration service for billing.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from django.conf import settings
@@ -46,16 +46,36 @@ class StripeService:
         """Check if Stripe is properly configured."""
         return bool(getattr(settings, 'STRIPE_SECRET_KEY', None))
 
-    def get_price_id(self, plan: str, annual: bool = False) -> str | None:
+    def _with_retry(self, func, *args, **kwargs):
+        """Retry Stripe API calls for transient errors."""
+        import time
+
+        max_attempts = 3
+        delay = 1
+        for attempt in range(max_attempts):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if not self.stripe or not hasattr(self.stripe, 'error'):
+                    raise
+                transient_errors = (
+                    self.stripe.error.APIConnectionError,
+                    self.stripe.error.RateLimitError,
+                )
+                if not isinstance(e, transient_errors) or attempt == max_attempts - 1:
+                    raise
+                time.sleep(delay)
+                delay *= 2
+
+    def get_price_id(self, plan: str, billing_interval: str = 'month') -> str | None:
         """
         Get Stripe price ID for a plan.
 
         Now reads from database instead of environment variables.
-        Falls back to settings if database is empty (for backward compatibility).
 
         Args:
-            plan: The plan name (e.g., 'starter', 'professional', 'premium')
-            annual: Whether to get annual pricing (default: False for monthly)
+            plan: The plan name (e.g., 'organizer', 'lms', 'organization')
+            billing_interval: 'month' or 'year' (default: 'month')
 
         Returns:
             Stripe price ID or None
@@ -64,36 +84,30 @@ class StripeService:
             return None
 
         try:
-            from .models import StripeProduct, StripePrice
+            from .models import StripeProduct
 
             # Find product for this plan
             product = StripeProduct.objects.filter(plan=plan, is_active=True).first()
             if not product:
-                # Fallback to environment variables
-                logger.warning(f"No StripeProduct found for plan '{plan}', falling back to settings")
-                price_ids = getattr(settings, 'STRIPE_PRICE_IDS', {})
-                price_key = f"{plan}_annual" if annual else plan
-                return price_ids.get(price_key)
+                logger.warning(f"No StripeProduct found for plan '{plan}'")
+                return None
 
             # Find price for billing interval
-            interval = 'year' if annual else 'month'
+            interval = billing_interval or 'month'
+            if interval not in ('month', 'year'):
+                logger.warning(f"Invalid billing interval '{interval}' for plan '{plan}'")
+                return None
             price = product.prices.filter(billing_interval=interval, is_active=True).first()
 
             if not price:
                 logger.warning(f"No active price found for plan '{plan}' with interval '{interval}'")
-                # Fallback to environment variables
-                price_ids = getattr(settings, 'STRIPE_PRICE_IDS', {})
-                price_key = f"{plan}_annual" if annual else plan
-                return price_ids.get(price_key)
+                return None
 
             return price.stripe_price_id
 
         except Exception as e:
             logger.error(f"Error getting price ID from database: {e}")
-            # Fallback to environment variables
-            price_ids = getattr(settings, 'STRIPE_PRICE_IDS', {})
-            price_key = f"{plan}_annual" if annual else plan
-            return price_ids.get(price_key)
+            return None
 
     def get_trial_days(self, plan: str) -> int:
         """
@@ -114,6 +128,116 @@ class StripeService:
 
         # Default to 0 (no trial) if not explicitly configured in DB
         return 0
+
+    def sync_trial_period_days(self, plan: str, trial_days: int, previous_trial_days: int | None = None) -> dict[str, int]:
+        """
+        Extend trial periods for existing trialing subscriptions on a plan.
+
+        Only extends trials when trial_days increases. Does not shorten trials.
+        """
+        if previous_trial_days is not None and trial_days <= previous_trial_days:
+            return {'updated': 0, 'skipped': 0}
+
+        if trial_days <= 0:
+            return {'updated': 0, 'skipped': 0}
+
+        updated = 0
+        skipped = 0
+        now = timezone.now()
+
+        try:
+            from organizations.models import OrganizationSubscription
+
+            from .models import Subscription
+
+            subscriptions = list(
+                Subscription.objects.filter(
+                    plan=plan,
+                    status=Subscription.Status.TRIALING,
+                    trial_ends_at__isnull=False,
+                )
+            )
+
+            if plan == OrganizationSubscription.Plan.ORGANIZATION:
+                org_subscriptions = list(
+                    OrganizationSubscription.objects.filter(
+                        plan=plan,
+                        status=OrganizationSubscription.Status.TRIALING,
+                        trial_ends_at__isnull=False,
+                    )
+                )
+            else:
+                org_subscriptions = []
+        except Exception as exc:
+            logger.error(f"Failed to load subscriptions for trial sync: {exc}")
+            return {'updated': 0, 'skipped': 0}
+
+        for sub in subscriptions:
+            new_trial_end = None
+            if sub.current_period_start:
+                new_trial_end = sub.current_period_start + timedelta(days=trial_days)
+
+            if not new_trial_end or new_trial_end <= now:
+                skipped += 1
+                continue
+
+            if sub.trial_ends_at and new_trial_end <= sub.trial_ends_at:
+                skipped += 1
+                continue
+
+            if self.is_configured and sub.stripe_subscription_id:
+                try:
+                    self.stripe.Subscription.modify(
+                        sub.stripe_subscription_id,
+                        trial_end=int(new_trial_end.timestamp()),
+                    )
+                except Exception as exc:
+                    logger.error(f"Failed to update Stripe trial for {sub.stripe_subscription_id}: {exc}")
+                    skipped += 1
+                    continue
+
+            sub.trial_ends_at = new_trial_end
+            sub.save(update_fields=['trial_ends_at', 'updated_at'])
+            updated += 1
+
+        for sub in org_subscriptions:
+            new_trial_end = None
+            if sub.current_period_start:
+                new_trial_end = sub.current_period_start + timedelta(days=trial_days)
+
+            if not new_trial_end or new_trial_end <= now:
+                skipped += 1
+                continue
+
+            if sub.trial_ends_at and new_trial_end <= sub.trial_ends_at:
+                skipped += 1
+                continue
+
+            if self.is_configured and sub.stripe_subscription_id:
+                try:
+                    self.stripe.Subscription.modify(
+                        sub.stripe_subscription_id,
+                        trial_end=int(new_trial_end.timestamp()),
+                    )
+                except Exception as exc:
+                    logger.error(f"Failed to update Stripe trial for org {sub.stripe_subscription_id}: {exc}")
+                    skipped += 1
+                    continue
+
+            sub.trial_ends_at = new_trial_end
+            sub.save(update_fields=['trial_ends_at', 'updated_at'])
+            updated += 1
+
+        return {'updated': updated, 'skipped': skipped}
+
+    def _apply_plan_to_user(self, user, plan: str) -> None:
+        """Apply account_type changes based on subscription plan."""
+        if plan in ['organizer', 'organization']:
+            user.upgrade_to_organizer()
+        elif plan == 'lms':
+            user.upgrade_to_course_manager()
+        elif plan == 'attendee':
+            user.downgrade_to_attendee()
 
     # =========================================================================
     # Customer Management
@@ -136,7 +260,8 @@ class StripeService:
             return subscription.stripe_customer_id
 
         try:
-            customer = self.stripe.Customer.create(
+            customer = self._with_retry(
+                self.stripe.Customer.create,
                 email=user.email,
                 name=user.full_name or user.email,
                 metadata={
@@ -167,38 +292,74 @@ class StripeService:
             logger.error(f"Failed to update Stripe customer: {e}")
             return False
 
+    def get_invoice(self, invoice_id: str):
+        """Retrieve a Stripe invoice."""
+        if not self.is_configured:
+            return None
+        try:
+            return self._with_retry(self.stripe.Invoice.retrieve, invoice_id)
+        except Exception as e:
+            logger.warning(f"Failed to retrieve invoice {invoice_id}: {e}")
+            return None
+
+    def list_payment_intents(self, created_gte: datetime | None = None, limit: int = 200) -> dict[str, Any]:
+        """List recent payment intents for reconciliation."""
+        if not self.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        try:
+            params: dict[str, Any] = {'limit': 100}
+            if created_gte:
+                params['created'] = {'gte': int(created_gte.timestamp())}
+
+            intents = []
+            response = self._with_retry(self.stripe.PaymentIntent.list, **params)
+            for intent in response.auto_paging_iter():
+                intents.append(intent)
+                if len(intents) >= limit:
+                    break
+
+            return {'success': True, 'payment_intents': intents}
+        except Exception as e:
+            logger.error(f"Failed to list payment intents: {e}")
+            return {'success': False, 'error': str(e)}
+
     # =========================================================================
     # Subscription Management
     # =========================================================================
 
-    def create_subscription(self, user, plan: str, payment_method_id: str | None = None) -> dict[str, Any]:
+    def create_subscription(
+        self,
+        user,
+        plan: str,
+        payment_method_id: str | None = None,
+        billing_interval: str = 'month',
+    ) -> dict[str, Any]:
         """
         Create a subscription for a user.
 
         Returns:
             Dict with subscription details or error
         """
-        from billing.models import Subscription
         from django.db import transaction
+
+        from billing.models import Subscription
 
         if not self.is_configured:
             # Create local subscription without Stripe
             with transaction.atomic():
                 subscription = Subscription.create_for_user(user, plan)
                 # Upgrade user account_type in same transaction
-                if plan in ['professional', 'organization']:
-                    user.upgrade_to_organizer()
+                self._apply_plan_to_user(user, plan)
             return {'success': True, 'subscription': subscription}
 
         # Check for existing active subscription (uniqueness enforcement)
         existing = getattr(user, 'subscription', None)
         if existing and existing.stripe_subscription_id and existing.status in ['active', 'trialing']:
-            return {
-                'success': False,
-                'error': 'User already has an active subscription. Use update to change plans.'
-            }
+            return {'success': False, 'error': 'User already has an active subscription. Use update to change plans.'}
 
-        price_id = self.get_price_id(plan)
+        billing_interval = billing_interval or 'month'
+        price_id = self.get_price_id(plan, billing_interval=billing_interval)
         if not price_id:
             return {'success': False, 'error': f'No price configured for plan: {plan}'}
 
@@ -208,6 +369,7 @@ class StripeService:
             if not customer_id:
                 return {'success': False, 'error': 'Failed to create customer'}
 
+            trial_days = self.get_trial_days(plan)
             subscription_params = {
                 'customer': customer_id,
                 'items': [{'price': price_id}],
@@ -217,13 +379,16 @@ class StripeService:
                 'metadata': {
                     'user_uuid': str(user.uuid),
                     'plan': plan,
+                    'billing_interval': billing_interval,
                 },
             }
 
             if payment_method_id:
                 subscription_params['default_payment_method'] = payment_method_id
+            if trial_days > 0:
+                subscription_params['trial_period_days'] = trial_days
 
-            stripe_subscription = self.stripe.Subscription.create(**subscription_params)
+            stripe_subscription = self._with_retry(self.stripe.Subscription.create, **subscription_params)
 
             # Atomically update local subscription
             with transaction.atomic():
@@ -232,17 +397,21 @@ class StripeService:
                 subscription.stripe_customer_id = customer_id
                 subscription.plan = plan
                 subscription.status = stripe_subscription.status
-                subscription.current_period_start = datetime.fromtimestamp(
-                    stripe_subscription.current_period_start, tz=dt_timezone.utc
-                )
-                subscription.current_period_end = datetime.fromtimestamp(
-                    stripe_subscription.current_period_end, tz=dt_timezone.utc
+                subscription.billing_interval = billing_interval
+                subscription.pending_plan = None
+                subscription.pending_billing_interval = None
+                subscription.pending_change_at = None
+                subscription.current_period_start = datetime.fromtimestamp(stripe_subscription.current_period_start, tz=UTC)
+                subscription.current_period_end = datetime.fromtimestamp(stripe_subscription.current_period_end, tz=UTC)
+                subscription.trial_ends_at = (
+                    datetime.fromtimestamp(stripe_subscription.trial_end, tz=UTC)
+                    if getattr(stripe_subscription, 'trial_end', None)
+                    else None
                 )
                 subscription.save()
 
                 # Upgrade user account_type in same transaction
-                if plan in ['professional', 'organization']:
-                    user.upgrade_to_organizer()
+                self._apply_plan_to_user(user, plan)
 
             return {
                 'success': True,
@@ -303,7 +472,13 @@ class StripeService:
             logger.error(f"Failed to reactivate subscription: {e}")
             return False
 
-    def update_subscription(self, subscription, new_plan: str, immediate: bool = True) -> dict[str, Any]:
+    def update_subscription(
+        self,
+        subscription,
+        new_plan: str,
+        immediate: bool = True,
+        billing_interval: str = 'month',
+    ) -> dict[str, Any]:
         """
         Update an existing subscription to a new plan atomically.
 
@@ -316,19 +491,30 @@ class StripeService:
         Returns:
             Dict with success status and updated subscription or error
         """
-        from billing.models import Subscription
         from django.db import transaction
+
+        from billing.models import Subscription
 
         # Handle local-only mode (no Stripe configured)
         if not self.is_configured:
             with transaction.atomic():
                 subscription.plan = new_plan
-                subscription.save(update_fields=['plan', 'updated_at'])
+                subscription.billing_interval = billing_interval
+                subscription.pending_plan = None
+                subscription.pending_billing_interval = None
+                subscription.pending_change_at = None
+                subscription.save(
+                    update_fields=[
+                        'plan',
+                        'billing_interval',
+                        'pending_plan',
+                        'pending_billing_interval',
+                        'pending_change_at',
+                        'updated_at',
+                    ]
+                )
                 # Update user account_type in same transaction
-                if new_plan in ['professional', 'organization']:
-                    subscription.user.upgrade_to_organizer()
-                elif new_plan == 'attendee':
-                    subscription.user.downgrade_to_attendee()
+                self._apply_plan_to_user(subscription.user, new_plan)
             return {'success': True, 'subscription': subscription}
 
         # Validate plan exists
@@ -336,7 +522,8 @@ class StripeService:
             return {'success': False, 'error': f'Invalid plan: {new_plan}'}
 
         # Get price ID for new plan
-        price_id = self.get_price_id(new_plan)
+        billing_interval = billing_interval or 'month'
+        price_id = self.get_price_id(new_plan, billing_interval=billing_interval)
         if not price_id:
             return {'success': False, 'error': f'No price configured for plan: {new_plan}'}
 
@@ -354,39 +541,88 @@ class StripeService:
             # Get the subscription item ID (first item)
             item_id = stripe_sub['items']['data'][0].id
 
-            # Prepare modification parameters
-            modification_params = {
-                'items': [{
-                    'id': item_id,
-                    'price': price_id,
-                }],
-            }
-
             if immediate:
-                # Immediate upgrade with proration
-                modification_params['proration_behavior'] = 'always_invoice'
-                modification_params['billing_cycle_anchor'] = 'unchanged'
+                # Immediate upgrade/downgrade with proration
+                updated_stripe_sub = self.stripe.Subscription.modify(
+                    subscription.stripe_subscription_id,
+                    items=[
+                        {
+                            'id': item_id,
+                            'price': price_id,
+                        }
+                    ],
+                    proration_behavior='always_invoice',
+                    billing_cycle_anchor='unchanged',
+                )
+
+                # Atomically update local database
+                with transaction.atomic():
+                    subscription.plan = new_plan
+                    subscription.status = updated_stripe_sub.get('status', subscription.status)
+                    subscription.billing_interval = billing_interval
+                    subscription.pending_plan = None
+                    subscription.pending_billing_interval = None
+                    subscription.pending_change_at = None
+                    subscription.save(
+                        update_fields=[
+                            'plan',
+                            'status',
+                            'billing_interval',
+                            'pending_plan',
+                            'pending_billing_interval',
+                            'pending_change_at',
+                            'updated_at',
+                        ]
+                    )
+                    # Update user account_type in same transaction
+                    self._apply_plan_to_user(subscription.user, new_plan)
             else:
-                # Schedule change for end of period (downgrade)
-                modification_params['proration_behavior'] = 'none'
-                modification_params['billing_cycle_anchor'] = 'unchanged'
+                # Schedule change for end of period
+                current_item = stripe_sub['items']['data'][0]
+                current_price = current_item.price if hasattr(current_item, 'price') else current_item.get('price')
+                current_price_id = getattr(current_price, 'id', None) or current_price.get('id')
+                current_quantity = getattr(current_item, 'quantity', None) or current_item.get('quantity') or 1
+                current_period_end = getattr(stripe_sub, 'current_period_end', None)
+                if current_period_end is None and hasattr(stripe_sub, 'get'):
+                    current_period_end = stripe_sub.get('current_period_end')
 
-            # Update subscription in Stripe
-            updated_stripe_sub = self.stripe.Subscription.modify(
-                subscription.stripe_subscription_id,
-                **modification_params
-            )
+                if not current_price_id or not current_period_end:
+                    return {'success': False, 'error': 'Stripe subscription missing price or period end'}
 
-            # Atomically update local database
-            with transaction.atomic():
-                subscription.plan = new_plan
-                subscription.status = updated_stripe_sub.get('status', subscription.status)
-                subscription.save(update_fields=['plan', 'status', 'updated_at'])
-                # Update user account_type in same transaction
-                if new_plan in ['professional', 'organization']:
-                    subscription.user.upgrade_to_organizer()
-                elif new_plan == 'attendee':
-                    subscription.user.downgrade_to_attendee()
+                schedule_id = getattr(stripe_sub, 'schedule', None)
+                if schedule_id is None and hasattr(stripe_sub, 'get'):
+                    schedule_id = stripe_sub.get('schedule')
+                if schedule_id:
+                    schedule = self.stripe.SubscriptionSchedule.retrieve(schedule_id)
+                else:
+                    schedule = self.stripe.SubscriptionSchedule.create(from_subscription=subscription.stripe_subscription_id)
+
+                self.stripe.SubscriptionSchedule.modify(
+                    schedule.id,
+                    phases=[
+                        {
+                            'items': [{'price': current_price_id, 'quantity': current_quantity}],
+                            'end_date': current_period_end,
+                        },
+                        {
+                            'items': [{'price': price_id, 'quantity': current_quantity}],
+                        },
+                    ],
+                    end_behavior='release',
+                )
+
+                with transaction.atomic():
+                    subscription.pending_plan = new_plan
+                    subscription.pending_billing_interval = billing_interval
+                    subscription.pending_change_at = datetime.fromtimestamp(current_period_end, tz=UTC)
+                    subscription.save(
+                        update_fields=[
+                            'pending_plan',
+                            'pending_billing_interval',
+                            'pending_change_at',
+                            'updated_at',
+                        ]
+                    )
 
             logger.info(f"Successfully updated subscription {subscription.id} to plan {new_plan}")
             return {'success': True, 'subscription': subscription}
@@ -398,11 +634,11 @@ class StripeService:
     def update_subscription_quantity(self, subscription_id: str, quantity: int) -> dict[str, Any]:
         """
         Update the quantity (number of seats) of a Stripe subscription.
-        
+
         Args:
             subscription_id: Stripe subscription ID
             quantity: New total quantity
-            
+
         Returns:
             Dict with success status or error
         """
@@ -426,7 +662,7 @@ class StripeService:
                 quantity=quantity,
                 proration_behavior='always_invoice',  # Charge immediately for adds, credit for removes
             )
-            
+
             return {'success': True}
 
         except Exception as e:
@@ -438,8 +674,9 @@ class StripeService:
         Sync local subscription with Stripe atomically.
         Useful when webhooks are not available (e.g. local dev).
         """
-        from billing.models import Subscription, StripeProduct
         from django.db import transaction
+
+        from billing.models import StripeProduct, Subscription
 
         if not self.is_configured:
             return {'success': False, 'error': 'Stripe not configured'}
@@ -486,31 +723,37 @@ class StripeService:
 
                 subscription.stripe_subscription_id = stripe_sub.id
                 subscription.status = stripe_sub.status
-                subscription.current_period_start = datetime.fromtimestamp(stripe_sub.current_period_start, tz=dt_timezone.utc)
-                subscription.current_period_end = datetime.fromtimestamp(stripe_sub.current_period_end, tz=dt_timezone.utc)
-                subscription.trial_ends_at = datetime.fromtimestamp(stripe_sub.trial_end, tz=dt_timezone.utc) if stripe_sub.trial_end else None
+                subscription.current_period_start = datetime.fromtimestamp(stripe_sub.current_period_start, tz=UTC)
+                subscription.current_period_end = datetime.fromtimestamp(stripe_sub.current_period_end, tz=UTC)
+                subscription.trial_ends_at = (
+                    datetime.fromtimestamp(stripe_sub.trial_end, tz=UTC) if stripe_sub.trial_end else None
+                )
                 subscription.cancel_at_period_end = stripe_sub.cancel_at_period_end
-                subscription.canceled_at = datetime.fromtimestamp(stripe_sub.canceled_at, tz=dt_timezone.utc) if stripe_sub.canceled_at else None
+                subscription.canceled_at = (
+                    datetime.fromtimestamp(stripe_sub.canceled_at, tz=UTC) if stripe_sub.canceled_at else None
+                )
 
                 # Determine plan from price
                 if stripe_sub.get('items') and stripe_sub['items'].data:
                     try:
-                        product_id = stripe_sub['items'].data[0].price.product
+                        item = stripe_sub['items'].data[0]
+                        product_id = item.price.product
                         local_product = StripeProduct.objects.filter(stripe_product_id=product_id).first()
                         if local_product:
                             subscription.plan = local_product.plan
+                        if item.price and item.price.recurring:
+                            subscription.billing_interval = item.price.recurring.interval
                     except Exception as e:
                         logger.warning(f"Could not map Stripe product to local plan: {e}")
 
+                subscription.pending_plan = None
+                subscription.pending_billing_interval = None
+                subscription.pending_change_at = None
                 subscription.save()
 
                 # Upgrade/downgrade account_type in same transaction
-                if subscription.plan in ['professional', 'organization']:
-                    user.upgrade_to_organizer()
-                    logger.info(f"Upgraded user {user.email} to organizer based on plan {subscription.plan}")
-                elif subscription.plan == 'attendee':
-                    user.downgrade_to_attendee()
-                    logger.info(f"Downgraded user {user.email} to attendee")
+                self._apply_plan_to_user(user, subscription.plan)
+                logger.info(f"Updated user {user.email} account_type based on plan {subscription.plan}")
 
             return {'success': True, 'subscription': subscription}
 
@@ -522,7 +765,15 @@ class StripeService:
     # Checkout & Portal
     # =========================================================================
 
-    def create_checkout_session(self, user, plan: str, success_url: str, cancel_url: str, organization_uuid: str | None = None) -> dict[str, Any]:
+    def create_checkout_session(
+        self,
+        user,
+        plan: str,
+        success_url: str,
+        cancel_url: str,
+        organization_uuid: str | None = None,
+        billing_interval: str = 'month',
+    ) -> dict[str, Any]:
         """
         Create Stripe Checkout Session.
 
@@ -540,12 +791,13 @@ class StripeService:
                 if stripe_sub.status in ['active', 'trialing']:
                     return {
                         'success': False,
-                        'error': 'You already have an active subscription. Use the billing portal to upgrade.'
+                        'error': 'You already have an active subscription. Use the billing portal to upgrade.',
                     }
             except Exception:
                 pass  # Subscription doesn't exist in Stripe, continue with checkout
 
-        price_id = self.get_price_id(plan)
+        billing_interval = billing_interval or 'month'
+        price_id = self.get_price_id(plan, billing_interval=billing_interval)
         if not price_id:
             return {'success': False, 'error': f'No price configured for plan: {plan}'}
 
@@ -557,18 +809,20 @@ class StripeService:
         existing_sub = getattr(user, 'subscription', None)
         if existing_sub and existing_sub.is_trialing and existing_sub.trial_ends_at:
             from django.utils import timezone
+
             remaining = (existing_sub.trial_ends_at - timezone.now()).days
             # Only override if remaining time is LESS than the plan's default trial
             # (e.g. if they have 5 days left, give them 5 days on Stripe. If they have -5, give 0).
             if remaining < trial_days:
                 trial_days = max(0, remaining)
-        
+
         try:
             customer_id = self.create_customer(user)
 
             metadata = {
                 'user_uuid': str(user.uuid),
                 'plan': plan,
+                'billing_interval': billing_interval,
             }
             if organization_uuid:
                 metadata['organization_uuid'] = organization_uuid
@@ -603,13 +857,13 @@ class StripeService:
             return {'success': False, 'error': str(e)}
 
     def create_one_time_checkout_session(
-        self, 
-        user, 
-        price_id: str, 
-        success_url: str, 
-        cancel_url: str, 
+        self,
+        user,
+        price_id: str,
+        success_url: str,
+        cancel_url: str,
         metadata: dict[str, Any] = None,
-        client_reference_id: str = None
+        client_reference_id: str = None,
     ) -> dict[str, Any]:
         """
         Create Stripe Checkout Session for one-time payment (e.g. Course).
@@ -619,7 +873,7 @@ class StripeService:
 
         try:
             customer_id = self.create_customer(user)
-            
+
             # Prepare success URL with session_id
             success_url_with_session = success_url
             if '{CHECKOUT_SESSION_ID}' not in success_url:
@@ -637,7 +891,7 @@ class StripeService:
                 'customer_update': {'address': 'auto'},
                 'metadata': metadata or {},
             }
-            
+
             if client_reference_id:
                 session_params['client_reference_id'] = client_reference_id
 
@@ -648,8 +902,6 @@ class StripeService:
         except Exception as e:
             logger.error(f"Failed to create checkout session: {e}")
             return {'success': False, 'error': str(e)}
-
-
 
     def confirm_checkout_session(self, user, session_id: str, max_retries: int = 3) -> dict[str, Any]:
         """
@@ -667,8 +919,10 @@ class StripeService:
             dict with success status and subscription or error
         """
         import time
-        from billing.models import Subscription, StripeProduct
+
         from django.db import transaction
+
+        from billing.models import StripeProduct, Subscription
 
         if not self.is_configured:
             return {'success': False, 'error': 'Stripe not configured'}
@@ -677,8 +931,7 @@ class StripeService:
             try:
                 # 1. Retrieve checkout session from Stripe
                 session = self.stripe.checkout.Session.retrieve(
-                    session_id,
-                    expand=['subscription', 'subscription.latest_invoice']
+                    session_id, expand=['subscription', 'subscription.latest_invoice']
                 )
 
                 # 2. Verify session belongs to this user (via customer or metadata)
@@ -686,10 +939,9 @@ class StripeService:
                 expected_customer = existing_sub.stripe_customer_id if existing_sub else None
 
                 # Check by customer ID or metadata
-                session_belongs_to_user = (
-                    (expected_customer and session.customer == expected_customer) or
-                    session.metadata.get('user_uuid') == str(user.uuid)
-                )
+                session_belongs_to_user = (expected_customer and session.customer == expected_customer) or session.metadata.get(
+                    'user_uuid'
+                ) == str(user.uuid)
 
                 if not session_belongs_to_user:
                     return {'success': False, 'error': 'Checkout session does not belong to this user'}
@@ -718,7 +970,9 @@ class StripeService:
                             existing_stripe_sub = self.stripe.Subscription.retrieve(subscription.stripe_subscription_id)
                             if existing_stripe_sub.status in ['active', 'trialing']:
                                 # Cancel the new one to maintain consistency
-                                logger.warning(f"User {user.email} already has subscription {subscription.stripe_subscription_id}, canceling new one {stripe_sub.id}")
+                                logger.warning(
+                                    f"User {user.email} already has subscription {subscription.stripe_subscription_id}, canceling new one {stripe_sub.id}"
+                                )
                                 self.stripe.Subscription.cancel(stripe_sub.id)
                                 return {'success': False, 'error': 'User already has an active subscription'}
                         except Exception:
@@ -728,58 +982,161 @@ class StripeService:
                     subscription.stripe_subscription_id = stripe_sub.id
                     subscription.stripe_customer_id = session.customer
                     subscription.status = stripe_sub.status
-                    subscription.current_period_start = datetime.fromtimestamp(
-                        stripe_sub.current_period_start, tz=dt_timezone.utc
-                    )
-                    subscription.current_period_end = datetime.fromtimestamp(
-                        stripe_sub.current_period_end, tz=dt_timezone.utc
-                    )
+                    subscription.current_period_start = datetime.fromtimestamp(stripe_sub.current_period_start, tz=UTC)
+                    subscription.current_period_end = datetime.fromtimestamp(stripe_sub.current_period_end, tz=UTC)
 
                     # Handle trial
                     if stripe_sub.trial_end:
-                        subscription.trial_ends_at = datetime.fromtimestamp(
-                            stripe_sub.trial_end, tz=dt_timezone.utc
-                        )
+                        subscription.trial_ends_at = datetime.fromtimestamp(stripe_sub.trial_end, tz=UTC)
 
                     # Determine plan from metadata or price
                     plan = session.metadata.get('plan')
+                    billing_interval = session.metadata.get('billing_interval')
                     if not plan:
                         # Try to determine from subscription items
                         if stripe_sub.get('items') and stripe_sub['items'].data:
                             try:
-                                product_id = stripe_sub['items'].data[0].price.product
+                                item = stripe_sub['items'].data[0]
+                                product_id = item.price.product
                                 local_product = StripeProduct.objects.filter(stripe_product_id=product_id).first()
                                 if local_product:
                                     plan = local_product.plan
+                                if not billing_interval and item.price and item.price.recurring:
+                                    billing_interval = item.price.recurring.interval
                             except Exception:
                                 pass
-                    plan = plan or 'professional'  # Default to professional if unknown
+                    plan = plan or 'organizer'  # Default to organizer if unknown
+                    billing_interval = billing_interval or 'month'
 
                     subscription.plan = plan
+                    subscription.billing_interval = billing_interval
+                    subscription.pending_plan = None
+                    subscription.pending_billing_interval = None
+                    subscription.pending_change_at = None
                     subscription.save()
 
                     # 6. Upgrade user account_type in same transaction
-                    if plan in ['professional', 'organization']:
-                        user.upgrade_to_organizer()
-                        logger.info(f"User {user.email} upgraded to organizer via checkout confirmation")
+                    self._apply_plan_to_user(user, plan)
+                    logger.info(f"User {user.email} account_type updated via checkout confirmation")
 
                 sync_result = self.sync_payment_methods(user, customer_id=session.customer)
-                if not sync_result['success']:
-                    logger.warning(
-                        f"Checkout session {session_id} confirmed, but payment method sync failed: {sync_result['error']}"
-                    )
+                if not sync_result.get('success'):
+                    logger.warning(f"Payment method sync failed for session {session_id}: {sync_result.get('error')}")
 
-                logger.info(f"Checkout session {session_id} confirmed for user {user.email}, subscription {stripe_sub.id}")
+                logger.info(f"Checkout session {session_id} confirmed for user {user.email}")
                 return {'success': True, 'subscription': subscription}
 
             except Exception as e:
-                if attempt < max_retries - 1:
+                if 'unique constraint' in str(e).lower() and attempt < max_retries - 1:
                     time.sleep(0.5)
                     continue
-                logger.error(f"Failed to confirm checkout session: {e}")
+                logger.error(f"Failed to confirm checkout session {session_id}: {e}")
                 return {'success': False, 'error': str(e)}
 
         return {'success': False, 'error': 'Max retries exceeded'}
+
+    def confirm_organization_checkout_session(self, organization, session_id: str, max_retries: int = 3) -> dict[str, Any]:
+        """
+        Atomically confirm checkout session and sync Organization Subscription.
+        """
+        import time
+        from datetime import datetime
+
+        from django.db import transaction
+
+        from organizations.models import OrganizationSubscription
+
+        if not self.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        for attempt in range(max_retries):
+            try:
+                # 1. Retrieve
+                session = self.stripe.checkout.Session.retrieve(session_id, expand=['subscription'])
+
+                # 2. Verify ownership
+                if session.metadata.get('organization_uuid') != str(organization.uuid):
+                    return {'success': False, 'error': 'Checkout session does not belong to this organization'}
+
+                # 3. Get subscription
+                stripe_sub = session.subscription
+                if not stripe_sub:
+                    if attempt < max_retries - 1:
+                        time.sleep(0.5)
+                        continue
+                    return {'success': False, 'error': 'No subscription found'}
+
+                if isinstance(stripe_sub, str):
+                    stripe_sub = self.stripe.Subscription.retrieve(stripe_sub)
+
+                # 4. Update
+                with transaction.atomic():
+                    subscription, created = OrganizationSubscription.objects.select_for_update().get_or_create(
+                        organization=organization
+                    )
+
+                # Idempotency check: if already updated, skip
+                if (
+                    not created
+                    and subscription.stripe_subscription_id == stripe_sub.id
+                    and subscription.status == stripe_sub.status
+                ):
+                    return {'success': True, 'subscription': subscription}
+
+                subscription.stripe_subscription_id = stripe_sub.id
+                subscription.stripe_customer_id = session.customer
+                subscription.status = stripe_sub.status
+                subscription.current_period_start = datetime.fromtimestamp(stripe_sub.current_period_start, tz=UTC)
+                subscription.current_period_end = datetime.fromtimestamp(stripe_sub.current_period_end, tz=UTC)
+
+                if stripe_sub.trial_end:
+                    subscription.trial_ends_at = datetime.fromtimestamp(stripe_sub.trial_end, tz=UTC)
+                else:
+                    subscription.trial_ends_at = None
+
+                plan = session.metadata.get('plan')
+                product = None
+                if not plan and stripe_sub.get('items') and stripe_sub['items'].data:
+                    try:
+                        item = stripe_sub['items'].data[0]
+                        product_id = item.price.product
+                        from billing.models import StripeProduct
+
+                        product = StripeProduct.objects.filter(stripe_product_id=product_id).first()
+                        if product:
+                            plan = product.plan
+                    except Exception:
+                        pass
+
+                if plan:
+                    subscription.plan = plan
+                    if not product:
+                        try:
+                            from billing.models import StripeProduct
+
+                            product = StripeProduct.objects.filter(plan=plan, is_active=True).first()
+                        except Exception:
+                            product = None
+                    if product:
+                        if product.included_seats is not None:
+                            subscription.included_seats = product.included_seats
+                        if product.seat_price_cents is not None:
+                            subscription.seat_price_cents = product.seat_price_cents
+
+                subscription.save()
+
+                return {'success': True, 'subscription': subscription}
+
+            except Exception as e:
+                # Retry on unique constraint or database lock
+                error_str = str(e).lower()
+                if ('unique constraint' in error_str or 'database is locked' in error_str) and attempt < max_retries - 1:
+                    time.sleep(0.5)
+                    continue
+                logger.error(f"Failed to confirm org checkout {session_id}: {e}")
+                return {'success': False, 'error': str(e)}
+
+        return {'success': False, 'error': 'Failed to confirm checkout session after retries'}
 
     def sync_payment_methods(self, user, customer_id: str | None = None) -> dict[str, Any]:
         """
@@ -787,8 +1144,9 @@ class StripeService:
 
         Intended to be called after checkout/portal flows; webhooks are fallback.
         """
-        from billing.models import PaymentMethod
         from django.db import transaction
+
+        from billing.models import PaymentMethod
 
         if not self.is_configured:
             return {'success': False, 'error': 'Stripe not configured'}
@@ -814,7 +1172,9 @@ class StripeService:
         try:
             customer = self.stripe.Customer.retrieve(customer_id)
             invoice_settings = (
-                customer.get('invoice_settings', {}) if isinstance(customer, dict) else getattr(customer, 'invoice_settings', {})
+                customer.get('invoice_settings', {})
+                if isinstance(customer, dict)
+                else getattr(customer, 'invoice_settings', {})
             )
             default_pm_id = (
                 invoice_settings.get('default_payment_method')
@@ -860,13 +1220,15 @@ class StripeService:
             logger.error(f"Failed to sync payment methods for {user.email}: {e}")
             return {'success': False, 'error': str(e)}
 
-    def create_portal_session(self, user, return_url: str) -> dict[str, Any]:
+    def create_portal_session(self, user, return_url: str, customer_id: str | None = None) -> dict[str, Any]:
         """Create Stripe Customer Portal session."""
         if not self.is_configured:
             return {'success': False, 'error': 'Stripe not configured'}
 
-        # Get or create Stripe customer for trial users
-        customer_id = self.create_customer(user)
+        # If customer_id not provided, get from user
+        if not customer_id:
+            customer_id = self.create_customer(user)
+
         if not customer_id:
             return {'success': False, 'error': 'Failed to create billing account'}
 
@@ -880,7 +1242,7 @@ class StripeService:
     def create_setup_intent(self, user) -> dict[str, Any]:
         """
         Create a SetupIntent for collecting payment method via Stripe Elements.
-        
+
         Returns:
             Dict with client_secret for frontend Stripe Elements
         """
@@ -900,13 +1262,13 @@ class StripeService:
                     'user_uuid': str(user.uuid),
                 },
             )
-            
+
             # Get subscription for trial end date
             subscription = getattr(user, 'subscription', None)
             trial_end = None
             if subscription and subscription.trial_ends_at:
                 trial_end = subscription.trial_ends_at.isoformat()
-            
+
             return {
                 'success': True,
                 'client_secret': setup_intent.client_secret,
@@ -1024,8 +1386,8 @@ class StripeConnectService:
                     'transfers': {'requested': True},
                 },
                 settings={
-                    'payouts': {'schedule': {'interval': 'manual'}}, # Platform controls payouts? Or let them manage.
-                }
+                    'payouts': {'schedule': {'interval': 'manual'}},  # Platform controls payouts? Or let them manage.
+                },
             )
             return account.id
         except Exception as e:
@@ -1088,24 +1450,24 @@ class StripeConnectService:
     def create_payout(self, user, amount_cents: int, currency: str = 'usd') -> dict[str, Any]:
         """
         Initiate a manual payout from the connected account to the external bank account.
-        
+
         Args:
             user: The organizer user
             amount_cents: Amount to pay out
             currency: Currency code
-            
+
         Returns:
             Dict with success status and payout details
         """
         from billing.models import PayoutRequest
-        
+
         if not self.is_configured:
             return {'success': False, 'error': 'Stripe not configured'}
 
         subscription = getattr(user, 'subscription', None)
         if not subscription or not subscription.stripe_connect_account_id:
             return {'success': False, 'error': 'User has no connected account'}
-            
+
         connect_id = subscription.stripe_connect_account_id
 
         try:
@@ -1114,7 +1476,7 @@ class StripeConnectService:
             payout = self._stripe.Payout.create(
                 amount=amount_cents,
                 currency=currency,
-                stripe_account=connect_id, # Important: perform on connected account
+                stripe_account=connect_id,  # Important: perform on connected account
             )
 
             # Record in DB
@@ -1124,11 +1486,11 @@ class StripeConnectService:
                 stripe_payout_id=payout.id,
                 amount_cents=amount_cents,
                 currency=currency,
-                status=PayoutRequest.Status.PENDING, # Will update via webhook
-                arrival_date=datetime.fromtimestamp(payout.arrival_date, tz=dt_timezone.utc) if payout.arrival_date else None,
-                destination_bank_last4=getattr(payout.destination, 'last4', '')
+                status=PayoutRequest.Status.PENDING,  # Will update via webhook
+                arrival_date=datetime.fromtimestamp(payout.arrival_date, tz=UTC) if payout.arrival_date else None,
+                destination_bank_last4=getattr(payout.destination, 'last4', ''),
             )
-            
+
             return {'success': True, 'payout_id': payout.id}
 
         except Exception as e:
@@ -1139,11 +1501,11 @@ class StripeConnectService:
         """Get available balance in cents for connected account."""
         if not self.is_configured:
             return 0
-            
+
         subscription = getattr(user, 'subscription', None)
         if not subscription or not subscription.stripe_connect_account_id:
             return 0
-            
+
         try:
             balance = self._stripe.Balance.retrieve(stripe_account=subscription.stripe_connect_account_id)
             # Sum up available funds in default currency
@@ -1159,91 +1521,124 @@ class StripeConnectService:
 class RefundService:
     """
     Service for processing refunds.
-    
+
     Handles:
     - Stripe refund creation
     - Fee reversals
     - Registration status updates
     - Audit logging
     """
-    
+
     def __init__(self):
         self._stripe = stripe_service.stripe
-        
+
     @property
     def is_configured(self) -> bool:
         return stripe_service.is_configured
 
-    def process_refund(self, registration, amount_cents: int | None = None, reason: str = 'requested_by_customer', processed_by=None) -> dict[str, Any]:
+    def process_refund(
+        self, registration, amount_cents: int | None = None, reason: str = 'requested_by_customer', processed_by=None
+    ) -> dict[str, Any]:
         """
         Process a refund for a registration.
-        
+
         Args:
             registration: Registration object
             amount_cents: Amount to refund (None for full refund)
             reason: Reason code
             processed_by: User who initiated the refund (optional)
-            
+
         Returns:
             Dict with success status
         """
-        from billing.models import RefundRecord
-        from registrations.models import Registration
         from django.db import transaction
 
+        from billing.models import RefundRecord, TransferRecord
+        from registrations.models import Registration
+
         if not self.is_configured:
-             return {'success': False, 'error': 'Stripe not configured'}
-             
-        if not registration.stripe_payment_intent_id:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        if not registration.payment_intent_id:
             return {'success': False, 'error': 'Registration has no payment record'}
 
         # Default to full refund if amount not specified
         is_full_refund = amount_cents is None
-        
+
         try:
             # 1. Create Refund in Stripe
             refund_params = {
-                'payment_intent': registration.stripe_payment_intent_id,
+                'payment_intent': registration.payment_intent_id,
                 'reason': reason if reason in ['duplicate', 'fraudulent', 'requested_by_customer'] else 'requested_by_customer',
+                'reverse_transfer': True,
             }
             if not is_full_refund:
                 refund_params['amount'] = amount_cents
-                
+
             # If application fee was taken, we might want to refund it too
             # For now, we accept the default behavior (platform keeps fee unless specified)
             # To reverse fee: refund_application_fee=True
-            
+
             stripe_refund = self._stripe.Refund.create(**refund_params)
-            
+
             # 2. Record in DB
             with transaction.atomic():
                 RefundRecord.objects.create(
                     registration=registration,
                     processed_by=processed_by,
                     stripe_refund_id=stripe_refund.id,
-                    stripe_payment_intent_id=registration.stripe_payment_intent_id,
+                    stripe_payment_intent_id=registration.payment_intent_id,
                     amount_cents=stripe_refund.amount,
                     currency=stripe_refund.currency,
-                    status=RefundRecord.Status.SUCCEEDED if stripe_refund.status == 'succeeded' else RefundRecord.Status.PENDING,
-                    reason=reason
+                    status=(
+                        RefundRecord.Status.SUCCEEDED if stripe_refund.status == 'succeeded' else RefundRecord.Status.PENDING
+                    ),
+                    reason=reason,
                 )
-                
+
                 # Update Registration Status if full refund
-                if is_full_refund or (amount_cents and amount_cents >= registration.price_cents):
+                total_amount_cents = int((registration.total_amount or registration.amount_paid) * 100)
+                is_full_refund_effective = is_full_refund or (amount_cents and amount_cents >= total_amount_cents)
+                if is_full_refund_effective:
                     registration.payment_status = Registration.PaymentStatus.REFUNDED
                     registration.status = Registration.Status.CANCELLED
                     registration.save(update_fields=['payment_status', 'status', 'updated_at'])
-                    
-                    # Release seat? 
+                    try:
+                        from promo_codes.models import PromoCodeUsage
+
+                        PromoCodeUsage.release_for_registration(registration)
+                    except Exception as e:
+                        logger.warning("Failed to release promo code usage for %s: %s", registration.uuid, e)
+                    if registration.stripe_transfer_id:
+                        TransferRecord.objects.filter(
+                            stripe_transfer_id=registration.stripe_transfer_id,
+                            reversed=False,
+                        ).update(reversed=True, reversed_at=timezone.now(), updated_at=timezone.now())
+
+                    # Release seat?
                     # Logic for seat release is usually handled by signal or explicit method
                     # But verifying 'CANCELLED' status should trigger it if implemented.
-            
+
+            if registration.user:
+                try:
+                    from accounts.notifications import create_notification
+
+                    create_notification(
+                        user=registration.user,
+                        notification_type='refund_processed',
+                        title='Refund processed',
+                        message=f"Your refund for {registration.event.title} has been processed.",
+                        action_url='/my-events',
+                        metadata={'registration_uuid': str(registration.uuid)},
+                    )
+                except Exception as exc:
+                    logger.warning("Failed to create refund notification: %s", exc)
+
             return {'success': True, 'refund_id': stripe_refund.id}
 
         except Exception as e:
             logger.error(f"Refund failed for registration {registration.uuid}: {e}")
             return {'success': False, 'error': str(e)}
-
 
 
 class StripePaymentService:
@@ -1273,7 +1668,8 @@ class StripePaymentService:
 
     def _calculate_service_fee_cents(self, ticket_amount_cents: int, currency: str) -> int:
         """Calculate service fee in cents based on ticket price."""
-        from decimal import Decimal, ROUND_HALF_UP
+        from decimal import ROUND_HALF_UP, Decimal
+
         from common.config.billing import TicketingFees
 
         if ticket_amount_cents <= 0:
@@ -1291,7 +1687,8 @@ class StripePaymentService:
 
     def _calculate_processing_fee_cents(self, base_total_cents: int, currency: str) -> int:
         """Calculate processing fee in cents based on total order."""
-        from decimal import Decimal, ROUND_HALF_UP
+        from decimal import ROUND_HALF_UP, Decimal
+
         from common.config.billing import TicketingFees
 
         if base_total_cents <= 0:
@@ -1415,9 +1812,7 @@ class StripePaymentService:
             )
             return {'success': True, 'tax_reversal_id': reversal.id}
         except Exception as e:
-            logger.error(
-                f"Failed to create tax transaction reversal for registration {registration.uuid}: {e}"
-            )
+            logger.error(f"Failed to create tax transaction reversal for registration {registration.uuid}: {e}")
             return {'success': False, 'error': str(e)}
 
     def create_payment_intent(self, registration, ticket_amount_cents: int | None = None) -> dict[str, Any]:
@@ -1521,7 +1916,7 @@ class StripePaymentService:
                 'amount': ticket_amount_cents,
             }
 
-            intent = self._stripe.PaymentIntent.create(**intent_params)
+            intent = stripe_service._with_retry(self._stripe.PaymentIntent.create, **intent_params)
 
             from decimal import Decimal
 
@@ -1593,6 +1988,7 @@ class StripePaymentService:
         except Exception as e:
             logger.error(f"Failed to refund payment intent {payment_intent_id}: {e}")
             return {'success': False, 'error': str(e)}
+
 
 # Singleton instances
 stripe_connect_service = StripeConnectService()

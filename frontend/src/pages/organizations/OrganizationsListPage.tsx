@@ -36,12 +36,10 @@ const OrganizationsListPage: React.FC = () => {
 
     const getRoleBadgeVariant = (role: string) => {
         switch (role) {
-            case 'owner':
-                return 'default';
             case 'admin':
+                return 'default';
+            case 'organizer':
                 return 'secondary';
-            case 'manager':
-                return 'outline';
             default:
                 return 'outline';
         }

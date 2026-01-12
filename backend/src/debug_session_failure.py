@@ -1,10 +1,8 @@
-
 import os
 import sys
+
 import django
-from django.conf import settings
 from rest_framework.test import APIRequestFactory, force_authenticate
-from rest_framework.exceptions import ErrorDetail
 
 # Setup Django source
 sys.path.append(os.getcwd())
@@ -18,7 +16,7 @@ except Exception as e:
 
 from events.models import Event
 from events.views import EventSessionViewSet
-from accounts.models import User
+
 
 def investigate_session_creation():
     event_uuid = 'ade08fa1-c34d-4dc6-a55a-66170113908f'
@@ -42,7 +40,7 @@ def investigate_session_creation():
         "duration_minutes": 60,
         "session_type": "live",
         "is_mandatory": True,
-        "is_published": True
+        "is_published": True,
     }
 
     factory = APIRequestFactory()
@@ -50,7 +48,7 @@ def investigate_session_creation():
     force_authenticate(request, user=user)
 
     view = EventSessionViewSet.as_view({'post': 'create'})
-    
+
     try:
         response = view(request, event_uuid=event.uuid)
         print(f"Response Status Code: {response.status_code}")
@@ -60,9 +58,10 @@ def investigate_session_creation():
         else:
             print("FAILURE: Session creation failed.")
             print(f"Error Data: {response.data}")
-            
+
     except Exception as e:
         print(f"EXCEPTION during view execution: {e}")
+
 
 if __name__ == "__main__":
     investigate_session_creation()

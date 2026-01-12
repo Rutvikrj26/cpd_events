@@ -5,6 +5,7 @@ Accounts app URL routing.
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 from rest_framework_simplejwt.views import TokenRefreshView
+
 from integrations.urls import my_recordings_router
 
 from . import views
@@ -13,6 +14,7 @@ app_name = 'accounts'
 
 router = SimpleRouter()
 router.register(r'cpd-requirements', views.CPDRequirementViewSet, basename='cpd-requirement')
+router.register(r'users/me/notifications/inbox', views.UserNotificationViewSet, basename='user-notifications')
 
 urlpatterns = [
     # Authentication
@@ -31,8 +33,12 @@ urlpatterns = [
     path('users/me/organizer-profile/', views.OrganizerProfileView.as_view(), name='organizer_profile'),
     path('users/me/notifications/', views.NotificationPreferencesView.as_view(), name='notifications'),
     path('users/me/upgrade/', views.UpgradeToOrganizerView.as_view(), name='upgrade'),
+    path('users/me/downgrade/', views.DowngradeToAttendeeView.as_view(), name='downgrade'),
     path('users/me/delete-account/', views.DeleteAccountView.as_view(), name='delete_account'),
     path('users/me/export-data/', views.DataExportView.as_view(), name='export_data'),  # H6: GDPR
+    path('users/me/sessions/', views.UserSessionListView.as_view(), name='user_sessions'),
+    path('users/me/sessions/logout-all/', views.UserSessionLogoutAllView.as_view(), name='user_sessions_logout_all'),
+    path('users/me/sessions/<uuid:uuid>/', views.UserSessionRevokeView.as_view(), name='user_session_revoke'),
     # Payouts (Stripe Connect for individuals)
     path('users/me/payouts/connect/', views.PayoutsConnectView.as_view(), name='payouts_connect'),
     path('users/me/payouts/status/', views.PayoutsStatusView.as_view(), name='payouts_status'),

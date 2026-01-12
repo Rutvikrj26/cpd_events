@@ -46,7 +46,7 @@ interface FormData {
 const OrganizationSettingsPage: React.FC = () => {
     const { slug } = useParams<{ slug: string }>();
     const navigate = useNavigate();
-    const { isOwner, refreshOrganizations } = useOrganization();
+    const { refreshOrganizations } = useOrganization();
 
     const [org, setOrg] = useState<Organization | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -123,7 +123,7 @@ const OrganizationSettingsPage: React.FC = () => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const canEdit = org?.user_role === 'owner' || org?.user_role === 'admin';
+    const canEdit = org?.user_role === 'admin';
 
     if (isLoading) {
         return (
@@ -186,10 +186,6 @@ const OrganizationSettingsPage: React.FC = () => {
                     <TabsTrigger value="branding">
                         <Palette className="h-4 w-4 mr-2" />
                         Branding
-                    </TabsTrigger>
-                    <TabsTrigger value="billing">
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        Billing
                     </TabsTrigger>
                     <TabsTrigger value="payments">
                         <CreditCard className="h-4 w-4 mr-2" />
@@ -262,6 +258,20 @@ const OrganizationSettingsPage: React.FC = () => {
                                     disabled={!canEdit}
                                     placeholder="+1 (555) 000-0000"
                                 />
+                            </div>
+
+                            <div className="space-y-2 pt-2 border-t mt-4">
+                                <Label htmlFor="gst_hst_number">GST/HST Number</Label>
+                                <Input
+                                    id="gst_hst_number"
+                                    value={formData.gst_hst_number}
+                                    onChange={(e) => handleInputChange('gst_hst_number', e.target.value)}
+                                    placeholder="Optional (for your records)"
+                                    disabled={!canEdit}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Taxes on ticket sales are calculated by the platform. This is for your records.
+                                </p>
                             </div>
 
                             {canEdit && (
@@ -390,97 +400,6 @@ const OrganizationSettingsPage: React.FC = () => {
                     </Card>
                 </TabsContent>
 
-                {/* Billing Settings */}
-                <TabsContent value="billing">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Subscription & Billing</CardTitle>
-                            <CardDescription>Manage your plan and payment methods</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="space-y-2">
-                                <Label htmlFor="gst_hst_number">GST/HST Number</Label>
-                                <Input
-                                    id="gst_hst_number"
-                                    value={formData.gst_hst_number}
-                                    onChange={(e) => handleInputChange('gst_hst_number', e.target.value)}
-                                    placeholder="Optional (for your records)"
-                                    disabled={!canEdit}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Taxes on ticket sales are calculated by the platform. This is for your records.
-                                </p>
-                            </div>
-
-                            {org.subscription && (
-                                <>
-                                    <div className="flex items-center justify-between p-4 rounded-lg border bg-accent/50">
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Current Plan</p>
-                                            <p className="text-2xl font-bold capitalize">{org.subscription.plan}</p>
-                                        </div>
-                                        <Badge variant={org.subscription.status === 'active' ? 'default' : 'destructive'} className="capitalize">
-                                            {org.subscription.status}
-                                        </Badge>
-                                    </div>
-
-                                    <div className="grid grid-cols-3 gap-4">
-                                        <div className="p-4 rounded-lg border text-center">
-                                            <p className="text-sm text-muted-foreground">Seats Used</p>
-                                            <p className="text-xl font-bold">
-                                                {org.subscription.active_organizer_seats} / {org.subscription.total_seats}
-                                            </p>
-                                            <p className="text-xl font-bold">{org.subscription.events_created_this_period || 0}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <BookOpen className="h-4 w-4 text-muted-foreground" />
-                                        <div>
-                                            <p className="text-sm font-medium leading-none">Courses</p>
-                                            <p className="text-muted-foreground text-xs">Cycles monthly</p>
-                                            <p className="text-xl font-bold">{org.subscription.courses_created_this_period || 0}</p>
-                                        </div>
-                                    </div>
-
-                                    {org.user_role === 'owner' && (
-                                        <div className="flex gap-4">
-                                            <Button variant="outline" disabled>
-                                                <CreditCard className="h-4 w-4 mr-2" />
-                                                Manage Payment Methods
-                                            </Button>
-                                            <Button disabled>
-                                                Upgrade Plan
-                                            </Button>
-                                        </div>
-                                    )}
-
-                                    <p className="text-sm text-muted-foreground">
-                                        Billing integration coming soon. Contact support to change your plan.
-                                    </p>
-                                </>
-                            )}
-
-                            {canEdit && (
-                                <div className="pt-4">
-                                    <Button onClick={handleSave} disabled={isSaving}>
-                                        {isSaving ? (
-                                            <>
-                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                Saving...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Check className="h-4 w-4 mr-2" />
-                                                Save Changes
-                                            </>
-                                        )}
-                                    </Button>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
                 {/* Payments & Payouts (Stripe Connect) */}
                 <TabsContent value="payments">
                     <StripeConnectSettings
@@ -493,7 +412,7 @@ const OrganizationSettingsPage: React.FC = () => {
                 </TabsContent>
 
             </Tabs>
-        </div>
+        </div >
     );
 };
 

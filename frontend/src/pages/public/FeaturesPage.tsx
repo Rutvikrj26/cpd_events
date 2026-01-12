@@ -15,7 +15,8 @@ import {
     Settings,
     FileCheck,
     Zap,
-    ChevronRight
+    ChevronRight,
+    BookOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,11 +64,11 @@ export function FeaturesPage() {
                                 </div>
                                 <h3 className="font-semibold text-sm">Event Management</h3>
                             </a>
-                            <a href="#zoom-integration" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
-                                <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
-                                    <Video className="h-5 w-5" />
+                            <a href="#course-management" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
+                                <div className="h-10 w-10 mx-auto bg-accent/10 rounded-lg flex items-center justify-center text-accent mb-3 group-hover:bg-accent group-hover:text-white transition-colors">
+                                    <BookOpen className="h-5 w-5" />
                                 </div>
-                                <h3 className="font-semibold text-sm">Zoom Integration</h3>
+                                <h3 className="font-semibold text-sm">Course Management</h3>
                             </a>
                             <a href="#certificates" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
                                 <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
@@ -101,27 +102,27 @@ export function FeaturesPage() {
                 ]}
                 visual={<EventManagementVisual />}
                 reversed={false}
-                ctaLink="/signup"
+                ctaLink="/signup?role=organizer"
                 ctaText="Start Creating Events"
             />
 
-            {/* Feature Highlight 2: Zoom Integration */}
+            {/* Feature Highlight 2: Course Management */}
             <FeatureSection
-                id="zoom-integration"
-                badge="Zoom Integration"
-                title="Automatic Attendance Tracking"
-                description="Connect your Zoom account and let our platform handle attendance automatically. No more manual roll-calls or tracking spreadsheets."
+                id="course-management"
+                badge="Course Management"
+                title="Build and Sell Self-Paced Courses"
+                description="Create engaging on-demand courses with our flexible LMS. Organize content into modules, add quizzes to test knowledge, and track learner progress automatically."
                 features={[
-                    "OAuth integration with your Zoom account",
-                    "Automatic meeting creation for events",
-                    "Real-time attendance tracking via webhooks",
-                    "Join/leave time logging for each participant",
-                    "Attendance percentage calculation"
+                    "Modular course builder with drag-and-drop ordering",
+                    "Support for video, PDF, and text content",
+                    "Built-in quizzes with passing score requirements",
+                    "Paid course enrollment via Stripe",
+                    "Automatic progress tracking and completion logic"
                 ]}
-                visual={<ZoomIntegrationVisual />}
+                visual={<CourseManagementVisual />}
                 reversed={true}
-                ctaLink="/features/zoom"
-                ctaText="Learn More About Zoom"
+                ctaLink="/signup?role=course_manager"
+                ctaText="Start Building Courses"
             />
 
             {/* Feature Highlight 3: Certificates */}
@@ -129,13 +130,13 @@ export function FeaturesPage() {
                 id="certificates"
                 badge="Certificates"
                 title="Professional Certificates, Automatically Issued"
-                description="Generate beautiful PDF certificates for attendees who meet your requirements. Each certificate includes a unique verification code."
+                description="Generate beautiful PDF certificates for attendees who meet attendance requirements or learners who complete a course."
                 features={[
                     "Customizable PDF certificate templates",
-                    "Automatic issuance based on attendance threshold",
+                    "Automatic issuance rules (Attendance or Course Completion)",
                     "Unique verification codes for each certificate",
                     "Public verification page for employers",
-                    "Bulk issuance for large events"
+                    "Bulk issuance for large cohorts"
                 ]}
                 visual={<CertificatesVisual />}
                 reversed={false}
@@ -147,14 +148,14 @@ export function FeaturesPage() {
             <FeatureSection
                 id="organizations"
                 badge="Organizations"
-                title="Manage Events as a Team"
-                description="Create organizations and invite team members with specific roles. Collaborate on events and share resources across your organization."
+                title="Manage Everything as a Team"
+                description="Create organizations and invite team members with specific roles. Collaborate on events and courses and share resources across your organization."
                 features={[
-                    "Team roles: Owner, Admin, Manager, Member",
-                    "Shared event management",
+                    "Team roles: Admin, Organizer, Course Manager, Instructor",
+                    "Shared events and courses library",
                     "Centralized certificate templates",
-                    "Organization-wide analytics",
-                    "Subscription plans for teams"
+                    "Organization-wide analytics and reporting",
+                    "Consolidated billing for the entire team"
                 ]}
                 visual={<TeamManagementVisual />}
                 reversed={true}
@@ -444,7 +445,7 @@ function TeamManagementVisual() {
                             <p className="text-xs text-muted-foreground">alex@acme.com</p>
                         </div>
                     </div>
-                    <Badge variant="secondary" className="text-xs">Owner</Badge>
+                    <Badge variant="secondary" className="text-xs">Admin</Badge>
                 </div>
 
                 <div className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg">
@@ -466,6 +467,60 @@ function TeamManagementVisual() {
                             <p className="text-xs text-muted-foreground">View all →</p>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function CourseManagementVisual() {
+    return (
+        <div className="bg-card rounded-2xl border border-border shadow-elevated p-6">
+            <div className="flex items-center justify-between mb-6">
+                <h3 className="font-semibold text-foreground">Course Content</h3>
+                <Badge className="bg-accent/10 text-accent border-0">Module 2</Badge>
+            </div>
+
+            <div className="space-y-4">
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium text-foreground">1. Introduction to Ethics</span>
+                        <CheckCircle2 className="h-4 w-4 text-success" />
+                    </div>
+                </div>
+
+                <div className="space-y-2 p-3 bg-secondary/30 rounded-lg border border-primary/20">
+                    <div className="flex items-center justify-between text-sm mb-2">
+                        <span className="font-medium text-foreground">2. Core Principles</span>
+                        <Badge variant="outline" className="text-xs">In Progress</Badge>
+                    </div>
+                    <div className="space-y-2 pl-4 border-l-2 border-border">
+                        <div className="flex items-center gap-2 text-sm text-foreground">
+                            <Video className="h-3 w-3 text-primary" />
+                            <span>Video Lecture (15:00)</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <FileCheck className="h-3 w-3" />
+                            <span>Reading Material</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <CheckCircle2 className="h-3 w-3" />
+                            <span>Knowledge Check</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="space-y-2 opacity-60">
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium text-foreground">3. Case Studies</span>
+                        <Badge variant="outline" className="text-xs">Locked</Badge>
+                    </div>
+                </div>
+
+                <div className="pt-2">
+                    <Button className="w-full bg-accent hover:bg-accent/90" size="sm">
+                        Continue Learning
+                    </Button>
                 </div>
             </div>
         </div>

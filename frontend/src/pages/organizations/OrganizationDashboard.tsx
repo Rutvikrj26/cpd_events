@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
     Building2,
     Users,
@@ -14,12 +14,10 @@ import {
     BookOpen,
     Settings,
     Plus,
-    ArrowRight,
-    Crown,
     Shield,
-    UserCog,
     User as UserIcon,
     CreditCard,
+    Award,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,11 +25,12 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getOrganization, getOrganizationMembers } from '@/api/organizations';
+import { getOrganization, getOrganizationMembers, createOrganizationPortalSession } from '@/api/organizations';
 import { Organization, OrganizationMember, OrganizationRole } from '@/api/organizations/types';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import TeamManagementPage from './TeamManagementPage';
-import OrgCoursesPage from './courses/OrgCoursesPage';
+import OrgCoursesOverview from './courses/OrgCoursesOverview';
+import OrgEventsOverview from './OrgEventsOverview';
 import OrganizationSettingsPage from './OrganizationSettingsPage';
 
 const OrganizationDashboard: React.FC = () => {
@@ -42,7 +41,21 @@ const OrganizationDashboard: React.FC = () => {
     const [org, setOrg] = useState<Organization | null>(null);
     const [members, setMembers] = useState<OrganizationMember[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isManagingBilling, setIsManagingBilling] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const handleManageBilling = async () => {
+        if (!org) return;
+        setIsManagingBilling(true);
+        try {
+            const { url } = await createOrganizationPortalSession(org.uuid);
+            window.location.href = url;
+        } catch (err) {
+            console.error('Failed to open billing portal', err);
+        } finally {
+            setIsManagingBilling(false);
+        }
+    };
 
     useEffect(() => {
         const loadOrg = async () => {
@@ -80,14 +93,21 @@ const OrganizationDashboard: React.FC = () => {
         loadOrg();
     }, [slug, setCurrentOrg]);
 
+    useEffect(() => {
+        if (org?.user_role === 'instructor' && slug) {
+            navigate(`/org/${slug}/instructor`, { replace: true });
+        }
+    }, [org?.user_role, slug, navigate]);
+
     const getRoleIcon = (role: OrganizationRole) => {
         switch (role) {
-            case 'owner':
-                return <Crown className="h-4 w-4 text-yellow-600" />;
             case 'admin':
                 return <Shield className="h-4 w-4 text-blue-600" />;
-            case 'manager':
-                return <UserCog className="h-4 w-4 text-green-600" />;
+            case 'organizer':
+                return <Calendar className="h-4 w-4 text-indigo-600" />;
+            case 'course_manager':
+                return <BookOpen className="h-4 w-4 text-emerald-600" />;
+            case 'instructor':
             default:
                 return <UserIcon className="h-4 w-4 text-gray-600" />;
         }
@@ -125,6 +145,13 @@ const OrganizationDashboard: React.FC = () => {
         );
     }
 
+    const isAdmin = hasRole('admin');
+    const canViewEvents = isAdmin || hasRole('organizer');
+    const canViewCourses = isAdmin || hasRole('course_manager');
+    const canViewTeam = isAdmin || hasRole('course_manager');
+    const canCreateEvents = canViewEvents;
+    const canCreateCourses = canViewCourses;
+
     return (
         <div className="container mx-auto py-8 px-4 max-w-6xl">
             {/* Header */}
@@ -153,7 +180,7 @@ const OrganizationDashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {hasRole('admin') && (
+                {isAdmin && (
                     <div className="flex gap-2">
                         <Button variant="outline" onClick={() => navigate(`/org/${slug}/billing`)}>
                             <CreditCard className="h-4 w-4 mr-2" />
@@ -182,105 +209,220 @@ const OrganizationDashboard: React.FC = () => {
                     </CardContent>
                 </Card>
 
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Events</CardTitle>
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold">{org.events_count}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Total events created
-                        </p>
-                    </CardContent>
-                </Card>
+                {canViewEvents && (
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-sm font-medium">Events</CardTitle>
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-3xl font-bold">{org.events_count}</div>
+                            <p className="text-xs text-muted-foreground">
+                                Total events created
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
 
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Courses</CardTitle>
-                        <BookOpen className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold">{org.courses_count}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Self-paced courses
-                        </p>
-                    </CardContent>
-                </Card>
+                {canViewCourses && (
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-sm font-medium">Courses</CardTitle>
+                            <BookOpen className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-3xl font-bold">{org.courses_count}</div>
+                            <p className="text-xs text-muted-foreground">
+                                Self-paced courses
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
 
             {/* Tabs */}
-            <Tabs defaultValue="team" className="space-y-6">
+            <Tabs defaultValue="overview" className="space-y-6">
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="members">Team Members</TabsTrigger>
-                    <TabsTrigger value="courses">Courses</TabsTrigger>
-                    <TabsTrigger value="settings">Settings</TabsTrigger>
+                    {canViewEvents && <TabsTrigger value="events">Events</TabsTrigger>}
+                    {canViewCourses && <TabsTrigger value="courses">Courses</TabsTrigger>}
+                    {canViewTeam && <TabsTrigger value="members">Team</TabsTrigger>}
+                    <TabsTrigger value="certificates">Certificates</TabsTrigger>
+                    {isAdmin && (
+                        <TabsTrigger value="settings">Settings</TabsTrigger>
+                    )}
                 </TabsList>
 
+                {/* Overview Tab */}
+                <TabsContent value="overview">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Recent Activity Card */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Quick Actions</CardTitle>
+                                <CardDescription>Common tasks for your organization</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {canViewEvents && (
+                                    <Button className="w-full justify-start" variant="outline" onClick={() => navigate('/events/create')}>
+                                        <Calendar className="h-4 w-4 mr-2" />
+                                        Create New Event
+                                    </Button>
+                                )}
+                                {canViewCourses && (
+                                    <Button className="w-full justify-start" variant="outline" onClick={() => navigate(`/org/${slug}/courses/new`)}>
+                                        <BookOpen className="h-4 w-4 mr-2" />
+                                        Create New Course
+                                    </Button>
+                                )}
+                                {canViewTeam && (
+                                    <Button className="w-full justify-start" variant="outline" onClick={() => navigate(`/org/${slug}/team`)}>
+                                        <Users className="h-4 w-4 mr-2" />
+                                        Invite Team Member
+                                    </Button>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Team Preview Card */}
+                        {canViewTeam && (
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between">
+                                    <div>
+                                        <CardTitle>Team</CardTitle>
+                                        <CardDescription>{members.length} member(s)</CardDescription>
+                                    </div>
+                                    {isAdmin && (
+                                        <Button size="sm" variant="outline" onClick={() => navigate(`/org/${slug}/team`)}>
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            Invite
+                                        </Button>
+                                    )}
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-3">
+                                        {members.slice(0, 4).map((member) => (
+                                            <div key={member.uuid} className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-8 w-8">
+                                                        <AvatarFallback>
+                                                            {member.user_name?.[0] || member.user_email[0]}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div>
+                                                        <p className="text-sm font-medium">{member.user_name || member.user_email}</p>
+                                                        <p className="text-xs text-muted-foreground capitalize">{member.role}</p>
+                                                    </div>
+                                                </div>
+                                                {getRoleIcon(member.role)}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+                </TabsContent>
+
+                {/* Events Tab */}
+                {canViewEvents && (
+                    <TabsContent value="events">
+                        {isAdmin ? (
+                            <OrgEventsOverview orgUuid={org.uuid} canCreateEvents={canCreateEvents} />
+                        ) : (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Events</CardTitle>
+                                    <CardDescription>
+                                        Organization-wide event oversight is available to admins.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-center py-8 text-muted-foreground">
+                                        <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                        <p>Only organization admins can view all events across organizers.</p>
+                                        <Button variant="outline" className="mt-4" onClick={() => navigate('/events')}>
+                                            Go to My Events
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </TabsContent>
+                )}
+
+                {/* Courses Tab */}
+                {canViewCourses && (
+                    <TabsContent value="courses">
+                        {isAdmin ? (
+                            <OrgCoursesOverview
+                                orgUuid={org.uuid}
+                                orgSlug={org.slug}
+                                canCreateCourses={canCreateCourses}
+                            />
+                        ) : (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Courses</CardTitle>
+                                    <CardDescription>
+                                        Organization-wide course oversight is available to admins.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-center py-8 text-muted-foreground">
+                                        <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                        <p>Course managers can manage courses in the full courses view.</p>
+                                        <Button variant="outline" className="mt-4" onClick={() => navigate(`/org/${slug}/courses`)}>
+                                            Go to Courses
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </TabsContent>
+                )}
+
                 {/* Team Tab */}
-                <TabsContent value="team">
+                {canViewTeam && (
+                    <TabsContent value="members">
+                        <TeamManagementPage />
+                    </TabsContent>
+                )}
+
+                {/* Certificates Tab */}
+                <TabsContent value="certificates">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div>
-                                <CardTitle>Team Members</CardTitle>
+                                <CardTitle>Certificate Templates</CardTitle>
                                 <CardDescription>
-                                    Manage your organization's team
+                                    Manage certificate templates for your events and courses
                                 </CardDescription>
                             </div>
-                            {hasRole('admin') && (
-                                <Button onClick={() => navigate(`/org/${slug}/team`)}>
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Invite Member
-                                </Button>
-                            )}
+                            <Button onClick={() => navigate('/certificate-templates/new')}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                New Template
+                            </Button>
                         </CardHeader>
                         <CardContent>
-                            <div className="space-y-4">
-                                {members.slice(0, 5).map((member) => (
-                                    <div key={member.uuid} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                                        <div className="flex items-center gap-3">
-                                            <Avatar className="h-10 w-10">
-                                                <AvatarFallback>
-                                                    {member.user_name?.[0] || member.user_email[0]}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div>
-                                                <p className="font-medium">{member.user_name || member.user_email}</p>
-                                                <p className="text-sm text-muted-foreground">{member.title || member.user_email}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {getRoleIcon(member.role)}
-                                            <Badge variant="outline" className="capitalize">
-                                                {member.role}
-                                            </Badge>
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {members.length > 5 && (
-                                    <Button variant="ghost" className="w-full" onClick={() => navigate(`/org/${slug}/team`)}>
-                                        View all {members.length} members
-                                        <ArrowRight className="h-4 w-4 ml-2" />
-                                    </Button>
-                                )}
+                            <div className="text-center py-8 text-muted-foreground">
+                                <Award className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                <p>Create certificate templates for your organization.</p>
+                                <p className="text-sm mt-2">Templates can be shared across all organization members.</p>
+                                <Button variant="link" onClick={() => navigate('/certificate-templates')}>
+                                    Manage Templates
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
 
-                <TabsContent value="members">
-                    <TeamManagementPage />
-                </TabsContent>
-
-                <TabsContent value="courses">
-                    <OrgCoursesPage />
-                </TabsContent>
-
-                <TabsContent value="settings">
-                    <OrganizationSettingsPage />
-                </TabsContent>
+                {/* Settings Tab */}
+                {isAdmin && (
+                    <TabsContent value="settings">
+                        <OrganizationSettingsPage />
+                    </TabsContent>
+                )}
 
                 {/* Subscription Tab */}
                 <TabsContent value="subscription">
@@ -301,11 +443,11 @@ const OrganizationDashboard: React.FC = () => {
                                                 Status: <span className="capitalize">{org.subscription.status}</span>
                                             </p>
                                         </div>
-                                        {hasRole('owner') && (
-                                            <Button variant="outline">
-                                                Manage Billing
-                                            </Button>
-                                        )}
+                                    {isAdmin && (
+                                        <Button variant="outline" onClick={handleManageBilling} disabled={isManagingBilling}>
+                                            {isManagingBilling ? 'Opening...' : 'Manage Billing'}
+                                        </Button>
+                                    )}
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">

@@ -33,6 +33,7 @@ class CloudTask:
         # Use emulator if configured
         if hasattr(settings, 'CLOUD_TASKS_EMULATOR_HOST') and settings.CLOUD_TASKS_EMULATOR_HOST:
             import os
+
             os.environ['CLOUD_TASKS_EMULATOR_HOST'] = settings.CLOUD_TASKS_EMULATOR_HOST
             client = tasks_v2.CloudTasksClient()
         else:

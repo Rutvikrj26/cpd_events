@@ -7,6 +7,7 @@ import {
     Video,
     Calendar,
     CreditCard,
+    BookOpen,
     ChevronRight,
     X,
     Sparkles
@@ -19,6 +20,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getZoomStatus } from '@/api/integrations';
 import { getEvents } from '@/api/events';
 import { getSubscription } from '@/api/billing';
+import { getOwnedCourses } from '@/api/courses';
+import { getRoleFlags } from '@/lib/role-utils';
 
 interface ChecklistItem {
     id: string;
@@ -37,87 +40,131 @@ interface OnboardingChecklistProps {
 
 const STORAGE_KEY = 'onboarding_checklist_dismissed';
 
+const getInitialDismissed = () => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(STORAGE_KEY) === 'true';
+};
+
 export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingChecklistProps) {
     const { user } = useAuth();
     const [items, setItems] = useState<ChecklistItem[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [dismissed, setDismissed] = useState(false);
+    const [loading, setLoading] = useState(() => !getInitialDismissed());
+    const [dismissed, setDismissed] = useState(getInitialDismissed);
 
     useEffect(() => {
-        // Check if already dismissed
-        const isDismissed = localStorage.getItem(STORAGE_KEY) === 'true';
-        if (isDismissed) {
-            setDismissed(true);
-            setLoading(false);
-            return;
-        }
+        if (dismissed) return;
 
         async function checkProgress() {
+            if (!user) {
+                setLoading(false);
+                return;
+            }
+
             const checklistItems: ChecklistItem[] = [];
+            const subscription = await getSubscription().catch(() => null);
+            const { isOrganizer, isCourseManager } = getRoleFlags(user, subscription);
+
+            if (!isOrganizer && !isCourseManager) {
+                setLoading(false);
+                return;
+            }
 
             // 1. Complete Profile
-            const hasProfile = !!(user?.full_name && user?.organization_name);
+            const hasProfile = isOrganizer
+                ? !!(user?.full_name && user?.organization_name)
+                : !!user?.full_name;
             checklistItems.push({
                 id: 'profile',
                 title: 'Complete your profile',
-                description: 'Add your organization name and details',
+                description: isOrganizer
+                    ? 'Add your organization name and details'
+                    : 'Add your personal details and preferences',
                 icon: User,
                 completed: hasProfile,
                 href: '/settings',
                 action: 'Complete Profile'
             });
 
-            // 2. Connect Zoom
-            try {
-                const zoomStatus = await getZoomStatus();
-                checklistItems.push({
-                    id: 'zoom',
-                    title: 'Connect Zoom account',
-                    description: 'Enable automatic meeting creation',
-                    icon: Video,
-                    completed: zoomStatus.is_connected,
-                    href: '/organizer/zoom',
-                    action: 'Connect Zoom'
-                });
-            } catch {
-                checklistItems.push({
-                    id: 'zoom',
-                    title: 'Connect Zoom account',
-                    description: 'Enable automatic meeting creation',
-                    icon: Video,
-                    completed: false,
-                    href: '/organizer/zoom',
-                    action: 'Connect Zoom'
-                });
+            // 2. Connect Zoom (organizer-only)
+            if (isOrganizer && !isCourseManager) {
+                try {
+                    const zoomStatus = await getZoomStatus();
+                    checklistItems.push({
+                        id: 'zoom',
+                        title: 'Connect Zoom account',
+                        description: 'Enable automatic meeting creation',
+                        icon: Video,
+                        completed: zoomStatus.is_connected,
+                        href: '/organizer/zoom',
+                        action: 'Connect Zoom'
+                    });
+                } catch {
+                    checklistItems.push({
+                        id: 'zoom',
+                        title: 'Connect Zoom account',
+                        description: 'Enable automatic meeting creation',
+                        icon: Video,
+                        completed: false,
+                        href: '/organizer/zoom',
+                        action: 'Connect Zoom'
+                    });
+                }
             }
 
             // 3. Create First Event
-            try {
-                const events = await getEvents();
-                checklistItems.push({
-                    id: 'event',
-                    title: 'Create your first event',
-                    description: 'Set up a webinar, workshop, or training',
-                    icon: Calendar,
-                    completed: events.length > 0,
-                    href: '/events/create',
-                    action: 'Create Event'
-                });
-            } catch {
-                checklistItems.push({
-                    id: 'event',
-                    title: 'Create your first event',
-                    description: 'Set up a webinar, workshop, or training',
-                    icon: Calendar,
-                    completed: false,
-                    href: '/events/create',
-                    action: 'Create Event'
-                });
+            if (isOrganizer) {
+                try {
+                    const events = await getEvents();
+                    checklistItems.push({
+                        id: 'event',
+                        title: 'Create your first event',
+                        description: 'Set up a webinar, workshop, or training',
+                        icon: Calendar,
+                        completed: events.length > 0,
+                        href: '/events/create',
+                        action: 'Create Event'
+                    });
+                } catch {
+                    checklistItems.push({
+                        id: 'event',
+                        title: 'Create your first event',
+                        description: 'Set up a webinar, workshop, or training',
+                        icon: Calendar,
+                        completed: false,
+                        href: '/events/create',
+                        action: 'Create Event'
+                    });
+                }
             }
 
-            // 4. Set up Billing
+            // 4. Create First Course
+            if (isCourseManager) {
+                try {
+                    const courses = await getOwnedCourses();
+                    checklistItems.push({
+                        id: 'course',
+                        title: 'Create your first course',
+                        description: 'Build a self-paced learning experience',
+                        icon: BookOpen,
+                        completed: courses.length > 0,
+                        href: '/courses/manage/new',
+                        action: 'Create Course'
+                    });
+                } catch {
+                    checklistItems.push({
+                        id: 'course',
+                        title: 'Create your first course',
+                        description: 'Build a self-paced learning experience',
+                        icon: BookOpen,
+                        completed: false,
+                        href: '/courses/manage/new',
+                        action: 'Create Course'
+                    });
+                }
+            }
+
+            // 5. Set up Billing
             try {
-                const subscription = await getSubscription();
                 const hasBilling = subscription?.status === 'active' ||
                     subscription?.status === 'trialing';
                 checklistItems.push({
@@ -145,12 +192,8 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
             setLoading(false);
         }
 
-        if (user?.account_type === 'organizer') {
-            checkProgress();
-        } else {
-            setLoading(false);
-        }
-    }, [user]);
+        checkProgress();
+    }, [user, dismissed]);
 
     const handleDismiss = () => {
         localStorage.setItem(STORAGE_KEY, 'true');
@@ -158,8 +201,8 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
         onDismiss?.();
     };
 
-    // Don't show for non-organizers
-    if (user?.account_type !== 'organizer') {
+    // Don't show for non-creators
+    if (items.length === 0) {
         return null;
     }
 

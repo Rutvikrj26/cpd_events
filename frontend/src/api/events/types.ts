@@ -71,6 +71,7 @@ export interface Event {
         name: string;
         slug: string;
         logo_url: string | null;
+        primary_color?: string;
     };
 
     created_at: string;

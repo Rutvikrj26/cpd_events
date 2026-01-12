@@ -166,6 +166,7 @@ class TestTokenObtainView:
     def test_login_inactive_user(self, api_client, db):
         """Cannot login with inactive account."""
         from factories import UserFactory
+
         inactive_user = UserFactory(is_active=False)
         data = {
             'email': inactive_user.email,
@@ -199,10 +200,13 @@ class TestTokenRefreshView:
     def test_refresh_token_success(self, api_client, user):
         """Successfully refresh access token."""
         # First, get tokens
-        login_response = api_client.post(self.token_endpoint, {
-            'email': user.email,
-            'password': 'testpass123',
-        })
+        login_response = api_client.post(
+            self.token_endpoint,
+            {
+                'email': user.email,
+                'password': 'testpass123',
+            },
+        )
         refresh_token = login_response.data['refresh']
 
         # Now refresh
@@ -303,27 +307,36 @@ class TestPasswordResetConfirmView:
         token = user.generate_password_reset_token()
         user.save()
 
-        response = api_client.post(self.endpoint, {
-            'token': token,
-            'new_password': 'NewSecurePass123!',
-            'new_password_confirm': 'NewSecurePass123!',
-        })
+        response = api_client.post(
+            self.endpoint,
+            {
+                'token': token,
+                'new_password': 'NewSecurePass123!',
+                'new_password_confirm': 'NewSecurePass123!',
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
 
         # Verify new password works
-        login_response = api_client.post('/api/v1/auth/token/', {
-            'email': user.email,
-            'password': 'NewSecurePass123!',
-        })
+        login_response = api_client.post(
+            '/api/v1/auth/token/',
+            {
+                'email': user.email,
+                'password': 'NewSecurePass123!',
+            },
+        )
         assert login_response.status_code == status.HTTP_200_OK
 
     def test_reset_password_invalid_token(self, api_client):
         """Cannot reset with invalid token."""
-        response = api_client.post(self.endpoint, {
-            'token': 'invalid-token',
-            'new_password': 'NewSecurePass123!',
-            'new_password_confirm': 'NewSecurePass123!',
-        })
+        response = api_client.post(
+            self.endpoint,
+            {
+                'token': 'invalid-token',
+                'new_password': 'NewSecurePass123!',
+                'new_password_confirm': 'NewSecurePass123!',
+            },
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_reset_password_mismatch(self, api_client, user):
@@ -331,11 +344,14 @@ class TestPasswordResetConfirmView:
         token = user.generate_password_reset_token()
         user.save()
 
-        response = api_client.post(self.endpoint, {
-            'token': token,
-            'new_password': 'NewSecurePass123!',
-            'new_password_confirm': 'DifferentPass123!',
-        })
+        response = api_client.post(
+            self.endpoint,
+            {
+                'token': token,
+                'new_password': 'NewSecurePass123!',
+                'new_password_confirm': 'DifferentPass123!',
+            },
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
@@ -352,38 +368,50 @@ class TestPasswordChangeView:
 
     def test_change_password_success(self, auth_client, user):
         """Successfully change password with correct old password."""
-        response = auth_client.post(self.endpoint, {
-            'current_password': 'testpass123',
-            'new_password': 'NewSecurePass123!',
-            'new_password_confirm': 'NewSecurePass123!',
-        })
+        response = auth_client.post(
+            self.endpoint,
+            {
+                'current_password': 'testpass123',
+                'new_password': 'NewSecurePass123!',
+                'new_password_confirm': 'NewSecurePass123!',
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
 
     def test_change_password_wrong_old_password(self, auth_client):
         """Cannot change with incorrect old password."""
-        response = auth_client.post(self.endpoint, {
-            'current_password': 'wrongpassword',
-            'new_password': 'NewSecurePass123!',
-            'new_password_confirm': 'NewSecurePass123!',
-        })
+        response = auth_client.post(
+            self.endpoint,
+            {
+                'current_password': 'wrongpassword',
+                'new_password': 'NewSecurePass123!',
+                'new_password_confirm': 'NewSecurePass123!',
+            },
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_change_password_unauthenticated(self, api_client):
         """Must be authenticated to change password."""
-        response = api_client.post(self.endpoint, {
-            'current_password': 'testpass123',
-            'new_password': 'NewSecurePass123!',
-            'new_password_confirm': 'NewSecurePass123!',
-        })
+        response = api_client.post(
+            self.endpoint,
+            {
+                'current_password': 'testpass123',
+                'new_password': 'NewSecurePass123!',
+                'new_password_confirm': 'NewSecurePass123!',
+            },
+        )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_change_password_mismatch(self, auth_client):
         """New password confirmation must match."""
-        response = auth_client.post(self.endpoint, {
-            'current_password': 'testpass123',
-            'new_password': 'NewSecurePass123!',
-            'new_password_confirm': 'DifferentPass123!',
-        })
+        response = auth_client.post(
+            self.endpoint,
+            {
+                'current_password': 'testpass123',
+                'new_password': 'NewSecurePass123!',
+                'new_password_confirm': 'DifferentPass123!',
+            },
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 

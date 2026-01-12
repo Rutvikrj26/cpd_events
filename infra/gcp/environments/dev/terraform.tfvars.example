@@ -62,16 +62,6 @@ ticketing_service_fee_fixed_usd = 0.99
 ticketing_processing_fee_percent_usd = 2.9
 ticketing_processing_fee_fixed_usd = 0.30
 billing_default_plan  = "attendee"
-stripe_price_starter             = ""
-stripe_price_starter_annual      = ""
-stripe_price_professional        = ""
-stripe_price_professional_annual = ""
-stripe_price_premium             = ""
-stripe_price_premium_annual      = ""
-stripe_price_team                = ""
-stripe_price_team_annual         = ""
-stripe_price_enterprise          = ""
-
 # Frontend build-time variables (used by CLI deploy)
 frontend_google_maps_api_key     = ""
 frontend_stripe_publishable_key  = ""

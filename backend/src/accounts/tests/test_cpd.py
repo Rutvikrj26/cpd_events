@@ -7,7 +7,7 @@ from rest_framework import status
 
 from accounts.models import CPDRequirement
 from factories import UserFactory
-from django.urls import reverse
+
 
 @pytest.fixture
 def cpd_requirement(db, user):
@@ -73,11 +73,7 @@ class TestCPDRequirementViewSet:
     def test_cannot_access_others_requirements(self, auth_client):
         """User cannot see others' requirements."""
         other_user = UserFactory()
-        other_req = CPDRequirement.objects.create(
-            user=other_user,
-            cpd_type='clinical',
-            annual_requirement=20
-        )
+        other_req = CPDRequirement.objects.create(user=other_user, cpd_type='clinical', annual_requirement=20)
         url = f"{self.get_endpoint()}{other_req.uuid}/"
         response = auth_client.get(url)
         assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -97,13 +93,13 @@ class TestCPDProgressView:
         endpoint = '/api/v1/cpd-requirements/progress/'
         response = auth_client.get(endpoint)
         assert response.status_code == status.HTTP_200_OK
-        
+
         # Should return summary dict
         assert isinstance(response.data, dict)
         assert 'total_requirements' in response.data
         assert 'completed_requirements' in response.data
         assert 'requirements' in response.data
-        
+
         reqs = response.data['requirements']
         assert isinstance(reqs, list)
         if len(reqs) > 0:
@@ -115,7 +111,7 @@ class TestCPDProgressView:
         """Returns empty summary if no requirements set."""
         # Ensure no requirements
         CPDRequirement.objects.all().delete()
-        
+
         endpoint = '/api/v1/cpd-requirements/progress/'
         response = auth_client.get(endpoint)
         assert response.status_code == status.HTTP_200_OK
@@ -131,7 +127,7 @@ class TestCPDProgressView:
 @pytest.mark.django_db
 class TestCPDRequirementValidation:
     """Tests for data validation."""
-    
+
     def test_required_credits_positive(self, auth_client):
         """Annual requirement must be positive."""
         endpoint = '/api/v1/cpd-requirements/'

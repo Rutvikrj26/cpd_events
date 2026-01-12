@@ -29,12 +29,14 @@ interface CheckoutResponse {
 export const createCheckoutSession = async (
     plan: string,
     successUrl: string,
-    cancelUrl: string
+    cancelUrl: string,
+    billingInterval: 'month' | 'year' = 'month'
 ): Promise<CheckoutResponse> => {
     const response = await client.post<CheckoutResponse>('/billing/checkout/', {
         plan,
         success_url: successUrl,
         cancel_url: cancelUrl,
+        billing_interval: billingInterval,
     });
     return response.data;
 };
@@ -61,11 +63,13 @@ export const reactivateSubscription = async (): Promise<Subscription> => {
 
 export const updateSubscription = async (
     plan: string,
-    immediate: boolean = true
+    immediate: boolean = true,
+    billingInterval: 'month' | 'year' = 'month'
 ): Promise<Subscription> => {
     const response = await client.put<Subscription>('/subscription/', {
         plan,
         immediate,
+        billing_interval: billingInterval,
     });
     return response.data;
 };

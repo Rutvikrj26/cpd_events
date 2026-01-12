@@ -1,12 +1,14 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Bell,
   Calendar,
-  Award,
   Info,
   Check,
   Trash2,
-  Clock
+  Clock,
+  Building2,
+  CreditCard,
+  DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,76 +16,95 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { toast } from "sonner";
-
-// Mock Notifications Data
-const mockNotifications = [
-  {
-    id: "1",
-    type: "reminder",
-    title: "Upcoming Event: Advanced Cardiology Symposium",
-    message: "The event starts in 24 hours. Check your email for the joining link.",
-    time: "2 hours ago",
-    read: false,
-  },
-  {
-    id: "2",
-    type: "award",
-    title: "Certificate Issued",
-    message: "You have earned a new certificate for 'Medical Ethics 2024'.",
-    time: "1 day ago",
-    read: false,
-  },
-  {
-    id: "3",
-    type: "system",
-    title: "Maintenance Scheduled",
-    message: "The platform will undergo maintenance on Sunday at 2 AM EST.",
-    time: "3 days ago",
-    read: true,
-  },
-  {
-    id: "4",
-    type: "reminder",
-    title: "Registration Confirmed",
-    message: "Your spot for the 'Annual Health Summit' has been confirmed.",
-    time: "1 week ago",
-    read: true,
-  },
-];
+import { formatDistanceToNow } from "date-fns";
+import {
+  deleteNotification,
+  getNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  Notification,
+} from "@/api/notifications";
 
 export function Notifications() {
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  const handleMarkAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    toast.success("All notifications marked as read");
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const data = await getNotifications();
+        setNotifications(data);
+      } catch (error: any) {
+        console.error("Failed to load notifications:", error);
+        toast.error(error?.message || "Failed to load notifications.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true, read_at: new Date().toISOString() })));
+      toast.success("All notifications marked as read");
+    } catch (error: any) {
+      console.error("Failed to mark all read:", error);
+      toast.error(error?.message || "Failed to mark all read.");
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-    toast.success("Notification removed");
+  const handleDelete = async (uuid: string) => {
+    try {
+      await deleteNotification(uuid);
+      setNotifications(prev => prev.filter(n => n.uuid !== uuid));
+      toast.success("Notification removed");
+    } catch (error: any) {
+      console.error("Failed to delete notification:", error);
+      toast.error(error?.message || "Failed to delete notification.");
+    }
   };
 
-  const handleMarkRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  const handleMarkRead = async (uuid: string) => {
+    try {
+      const updated = await markNotificationRead(uuid);
+      setNotifications(prev => prev.map(n => n.uuid === uuid ? updated : n));
+    } catch (error: any) {
+      console.error("Failed to mark notification read:", error);
+      toast.error(error?.message || "Failed to mark as read.");
+    }
   };
 
   const getIcon = (type: string) => {
     switch (type) {
-      case "reminder": return <Calendar className="h-5 w-5 text-primary" />;
-      case "award": return <Award className="h-5 w-5 text-green-600" />;
-      case "system": return <Info className="h-5 w-5 text-muted-foreground" />;
-      default: return <Bell className="h-5 w-5 text-muted-foreground" />;
+      case "org_invite":
+        return <Building2 className="h-5 w-5 text-primary" />;
+      case "payment_failed":
+        return <CreditCard className="h-5 w-5 text-destructive" />;
+      case "refund_processed":
+        return <DollarSign className="h-5 w-5 text-green-600" />;
+      case "trial_ending":
+        return <Calendar className="h-5 w-5 text-amber-600" />;
+      case "payment_method_expired":
+        return <CreditCard className="h-5 w-5 text-amber-600" />;
+      case "system":
+        return <Info className="h-5 w-5 text-muted-foreground" />;
+      default:
+        return <Bell className="h-5 w-5 text-muted-foreground" />;
     }
   };
 
-  const filteredNotifications = notifications.filter(n => {
-    if (filter === "unread") return !n.read;
-    return true;
-  });
+  const filteredNotifications = useMemo(() => {
+    if (filter === "unread") {
+      return notifications.filter(n => !n.is_read);
+    }
+    return notifications;
+  }, [filter, notifications]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-12">
@@ -113,35 +134,48 @@ export function Notifications() {
         </TabsList>
 
         <TabsContent value={filter} className="mt-0 space-y-4">
-          {filteredNotifications.length > 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
+              Loading notifications...
+            </div>
+          ) : filteredNotifications.length > 0 ? (
             filteredNotifications.map((notification) => (
-              <Card key={notification.id} className={`transition-all ${notification.read ? 'bg-card' : 'bg-primary/5 border-primary/20'}`}>
+              <Card key={notification.uuid} className={`transition-all ${notification.is_read ? 'bg-card' : 'bg-primary/5 border-primary/20'}`}>
                 <div className="p-4 flex gap-4 items-start">
-                  <div className={`mt-1 p-2 rounded-full shrink-0 ${notification.read ? 'bg-muted' : 'bg-card shadow-sm'}`}>
-                    {getIcon(notification.type)}
+                  <div className={`mt-1 p-2 rounded-full shrink-0 ${notification.is_read ? 'bg-muted' : 'bg-card shadow-sm'}`}>
+                    {getIcon(notification.notification_type)}
                   </div>
 
                   <div className="flex-1 space-y-1">
                     <div className="flex justify-between items-start">
-                      <h4 className={`text-sm font-semibold ${notification.read ? 'text-foreground' : 'text-primary'}`}>
+                      <h4 className={`text-sm font-semibold ${notification.is_read ? 'text-foreground' : 'text-primary'}`}>
                         {notification.title}
                       </h4>
                       <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0 ml-2">
-                        <Clock className="h-3 w-3" /> {notification.time}
+                        <Clock className="h-3 w-3" /> {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                       </span>
                     </div>
-                    <p className={`text-sm ${notification.read ? 'text-muted-foreground' : 'text-primary/80'}`}>
+                    <p className={`text-sm ${notification.is_read ? 'text-muted-foreground' : 'text-primary/80'}`}>
                       {notification.message}
                     </p>
+                    {notification.action_url && (
+                      <Button
+                        variant="link"
+                        className="h-auto p-0 text-xs"
+                        onClick={() => window.location.assign(notification.action_url)}
+                      >
+                        View details
+                      </Button>
+                    )}
                   </div>
 
                   <div className="flex gap-1 shrink-0 ml-2">
-                    {!notification.read && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" onClick={() => handleMarkRead(notification.id)} title="Mark as read">
+                    {!notification.is_read && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" onClick={() => handleMarkRead(notification.uuid)} title="Mark as read">
                         <Check className="h-4 w-4" />
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(notification.id)} title="Delete">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(notification.uuid)} title="Delete">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>

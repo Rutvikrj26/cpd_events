@@ -74,6 +74,7 @@ export function TrialBanner({ className }: TrialBannerProps) {
     // Determine urgency level
     const isUrgent = daysRemaining <= 3;
     const isWarning = daysRemaining <= 7 && daysRemaining > 3;
+    const planLabel = subscription.plan_display || (subscription.plan === 'lms' ? 'LMS' : 'Organizer');
 
     return (
         <div
@@ -105,7 +106,7 @@ export function TrialBanner({ className }: TrialBannerProps) {
                         <strong>Your trial expires tomorrow!</strong>
                     ) : (
                         <>
-                            <strong>{daysRemaining} days</strong> remaining in your Professional trial
+                            <strong>{daysRemaining} days</strong> remaining in your {planLabel} trial
                         </>
                     )}
                 </span>

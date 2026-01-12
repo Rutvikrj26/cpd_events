@@ -14,7 +14,6 @@ Endpoints tested:
 import pytest
 from rest_framework import status
 
-
 # =============================================================================
 # Current User Tests
 # =============================================================================
@@ -40,9 +39,12 @@ class TestCurrentUserView:
 
     def test_update_current_user(self, auth_client, user):
         """User can update their profile."""
-        response = auth_client.patch(self.endpoint, {
-            'full_name': 'Updated Name',
-        })
+        response = auth_client.patch(
+            self.endpoint,
+            {
+                'full_name': 'Updated Name',
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
         user.refresh_from_db()
         assert user.full_name == 'Updated Name'
@@ -50,9 +52,12 @@ class TestCurrentUserView:
     def test_update_email_not_allowed(self, auth_client, user):
         """Email cannot be changed through profile update."""
         original_email = user.email
-        response = auth_client.patch(self.endpoint, {
-            'email': 'newemail@example.com',
-        })
+        response = auth_client.patch(
+            self.endpoint,
+            {
+                'email': 'newemail@example.com',
+            },
+        )
         # Either rejected or ignored
         user.refresh_from_db()
         assert user.email == original_email
@@ -82,10 +87,13 @@ class TestOrganizerProfileView:
 
     def test_update_organizer_profile(self, organizer_client, organizer):
         """Organizer can update their organizer profile."""
-        response = organizer_client.patch(self.endpoint, {
-            'organizer_bio': 'This is my bio',
-            'organizer_website': 'https://example.com',
-        })
+        response = organizer_client.patch(
+            self.endpoint,
+            {
+                'organizer_bio': 'This is my bio',
+                'organizer_website': 'https://example.com',
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
         organizer.refresh_from_db()
         assert organizer.organizer_bio == 'This is my bio'
@@ -119,9 +127,12 @@ class TestNotificationPreferencesView:
 
     def test_update_notification_preferences(self, auth_client, user):
         """User can update notification preferences."""
-        response = auth_client.patch(self.endpoint, {
-            'email_event_reminders': False,
-        })
+        response = auth_client.patch(
+            self.endpoint,
+            {
+                'email_event_reminders': False,
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
 
     def test_unauthenticated_cannot_access(self, api_client):
@@ -174,10 +185,13 @@ class TestDeleteAccountView:
 
     def test_delete_account_with_password(self, auth_client, user):
         """User can delete their account with password confirmation."""
-        response = auth_client.post(self.endpoint, {
-            'password': 'testpass123',
-            'confirm': True,
-        })
+        response = auth_client.post(
+            self.endpoint,
+            {
+                'password': 'testpass123',
+                'confirm': True,
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
         user.refresh_from_db()
         # User should be soft-deleted or anonymized
@@ -185,18 +199,24 @@ class TestDeleteAccountView:
 
     def test_delete_account_wrong_password(self, auth_client):
         """Cannot delete with wrong password."""
-        response = auth_client.post(self.endpoint, {
-            'password': 'wrongpassword',
-            'confirm': True,
-        })
+        response = auth_client.post(
+            self.endpoint,
+            {
+                'password': 'wrongpassword',
+                'confirm': True,
+            },
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_delete_account_no_confirmation(self, auth_client):
         """Must confirm deletion."""
-        response = auth_client.post(self.endpoint, {
-            'password': 'testpass123',
-            'confirm': False,
-        })
+        response = auth_client.post(
+            self.endpoint,
+            {
+                'password': 'testpass123',
+                'confirm': False,
+            },
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_unauthenticated_cannot_delete(self, api_client):
@@ -253,6 +273,7 @@ class TestPublicOrganizerView:
     def test_nonexistent_organizer(self, api_client):
         """404 for non-existent organizer."""
         import uuid
+
         fake_uuid = uuid.uuid4()
         response = api_client.get(f'/api/v1/organizers/{fake_uuid}/')
         assert response.status_code == status.HTTP_404_NOT_FOUND

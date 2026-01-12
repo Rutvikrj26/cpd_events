@@ -124,7 +124,7 @@ flowchart TD
 ### 3. TRIAL & CONVERSION OPTIMIZATION
 
 #### Current State
-- 30-day professional trial for organizers
+- Organizer trial length is configured in admin
 - Trial status shown in onboarding
 - Billing page with plan comparison
 - Stripe checkout integration

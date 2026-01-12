@@ -16,18 +16,15 @@
 
 ## ⚠️ What You Need to Do
 
-### 1. Stripe Setup (3 values needed)
+### 1. Stripe Setup
 
-Run these commands after creating products in Stripe:
+Run these commands after configuring Stripe:
 
 ```bash
 cd backend
 
-# After creating products in Stripe Dashboard
-# Update these 3 values in .env:
+# Update this value in .env:
 # - STRIPE_WEBHOOK_SECRET (from Stripe CLI: stripe listen)
-# - STRIPE_PRICE_ORGANIZER (from Products page)
-# - STRIPE_PRICE_ORGANIZATION (from Products page)
 ```
 
 **Full instructions**: See `STRIPE_SETUP.md`
@@ -70,12 +67,9 @@ accredit local up --backend
 
 ### Create Stripe Products
 
-1. Go to: https://dashboard.stripe.com/test/products
-2. Click "+ Add product"
-3. Create "Accredit Organizer" ($29/month or your price)
-4. Copy Price ID → Update `STRIPE_PRICE_ORGANIZER` in `.env`
-5. Create "Accredit Organization" ($99/month or your price)
-6. Copy Price ID → Update `STRIPE_PRICE_ORGANIZATION` in `.env`
+1. Go to Django Admin → Billing → Stripe Products
+2. Create products/prices for `organizer`, `lms`, and `organization`
+3. Click **Save** to sync to Stripe
 
 ## 🚀 Production TODO (Later)
 

@@ -10,10 +10,10 @@ Centralizes all event-related magic numbers including:
 
 from django.core.exceptions import ImproperlyConfigured
 
-
 # =============================================================================
 # Validation Helpers
 # =============================================================================
+
 
 def _validate_positive(value: int, name: str) -> int:
     """Validate value is positive (> 0)."""
@@ -40,6 +40,7 @@ def _validate_non_negative(value: int, name: str) -> int:
 # Event Duration Configuration
 # =============================================================================
 
+
 class EventDuration:
     """
     Event duration settings in minutes.
@@ -48,6 +49,7 @@ class EventDuration:
     - MIN: Minimum allowed event duration
     - MAX: Maximum allowed event duration (8 hours)
     """
+
     DEFAULT: int = _validate_positive(60, 'EventDuration.DEFAULT')
     MIN: int = _validate_positive(15, 'EventDuration.MIN')
     MAX: int = _validate_positive(480, 'EventDuration.MAX')  # 8 hours
@@ -56,6 +58,7 @@ class EventDuration:
 # =============================================================================
 # Attendance Thresholds
 # =============================================================================
+
 
 class AttendanceThresholds:
     """
@@ -67,6 +70,7 @@ class AttendanceThresholds:
     - DEFAULT_PERCENT: Default minimum attendance percentage (0-100)
     - DEFAULT_MINUTES: Default minimum attendance minutes (0 = no minimum)
     """
+
     DEFAULT_PERCENT: int = _validate_percentage(80, 'AttendanceThresholds.DEFAULT_PERCENT')
     DEFAULT_MINUTES: int = _validate_non_negative(0, 'AttendanceThresholds.DEFAULT_MINUTES')
 
@@ -75,12 +79,14 @@ class AttendanceThresholds:
 # Session Defaults
 # =============================================================================
 
+
 class SessionDefaults:
     """
     Default values for event sessions.
 
     Used when creating new sessions within a multi-session event.
     """
+
     DURATION_MINUTES: int = _validate_positive(60, 'SessionDefaults.DURATION_MINUTES')
     ATTENDANCE_PERCENT: int = _validate_percentage(80, 'SessionDefaults.ATTENDANCE_PERCENT')
 
@@ -89,12 +95,14 @@ class SessionDefaults:
 # Event Duplication
 # =============================================================================
 
+
 class EventDuplication:
     """
     Settings for event duplication feature.
 
     When duplicating an event, the start date is offset by DAYS_OFFSET days.
     """
+
     DAYS_OFFSET: int = _validate_positive(7, 'EventDuplication.DAYS_OFFSET')
 
 

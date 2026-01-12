@@ -5,21 +5,53 @@ Events app views and viewsets.
 from django.db.models import Q
 from django.utils import timezone
 from django_filters import rest_framework as filters
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from drf_yasg.utils import swagger_auto_schema
 
 from common.pagination import SmallPagination
-from common.permissions import IsOrganizer
+from common.permissions import IsOrganizerOrOrgAdmin
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import SoftDeleteModelViewSet
 
 from . import serializers
 from .models import Event, EventCustomField, Speaker
+
+# =============================================================================
+# Access Helpers
+# =============================================================================
+
+
+def _event_access_q(user, prefix: str = '') -> Q:
+    owner_key = f'{prefix}owner'
+    org_user_key = f'{prefix}organization__memberships__user'
+    org_role_key = f'{prefix}organization__memberships__role'
+    org_active_key = f'{prefix}organization__memberships__is_active'
+
+    return Q(**{owner_key: user}) | Q(
+        **{
+            org_user_key: user,
+            org_role_key: 'admin',
+            org_active_key: True,
+        }
+    )
+
+
+def _user_can_manage_event(user, event) -> bool:
+    if event.owner_id == user.id:
+        return True
+    if event.organization_id:
+        return event.organization.memberships.filter(
+            user=user,
+            role='admin',
+            is_active=True,
+        ).exists()
+    return False
+
 
 # =============================================================================
 # Filters
@@ -75,15 +107,17 @@ class EventViewSet(SoftDeleteModelViewSet):
     """
 
     parser_classes = (MultiPartParser, FormParser, JSONParser)
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsOrganizerOrOrgAdmin]
     filterset_class = EventFilter
     search_fields = ['title', 'description']
     ordering_fields = ['starts_at', 'created_at', 'title', 'registration_count']
     ordering = ['-created_at']
 
     def get_queryset(self):
-        return Event.objects.filter(owner=self.request.user, deleted_at__isnull=True).select_related(
-            'owner', 'certificate_template'
+        return (
+            Event.objects.filter(_event_access_q(self.request.user), deleted_at__isnull=True)
+            .select_related('owner', 'certificate_template')
+            .distinct()
         )
 
     def get_serializer_class(self):
@@ -96,23 +130,22 @@ class EventViewSet(SoftDeleteModelViewSet):
         return serializers.EventDetailSerializer
 
     def perform_create(self, serializer):
-        from .services import event_service
         from rest_framework.exceptions import ValidationError
+
+        from .services import event_service
 
         organization_uuid = self.request.data.get('organization')
 
         try:
             event = event_service.create_event(
-                user=self.request.user,
-                data=serializer.validated_data,
-                organization_uuid=organization_uuid
+                user=self.request.user, data=serializer.validated_data, organization_uuid=organization_uuid
             )
             serializer.instance = event
         except ValidationError as e:
-             raise e
+            raise e
         except Exception as e:
-             # Re-raise known exceptions as is, wrap others if needed
-             raise e
+            # Re-raise known exceptions as is, wrap others if needed
+            raise e
 
     @swagger_auto_schema(
         operation_summary="Publish event",
@@ -125,7 +158,9 @@ class EventViewSet(SoftDeleteModelViewSet):
         event = self.get_object()
 
         if event.status != 'draft':
-            return error_response('Can only publish draft events.', code='INVALID_STATE', status_code=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                'Can only publish draft events.', code='INVALID_STATE', status_code=status.HTTP_400_BAD_REQUEST
+            )
 
         event.publish(user=request.user)
         return Response(serializers.EventDetailSerializer(event).data)
@@ -141,7 +176,9 @@ class EventViewSet(SoftDeleteModelViewSet):
         event = self.get_object()
 
         if event.starts_at <= timezone.now():
-             return error_response('Cannot revert to draft after event has started.', code='INVALID_STATE', status_code=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                'Cannot revert to draft after event has started.', code='INVALID_STATE', status_code=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             event.unpublish(user=request.user)
@@ -240,37 +277,35 @@ class EventViewSet(SoftDeleteModelViewSet):
         event = self.get_object()
 
         if request.method == 'DELETE':
-            event.featured_image.delete(save=False) # Delete file from storage
+            event.featured_image.delete(save=False)  # Delete file from storage
             event.featured_image = None
             event.save(update_fields=['featured_image', 'updated_at'])
             return Response(serializers.EventDetailSerializer(event, context={'request': request}).data)
-        
+
         if 'image' not in request.FILES:
             return error_response('No image file provided.', code='NO_FILE', status_code=status.HTTP_400_BAD_REQUEST)
-        
+
         image_file = request.FILES['image']
-        
+
         # Validate file type
         valid_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
         if image_file.content_type not in valid_types:
             return error_response(
                 f'Invalid file type. Allowed: {", ".join(valid_types)}',
                 code='INVALID_TYPE',
-                status_code=status.HTTP_400_BAD_REQUEST
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Validate file size (max 5MB)
         max_size = 5 * 1024 * 1024
         if image_file.size > max_size:
             return error_response(
-                'File too large. Maximum size is 5MB.',
-                code='FILE_TOO_LARGE',
-                status_code=status.HTTP_400_BAD_REQUEST
+                'File too large. Maximum size is 5MB.', code='FILE_TOO_LARGE', status_code=status.HTTP_400_BAD_REQUEST
             )
-        
+
         event.featured_image = image_file
         event.save(update_fields=['featured_image', 'updated_at'])
-        
+
         return Response(serializers.EventDetailSerializer(event, context={'request': request}).data)
 
     @swagger_auto_schema(
@@ -306,6 +341,115 @@ class EventViewSet(SoftDeleteModelViewSet):
                 'completed': events.filter(status__in=['completed', 'closed']).count(),
                 'total_registrations': sum(e.registration_count for e in events),
                 'total_attendees': sum(e.attendee_count for e in events),
+            }
+        )
+
+    @swagger_auto_schema(
+        operation_summary="Reports & analytics",
+        operation_description="Get report summary and trends for organizer events.",
+    )
+    @action(detail=False, methods=['get'])
+    def reports(self, request):
+        from datetime import timedelta
+
+        from django.db.models import Avg, Count, Sum
+        from django.db.models.functions import TruncDate
+
+        from feedback.models import EventFeedback
+        from registrations.models import Registration
+
+        events = self.get_queryset()
+        now = timezone.now()
+        period = request.query_params.get('period', 'last-30-days')
+
+        from datetime import datetime
+
+        if period == 'last-7-days':
+            start = now - timedelta(days=7)
+        elif period == 'last-90-days':
+            start = now - timedelta(days=90)
+        elif period == 'this-year':
+            start = timezone.make_aware(datetime(now.year, 1, 1))
+        else:
+            start = now - timedelta(days=30)
+
+        registrations = Registration.objects.filter(
+            event__in=events,
+            created_at__gte=start,
+            created_at__lte=now,
+            deleted_at__isnull=True,
+        )
+
+        paid_regs = registrations.filter(payment_status=Registration.PaymentStatus.PAID)
+        total_revenue = paid_regs.aggregate(total=Sum('total_amount'))['total'] or 0
+
+        event_counts = events.values('currency').annotate(count=Count('id')).order_by('-count')
+        primary_currency = event_counts[0]['currency'] if event_counts else 'USD'
+
+        trends = []
+        for row in (
+            registrations.annotate(day=TruncDate('created_at'))
+            .values('day')
+            .annotate(
+                registrations=Count('id'),
+                revenue=Sum('total_amount'),
+            )
+            .order_by('day')
+        ):
+            trends.append(
+                {
+                    'date': row['day'].isoformat() if row['day'] else None,
+                    'registrations': row['registrations'],
+                    'revenue_cents': int((row['revenue'] or 0) * 100),
+                }
+            )
+
+        ticket_breakdown = [
+            {
+                'label': 'Paid',
+                'count': paid_regs.count(),
+            },
+            {
+                'label': 'Free',
+                'count': registrations.filter(payment_status=Registration.PaymentStatus.NA).count(),
+            },
+            {
+                'label': 'Refunded',
+                'count': registrations.filter(payment_status=Registration.PaymentStatus.REFUNDED).count(),
+            },
+        ]
+
+        avg_rating = EventFeedback.objects.filter(
+            event__in=events,
+            created_at__gte=start,
+            created_at__lte=now,
+        ).aggregate(
+            avg=Avg('rating')
+        )['avg']
+
+        recent_transactions = [
+            {
+                'registration_uuid': str(reg.uuid),
+                'event_title': reg.event.title if reg.event else '',
+                'amount_cents': int((reg.total_amount or 0) * 100),
+                'currency': reg.event.currency if reg.event else primary_currency,
+                'created_at': reg.created_at.isoformat(),
+            }
+            for reg in paid_regs.select_related('event').order_by('-created_at')[:5]
+        ]
+
+        return Response(
+            {
+                'summary': {
+                    'total_revenue_cents': int(total_revenue * 100),
+                    'total_attendees': registrations.filter(status=Registration.Status.CONFIRMED).count(),
+                    'events_hosted': events.filter(starts_at__gte=start, starts_at__lte=now).count(),
+                    'avg_rating': round(avg_rating, 2) if avg_rating else None,
+                    'currency': primary_currency,
+                },
+                'trends': trends,
+                'ticket_breakdown': ticket_breakdown,
+                'recent_transactions': recent_transactions,
             }
         )
 
@@ -370,6 +514,7 @@ class PublicEventDetailView(generics.RetrieveAPIView):
         # Try uuid
         try:
             import uuid
+
             uuid_obj = uuid.UUID(identifier)
             obj = queryset.filter(uuid=uuid_obj).first()
             if obj:
@@ -379,6 +524,7 @@ class PublicEventDetailView(generics.RetrieveAPIView):
 
         # Not found
         from django.http import Http404
+
         raise Http404("Event not found")
 
     def get_queryset(self):
@@ -389,10 +535,10 @@ class PublicEventDetailView(generics.RetrieveAPIView):
         if user.is_authenticated:
             # If user is authenticated, they can see published/live public events OR any event they own
             return queryset.filter(
-                Q(status__in=['published', 'live'], is_public=True, deleted_at__isnull=True) |
-                Q(owner=user, deleted_at__isnull=True)
+                Q(status__in=['published', 'live'], is_public=True, deleted_at__isnull=True)
+                | Q(owner=user, deleted_at__isnull=True)
             ).distinct()
-        
+
         # Public users only see published/live public events
         return queryset.filter(
             status__in=['published', 'live'],
@@ -414,12 +560,14 @@ class EventCustomFieldViewSet(viewsets.ModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/custom-fields/
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsOrganizerOrOrgAdmin]
     lookup_field = 'uuid'
 
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
-        return EventCustomField.objects.filter(event__uuid=event_uuid, event__owner=self.request.user)
+        return EventCustomField.objects.filter(
+            event__uuid=event_uuid,
+        ).filter(_event_access_q(self.request.user, prefix='event__'))
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -428,8 +576,12 @@ class EventCustomFieldViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         from django.shortcuts import get_object_or_404
+
         event_uuid = self.kwargs.get('event_uuid')
-        event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
+        event = get_object_or_404(
+            Event.objects.filter(_event_access_q(self.request.user)),
+            uuid=event_uuid,
+        )
 
         # Get next order position
         max_order = self.get_queryset().order_by('-order').values_list('order', flat=True).first() or 0
@@ -460,7 +612,7 @@ class EventSessionViewSet(viewsets.ModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/sessions/
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsOrganizerOrOrgAdmin]
     pagination_class = SmallPagination  # M5: Nested resource pagination
     lookup_field = 'uuid'
 
@@ -468,8 +620,12 @@ class EventSessionViewSet(viewsets.ModelViewSet):
         from .models import EventSession
 
         event_uuid = self.kwargs.get('event_uuid')
-        return EventSession.objects.filter(event__uuid=event_uuid, event__owner=self.request.user).order_by(
-            'order', 'starts_at'
+        return (
+            EventSession.objects.filter(
+                event__uuid=event_uuid,
+            )
+            .filter(_event_access_q(self.request.user, prefix='event__'))
+            .order_by('order', 'starts_at')
         )
 
     def get_serializer_class(self):
@@ -483,8 +639,12 @@ class EventSessionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         from django.shortcuts import get_object_or_404
+
         event_uuid = self.kwargs.get('event_uuid')
-        event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
+        event = get_object_or_404(
+            Event.objects.filter(_event_access_q(self.request.user)),
+            uuid=event_uuid,
+        )
 
         # Get next order position
         max_order = self.get_queryset().order_by('-order').values_list('order', flat=True).first() or 0
@@ -501,9 +661,13 @@ class EventSessionViewSet(viewsets.ModelViewSet):
     def reorder(self, request, event_uuid=None):
         """Reorder sessions within the event."""
         from django.shortcuts import get_object_or_404
+
         # Validate event ownership
-        get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
-        
+        get_object_or_404(
+            Event.objects.filter(_event_access_q(self.request.user)),
+            uuid=event_uuid,
+        )
+
         reorder_serializer = serializers.SessionReorderSerializer(data=request.data)
         reorder_serializer.is_valid(raise_exception=True)
 
@@ -534,9 +698,9 @@ class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         registration_uuid = self.kwargs.get('registration_uuid')
         registration = Registration.objects.get(uuid=registration_uuid)
 
-        # Check permission: owner of event or the registrant themselves
+        # Check permission: owner/admin of event or the registrant themselves
         user = self.request.user
-        if registration.event.owner != user and registration.user != user:
+        if registration.user != user and not _user_can_manage_event(user, registration.event):
             return SessionAttendance.objects.none()
 
         return (
@@ -559,11 +723,14 @@ class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         """Override session attendance eligibility."""
 
         session_attendance = self.get_object()
-        event = session_attendance.registration.event # Define event for the check
+        event = session_attendance.registration.event  # Define event for the check
 
-        # Only event owner can override
-        if session_attendance.registration.event.owner != request.user:
-             return error_response('Only the event owner can override attendance.', code='PERMISSION_DENIED', status_code=status.HTTP_403_FORBIDDEN)
+        if not _user_can_manage_event(request.user, event):
+            return error_response(
+                'Only the event owner or org admin can override attendance.',
+                code='PERMISSION_DENIED',
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
 
         override_serializer = serializers.SessionAttendanceOverrideSerializer(data=request.data)
         override_serializer.is_valid(raise_exception=True)
@@ -581,7 +748,8 @@ class SpeakerViewSet(SoftDeleteModelViewSet):
     """
     CRUD for speakers.
     """
-    permission_classes = [IsAuthenticated, IsOrganizer]
+
+    permission_classes = [IsAuthenticated, IsOrganizerOrOrgAdmin]
     queryset = Speaker.objects.all()
     serializer_class = serializers.SpeakerSerializer
     search_fields = ['name', 'bio']
@@ -589,7 +757,15 @@ class SpeakerViewSet(SoftDeleteModelViewSet):
     ordering = ['name']
 
     def get_queryset(self):
-        return Speaker.objects.filter(owner=self.request.user, deleted_at__isnull=True)
+        return Speaker.objects.filter(
+            Q(owner=self.request.user)
+            | Q(
+                organization__memberships__user=self.request.user,
+                organization__memberships__role='admin',
+                organization__memberships__is_active=True,
+            ),
+            deleted_at__isnull=True,
+        ).distinct()
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)

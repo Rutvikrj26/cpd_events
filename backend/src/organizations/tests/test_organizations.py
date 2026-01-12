@@ -20,7 +20,6 @@ Endpoints tested:
 import pytest
 from rest_framework import status
 
-
 # =============================================================================
 # Organization CRUD Tests
 # =============================================================================
@@ -54,17 +53,20 @@ class TestOrganizationViewSet:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['name'] == organization.name
 
-    def test_update_organization_as_owner(self, organizer_client, organization):
-        """Owner can update organization."""
-        response = organizer_client.patch(f'{self.endpoint}{organization.uuid}/', {
-            'name': 'Updated Org Name',
-        })
+    def test_update_organization_as_admin(self, organizer_client, organization):
+        """Admin can update organization."""
+        response = organizer_client.patch(
+            f'{self.endpoint}{organization.uuid}/',
+            {
+                'name': 'Updated Org Name',
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
         organization.refresh_from_db()
         assert organization.name == 'Updated Org Name'
 
-    def test_delete_organization_as_owner(self, organizer_client, organization):
-        """Owner can delete organization."""
+    def test_delete_organization_as_admin(self, organizer_client, organization):
+        """Admin can delete organization."""
         response = organizer_client.delete(f'{self.endpoint}{organization.uuid}/')
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
@@ -76,8 +78,9 @@ class TestOrganizationViewSet:
     def test_cannot_access_unrelated_organization(self, organizer_client, other_organizer, db):
         """Cannot access organization user doesn't belong to."""
         from factories import OrganizationFactory
+
         other_org = OrganizationFactory(created_by=other_organizer)
-        
+
         response = organizer_client.get(f'{self.endpoint}{other_org.uuid}/')
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -92,60 +95,135 @@ class TestMemberManagement:
     """Tests for organization member management."""
 
     def test_list_members(self, organizer_client, organization):
-        """Owner can list organization members."""
+        """Admin can list organization members."""
         response = organizer_client.get(f'/api/v1/organizations/{organization.uuid}/members/')
         assert response.status_code == status.HTTP_200_OK
 
     def test_invite_member(self, organizer_client, organization):
-        """Owner can invite a new member."""
+        """Admin can invite a new member."""
         response = organizer_client.post(
             f'/api/v1/organizations/{organization.uuid}/members/invite/',
             {
                 'email': 'newmember@example.com',
                 'role': 'instructor',
-            }
+            },
         )
         assert response.status_code == status.HTTP_201_CREATED
 
     def test_update_member_role(self, organizer_client, organization, org_member, db):
-        """Owner can update member role."""
+        """Admin can update member role."""
         from organizations.models import OrganizationMembership
+
         membership = OrganizationMembership.objects.get(
             organization=organization,
             user=org_member,
         )
-        
+
         response = organizer_client.patch(
-            f'/api/v1/organizations/{organization.uuid}/members/{membership.user.uuid}/',
-            {'role': 'admin'}
+            f'/api/v1/organizations/{organization.uuid}/members/{membership.user.uuid}/', {'role': 'admin'}
         )
         assert response.status_code == status.HTTP_200_OK
         membership.refresh_from_db()
         assert membership.role == 'admin'
 
     def test_remove_member(self, organizer_client, organization, org_member, db):
-        """Owner can remove a member."""
+        """Admin can remove a member."""
         from organizations.models import OrganizationMembership
+
         membership = OrganizationMembership.objects.get(
             organization=organization,
             user=org_member,
         )
-        
-        response = organizer_client.delete(
-            f'/api/v1/organizations/{organization.uuid}/members/{membership.user.uuid}/remove/'
-        )
+
+        response = organizer_client.delete(f'/api/v1/organizations/{organization.uuid}/members/{membership.uuid}/remove/')
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
     def test_member_cannot_invite(self, organizer_client, organization, org_member, db):
-        """Regular member cannot invite others."""
+        """Instructor cannot invite others."""
         from rest_framework.test import APIClient
+
         member_client = APIClient()
         member_client.force_authenticate(user=org_member)
-        
+
         response = member_client.post(
-            f'/api/v1/organizations/{organization.uuid}/members/invite/',
-            {'email': 'another@example.com', 'role': 'member'}
+            f'/api/v1/organizations/{organization.uuid}/members/invite/', {'email': 'another@example.com', 'role': 'instructor'}
         )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+# =============================================================================
+# Organization Oversight Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestOrganizationOversight:
+    def test_admin_can_view_all_org_events(self, organizer_client, organization, other_organizer):
+        """Admin can view all events across organizers in the org."""
+        from factories import EventFactory
+        from organizations.models import OrganizationMembership
+
+        OrganizationMembership.objects.create(
+            organization=organization,
+            user=other_organizer,
+            role=OrganizationMembership.Role.ORGANIZER,
+            is_active=True,
+        )
+
+        event = EventFactory(
+            owner=other_organizer,
+            organization=organization,
+            title='Org Event',
+        )
+
+        response = organizer_client.get(f'/api/v1/organizations/{organization.uuid}/events/')
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get('results', response.data)
+        assert any(item['uuid'] == str(event.uuid) for item in results)
+
+    def test_admin_can_view_all_org_courses(self, organizer_client, organization, course_manager):
+        """Admin can view all courses across course managers in the org."""
+        from factories import CourseFactory
+        from organizations.models import OrganizationMembership
+
+        OrganizationMembership.objects.create(
+            organization=organization,
+            user=course_manager,
+            role=OrganizationMembership.Role.COURSE_MANAGER,
+            is_active=True,
+        )
+
+        course = CourseFactory(
+            organization=organization,
+            created_by=course_manager,
+            title='Org Course',
+        )
+
+        response = organizer_client.get(f'/api/v1/organizations/{organization.uuid}/courses/')
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get('results', response.data)
+        assert any(item['uuid'] == str(course.uuid) for item in results)
+
+    def test_non_admin_cannot_view_org_overview(self, organization, other_organizer):
+        """Non-admins cannot access org oversight endpoints."""
+        from rest_framework.test import APIClient
+
+        from organizations.models import OrganizationMembership
+
+        OrganizationMembership.objects.create(
+            organization=organization,
+            user=other_organizer,
+            role=OrganizationMembership.Role.ORGANIZER,
+            is_active=True,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=other_organizer)
+
+        response = client.get(f'/api/v1/organizations/{organization.uuid}/events/')
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+        response = client.get(f'/api/v1/organizations/{organization.uuid}/courses/')
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -161,24 +239,24 @@ class TestAcceptInvitation:
     def test_accept_valid_invitation(self, auth_client, organization, db):
         """User can accept a valid invitation."""
         from factories import OrganizationMembershipFactory, UserFactory
+
         invitee = UserFactory()
         membership = OrganizationMembershipFactory(
             organization=organization,
             user=invitee,
-            role='member',
+            role='instructor',
         )
         membership.generate_invitation_token()
         membership.accepted_at = None  # Mark as pending
         membership.save()
-        
+
         # Authenticate as invited user
         from rest_framework.test import APIClient
+
         invitee_client = APIClient()
         invitee_client.force_authenticate(user=invitee)
-        
-        response = invitee_client.post(
-            f'/api/v1/organizations/accept-invite/{membership.invitation_token}/'
-        )
+
+        response = invitee_client.post(f'/api/v1/organizations/accept-invite/{membership.invitation_token}/')
         assert response.status_code == status.HTTP_200_OK
         membership.refresh_from_db()
         assert membership.accepted_at is not None
@@ -209,9 +287,12 @@ class TestCreateFromAccount:
 
     def test_create_org_from_account(self, organizer_client, organizer):
         """Organizer can create an org from their account."""
-        response = organizer_client.post(self.endpoint, {
-            'name': 'My New Organization',
-        })
+        response = organizer_client.post(
+            self.endpoint,
+            {
+                'name': 'My New Organization',
+            },
+        )
         assert response.status_code == status.HTTP_201_CREATED
 
     def test_attendee_cannot_create_from_account(self, auth_client):
@@ -231,9 +312,6 @@ class TestLinkOrganizer:
 
     def test_link_organizer_data(self, organizer_client, organization, organizer, event):
         """Can link existing organizer data to organization."""
-        response = organizer_client.post(
-            f'/api/v1/organizations/{organization.uuid}/link-organizer/',
-            {'confirm': True}
-        )
+        response = organizer_client.post(f'/api/v1/organizations/{organization.uuid}/link-organizer/', {'confirm': True})
         # May succeed or fail based on business logic
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]

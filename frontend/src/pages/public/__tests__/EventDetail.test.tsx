@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
-import { BrowserRouter, MemoryRouter, Route, Routes } from "react-router-dom";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { EventDetail } from "../EventDetail";
 
 // Mock the API calls
@@ -30,11 +30,22 @@ const renderEventDetail = (id = "test-event-id") => {
 };
 
 describe("EventDetail", () => {
-    it("shows loading state initially", () => {
+    let consoleError: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        consoleError.mockRestore();
+    });
+
+    it("shows loading state initially", async () => {
         renderEventDetail();
 
         // The component shows a loader while fetching
         expect(document.querySelector(".animate-spin")).toBeInTheDocument();
+        await screen.findByText("Event Not Found");
     });
 
     it("shows error state when event not found", async () => {

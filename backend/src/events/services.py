@@ -1,6 +1,5 @@
-
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from django.db import transaction
 from django.utils.text import slugify
@@ -20,7 +19,7 @@ class EventService:
     """
 
     @staticmethod
-    def create_event(user, data: Dict[str, Any], organization_uuid: str = None) -> Event:
+    def create_event(user, data: dict[str, Any], organization_uuid: str = None) -> Event:
         """
         Create a new event, enforcing subscription limits.
 
@@ -45,8 +44,12 @@ class EventService:
             except Organization.DoesNotExist:
                 raise ValidationError("Organization not found")
 
-            # Validate User Permission for Organization (Assuming ViewSet checks this, but good to double check if needed)
-            # For now, we assume the caller (ViewSet) has verified the user can manage this org.
+            if not organization.memberships.filter(
+                user=user,
+                role__in=['admin', 'organizer'],
+                is_active=True,
+            ).exists():
+                raise PermissionDenied("You do not have permission to create events for this organization.")
 
             # 2. Check Organization Subscription Limits
             if hasattr(organization, 'subscription'):
@@ -64,17 +67,11 @@ class EventService:
             if subscription:
                 if not subscription.can_create_events:
                     if subscription.is_access_blocked:
-                        raise PermissionDenied(
-                            "Your subscription has expired. Please upgrade to continue creating events."
-                        )
+                        raise PermissionDenied("Your subscription has expired. Please upgrade to continue creating events.")
                     elif subscription.is_trial_expired:
-                        raise PermissionDenied(
-                            "Your trial has ended. Please upgrade to a paid plan to create new events."
-                        )
+                        raise PermissionDenied("Your trial has ended. Please upgrade to a paid plan to create new events.")
                     elif not subscription.check_event_limit():
-                        raise PermissionDenied(
-                            "You have reached your monthly event limit. Please upgrade for more events."
-                        )
+                        raise PermissionDenied("You have reached your monthly event limit. Please upgrade for more events.")
 
         # 4. Prepare Data
         # Pop custom fields to handle separately
@@ -90,17 +87,13 @@ class EventService:
         # 5. Create Event & Increment Counters (Atomic)
         with transaction.atomic():
             # Create the event
-            event = Event.objects.create(
-                owner=user,
-                organization=organization,
-                **data
-            )
+            event = Event.objects.create(owner=user, organization=organization, **data)
 
             # Create custom fields
             for position, field_data in enumerate(custom_fields_data):
                 field_data['position'] = position
                 EventCustomField.objects.create(event=event, **field_data)
-            
+
             # Set speakers
             if speakers_data:
                 event.speakers.set(speakers_data)

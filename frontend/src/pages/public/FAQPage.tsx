@@ -126,11 +126,11 @@ const faqCategories = [
         questions: [
             {
                 q: "What are organizations?",
-                a: "Organizations allow you to manage events as a team. You can invite team members, assign roles (Owner, Admin, Manager, Member), and share resources like certificate templates across your organization."
+                a: "Organizations allow you to manage events and courses as a team. You can invite team members, assign roles (Admin, Organizer, Course Manager, Instructor), and share resources like certificate templates across your organization."
             },
             {
                 q: "What roles are available?",
-                a: "There are four roles: Owner (full control, billing), Admin (manage events and team), Manager (manage assigned events), and Member (view-only access). Each role has appropriate permissions for their responsibilities."
+                a: "There are four roles: Admin (org settings, members, templates), Organizer (events and contacts), Course Manager (courses and instructors), and Instructor (assigned courses). Each role has permissions tailored to their responsibilities."
             },
             {
                 q: "Can I have multiple organizations?",

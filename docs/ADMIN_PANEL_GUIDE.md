@@ -1,6 +1,8 @@
 # Django Admin Panel - Pricing Management Guide
 
-**Last Updated**: 2025-12-29
+**Last Updated**: 2026-01-11
+
+**Note**: Trial periods are fully configurable per product. Examples in this guide use placeholder values - set your actual trial duration based on your business needs.
 
 ---
 
@@ -22,10 +24,10 @@ python manage.py migrate billing
 Django Admin → Billing → Stripe Products
 
 ### List View Shows:
-- Name (e.g., "CPD Events - Professional")
-- Plan (professional, organization, etc.)
-- Trial period days (e.g., 90)
-- **Show contact sales** ✓/✗ (NEW!)
+- Name (e.g., "CPD Events - Organizer")
+- Plan (organizer, lms, organization)
+- Trial period days (configurable per product)
+- **Show contact sales** ✓/✗
 - Is active ✓/✗
 - Stripe product ID
 - Created at
@@ -35,7 +37,7 @@ Django Admin → Billing → Stripe Products
 #### 1. **Product Details**
 - **Name**: Product name (shown to customers)
 - **Description**: Product description
-- **Plan**: Which subscription plan (Professional, Organization, etc.)
+- **Plan**: Which subscription plan (Organizer, LMS, Organization)
 - **Is active**: ✓ Active products appear on pricing page
 
 #### 2. **Pricing Display** (NEW!)
@@ -47,7 +49,6 @@ Django Admin → Billing → Stripe Products
 
 #### 3. **Trial Configuration**
 - **Trial period days**: e.g., 90
-  - Leave blank = use global default (14 days)
   - Set value = custom trial for this product
 
 #### 4. **Feature Limits** (NEW!)
@@ -60,6 +61,11 @@ Fields:
   - Empty/null = Unlimited
   - Example: 30
   - Shown on pricing page as "30 events per month"
+
+- **Courses per month**:
+  - Empty/null = Unlimited
+  - Example: 30
+  - Shown as "30 courses per month"
 
 - **Certificates per month**:
   - Empty/null = Unlimited
@@ -81,12 +87,12 @@ Fields:
 
 ## Current Setup After Migration
 
-### Professional Plan
+### Organizer Plan
 After migration, you should see:
 
-**Name**: CPD Events - Professional
-**Plan**: Professional
-**Trial period days**: 90
+**Name**: CPD Events - Organizer
+**Plan**: Organizer
+**Trial period days**: (configurable, e.g., 30, 90, or custom)
 **Show contact sales**: ☐ (unchecked)
 
 **Feature Limits**:
@@ -99,44 +105,64 @@ After migration, you should see:
 - "500 attendees per event"
 - "500 certificates/month"
 - "Zoom integration"
-- "Advanced analytics"
 - "Custom certificate templates"
 - "Priority email support"
-- "90-day free trial"
+- Trial period (configurable, e.g., "30-day free trial" or "90-day free trial")
+
+### LMS Plan
+After migration, you should see:
+
+**Name**: CPD Events - LMS
+**Plan**: LMS
+**Trial period days**: (configurable, e.g., 30, 90, or custom)
+**Show contact sales**: ☐ (unchecked)
+
+**Feature Limits**:
+- Courses per month: **30**
+- Certificates per month: **500**
+
+**Features shown on pricing page**:
+- "30 courses per month"
+- "500 certificates/month"
+- "Self-paced course builder"
+- "Course certificates"
+- "Learner progress tracking"
+- Trial period (configurable per product)
 
 ### Organization Plan
 After migration, you should see:
 
 **Name**: CPD Events - Organization
 **Plan**: Organization
-**Trial period days**: 90
+**Trial period days**: (configurable, e.g., 30, 90, or custom)
 **Show contact sales**: ☐ (unchecked)
 
 **Feature Limits**:
 - Events per month: **(blank - unlimited)**
+- Courses per month: **(blank - unlimited)**
 - Certificates per month: **(blank - unlimited)**
 - Max attendees per event: **2000**
 
 **Features shown on pricing page**:
 - "Unlimited events"
+- "Unlimited courses"
 - "2,000 attendees per event"
 - "Unlimited certificates"
 - "Multi-user team access"
-- "Advanced analytics & reporting"
 - "White-label options"
 - "API access"
 - "Priority support"
 - "Team collaboration"
 - "Shared templates"
 - "Dedicated account manager"
-- "90-day free trial"
+- Trial period (configurable per product)
 
 ---
 
 ## How to Use These Features
 
 ### Example 1: Change Event Limit
-1. Django Admin → Stripe Products → "CPD Events - Professional"
+1. Django Admin → Stripe Products → "CPD Events - Organizer"
 2. Scroll to "Feature Limits"
 3. Change "Events per month" from **30** to **50**
 4. Click **Save**
@@ -156,33 +182,14 @@ After migration, you should see:
    - Features still displayed
    - Good for custom/enterprise plans
 
-### Example 3: Add Enterprise Plan
-1. Django Admin → Stripe Products → **Add Stripe Product**
-2. Fill in:
-   - Name: "CPD Events - Enterprise"
-   - Description: "Custom enterprise solution for large teams"
-   - Plan: "organization" (or add new choice to model)
-   - Is active: ✓
-   - **Show contact sales**: ✓
-   - Trial period days: (blank or 0)
-   - Events per month: (blank = unlimited)
-   - Certificates per month: (blank = unlimited)
-   - Max attendees per event: (blank = unlimited)
-3. Click **Save**
-4. Create prices if needed (optional if using Contact Sales)
-5. Result:
-   - Shows on pricing page with "Custom Pricing"
-   - "Contact Sales" button
-   - All features listed
-
-### Example 4: Extend Trial Period
+### Example 3: Customize Trial Period
 1. Django Admin → Stripe Products → Select product
 2. Scroll to "Trial Configuration"
-3. Change "Trial period days" from **90** to **180**
+3. Set "Trial period days" to your desired value (e.g., **30**, **90**, or **180**)
 4. Click **Save**
 5. Result:
-   - New signups get 180-day trial
-   - Pricing page shows "180-day free trial"
+   - New signups get the configured trial period
+   - Pricing page shows "{N}-day free trial"
    - Existing subscriptions unchanged
 
 ---
@@ -220,7 +227,7 @@ python manage.py migrate billing
 3. Verify in Django shell:
 ```python
 from billing.models import StripeProduct
-p = StripeProduct.objects.get(plan='professional')
+p = StripeProduct.objects.get(plan='organizer')
 print(p.get_feature_limits())
 print(p.get_features_list())
 ```

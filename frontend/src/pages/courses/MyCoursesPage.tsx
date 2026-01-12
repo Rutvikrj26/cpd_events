@@ -46,7 +46,7 @@ export const MyCoursesPage = () => {
                         Continue learning where you left off.
                     </p>
                 </div>
-                <Button onClick={() => navigate('/events/browse')}>Browse Catalog</Button>
+                <Button onClick={() => navigate('/courses')}>Browse Catalog</Button>
             </div>
 
             {enrollments.length === 0 ? (
@@ -54,7 +54,7 @@ export const MyCoursesPage = () => {
                     <BookOpen className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
                     <h3 className="text-lg font-medium mb-2">No courses yet</h3>
                     <p className="text-muted-foreground mb-6">You haven't enrolled in any courses yet.</p>
-                    <Button onClick={() => navigate('/events/browse')}>Browse Courses</Button>
+                    <Button onClick={() => navigate('/courses')}>Browse Courses</Button>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -95,13 +95,23 @@ export const MyCoursesPage = () => {
                                     </div>
                                 </div>
                             </CardContent>
-                            <CardFooter className="pt-0">
-                                <Button className="w-full" asChild>
-                                    <Link to={`/courses/${enrollment.course?.slug}`}>
-                                        {enrollment.status === 'completed' ? 'Review Course' : 'Continue Learning'}
+                            <CardFooter className="pt-0 flex gap-2">
+                                <Button className="flex-1" asChild>
+                                    <Link to={`/learn/${enrollment.course?.uuid}`}>
+                                        {enrollment.status === 'completed' ? 'Review' : 'Continue'}
                                         <ArrowRight className="ml-2 h-4 w-4" />
                                     </Link>
                                 </Button>
+                                {enrollment.certificate_issued && (
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={() => window.open(`/certificates`, '_blank')}
+                                        title="View Certificate"
+                                    >
+                                        <Award className="h-4 w-4" />
+                                    </Button>
+                                )}
                             </CardFooter>
                         </Card>
                     ))}

@@ -34,20 +34,13 @@ interface OrganizationContextType {
     hasRole: (minRole: OrganizationRole) => boolean;
     canManageMembers: () => boolean;
     canCreateContent: () => boolean;
-    isOwner: () => boolean;
     isAdmin: () => boolean;
     isManager: () => boolean;
 }
 
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
 
-// Role hierarchy for permission checks
-const ROLE_HIERARCHY: Record<OrganizationRole, number> = {
-    owner: 4,
-    admin: 3,
-    manager: 2,
-    member: 1,
-};
+// ...
 
 const LOCAL_STORAGE_KEY = 'current_org_slug';
 
@@ -153,17 +146,27 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
         return currentOrg?.user_role || null;
     };
 
-    const hasRole = (minRole: OrganizationRole): boolean => {
+    const hasRole = (role: OrganizationRole): boolean => {
         const userRole = getUserRole();
         if (!userRole) return false;
-        return ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[minRole];
+        return userRole === role;
     };
 
-    const canManageMembers = (): boolean => hasRole('admin');
-    const canCreateContent = (): boolean => hasRole('manager');
-    const isOwner = (): boolean => hasRole('owner');
-    const isAdmin = (): boolean => hasRole('admin');
-    const isManager = (): boolean => hasRole('manager');
+    const canManageMembers = (): boolean => {
+        const role = getUserRole();
+        return role === 'admin' || role === 'course_manager';
+    };
+
+    const canCreateContent = (): boolean => {
+        const role = getUserRole();
+        return role === 'admin' || role === 'organizer' || role === 'course_manager';
+    };
+
+    const isAdmin = (): boolean => getUserRole() === 'admin';
+    const isManager = (): boolean => {
+        const role = getUserRole();
+        return role === 'admin' || role === 'course_manager';
+    };
 
     return (
         <OrganizationContext.Provider
@@ -179,7 +182,6 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
                 hasRole,
                 canManageMembers,
                 canCreateContent,
-                isOwner,
                 isAdmin,
                 isManager,
             }}

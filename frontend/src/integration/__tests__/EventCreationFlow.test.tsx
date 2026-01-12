@@ -5,11 +5,17 @@ import App from "@/App";
 import * as accountsApi from "@/api/accounts";
 import * as eventsApi from "@/api/events";
 import * as manifestApi from "@/api/auth/manifest";
+import * as billingApi from "@/api/billing";
+import * as organizationsApi from "@/api/organizations";
+import * as payoutsApi from "@/api/payouts";
 
 // Mock API modules
 vi.mock("@/api/accounts");
 vi.mock("@/api/events");
 vi.mock("@/api/auth/manifest");
+vi.mock("@/api/billing");
+vi.mock("@/api/organizations");
+vi.mock("@/api/payouts");
 vi.mock("@/lib/auth");
 
 // Mock ScrollToTop
@@ -56,7 +62,7 @@ vi.mock("@/components/ui/select", () => ({
             </select>
         </div>
     ),
-    SelectTrigger: ({ children }: any) => <div>{children}</div>,
+    SelectTrigger: () => null,
     SelectValue: () => null,
     SelectContent: ({ children }: any) => <>{children}</>,
     SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
@@ -116,6 +122,14 @@ describe("Integration: Event Creation Flow", () => {
         (manifestApi.getManifest as any).mockResolvedValue({
             routes: ["dashboard", "events", "profile"],
             features: {},
+        });
+
+        (billingApi.getSubscription as any).mockResolvedValue(null);
+        (organizationsApi.getMyInvitations as any).mockResolvedValue([]);
+        (payoutsApi.getPayoutsStatus as any).mockResolvedValue({
+            connected: true,
+            status: "active",
+            charges_enabled: true,
         });
     });
 

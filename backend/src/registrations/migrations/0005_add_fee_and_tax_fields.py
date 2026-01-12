@@ -16,12 +16,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='registration',
             name='processing_fee_amount',
-            field=models.DecimalField(decimal_places=2, default=0, help_text='Payment processing fee charged to attendee', max_digits=10),
+            field=models.DecimalField(
+                decimal_places=2, default=0, help_text='Payment processing fee charged to attendee', max_digits=10
+            ),
         ),
         migrations.AddField(
             model_name='registration',
             name='tax_amount',
-            field=models.DecimalField(decimal_places=2, default=0, help_text='Tax amount charged on ticket and service fee', max_digits=10),
+            field=models.DecimalField(
+                decimal_places=2, default=0, help_text='Tax amount charged on ticket and service fee', max_digits=10
+            ),
         ),
         migrations.AddField(
             model_name='registration',

@@ -74,7 +74,7 @@ class ZoomService:
         logger.error(f"DEBUG ZOOM CONFIG CHECK: configured={self.is_configured}")
         logger.error(f"DEBUG CLIENT_ID: '{self.client_id}' (Type: {type(self.client_id)})")
         logger.error(f"DEBUG REDIRECT_URI: '{self.redirect_uri}' (Type: {type(self.redirect_uri)})")
-        
+
         if not self.is_configured:
             return {'success': False, 'error': 'Zoom is not configured'}
 
@@ -334,9 +334,7 @@ class ZoomService:
                 'Content-Type': 'application/json',
             }
 
-            response = requests.post(
-                f"{self.API_URL}/users/me/meetings", headers=headers, json=payload, timeout=30
-            )
+            response = requests.post(f"{self.API_URL}/users/me/meetings", headers=headers, json=payload, timeout=30)
 
             if response.status_code != 201:
                 logger.error(f"Zoom meeting creation failed: {response.text}")
@@ -379,13 +377,7 @@ class ZoomService:
             logger.error(f"Create meeting failed: {e}")
             return {'success': False, 'error': str(e)}
 
-    def add_meeting_registrant(
-        self,
-        event,
-        email: str,
-        first_name: str,
-        last_name: str
-    ) -> dict[str, Any]:
+    def add_meeting_registrant(self, event, email: str, first_name: str, last_name: str) -> dict[str, Any]:
         """
         Add a registrant to a Zoom meeting.
 
@@ -428,16 +420,11 @@ class ZoomService:
             }
 
             response = requests.post(
-                f"{self.API_URL}/meetings/{event.zoom_meeting_id}/registrants",
-                headers=headers,
-                json=payload,
-                timeout=30
+                f"{self.API_URL}/meetings/{event.zoom_meeting_id}/registrants", headers=headers, json=payload, timeout=30
             )
 
             if response.status_code not in [201, 200]:
-                logger.error(
-                    f"Zoom add registrant failed: {response.status_code} - {response.text}"
-                )
+                logger.error(f"Zoom add registrant failed: {response.status_code} - {response.text}")
                 return {'success': False, 'error': f"Zoom API error: {response.status_code}"}
 
             data = response.json()
@@ -456,6 +443,7 @@ class ZoomService:
         except Exception as e:
             logger.error(f"Add meeting registrant failed: {e}")
             return {'success': False, 'error': str(e)}
+
 
 # Singleton instance
 zoom_service = ZoomService()

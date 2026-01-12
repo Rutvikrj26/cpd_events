@@ -66,11 +66,7 @@ export function ListSelector({
                                         Shared
                                     </Badge>
                                 )}
-                                {list.is_default && (
-                                    <Badge variant="secondary" className="text-xs px-1 py-0">
-                                        Default
-                                    </Badge>
-                                )}
+
                             </div>
                         </SelectItem>
                     ))}

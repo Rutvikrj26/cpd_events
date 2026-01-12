@@ -30,6 +30,36 @@ class IsOrganizer(permissions.BasePermission):
         return request.user.is_authenticated and request.user.account_type == 'organizer'
 
 
+class IsOrganizerOrOrgAdmin(permissions.BasePermission):
+    """Organizers or organization admins/organizers."""
+
+    message = "Organizer or organization admin required."
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        if request.user.account_type == 'organizer':
+            return True
+        from organizations.models import OrganizationMembership
+
+        return OrganizationMembership.objects.filter(
+            user=request.user,
+            is_active=True,
+            role__in=['admin', 'organizer'],
+        ).exists()
+
+
+class IsOrganizerOrCourseManager(permissions.BasePermission):
+    """Organizers or course managers."""
+
+    message = "Organizer or course manager account required."
+
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.account_type in ['organizer', 'course_manager']
+
+
 class IsOrganizerOrReadOnly(permissions.BasePermission):
     """Organizers can write, everyone can read."""
 

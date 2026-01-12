@@ -1,161 +1,258 @@
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import patch, MagicMock
 from django.urls import reverse
 from rest_framework import status
-from organizations.models import Organization, OrganizationSubscription, OrganizationMembership
-from common.config.billing import OrganizationPlanLimits
+
+from organizations.models import OrganizationMembership
+
 
 @pytest.mark.django_db
 class TestOrganizationSeatManagement:
 
-    @pytest.fixture
-    def subscription(self, organization):
-        """Create a subscription for the organization."""
-        return OrganizationSubscription.objects.create(
-            organization=organization,
-            plan=OrganizationSubscription.Plan.ORGANIZATION, # Paid plan (Consolidated Organization)
-            included_seats=1,
-            # active_organizer_seats is a property or denormalized field, but we should rely on memberships for logic tests
-            stripe_subscription_id='sub_123'
-        )
+    @patch('billing.services.stripe_service.update_subscription_quantity')
+    def test_auto_provisioning_on_invite(self, mock_update_stripe, api_client, organization, organizer):
+        """Test that inviting a member auto-provisions a seat."""
 
-    def test_plan_limits_configuration(self):
-        """Verify the consolidated ORGANIZATION plan limits."""
-        limits = OrganizationPlanLimits.ORGANIZATION
-        assert limits['name'] == 'Organization'
-        assert limits['included_seats'] == 1
-        assert limits['seat_price_cents'] == 12900
-        assert limits['max_attendees_per_event'] is None
+        # Setup: Organization has 1 included seat (Admin), 0 additional.
+        subscription = organization.subscription
+        subscription.stripe_subscription_id = 'sub_123'
+        subscription.save()
 
-    def test_invite_member_seat_limit_reached(self, api_client, organization, subscription, organizer):
-        """Test that inviting a member when seats are full returns 402 with buying options."""
-        # Setup: Organization has 1 included seat, 0 additional.
-        # Organizer is OWNER (occupies 1 seat).
-        # active_organizer_seats is 1. total_seats is 1.
-        # So available_seats is 0.
-        
-        # Authenticate as owner
-        api_client.force_authenticate(user=organizer)
-        
+        # Ensure admin membership exists (free, but has permissions)
+        admin_membership = organization.memberships.get(user=organizer)
+        admin_membership.role = OrganizationMembership.Role.ADMIN
+        admin_membership.save()
+
+        # Create a dummy billable member (Organizer) to consume the included seat
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
         dummy_user = User.objects.create_user(email='dummy@example.com', password='password')
-        
-        # Create a dummy organizer to consume the included seat
         OrganizationMembership.objects.create(
-            organization=organization,
-            user=dummy_user,
-            role='organizer',
-            organizer_billing_payer='organization',
-            is_active=True
+            organization=organization, user=dummy_user, role=OrganizationMembership.Role.ORGANIZER, is_active=True
         )
 
-        # Create user to be invited
-        User.objects.create_user(email='newinvite@example.com', password='password')
+        api_client.force_authenticate(user=organizer)
+        mock_update_stripe.return_value = {'success': True}
+
+        url = reverse('organizations:organization-invite-member', kwargs={'pk': organization.uuid})
+
+        # Create user beforehand
+        User.objects.create_user(email='new_member@example.com', password='password')
+
+        data = {'email': 'new_member@example.com', 'role': 'organizer', 'billing_payer': 'organization'}
+
+        response = api_client.post(url, data)
+        assert response.status_code == status.HTTP_201_CREATED
+
+        # Check seat count
+        subscription.refresh_from_db()
+        assert subscription.additional_seats == 1  # 1 admin + 1 new = 2 total. 1 included. 1 additional.
+
+        # Verify Stripe call
+        # total = included(1) + additional(1) = 2
+        mock_update_stripe.assert_called_with('sub_123', quantity=2)
+
+    @patch('billing.services.stripe_service.update_subscription_quantity')
+    def test_invite_new_user_auto_provisions_seat(self, mock_update_stripe, api_client, organization, organizer):
+        """Test that inviting a NEW user (no account) auto-provisions a seat."""
+        subscription = organization.subscription
+        subscription.stripe_subscription_id = 'sub_123'
+        subscription.save()
+
+        # Ensure admin membership exists (free, but has permissions)
+        admin_membership = organization.memberships.get(user=organizer)
+        admin_membership.role = OrganizationMembership.Role.ADMIN
+        admin_membership.save()
+
+        # Create a dummy billable member (Organizer) to consume the included seat
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        dummy_user = User.objects.create_user(email='dummy_new@example.com', password='password')
+        OrganizationMembership.objects.create(
+            organization=organization, user=dummy_user, role=OrganizationMembership.Role.ORGANIZER, is_active=True
+        )
+
+        api_client.force_authenticate(user=organizer)
+        mock_update_stripe.return_value = {'success': True}
 
         url = reverse('organizations:organization-invite-member', kwargs={'pk': organization.uuid})
         data = {
-            'email': 'newinvite@example.com',
+            'email': 'brand_new_user@example.com',  # No user created in DB
             'role': 'organizer',
-            'billing_payer': 'organization'
+            'billing_payer': 'organization',
         }
 
         response = api_client.post(url, data)
+        assert response.status_code == status.HTTP_201_CREATED
 
-        assert response.status_code == status.HTTP_402_PAYMENT_REQUIRED
-        error_data = response.json()['error']
-        assert error_data['code'] == 'SEAT_LIMIT_REACHED'
-        assert error_data['details']['seat_price_cents'] == 12900
-        assert error_data['details']['action'] == 'buy_seat'
+        # Check membership created with user=None
+        membership = OrganizationMembership.objects.get(invitation_email='brand_new_user@example.com')
+        assert membership.user is None
+        assert not membership.is_active
 
-    @patch('billing.services.stripe_service.update_subscription_quantity')
-    def test_add_seats_success(self, mock_update_stripe, api_client, organization, subscription, organizer):
-        """Test adding seats successfully."""
-        api_client.force_authenticate(user=organizer)
-        
-        mock_update_stripe.return_value = {'success': True}
-        
-        url = reverse('organizations:organization-add-seats', kwargs={'pk': organization.uuid})
-        data = {'seats': 2}
-        
-        response = api_client.post(url, data)
-        
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data['total_seats'] == 3 # 1 included + 2 additional
-        assert response.data['additional_seats'] == 2
-        
-        # Verify local DB update
+        # Check seat count
         subscription.refresh_from_db()
-        assert subscription.additional_seats == 2
-        
-        # Verify Stripe call
-        mock_update_stripe.assert_called_with('sub_123', quantity=3)
-
-    @patch('billing.services.stripe_service.update_subscription_quantity')
-    def test_remove_seats_success(self, mock_update_stripe, api_client, organization, subscription, organizer):
-        """Test removing unused seats successfully."""
-        # Setup: Buy 2 extra seats first
-        subscription.additional_seats = 2
-        subscription.save()
-        # active=1 (owner), total=3 (1+2). available=2.
-        
-        api_client.force_authenticate(user=organizer)
-        
-        mock_update_stripe.return_value = {'success': True}
-        
-        url = reverse('organizations:organization-remove-seats', kwargs={'pk': organization.uuid})
-        data = {'seats': 1}
-        
-        response = api_client.post(url, data)
-        
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data['total_seats'] == 2 # 1 included + 1 additional
-        
-        subscription.refresh_from_db()
+        # Admin (1 - FREE) + Dummy (1 - BILLABLE) + Pending (1 - BILLABLE) = 2 Billable Total
+        # Included = 1. Additional = 1.
+        assert subscription.org_paid_organizers_count == 2
         assert subscription.additional_seats == 1
-        
+
+        # Verify Stripe call
         mock_update_stripe.assert_called_with('sub_123', quantity=2)
 
-    def test_remove_seats_failure_occupied(self, api_client, organization, subscription, organizer):
-        """Test failing to remove seats that are currently occupied."""
-        # Setup: 0 extra seats. active=1. total=1. available=0.
-        # User tries to remove 1 (which would be the base seat? No endpoint logic handles additional only)
-        # But let's say they have 1 additional seat, and 2 active users.
-        
-        subscription.additional_seats = 1
-        subscription.save()
-        # Create another admin to occupy the seat
-        other_user = MagicMock() # We need a real user for membership FK...
-        # Let's just mock active_organizer_seats on the model for simplicity if possible, 
-        # but update_seat_usage might overwrite it.
-        # Best to just rely on the fact that we have 1 active (owner) and 1 included + 1 additional = 2 total.
-        # available = 1.
-        # Try to remove 2 seats.
-        
-        api_client.force_authenticate(user=organizer)
-        
-        url = reverse('organizations:organization-remove-seats', kwargs={'pk': organization.uuid})
-        data = {'seats': 2} # Attempt to remove 2, but only 1 is available (technically 1 is unused)
-        
-        response = api_client.post(url, data)
-        
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'Cannot remove 2 seats' in response.data['detail']
+        # Verify list endpoint returns user_email for pending member
+        list_url = reverse('organizations:organization-members', kwargs={'pk': organization.uuid})
+        list_response = api_client.get(list_url)
+        assert list_response.status_code == status.HTTP_200_OK
+        # Find the pending member
+        pending = next(m for m in list_response.data if m['user_email'] == 'brand_new_user@example.com')
+        assert pending['user_email'] == 'brand_new_user@example.com'
+        assert pending['user_name'] is None
 
     @patch('billing.services.stripe_service.update_subscription_quantity')
-    def test_stripe_failure_rollback(self, mock_update_stripe, api_client, organization, subscription, organizer):
-        """Test that local DB is not updated if Stripe call fails."""
-        api_client.force_authenticate(user=organizer)
-        
-        mock_update_stripe.return_value = {'success': False, 'error': 'Stripe Error'}
-        
-        url = reverse('organizations:organization-add-seats', kwargs={'pk': organization.uuid})
-        data = {'seats': 1}
-        
-        response = api_client.post(url, data)
-        
-        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        
+    def test_auto_deprovisioning_on_remove(self, mock_update_stripe, api_client, organization, organizer):
+        """Test that removing an organizer automatically releases the seat (removes additional)."""
+        # Setup: 2 organizers (1 admin + 1 extra). 1 additional seat. active=2.
+        subscription = organization.subscription
+        subscription.stripe_subscription_id = 'sub_123'
+        subscription.additional_seats = 1
+        subscription.save()
+
+        # Ensure admin membership exists (free, but has permissions)
+        admin_membership = organization.memberships.get(user=organizer)
+        admin_membership.role = OrganizationMembership.Role.ADMIN
+        admin_membership.save()
+
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+
+        # User 1: Dummy Organizer (Billable)
+        dummy_user = User.objects.create_user(email='dummy_remove@example.com', password='password')
+        OrganizationMembership.objects.create(
+            organization=organization, user=dummy_user, role=OrganizationMembership.Role.ORGANIZER, is_active=True
+        )
+
+        # User 2: The one we will remove (Billable)
+        user2 = User.objects.create_user(email='user2@example.com', password='password')
+
+        m = OrganizationMembership.objects.create(
+            organization=organization, user=user2, role='organizer', organizer_billing_payer='organization', is_active=True
+        )
+
+        # Verify setup
+        organization.update_counts()  # ensure counts are fresh
         subscription.refresh_from_db()
+        assert subscription.org_paid_organizers_count == 2
+        assert subscription.additional_seats == 1
+
+        # Now remove user2
+        api_client.force_authenticate(user=organizer)
+        mock_update_stripe.return_value = {'success': True}
+
+        # Using API to remove member
+        # Note: 'remove_member' action url is .../members/{uuid}/remove
+        url = reverse('organizations:organization-remove-member', kwargs={'pk': organization.uuid, 'member_uuid': m.uuid})
+        # Wait, the action url_path is 'members/(?P<member_uuid>[^/.]+)/remove'
+        # verify URL: organizations/{pk}/members/{member_uuid}/remove/
+
+        response = api_client.delete(url)
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+        # Verify local DB update
+        subscription.refresh_from_db()
+        assert subscription.org_paid_organizers_count == 1
         assert subscription.additional_seats == 0
+
+        # Verify Stripe call
+        # total = included(1) + additional(0) = 1
+        mock_update_stripe.assert_called_with('sub_123', quantity=1)
+
+    @patch('billing.services.stripe_service.update_subscription_quantity')
+    def test_admin_plus_pending_organizer_count(self, mock_update_stripe, api_client, organization, organizer):
+        """
+        Test the user's scenario: 1 active Admin + 1 pending Organizer.
+        Should result in 2 org-paid seats and 1 additional seat.
+        """
+        subscription = organization.subscription
+        subscription.stripe_subscription_id = 'sub_123'
+        subscription.save()
+
+        # 1. The 'organizer' (creator) is already a member, likely an admin.
+        # Let's ensure they are an 'admin' (FREE).
+        membership = OrganizationMembership.objects.get(organization=organization, user=organizer)
+        membership.role = OrganizationMembership.Role.ADMIN
+        membership.is_active = True
+        membership.organizer_billing_payer = None
+        membership.save()
+
+        # Create a dummy billable member (Organizer) to consume the included seat
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        dummy_user = User.objects.create_user(email='dummy_pending@example.com', password='password')
+        OrganizationMembership.objects.create(
+            organization=organization, user=dummy_user, role=OrganizationMembership.Role.ORGANIZER, is_active=True
+        )
+
+        api_client.force_authenticate(user=organizer)
+        mock_update_stripe.return_value = {'success': True}
+
+        # 2. Invite a pending organizer
+        url = reverse('organizations:organization-invite-member', kwargs={'pk': organization.uuid})
+        data = {'email': 'pending_org@example.com', 'role': 'organizer', 'billing_payer': 'organization'}
+
+        response = api_client.post(url, data)
+        assert response.status_code == status.HTTP_201_CREATED
+
+        # 3. Verify total seats
+        subscription.refresh_from_db()
+        # Admin (1 - FREE) + Dummy Organizer (1 - BILLABLE) + Pending Organizer (1 - BILLABLE) = 2 Billable Total
+        # Included = 1. Additional = 1.
+        assert subscription.org_paid_organizers_count == 2
+        assert subscription.additional_seats == 1
+
+        # Verify Stripe call
+        mock_update_stripe.assert_called_with('sub_123', quantity=2)
+
+    def test_invite_course_manager_requires_available_seat(self, api_client, organization, organizer):
+        """Course manager invites should respect org-paid seat limits."""
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+
+        subscription = organization.subscription
+        subscription.included_seats = 1
+        subscription.additional_seats = 0
+        subscription.save(update_fields=['included_seats', 'additional_seats', 'updated_at'])
+
+        # Ensure admin membership exists (free, but has permissions)
+        admin_membership = organization.memberships.get(user=organizer)
+        admin_membership.role = OrganizationMembership.Role.ADMIN
+        admin_membership.save()
+
+        # Consume the single included seat with an org-paid organizer
+        dummy_user = User.objects.create_user(email='seat_owner@example.com', password='password')
+        OrganizationMembership.objects.create(
+            organization=organization,
+            user=dummy_user,
+            role=OrganizationMembership.Role.ORGANIZER,
+            organizer_billing_payer='organization',
+            is_active=True,
+        )
+
+        api_client.force_authenticate(user=organizer)
+
+        url = reverse('organizations:organization-invite-member', kwargs={'pk': organization.uuid})
+        data = {
+            'email': 'course_manager@example.com',
+            'role': 'course_manager',
+        }
+
+        response = api_client.post(url, data)
+        assert response.status_code == status.HTTP_402_PAYMENT_REQUIRED
+        assert response.data['error']['code'] == 'SEAT_LIMIT_REACHED'

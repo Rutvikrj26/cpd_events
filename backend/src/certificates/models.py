@@ -106,8 +106,7 @@ class CertificateTemplate(SoftDeleteModel):
     is_default = models.BooleanField(default=False, help_text="Default template for new events")
     is_active = models.BooleanField(default=True, help_text="Available for selection (not archived)")
     is_shared = models.BooleanField(
-        default=False,
-        help_text="If True, this org template is available to all org members for their events"
+        default=False, help_text="If True, this org template is available to all org members for their events"
     )
 
     # =========================================
@@ -443,13 +442,21 @@ class Certificate(SoftDeleteModel):
                 'attendee_name': user.display_name,
                 'attendee_email': user.email,
                 # 'attendee_title': user.profile.professional_title, # Assuming profile exists or similar
-                'event_title': course.title, # Using event_title key for template compatibility
+                'event_title': course.title,  # Using event_title key for template compatibility
                 'course_title': course.title,
-                'event_date': enrollment.completed_at.date().isoformat() if enrollment.completed_at else timezone.now().date().isoformat(),
-                'completion_date': enrollment.completed_at.date().isoformat() if enrollment.completed_at else timezone.now().date().isoformat(),
+                'event_date': (
+                    enrollment.completed_at.date().isoformat() if enrollment.completed_at else timezone.now().date().isoformat()
+                ),
+                'completion_date': (
+                    enrollment.completed_at.date().isoformat() if enrollment.completed_at else timezone.now().date().isoformat()
+                ),
                 'cpd_type': course.cpd_type,
                 'cpd_credits': str(course.cpd_credits),
-                'organizer_name': course.organization.name, # Course is owned by org
+                'organizer_name': (
+                    course.organization.name
+                    if course.organization
+                    else (course.created_by.display_name if course.created_by else '')
+                ),
                 'issued_date': timezone.now().date().isoformat(),
                 'issued_datetime': timezone.now().isoformat(),
                 'type': 'course',

@@ -1,6 +1,6 @@
 export interface Subscription {
     uuid: string;
-    plan: 'attendee' | 'starter' | 'professional' | 'premium' | 'organizer' | 'organization';
+    plan: 'attendee' | 'organizer' | 'lms' | 'organization';
     plan_display: string;
     status: 'active' | 'trialing' | 'canceled' | 'past_due' | 'unpaid' | 'incomplete' | 'paused';
     status_display: string;
@@ -10,19 +10,26 @@ export interface Subscription {
     is_in_grace_period: boolean;
     is_access_blocked: boolean;
     can_create_events: boolean;
+    can_create_courses: boolean;
     days_until_trial_ends: number | null;
     subscription_status_display: string;
     limits: {
         events_per_month: number | null;
+        courses_per_month: number | null;
         certificates_per_month: number | null;
         max_attendees_per_event: number | null;
     };
+    billing_interval: 'month' | 'year';
+    pending_plan?: 'attendee' | 'organizer' | 'lms' | 'organization' | null;
+    pending_billing_interval?: 'month' | 'year' | null;
+    pending_change_at?: string | null;
     current_period_start: string | null;
     current_period_end: string | null;
     trial_ends_at: string | null;
     cancel_at_period_end: boolean;
     canceled_at: string | null;
     events_created_this_period: number;
+    courses_created_this_period: number;
     certificates_issued_this_period: number;
     stripe_subscription_id?: string | null;
     stripe_customer_id?: string | null;
@@ -80,6 +87,7 @@ export interface PricingProduct {
     features: string[];
     feature_limits: {
         events_per_month: number | null;
+        courses_per_month: number | null;
         certificates_per_month: number | null;
         max_attendees_per_event: number | null;
     };

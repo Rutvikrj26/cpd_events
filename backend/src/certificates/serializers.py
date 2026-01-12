@@ -2,7 +2,6 @@
 Certificates app serializers.
 """
 
-from django.utils import timezone
 from rest_framework import serializers
 
 from common.serializers import BaseModelSerializer, SoftDeleteModelSerializer
@@ -227,6 +226,7 @@ class CertificateDetailSerializer(SoftDeleteModelSerializer):
 
     def get_public_url(self, obj):
         from django.conf import settings
+
         return f"{settings.SITE_URL}/verify/{obj.short_code}"
 
     def get_last_viewed_at(self, obj):
@@ -361,7 +361,7 @@ class MyCertificateSerializer(SoftDeleteModelSerializer):
                 'title': obj.event.title,
                 'cpd_credits': str(obj.event.cpd_credit_value) if obj.event.cpd_credit_value else None,
                 'cpd_type': obj.event.cpd_credit_type,
-                'event_type': obj.event.event_type, # Ensure this exists on event model or helper
+                'event_type': obj.event.event_type,  # Ensure this exists on event model or helper
             }
         if obj.course_enrollment:
             return {
@@ -402,7 +402,5 @@ class MyCertificateSerializer(SoftDeleteModelSerializer):
             return True  # No feedback needed if no registration
 
         from feedback.models import EventFeedback
-        return EventFeedback.objects.filter(
-            event=obj.registration.event,
-            registration=obj.registration
-        ).exists()
+
+        return EventFeedback.objects.filter(event=obj.registration.event, registration=obj.registration).exists()

@@ -8,20 +8,20 @@ import hmac
 from django.conf import settings
 from django.utils import timezone
 from django_filters import rest_framework as filters
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema
 
 from common.permissions import IsOrganizer
 from common.rbac import roles
-from common.viewsets import ReadOnlyModelViewSet
 from common.utils import error_response
+from common.viewsets import ReadOnlyModelViewSet
 
 from . import serializers
-from .tasks import process_zoom_webhook
 from .models import EmailLog, RecordingView, ZoomRecording, ZoomRecordingFile, ZoomWebhookLog
+from .tasks import process_zoom_webhook
 
 # =============================================================================
 # Event Recordings ViewSet (C3)
@@ -238,8 +238,9 @@ class ZoomWebhookView(generics.GenericAPIView):
         event_ts = request.data.get('event_ts')
         if event_ts:
             import datetime
+
             # Zoom sends timestamp in milliseconds
-            event_timestamp = datetime.datetime.fromtimestamp(event_ts / 1000.0, tz=datetime.timezone.utc)
+            event_timestamp = datetime.datetime.fromtimestamp(event_ts / 1000.0, tz=datetime.UTC)
         else:
             event_timestamp = timezone.now()
 
@@ -345,7 +346,7 @@ class ZoomInitiateView(generics.GenericAPIView):
 
         if result.get('success'):
             return Response({'url': result.get('authorization_url')})
-        
+
         return error_response(result.get('error', 'Configuration error'), code='CONFIG_ERROR')
 
 
@@ -375,7 +376,7 @@ class ZoomCallbackView(generics.GenericAPIView):
 
         if result.get('success'):
             return Response({'status': 'connected'})
-        
+
         return error_response(result.get('error', 'Unknown error'), code='CONNECTION_FAILED')
 
 
@@ -390,10 +391,12 @@ class ZoomStatusView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response({
-            'is_connected': request.user.has_zoom_connected,
-            'zoom_email': request.user.zoom_connection.zoom_email if request.user.has_zoom_connected else None
-        })
+        return Response(
+            {
+                'is_connected': request.user.has_zoom_connected,
+                'zoom_email': request.user.zoom_connection.zoom_email if request.user.has_zoom_connected else None,
+            }
+        )
 
 
 @roles('organizer', 'admin', route_name='zoom_disconnect')
@@ -411,7 +414,7 @@ class ZoomDisconnectView(generics.GenericAPIView):
 
         if zoom_service.disconnect(request.user):
             return Response({'status': 'disconnected'})
-        
+
         return error_response('Failed to disconnect Zoom', code='DISCONNECT_FAILED')
 
 
@@ -467,4 +470,3 @@ class ZoomMeetingsListView(generics.ListAPIView):
         ]
         serializer = self.get_serializer(data, many=True)
         return Response(serializer.data)
-

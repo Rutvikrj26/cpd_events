@@ -9,7 +9,6 @@ Endpoints tested:
 import pytest
 from rest_framework import status
 
-
 # =============================================================================
 # Public Event List Tests
 # =============================================================================
@@ -45,6 +44,7 @@ class TestPublicEventListView:
     def test_cancelled_events_not_visible(self, api_client, organizer, db):
         """Cancelled events are not publicly visible."""
         from factories import EventFactory
+
         cancelled = EventFactory(owner=organizer, status='cancelled')
         response = api_client.get(self.endpoint)
         event_uuids = [e['uuid'] for e in response.data['results']]
@@ -53,6 +53,7 @@ class TestPublicEventListView:
     def test_filter_by_event_type(self, api_client, organizer, db):
         """Can filter events by type."""
         from factories import EventFactory
+
         webinar = EventFactory(owner=organizer, status='published', event_type='webinar')
         workshop = EventFactory(owner=organizer, status='published', event_type='workshop')
 
@@ -63,8 +64,9 @@ class TestPublicEventListView:
 
     def test_filter_by_date_range(self, api_client, published_event):
         """Can filter events by date range."""
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         future_date = (timezone.now() + timedelta(days=30)).date().isoformat()
         response = api_client.get(f'{self.endpoint}?starts_before={future_date}')
@@ -78,6 +80,7 @@ class TestPublicEventListView:
     def test_pagination(self, api_client, organizer, db):
         """Public event list is paginated."""
         from factories import EventFactory
+
         EventFactory.create_batch(15, owner=organizer, status='published')
         response = api_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
@@ -85,21 +88,23 @@ class TestPublicEventListView:
 
     def test_ordering_by_start_date(self, api_client, organizer, db):
         """Events are ordered by start date."""
-        from factories import EventFactory
-        from django.utils import timezone
         from datetime import timedelta
 
+        from django.utils import timezone
+
+        from factories import EventFactory
+
         event1 = EventFactory(
-            owner=organizer, 
+            owner=organizer,
             status='published',
             starts_at=timezone.now() + timedelta(days=10),
         )
         event2 = EventFactory(
-            owner=organizer, 
+            owner=organizer,
             status='published',
             starts_at=timezone.now() + timedelta(days=5),
         )
-        
+
         response = api_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
         # Default ordering should be by start date ascending
@@ -138,6 +143,7 @@ class TestPublicEventDetailView:
     def test_cancelled_event_not_accessible(self, api_client, organizer, db):
         """Cancelled events are not publicly accessible."""
         from factories import EventFactory
+
         cancelled = EventFactory(owner=organizer, status='cancelled')
         response = api_client.get(f'/api/v1/public/events/{cancelled.uuid}/')
         assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -145,6 +151,7 @@ class TestPublicEventDetailView:
     def test_nonexistent_event(self, api_client):
         """404 for non-existent event."""
         import uuid
+
         fake_uuid = uuid.uuid4()
         response = api_client.get(f'/api/v1/public/events/{fake_uuid}/')
         assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -190,7 +197,7 @@ class TestPublicEventWithSessions:
         # Publish the event first
         event_with_sessions.status = 'published'
         event_with_sessions.save()
-        
+
         response = api_client.get(f'/api/v1/public/events/{event_with_sessions.uuid}/')
         assert response.status_code == status.HTTP_200_OK
         # Sessions should be included if the event has them

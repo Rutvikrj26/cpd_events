@@ -4,7 +4,7 @@ Serializers for billing API.
 
 from rest_framework import serializers
 
-from .models import Invoice, PaymentMethod, Subscription, StripeProduct, StripePrice, RefundRecord, PayoutRequest
+from .models import Invoice, PaymentMethod, PayoutRequest, RefundRecord, StripePrice, StripeProduct, Subscription
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
@@ -15,12 +15,13 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     is_active = serializers.BooleanField(read_only=True)
     is_trialing = serializers.BooleanField(read_only=True)
     limits = serializers.DictField(read_only=True)
-    
+
     # Trial and access control fields
     is_trial_expired = serializers.BooleanField(read_only=True)
     is_in_grace_period = serializers.BooleanField(read_only=True)
     is_access_blocked = serializers.BooleanField(read_only=True)
     can_create_events = serializers.BooleanField(read_only=True)
+    can_create_courses = serializers.BooleanField(read_only=True)
     days_until_trial_ends = serializers.IntegerField(read_only=True)
     subscription_status_display = serializers.CharField(read_only=True)
     has_payment_method = serializers.SerializerMethodField()
@@ -43,16 +44,22 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'is_in_grace_period',
             'is_access_blocked',
             'can_create_events',
+            'can_create_courses',
             'days_until_trial_ends',
             'subscription_status_display',
             'has_payment_method',
             'limits',
+            'billing_interval',
+            'pending_plan',
+            'pending_billing_interval',
+            'pending_change_at',
             'current_period_start',
             'current_period_end',
             'trial_ends_at',
             'cancel_at_period_end',
             'canceled_at',
             'events_created_this_period',
+            'courses_created_this_period',
             'certificates_issued_this_period',
             'stripe_subscription_id',
             'stripe_customer_id',
@@ -94,6 +101,11 @@ class SubscriptionCreateSerializer(serializers.Serializer):
 
     plan = serializers.ChoiceField(choices=Subscription.Plan.choices)
     payment_method_id = serializers.CharField(required=False, allow_blank=True)
+    billing_interval = serializers.ChoiceField(
+        choices=Subscription.BillingInterval.choices,
+        required=False,
+        default=Subscription.BillingInterval.MONTH,
+    )
 
     def validate_plan(self, value):
         user = self.context['request'].user
@@ -107,12 +119,20 @@ class SubscriptionUpdateSerializer(serializers.Serializer):
 
     plan = serializers.ChoiceField(choices=Subscription.Plan.choices)
     immediate = serializers.BooleanField(default=True, required=False)
+    billing_interval = serializers.ChoiceField(
+        choices=Subscription.BillingInterval.choices,
+        required=False,
+        default=Subscription.BillingInterval.MONTH,
+    )
 
-    def validate_plan(self, value):
+    def validate(self, attrs):
         user = self.context['request'].user
-        if hasattr(user, 'subscription') and user.subscription.plan == value:
-            raise serializers.ValidationError("Already on this plan")
-        return value
+        if hasattr(user, 'subscription'):
+            plan = attrs.get('plan')
+            billing_interval = attrs.get('billing_interval', Subscription.BillingInterval.MONTH)
+            if user.subscription.plan == plan and user.subscription.billing_interval == billing_interval:
+                raise serializers.ValidationError("Already on this plan")
+        return attrs
 
 
 class InvoiceSerializer(serializers.ModelSerializer):
@@ -193,6 +213,11 @@ class CheckoutSessionSerializer(serializers.Serializer):
     plan = serializers.ChoiceField(choices=Subscription.Plan.choices)
     success_url = serializers.URLField()
     cancel_url = serializers.URLField()
+    billing_interval = serializers.ChoiceField(
+        choices=Subscription.BillingInterval.choices,
+        required=False,
+        default=Subscription.BillingInterval.MONTH,
+    )
 
 
 class BillingPortalSerializer(serializers.Serializer):
@@ -204,6 +229,7 @@ class BillingPortalSerializer(serializers.Serializer):
 # ==============================================================================
 # Public Pricing API Serializers
 # ==============================================================================
+
 
 class StripePricePublicSerializer(serializers.ModelSerializer):
     """Public serializer for Stripe prices (read-only for frontend)."""
@@ -260,7 +286,7 @@ class StripeProductPublicSerializer(serializers.ModelSerializer):
 
 class RefundRecordSerializer(serializers.ModelSerializer):
     """Refund record serializer."""
-    
+
     amount_display = serializers.CharField(read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     processed_by_email = serializers.EmailField(source='processed_by.email', read_only=True)
@@ -288,9 +314,29 @@ class RefundRecordSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class RefundRequestSerializer(serializers.Serializer):
+    """Serializer for refund request input."""
+
+    amount_cents = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1, help_text="Amount to refund in cents (omit for full refund)"
+    )
+    reason = serializers.ChoiceField(
+        choices=[
+            ('requested_by_customer', 'Requested by customer'),
+            ('duplicate', 'Duplicate payment'),
+            ('fraudulent', 'Fraudulent'),
+        ],
+        default='requested_by_customer',
+        help_text="Reason for refund",
+    )
+    description = serializers.CharField(
+        required=False, allow_blank=True, max_length=500, help_text="Optional description or notes"
+    )
+
+
 class PayoutRequestSerializer(serializers.ModelSerializer):
     """Payout request serializer."""
-    
+
     amount_display = serializers.CharField(read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
 
@@ -310,4 +356,3 @@ class PayoutRequestSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = fields
-

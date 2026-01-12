@@ -2,7 +2,6 @@
 Promo Code serializers.
 """
 
-from decimal import Decimal
 from rest_framework import serializers
 
 from .models import PromoCode, PromoCodeUsage
@@ -11,19 +10,11 @@ from .models import PromoCode, PromoCodeUsage
 class PromoCodeSerializer(serializers.ModelSerializer):
     """Full promo code serializer for organizers."""
 
-    discount_display = serializers.CharField(
-        source='get_discount_display',
-        read_only=True
-    )
+    discount_display = serializers.CharField(source='get_discount_display', read_only=True)
     uses_remaining = serializers.IntegerField(read_only=True)
     is_valid = serializers.BooleanField(read_only=True)
     is_expired = serializers.BooleanField(read_only=True)
-    event_uuids = serializers.ListField(
-        child=serializers.UUIDField(),
-        write_only=True,
-        required=False,
-        allow_empty=True
-    )
+    event_uuids = serializers.ListField(child=serializers.UUIDField(), write_only=True, required=False, allow_empty=True)
     events_data = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -32,6 +23,7 @@ class PromoCodeSerializer(serializers.ModelSerializer):
             'uuid',
             'code',
             'description',
+            'currency',
             'discount_type',
             'discount_value',
             'max_discount_amount',
@@ -56,10 +48,7 @@ class PromoCodeSerializer(serializers.ModelSerializer):
 
     def get_events_data(self, obj):
         """Return basic event info for linked events."""
-        return [
-            {'uuid': str(e.uuid), 'title': e.title}
-            for e in obj.events.all()
-        ]
+        return [{'uuid': str(e.uuid), 'title': e.title} for e in obj.events.all()]
 
     def validate_code(self, value):
         """Normalize code to uppercase."""
@@ -78,17 +67,13 @@ class PromoCodeSerializer(serializers.ModelSerializer):
 
         if discount_type == PromoCode.DiscountType.PERCENTAGE:
             if discount_value and discount_value > 100:
-                raise serializers.ValidationError({
-                    'discount_value': 'Percentage discount cannot exceed 100%.'
-                })
+                raise serializers.ValidationError({'discount_value': 'Percentage discount cannot exceed 100%.'})
 
         # Validate date range
         valid_from = data.get('valid_from')
         valid_until = data.get('valid_until')
         if valid_from and valid_until and valid_from >= valid_until:
-            raise serializers.ValidationError({
-                'valid_until': 'End date must be after start date.'
-            })
+            raise serializers.ValidationError({'valid_until': 'End date must be after start date.'})
 
         return data
 
@@ -97,19 +82,14 @@ class PromoCodeSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
 
         promo_code = PromoCode.objects.create(
-            owner=request.user,
-            organization=getattr(request.user, 'organization', None),
-            **validated_data
+            owner=request.user, organization=getattr(request.user, 'organization', None), **validated_data
         )
 
         # Link events
         if event_uuids:
             from events.models import Event
-            events = Event.objects.filter(
-                uuid__in=event_uuids,
-                owner=request.user,
-                deleted_at__isnull=True
-            )
+
+            events = Event.objects.filter(uuid__in=event_uuids, owner=request.user, deleted_at__isnull=True)
             promo_code.events.set(events)
 
         return promo_code
@@ -124,12 +104,9 @@ class PromoCodeSerializer(serializers.ModelSerializer):
         # Update events if provided
         if event_uuids is not None:
             from events.models import Event
+
             request = self.context.get('request')
-            events = Event.objects.filter(
-                uuid__in=event_uuids,
-                owner=request.user,
-                deleted_at__isnull=True
-            )
+            events = Event.objects.filter(uuid__in=event_uuids, owner=request.user, deleted_at__isnull=True)
             instance.events.set(events)
 
         return instance

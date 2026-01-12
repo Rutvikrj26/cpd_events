@@ -7,12 +7,12 @@ import logging
 from django.db.models import Q
 from django.utils import timezone
 from django_filters import rest_framework as filters
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema
 
 logger = logging.getLogger(__name__)
 
@@ -81,52 +81,42 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     def available_templates(self, request):
         """
         Get all templates available to the current user.
-        
+
         Returns:
         - User's own templates
         - Shared templates from organizations the user belongs to
-        
+
         User access logic:
         - Individual organizers: see only their own templates
         - Org members: see own templates + org shared templates
         """
         user = request.user
-        
+
         # Start with user's own templates
-        own_templates = CertificateTemplate.objects.filter(
-            owner=user,
-            is_active=True,
-            deleted_at__isnull=True
-        )
-        
+        own_templates = CertificateTemplate.objects.filter(owner=user, is_active=True, deleted_at__isnull=True)
+
         # Get shared templates from user's organizations
         from organizations.models import OrganizationMembership
-        
+
         # Find orgs where user is an active member
-        user_org_ids = OrganizationMembership.objects.filter(
-            user=user,
-            is_active=True
-        ).values_list('organization_id', flat=True)
-        
+        user_org_ids = OrganizationMembership.objects.filter(user=user, is_active=True).values_list(
+            'organization_id', flat=True
+        )
+
         # Get shared templates from those orgs (excluding user's own)
         org_shared_templates = CertificateTemplate.objects.filter(
-            organization_id__in=user_org_ids,
-            is_shared=True,
-            is_active=True,
-            deleted_at__isnull=True
+            organization_id__in=user_org_ids, is_shared=True, is_active=True, deleted_at__isnull=True
         ).exclude(owner=user)
-        
+
         # Combine and serialize
         all_templates = list(own_templates) + list(org_shared_templates)
-        
+
         # Add source info
         serializer = serializers.CertificateTemplateListSerializer(all_templates, many=True)
-        
-        return Response({
-            'own_count': own_templates.count(),
-            'shared_count': org_shared_templates.count(),
-            'templates': serializer.data
-        })
+
+        return Response(
+            {'own_count': own_templates.count(), 'shared_count': org_shared_templates.count(), 'templates': serializer.data}
+        )
 
     @swagger_auto_schema(
         operation_summary="Upload template PDF",
@@ -136,28 +126,32 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     def upload(self, request, uuid=None):
         """Upload PDF template file."""
         template = self.get_object()
-        
+
         file = request.FILES.get('file')
         if not file:
             return error_response('No file provided.', code='MISSING_FILE', status_code=status.HTTP_400_BAD_REQUEST)
-        
+
         # Validate file type
         if not file.name.lower().endswith('.pdf'):
-            return error_response('Only PDF files are allowed.', code='INVALID_FILE_TYPE', status_code=status.HTTP_400_BAD_REQUEST)
-        
+            return error_response(
+                'Only PDF files are allowed.', code='INVALID_FILE_TYPE', status_code=status.HTTP_400_BAD_REQUEST
+            )
+
         # Validate file size (max 10MB)
         if file.size > 10 * 1024 * 1024:
-            return error_response('File too large. Maximum size is 10MB.', code='FILE_TOO_LARGE', status_code=status.HTTP_400_BAD_REQUEST)
-        
+            return error_response(
+                'File too large. Maximum size is 10MB.', code='FILE_TOO_LARGE', status_code=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             from common.storage import gcs_storage
-            
+
             # Read file content
             content = file.read()
-            
+
             # Generate path
             path = f"certificate-templates/{template.uuid}/{file.name}"
-            
+
             # Upload to storage
             file_url = gcs_storage.upload(
                 content=content,
@@ -165,22 +159,26 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
                 content_type='application/pdf',
                 public=False,
             )
-            
+
             if not file_url:
-                return error_response('Failed to upload file.', code='UPLOAD_FAILED', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+                return error_response(
+                    'Failed to upload file.', code='UPLOAD_FAILED', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
             # Update template
             template.file_url = file_url
             template.file_type = 'pdf'
             template.file_size_bytes = file.size
             template.save(update_fields=['file_url', 'file_type', 'file_size_bytes', 'updated_at'])
-            
-            return Response({
-                'file_url': file_url,
-                'file_size': file.size,
-                'message': 'Template uploaded successfully.',
-            })
-            
+
+            return Response(
+                {
+                    'file_url': file_url,
+                    'file_size': file.size,
+                    'message': 'Template uploaded successfully.',
+                }
+            )
+
         except Exception as e:
             logger.error(f"Template upload failed: {e}")
             return error_response('Upload failed.', code='UPLOAD_FAILED', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -193,10 +191,10 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     def preview(self, request, uuid=None):
         """Generate preview with sample data."""
         template = self.get_object()
-        
+
         # Get field positions from request or use template's saved positions
         field_positions = request.data.get('field_positions', template.field_positions)
-        
+
         # Sample data for preview - keys must match Certificate.build_certificate_data()
         sample_data = {
             'attendee_name': 'John Doe',
@@ -210,20 +208,23 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
             'attendee_title': 'Dr.',
             'attendee_organization': 'Sample Hospital',
         }
-        
+
         try:
             from .services import certificate_service
-            
+
             # Generate preview PDF
             preview_bytes = certificate_service.generate_template_preview(template, field_positions, sample_data)
-            
+
             if not preview_bytes:
-                return error_response('Failed to generate preview.', code='PREVIEW_FAILED', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+                return error_response(
+                    'Failed to generate preview.', code='PREVIEW_FAILED', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
             # Upload preview (temporary)
-            from common.storage import gcs_storage
             import uuid as uuid_lib
-            
+
+            from common.storage import gcs_storage
+
             preview_path = f"certificate-templates/{template.uuid}/preview-{uuid_lib.uuid4().hex[:8]}.pdf"
             preview_url = gcs_storage.upload(
                 content=preview_bytes,
@@ -231,12 +232,14 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
                 content_type='application/pdf',
                 public=True,  # Preview can be public
             )
-            
-            return Response({
-                'preview_url': preview_url,
-                'field_positions': field_positions,
-            })
-            
+
+            return Response(
+                {
+                    'preview_url': preview_url,
+                    'field_positions': field_positions,
+                }
+            )
+
         except Exception as e:
             logger.error(f"Preview generation failed: {e}")
             return error_response('Preview failed.', code='PREVIEW_FAILED', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -274,9 +277,7 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
         return Certificate.objects.filter(
-            registration__event__uuid=event_uuid,
-            registration__event__owner=self.request.user,
-            deleted_at__isnull=True
+            registration__event__uuid=event_uuid, registration__event__owner=self.request.user, deleted_at__isnull=True
         ).select_related('registration', 'registration__event', 'template')
 
     def get_serializer_class(self):
@@ -336,11 +337,8 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
 
             # Issue certificate using service
             from .services import certificate_service
-            
-            result = certificate_service.issue_certificate(
-                registration=reg,
-                issued_by=request.user
-            )
+
+            result = certificate_service.issue_certificate(registration=reg, issued_by=request.user)
 
             if result['success']:
                 issued.append(str(result['certificate'].uuid))
@@ -447,6 +445,7 @@ class CertificateVerificationView(generics.RetrieveAPIView):
 
         # If neither works, raise 404
         from rest_framework.exceptions import NotFound
+
         raise NotFound('Certificate not found with the provided code.')
 
     def retrieve(self, request, *args, **kwargs):
@@ -461,16 +460,13 @@ class CertificateVerificationView(generics.RetrieveAPIView):
             from feedback.models import EventFeedback
 
             # Check if user has submitted feedback for this event
-            feedback_exists = EventFeedback.objects.filter(
-                event=event,
-                registration=instance.registration
-            ).exists()
+            feedback_exists = EventFeedback.objects.filter(event=event, registration=instance.registration).exists()
 
             if not feedback_exists:
                 return error_response(
                     'Please submit feedback for this event before accessing your certificate.',
                     code='FEEDBACK_REQUIRED',
-                    status_code=status.HTTP_403_FORBIDDEN
+                    status_code=status.HTTP_403_FORBIDDEN,
                 )
 
         # Track view - only set first_viewed_at on first view
@@ -505,12 +501,8 @@ class MyCertificateViewSet(ReadOnlyModelViewSet):
     def get_queryset(self):
         # Include certificates from both event registrations and course enrollments
         return Certificate.objects.filter(
-            Q(registration__user=self.request.user) | Q(course_enrollment__user=self.request.user),
-            deleted_at__isnull=True
-        ).select_related(
-            'registration__event', 'registration',
-            'course_enrollment__course', 'course_enrollment'
-        )
+            Q(registration__user=self.request.user) | Q(course_enrollment__user=self.request.user), deleted_at__isnull=True
+        ).select_related('registration__event', 'registration', 'course_enrollment__course', 'course_enrollment')
 
     @swagger_auto_schema(
         operation_summary="Download certificate",
@@ -531,16 +523,13 @@ class MyCertificateViewSet(ReadOnlyModelViewSet):
             from feedback.models import EventFeedback
 
             # Check if user has submitted feedback for this event
-            feedback_exists = EventFeedback.objects.filter(
-                event=event,
-                registration=certificate.registration
-            ).exists()
+            feedback_exists = EventFeedback.objects.filter(event=event, registration=certificate.registration).exists()
 
             if not feedback_exists:
                 return error_response(
                     'Please submit feedback for this event before downloading your certificate.',
                     code='FEEDBACK_REQUIRED',
-                    status_code=status.HTTP_403_FORBIDDEN
+                    status_code=status.HTTP_403_FORBIDDEN,
                 )
 
         # Track download

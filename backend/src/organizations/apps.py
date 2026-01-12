@@ -16,4 +16,3 @@ class OrganizationsConfig(AppConfig):
             import organizations.signals  # noqa: F401
         except ImportError:
             pass
-

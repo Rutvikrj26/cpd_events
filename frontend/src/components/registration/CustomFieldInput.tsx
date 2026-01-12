@@ -63,7 +63,7 @@ export function CustomFieldInput({ field, value, onChange, error }: CustomFieldI
                     />
                 );
 
-            case 'select':
+            case 'select': {
                 const selectOptions = parseOptions(options);
                 return (
                     <Select value={value || ''} onValueChange={onChange}>
@@ -79,6 +79,7 @@ export function CustomFieldInput({ field, value, onChange, error }: CustomFieldI
                         </SelectContent>
                     </Select>
                 );
+            }
 
             case 'checkbox':
                 return (

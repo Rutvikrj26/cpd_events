@@ -127,7 +127,7 @@ Production configuration now lives in **Terraform tfvars + Secret Manager** (no 
    - `project_id = "accredit-store"`
    - `frontend_url`, `cors_origins`, optional `site_url`
    - Email defaults (`default_from_email`, `server_email`, `admin_email`, `smtp_domain`)
-   - Billing overrides (`platform_fee_percent`, `billing_default_plan`, `stripe_price_*`)
+   - Billing overrides (`platform_fee_percent`, `billing_default_plan`)
    - Frontend build vars (`frontend_google_maps_api_key`, `frontend_stripe_publishable_key`)
 2. **Upload secrets to Secret Manager**:
    - `accredit cloud secrets upload --file .secrets --env prod` (from repo root)

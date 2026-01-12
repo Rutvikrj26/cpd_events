@@ -1,4 +1,5 @@
 import logging
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -19,7 +20,7 @@ def trigger_zoom_creation(sender, instance, created, **kwargs):
     # 2. zoom_meeting_id is empty (not already created)
     # 3. auto_create is true (optional explicit flag from frontend)
     #    OR just implicit presence of settings
-    
+
     # Check implicit presence of settings or explicit flag
     should_create = False
     if instance.zoom_settings and not instance.zoom_meeting_id:

@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { Plus, GripVertical, Trash2, Edit2, FileText, File, ChevronRight, ChevronDown, HelpCircle } from "lucide-react";
+import { Plus, GripVertical, Trash2, Edit2, FileText, File, ChevronRight, ChevronDown, HelpCircle, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { getCourseModules, createCourseModule, deleteCourseModule, createModuleContent, updateModuleContent } from "@/api/courses/modules";
-import { CourseModule } from "@/api/courses/types";
+import { createCourseAssignment, deleteCourseAssignment, updateCourseAssignment } from "@/api/courses";
+import { Assignment, CourseModule } from "@/api/courses/types";
 import { QuizBuilder, QuizData } from "@/components/custom/QuizBuilder";
 
 import client from "@/api/client";
@@ -43,6 +46,23 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
     const [selectedModuleUuid, setSelectedModuleUuid] = useState<string | null>(null);
     const [editingContentUuid, setEditingContentUuid] = useState<string | null>(null);
 
+    // Assignment management state
+    const [isAssignmentOpen, setIsAssignmentOpen] = useState(false);
+    const [assignmentModuleUuid, setAssignmentModuleUuid] = useState<string | null>(null);
+    const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+    const [assignmentForm, setAssignmentForm] = useState({
+        title: "",
+        description: "",
+        instructions: "",
+        due_days_after_release: "",
+        max_score: "",
+        passing_score: "",
+        allow_resubmission: false,
+        max_attempts: "",
+        submission_type: "text",
+        rubric: "",
+    });
+
     // Joint state
     const [contentType, setContentType] = useState<'lesson' | 'quiz'>('lesson');
     const [newContentTitle, setNewContentTitle] = useState("");
@@ -58,7 +78,7 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
     const [quizData, setQuizData] = useState<QuizData>({ questions: [], passing_score: 70 });
 
     // Deletion state
-    const [itemToDelete, setItemToDelete] = useState<{ type: 'module' | 'content', uuid: string } | null>(null);
+    const [itemToDelete, setItemToDelete] = useState<{ type: 'module' | 'content' | 'assignment', uuid: string, moduleUuid?: string } | null>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [previewContent, setPreviewContent] = useState<any>(null);
 
@@ -187,10 +207,114 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
         setEditingContentUuid(null);
     };
 
+    const resetAssignmentForm = () => {
+        setAssignmentForm({
+            title: "",
+            description: "",
+            instructions: "",
+            due_days_after_release: "",
+            max_score: "",
+            passing_score: "",
+            allow_resubmission: false,
+            max_attempts: "",
+            submission_type: "text",
+            rubric: "",
+        });
+        setAssignmentModuleUuid(null);
+        setEditingAssignment(null);
+    };
+
     const openAddContentDialog = (moduleUuid: string) => {
         resetContentForm();
         setSelectedModuleUuid(moduleUuid);
         setIsAddContentOpen(true);
+    };
+
+    const openAddAssignmentDialog = (moduleUuid: string) => {
+        resetAssignmentForm();
+        setAssignmentModuleUuid(moduleUuid);
+        setIsAssignmentOpen(true);
+    };
+
+    const openEditAssignmentDialog = (moduleUuid: string, assignment: Assignment) => {
+        setAssignmentModuleUuid(moduleUuid);
+        setEditingAssignment(assignment);
+        setAssignmentForm({
+            title: assignment.title || "",
+            description: assignment.description || "",
+            instructions: assignment.instructions || "",
+            due_days_after_release: assignment.due_days_after_release ? String(assignment.due_days_after_release) : "",
+            max_score: assignment.max_score ? String(assignment.max_score) : "",
+            passing_score: assignment.passing_score ? String(assignment.passing_score) : "",
+            allow_resubmission: Boolean(assignment.allow_resubmission),
+            max_attempts: assignment.max_attempts ? String(assignment.max_attempts) : "",
+            submission_type: assignment.submission_type || "text",
+            rubric: assignment.rubric ? JSON.stringify(assignment.rubric, null, 2) : "",
+        });
+        setIsAssignmentOpen(true);
+    };
+
+    const parseOptionalNumber = (value: string) => {
+        const parsed = parseInt(value, 10);
+        return Number.isNaN(parsed) ? undefined : parsed;
+    };
+
+    const handleSaveAssignment = async () => {
+        if (!assignmentModuleUuid || !assignmentForm.title.trim()) {
+            return;
+        }
+
+        let rubric: Record<string, any> | undefined;
+        if (assignmentForm.rubric.trim()) {
+            try {
+                rubric = JSON.parse(assignmentForm.rubric);
+            } catch (error) {
+                toast.error("Rubric must be valid JSON");
+                return;
+            }
+        }
+
+        const payload: Partial<Assignment> = {
+            title: assignmentForm.title.trim(),
+            description: assignmentForm.description || undefined,
+            instructions: assignmentForm.instructions || undefined,
+            due_days_after_release: parseOptionalNumber(assignmentForm.due_days_after_release),
+            max_score: parseOptionalNumber(assignmentForm.max_score),
+            passing_score: parseOptionalNumber(assignmentForm.passing_score),
+            allow_resubmission: assignmentForm.allow_resubmission,
+            max_attempts: parseOptionalNumber(assignmentForm.max_attempts),
+            submission_type: assignmentForm.submission_type as Assignment["submission_type"],
+            rubric,
+        };
+
+        try {
+            if (editingAssignment) {
+                await updateCourseAssignment(courseUuid, assignmentModuleUuid, editingAssignment.uuid, payload);
+                toast.success("Assignment updated");
+            } else {
+                await createCourseAssignment(courseUuid, assignmentModuleUuid, payload);
+                toast.success("Assignment created");
+            }
+            setIsAssignmentOpen(false);
+            resetAssignmentForm();
+            fetchModules();
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to save assignment");
+        }
+    };
+
+    const handleDeleteAssignment = async (moduleUuid: string, assignmentUuid: string) => {
+        try {
+            await deleteCourseAssignment(courseUuid, moduleUuid, assignmentUuid);
+            toast.success("Assignment deleted");
+            fetchModules();
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to delete assignment");
+        } finally {
+            setItemToDelete(null);
+        }
     };
 
     const openEditContentDialog = (moduleUuid: string, content: any) => {
@@ -409,6 +533,155 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                     </DialogContent>
                 </Dialog>
 
+                {/* Add/Edit Assignment Dialog */}
+                <Dialog open={isAssignmentOpen} onOpenChange={(open) => {
+                    if (!open) {
+                        setIsAssignmentOpen(false);
+                        resetAssignmentForm();
+                    }
+                }}>
+                    <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle>{editingAssignment ? "Edit Assignment" : "Add Assignment"}</DialogTitle>
+                            <DialogDescription>
+                                Create graded work for learners to submit.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-2">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="assignment-title">Title</Label>
+                                    <Input
+                                        id="assignment-title"
+                                        placeholder="Assignment title"
+                                        value={assignmentForm.title}
+                                        onChange={(event) => setAssignmentForm((prev) => ({ ...prev, title: event.target.value }))}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="assignment-submission-type">Submission Type</Label>
+                                    <Select
+                                        value={assignmentForm.submission_type}
+                                        onValueChange={(value) => setAssignmentForm((prev) => ({ ...prev, submission_type: value }))}
+                                    >
+                                        <SelectTrigger id="assignment-submission-type">
+                                            <SelectValue placeholder="Select type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="text">Text Response</SelectItem>
+                                            <SelectItem value="url">URL Submission</SelectItem>
+                                            <SelectItem value="file">File Link</SelectItem>
+                                            <SelectItem value="mixed">Mixed</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="assignment-description">Description</Label>
+                                <Textarea
+                                    id="assignment-description"
+                                    value={assignmentForm.description}
+                                    onChange={(event) => setAssignmentForm((prev) => ({ ...prev, description: event.target.value }))}
+                                    placeholder="Optional summary for the assignment"
+                                    className="min-h-[80px]"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="assignment-instructions">Instructions</Label>
+                                <Textarea
+                                    id="assignment-instructions"
+                                    value={assignmentForm.instructions}
+                                    onChange={(event) => setAssignmentForm((prev) => ({ ...prev, instructions: event.target.value }))}
+                                    placeholder="Detailed steps or grading guidance"
+                                    className="min-h-[120px]"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="assignment-due-days">Due Days After Release</Label>
+                                    <Input
+                                        id="assignment-due-days"
+                                        type="number"
+                                        min="0"
+                                        value={assignmentForm.due_days_after_release}
+                                        onChange={(event) => setAssignmentForm((prev) => ({ ...prev, due_days_after_release: event.target.value }))}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="assignment-max-score">Max Score</Label>
+                                    <Input
+                                        id="assignment-max-score"
+                                        type="number"
+                                        min="0"
+                                        value={assignmentForm.max_score}
+                                        onChange={(event) => setAssignmentForm((prev) => ({ ...prev, max_score: event.target.value }))}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="assignment-passing-score">Passing Score</Label>
+                                    <Input
+                                        id="assignment-passing-score"
+                                        type="number"
+                                        min="0"
+                                        value={assignmentForm.passing_score}
+                                        onChange={(event) => setAssignmentForm((prev) => ({ ...prev, passing_score: event.target.value }))}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="assignment-max-attempts">Max Attempts</Label>
+                                    <Input
+                                        id="assignment-max-attempts"
+                                        type="number"
+                                        min="1"
+                                        value={assignmentForm.max_attempts}
+                                        onChange={(event) => setAssignmentForm((prev) => ({ ...prev, max_attempts: event.target.value }))}
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between border rounded-lg px-3 py-2">
+                                    <div>
+                                        <Label htmlFor="assignment-resubmission" className="text-sm font-medium">
+                                            Allow Resubmission
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Learners can resubmit if revisions are needed.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        id="assignment-resubmission"
+                                        checked={assignmentForm.allow_resubmission}
+                                        onCheckedChange={(checked) => setAssignmentForm((prev) => ({ ...prev, allow_resubmission: checked }))}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="assignment-rubric">Rubric (JSON, optional)</Label>
+                                <Textarea
+                                    id="assignment-rubric"
+                                    value={assignmentForm.rubric}
+                                    onChange={(event) => setAssignmentForm((prev) => ({ ...prev, rubric: event.target.value }))}
+                                    placeholder='{"criteria": []}'
+                                    className="min-h-[100px]"
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsAssignmentOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button onClick={handleSaveAssignment} disabled={!assignmentForm.title.trim()}>
+                                {editingAssignment ? "Save Assignment" : "Create Assignment"}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
                 {/* Preview Dialog */}
                 <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
                     <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
@@ -505,7 +778,11 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
                             This action cannot be undone. This will permanently delete the
-                            {itemToDelete?.type === 'module' ? ' module and all its contents' : ' content'}.
+                            {itemToDelete?.type === 'module'
+                                ? ' module and all its contents'
+                                : itemToDelete?.type === 'assignment'
+                                    ? ' assignment'
+                                    : ' content'}.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -517,6 +794,8 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                     handleDeleteModule(itemToDelete.uuid);
                                 } else if (itemToDelete?.type === 'content') {
                                     handleDeleteContent(itemToDelete.uuid);
+                                } else if (itemToDelete?.type === 'assignment' && itemToDelete.moduleUuid) {
+                                    handleDeleteAssignment(itemToDelete.moduleUuid, itemToDelete.uuid);
                                 }
                             }}
                             className="bg-red-600 hover:bg-red-700"
@@ -550,6 +829,11 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                             onEditContent={openEditContentDialog}
                             onPreviewContent={openPreviewDialog}
                             onDeleteContent={(contentUuid) => setItemToDelete({ type: 'content', uuid: contentUuid })}
+                            onAddAssignment={openAddAssignmentDialog}
+                            onEditAssignment={openEditAssignmentDialog}
+                            onDeleteAssignment={(moduleUuid, assignmentUuid) =>
+                                setItemToDelete({ type: 'assignment', uuid: assignmentUuid, moduleUuid })
+                            }
                         />
                     ))
                 )}
@@ -565,7 +849,10 @@ function ModuleItem({
     onAddContent,
     onEditContent,
     onPreviewContent,
-    onDeleteContent
+    onDeleteContent,
+    onAddAssignment,
+    onEditAssignment,
+    onDeleteAssignment
 }: {
     module: CourseModule,
     onDelete: () => void,
@@ -573,11 +860,15 @@ function ModuleItem({
     onAddContent: (id: string) => void,
     onEditContent: (moduleUuid: string, content: any) => void,
     onPreviewContent: (content: any) => void,
-    onDeleteContent: (uuid: string) => void
+    onDeleteContent: (uuid: string) => void,
+    onAddAssignment: (moduleUuid: string) => void,
+    onEditAssignment: (moduleUuid: string, assignment: Assignment) => void,
+    onDeleteAssignment: (moduleUuid: string, assignmentUuid: string) => void
 }) {
 
     const [isExpanded, setIsExpanded] = useState(false);
     const contents = module.module?.contents || [];
+    const assignments = module.module?.assignments || [];
 
     return (
         <Card className="overflow-hidden">
@@ -640,6 +931,54 @@ function ModuleItem({
                         <div className="p-2 pl-12 bg-gray-50/30">
                             <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-primary" onClick={() => onAddContent(module.module.uuid)}>
                                 <Plus className="mr-1 h-3 w-3" /> Add Content
+                            </Button>
+                        </div>
+                        <div className="border-t border-gray-100" />
+                        {assignments.length === 0 ? (
+                            <div className="p-8 text-center text-sm text-gray-400 italic">
+                                No assignments in this module yet.
+                                <div className="mt-2">
+                                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onAddAssignment(module.module.uuid)}>
+                                        <Plus className="mr-1 h-3 w-3" /> Add Assignment
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            assignments.map((assignment: Assignment) => (
+                                <div key={assignment.uuid} className="flex items-center p-3 pl-12 hover:bg-gray-50 group">
+                                    <div className="mr-3 text-gray-400">
+                                        <ClipboardCheck className="h-4 w-4 text-amber-500" />
+                                    </div>
+                                    <span className="text-sm flex-1">
+                                        {assignment.title}
+                                        <span className="text-xs text-muted-foreground ml-2">
+                                            ({assignment.submission_type || 'text'})
+                                        </span>
+                                    </span>
+                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6"
+                                            onClick={() => onEditAssignment(module.module.uuid, assignment)}
+                                        >
+                                            <Edit2 className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 text-gray-500 hover:text-red-500"
+                                            onClick={() => onDeleteAssignment(module.module.uuid, assignment.uuid)}
+                                        >
+                                            <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                        <div className="p-2 pl-12 bg-gray-50/30">
+                            <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-primary" onClick={() => onAddAssignment(module.module.uuid)}>
+                                <Plus className="mr-1 h-3 w-3" /> Add Assignment
                             </Button>
                         </div>
                     </div>

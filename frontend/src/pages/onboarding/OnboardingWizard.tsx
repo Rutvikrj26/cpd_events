@@ -6,6 +6,7 @@ import {
     User,
     Video,
     Calendar,
+    BookOpen,
     ArrowRight,
     ArrowLeft,
     Check,
@@ -29,14 +30,6 @@ import { createCheckoutSession } from '@/api/billing';
 import { getSubscription } from '@/api/billing';
 import { Subscription } from '@/api/billing/types';
 import { toast } from 'sonner';
-
-const STEPS = [
-    { id: 'welcome', title: 'Welcome', icon: Rocket },
-    { id: 'profile', title: 'Your Profile', icon: User },
-    { id: 'integrations', title: 'Integrations', icon: Video },
-    { id: 'billing', title: 'Billing', icon: CreditCard },
-    { id: 'complete', title: 'Get Started', icon: Calendar },
-];
 
 interface OnboardingWizardProps {
     onComplete?: () => void;
@@ -63,10 +56,31 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     const [billingChecked, setBillingChecked] = useState(false);
     const [addingPayment, setAddingPayment] = useState(false);
 
-    const progress = ((currentStep + 1) / STEPS.length) * 100;
+    const isLmsOnly = subscription?.plan === 'lms' || (!subscription && user?.account_type === 'course_manager');
+    const planLabel = subscription?.plan_display || (isLmsOnly ? 'LMS' : 'Organizer');
+
+    const steps = isLmsOnly
+        ? [
+            { id: 'welcome', title: 'Welcome', icon: Rocket },
+            { id: 'profile', title: 'Your Profile', icon: User },
+            { id: 'course_setup', title: 'Course Setup', icon: BookOpen },
+            { id: 'billing', title: 'Billing', icon: CreditCard },
+            { id: 'complete', title: 'Get Started', icon: BookOpen },
+        ]
+        : [
+            { id: 'welcome', title: 'Welcome', icon: Rocket },
+            { id: 'profile', title: 'Your Profile', icon: User },
+            { id: 'integrations', title: 'Integrations', icon: Video },
+            { id: 'billing', title: 'Billing', icon: CreditCard },
+            { id: 'complete', title: 'Get Started', icon: Calendar },
+        ];
+
+    const progress = ((currentStep + 1) / steps.length) * 100;
+    const stepId = steps[currentStep]?.id;
+    const getStepIndex = (id: string) => steps.findIndex(step => step.id === id);
 
     const nextStep = () => {
-        if (currentStep < STEPS.length - 1) {
+        if (currentStep < steps.length - 1) {
             setCurrentStep(prev => prev + 1);
         }
     };
@@ -117,7 +131,10 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         try {
             const url = await initiateZoomOAuth();
             // Store that we're in onboarding so callback can redirect back
-            sessionStorage.setItem('onboarding_redirect', '/onboarding?step=2');
+            const stepIndex = getStepIndex('integrations');
+            if (stepIndex >= 0) {
+                sessionStorage.setItem('onboarding_redirect', `/onboarding?step=${stepIndex}`);
+            }
             window.location.href = url;
         } catch (error) {
             toast.error("Failed to initiate Zoom connection");
@@ -128,11 +145,14 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         setAddingPayment(true);
         try {
             // Store current onboarding step so we can return after Stripe
-            sessionStorage.setItem('onboarding_redirect', '/onboarding?step=3');
+            const stepIndex = getStepIndex('billing');
+            if (stepIndex >= 0) {
+                sessionStorage.setItem('onboarding_redirect', `/onboarding?step=${stepIndex}`);
+            }
             const result = await createCheckoutSession(
-                subscription?.plan || 'professional',
-                `${window.location.origin}/onboarding?step=3&checkout=success`,
-                `${window.location.origin}/onboarding?step=3&checkout=canceled`
+                subscription?.plan || 'organizer',
+                `${window.location.origin}/onboarding?step=${getStepIndex('billing')}&checkout=success`,
+                `${window.location.origin}/onboarding?step=${getStepIndex('billing')}&checkout=canceled`
             );
             window.location.href = result.url;
         } catch (error: any) {
@@ -159,17 +179,17 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
     // Load zoom status when reaching integrations step
     React.useEffect(() => {
-        if (currentStep === 2 && !zoomChecked) {
+        if (stepId === 'integrations' && !zoomChecked) {
             checkZoomStatus();
         }
-    }, [currentStep, zoomChecked]);
+    }, [stepId, zoomChecked]);
 
     // Load billing status when reaching billing step
     React.useEffect(() => {
-        if (currentStep === 3 && !billingChecked) {
+        if (stepId === 'billing' && !billingChecked) {
             checkBillingStatus();
         }
-    }, [currentStep, billingChecked]);
+    }, [stepId, billingChecked]);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 flex items-center justify-center p-4">
@@ -177,7 +197,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                 {/* Progress Header */}
                 <div className="mb-8">
                     <div className="flex items-center justify-between mb-4">
-                        {STEPS.map((step, index) => {
+                        {steps.map((step, index) => {
                             const Icon = step.icon;
                             const isComplete = index < currentStep;
                             const isCurrent = index === currentStep;
@@ -215,7 +235,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     >
                         <Card className="border-2">
                             {/* Step 0: Welcome */}
-                            {currentStep === 0 && (
+                            {stepId === 'welcome' && (
                                 <>
                                     <CardHeader className="text-center pb-2">
                                         <div className="mx-auto bg-primary/10 rounded-full p-4 w-20 h-20 flex items-center justify-center mb-4">
@@ -223,7 +243,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                         </div>
                                         <CardTitle className="text-2xl">Welcome to Accredit! 🎉</CardTitle>
                                         <CardDescription className="text-base">
-                                            Let's get you set up to create amazing CPD events
+                                            {isLmsOnly
+                                                ? "Let's get you set up to launch impactful courses"
+                                                : "Let's get you set up to create amazing CPD events"}
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-6 text-center">
@@ -240,11 +262,15 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                         <div className="grid grid-cols-3 gap-4 text-center">
                                             <div className="p-4 bg-muted/30 rounded-lg">
                                                 <div className="text-2xl font-bold text-primary">∞</div>
-                                                <div className="text-sm text-muted-foreground">Events</div>
+                                                <div className="text-sm text-muted-foreground">
+                                                    {isLmsOnly ? 'Courses' : 'Events'}
+                                                </div>
                                             </div>
                                             <div className="p-4 bg-muted/30 rounded-lg">
                                                 <div className="text-2xl font-bold text-primary">500</div>
-                                                <div className="text-sm text-muted-foreground">Attendees/Event</div>
+                                                <div className="text-sm text-muted-foreground">
+                                                    {isLmsOnly ? 'Learners/Course' : 'Attendees/Event'}
+                                                </div>
                                             </div>
                                             <div className="p-4 bg-muted/30 rounded-lg">
                                                 <div className="text-2xl font-bold text-primary">∞</div>
@@ -261,7 +287,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                             )}
 
                             {/* Step 1: Profile */}
-                            {currentStep === 1 && (
+                            {stepId === 'profile' && (
                                 <>
                                     <CardHeader className="text-center pb-2">
                                         <div className="mx-auto bg-primary/10 rounded-full p-4 w-16 h-16 flex items-center justify-center mb-2">
@@ -269,7 +295,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                         </div>
                                         <CardTitle>Set Up Your Profile</CardTitle>
                                         <CardDescription>
-                                            This info will appear on your events and certificates
+                                            {isLmsOnly
+                                                ? 'This info will appear on your courses and certificates'
+                                                : 'This info will appear on your events and certificates'}
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-4">
@@ -284,7 +312,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <Label htmlFor="organization_name">Organization / Company Name</Label>
+                                            <Label htmlFor="organization_name">
+                                                {isLmsOnly ? 'Organization / Brand (Optional)' : 'Organization / Company Name'}
+                                            </Label>
                                             <Input
                                                 id="organization_name"
                                                 value={profileData.organization_name}
@@ -292,7 +322,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                 placeholder="Healthcare Training Institute"
                                             />
                                             <p className="text-xs text-muted-foreground">
-                                                This will be shown as the event organizer
+                                                {isLmsOnly ? 'Shown on course certificates and landing pages' : 'This will be shown as the event organizer'}
                                             </p>
                                         </div>
 
@@ -304,7 +334,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                             <Button
                                                 className="flex-1"
                                                 onClick={handleProfileSubmit}
-                                                disabled={isLoading || !profileData.organization_name}
+                                                disabled={isLoading || !profileData.full_name || (!isLmsOnly && !profileData.organization_name)}
                                             >
                                                 {isLoading ? (
                                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -321,7 +351,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                             )}
 
                             {/* Step 2: Integrations (Zoom) */}
-                            {currentStep === 2 && (
+                            {stepId === 'integrations' && (
                                 <>
                                     <CardHeader className="text-center pb-2">
                                         <div className="mx-auto bg-blue-100 rounded-full p-4 w-16 h-16 flex items-center justify-center mb-2">
@@ -390,8 +420,61 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                 </>
                             )}
 
+                            {/* Step 2: Course Setup (LMS) */}
+                            {stepId === 'course_setup' && (
+                                <>
+                                    <CardHeader className="text-center pb-2">
+                                        <div className="mx-auto bg-primary/10 rounded-full p-4 w-16 h-16 flex items-center justify-center mb-2">
+                                            <BookOpen className="h-8 w-8 text-primary" />
+                                        </div>
+                                        <CardTitle>Prepare Your First Course</CardTitle>
+                                        <CardDescription>
+                                            Build modules, track progress, and issue certificates on completion
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+                                            <h4 className="font-medium">Why create a course now?</h4>
+                                            <ul className="text-sm text-muted-foreground space-y-1">
+                                                <li className="flex items-center gap-2">
+                                                    <Check className="h-4 w-4 text-primary" />
+                                                    Launch self-paced learning quickly
+                                                </li>
+                                                <li className="flex items-center gap-2">
+                                                    <Check className="h-4 w-4 text-primary" />
+                                                    Track completions and outcomes
+                                                </li>
+                                                <li className="flex items-center gap-2">
+                                                    <Check className="h-4 w-4 text-primary" />
+                                                    Auto-issue completion certificates
+                                                </li>
+                                            </ul>
+                                        </div>
+
+                                        <Button
+                                            className="w-full"
+                                            onClick={() => navigate('/courses/manage/new')}
+                                        >
+                                            <BookOpen className="mr-2 h-4 w-4" />
+                                            Create Course
+                                        </Button>
+
+                                        <div className="flex gap-3 pt-2">
+                                            <Button variant="outline" onClick={prevStep}>
+                                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                                Back
+                                            </Button>
+                                            <Button className="flex-1" onClick={nextStep}>
+                                                Continue
+                                                <ArrowRight className="ml-2 h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </>
+                            )}
+
                             {/* Step 3: Billing (Optional) */}
-                            {currentStep === 3 && (
+                            {stepId === 'billing' && (
                                 <>
                                     <CardHeader className="text-center pb-2">
                                         <div className="mx-auto bg-primary/10 rounded-full p-4 w-16 h-16 flex items-center justify-center mb-2">
@@ -420,7 +503,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                 <div className="bg-muted/30 rounded-lg p-4 space-y-3">
                                                     <div className="flex items-center justify-between">
                                                         <span className="text-sm text-muted-foreground">Plan</span>
-                                                        <span className="font-medium">Organizer - $30/mo</span>
+                                                        <span className="font-medium">{planLabel} Plan</span>
                                                     </div>
                                                     <div className="flex items-center justify-between">
                                                         <span className="text-sm text-muted-foreground">Trial ends</span>
@@ -461,7 +544,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                             )}
 
                             {/* Step 4: Complete */}
-                            {currentStep === 4 && (
+                            {stepId === 'complete' && (
                                 <>
                                     <CardHeader className="text-center pb-2">
                                         <div className="mx-auto bg-success/10 rounded-full p-4 w-20 h-20 flex items-center justify-center mb-4">
@@ -479,13 +562,21 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                 className="w-full h-auto py-4"
                                                 onClick={() => {
                                                     handleComplete();
-                                                    navigate('/events/create');
+                                                    navigate(isLmsOnly ? '/courses/manage/new' : '/events/create');
                                                 }}
                                             >
-                                                <Calendar className="mr-3 h-5 w-5" />
+                                                {isLmsOnly ? (
+                                                    <BookOpen className="mr-3 h-5 w-5" />
+                                                ) : (
+                                                    <Calendar className="mr-3 h-5 w-5" />
+                                                )}
                                                 <div className="text-left">
-                                                    <div className="font-medium">Create Your First Event</div>
-                                                    <div className="text-xs opacity-80">Start engaging your audience</div>
+                                                    <div className="font-medium">
+                                                        {isLmsOnly ? 'Create Your First Course' : 'Create Your First Event'}
+                                                    </div>
+                                                    <div className="text-xs opacity-80">
+                                                        {isLmsOnly ? 'Launch your first learning experience' : 'Start engaging your audience'}
+                                                    </div>
                                                 </div>
                                                 <ArrowRight className="ml-auto h-5 w-5" />
                                             </Button>

@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { MapPin, Loader2 } from 'lucide-react';
 
+/* global google */
+
 interface LocationAutocompleteProps {
     value: string;
     onChange: (value: string, placeDetails?: google.maps.places.PlaceResult) => void;

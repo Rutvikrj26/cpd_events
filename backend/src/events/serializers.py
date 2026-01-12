@@ -6,11 +6,11 @@ from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import serializers
 
+from certificates.models import CertificateTemplate
 from common.serializers import BaseModelSerializer, SoftDeleteModelSerializer
 from common.utils import generate_unique_slug
 
-from .models import Event, EventCustomField, EventStatusHistory, Speaker, EventSession, SessionAttendance
-from certificates.models import CertificateTemplate
+from .models import Event, EventCustomField, EventSession, EventStatusHistory, SessionAttendance, Speaker
 
 # =============================================================================
 # Custom Field Serializers
@@ -27,7 +27,7 @@ class EventCustomFieldSerializer(BaseModelSerializer):
             'field_type',
             'label',
             'placeholder',
-            'help_text', 
+            'help_text',
             'required',
             'options',
             'order',
@@ -265,6 +265,7 @@ class SessionAttendanceOverrideSerializer(serializers.Serializer):
 # Event Serializers
 # =============================================================================
 
+
 def _validate_certificate_settings(attrs, instance=None):
     certificates_enabled = attrs.get('certificates_enabled')
     certificate_template = attrs.get('certificate_template')
@@ -276,9 +277,9 @@ def _validate_certificate_settings(attrs, instance=None):
             certificate_template = instance.certificate_template
 
     if certificates_enabled and not certificate_template:
-        raise serializers.ValidationError({
-            'certificate_template': 'Select a certificate template when certificates are enabled.'
-        })
+        raise serializers.ValidationError(
+            {'certificate_template': 'Select a certificate template when certificates are enabled.'}
+        )
 
     return attrs
 
@@ -484,10 +485,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
         slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
     organization = serializers.UUIDField(required=False, allow_null=True, write_only=True)
-    speakers = serializers.SlugRelatedField(
-        slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False
-    )
-
+    speakers = serializers.SlugRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
 
     class Meta:
         model = Event
@@ -546,8 +544,6 @@ class EventCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         return _validate_certificate_settings(attrs)
 
-
-
     def create(self, validated_data):
         custom_fields_data = validated_data.pop('custom_fields', [])
         speakers_data = validated_data.pop('speakers', None)
@@ -568,7 +564,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
         for order, field_data in enumerate(custom_fields_data):
             field_data['order'] = order
             EventCustomField.objects.create(event=event, **field_data)
-            
+
         # Set speakers
         if speakers_data is not None:
             event.speakers.set(speakers_data)
@@ -585,9 +581,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
     certificate_template = serializers.SlugRelatedField(
         slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
-    speakers = serializers.SlugRelatedField(
-        slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False
-    )
+    speakers = serializers.SlugRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
 
     class Meta:
         model = Event
@@ -640,7 +634,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
         """
         instance = self.instance
         if instance and instance.starts_at <= timezone.now():
-             raise serializers.ValidationError("Cannot edit event details after the event has started.")
+            raise serializers.ValidationError("Cannot edit event details after the event has started.")
         return _validate_certificate_settings(attrs, instance=instance)
 
 
@@ -682,6 +676,7 @@ class PublicEventListSerializer(serializers.ModelSerializer):
     """Public event list for discovery."""
 
     organizer_name = serializers.SerializerMethodField()
+    organization_info = serializers.SerializerMethodField()
     is_registration_open = serializers.SerializerMethodField()
     # Field aliases to match API contract with model field names
     cpd_credits = serializers.DecimalField(source='cpd_credit_value', max_digits=5, decimal_places=2, read_only=True)
@@ -703,6 +698,7 @@ class PublicEventListSerializer(serializers.ModelSerializer):
             'timezone',
             'cpd_credits',
             'organizer_name',
+            'organization_info',
             'featured_image_url',
             'is_registration_open',
             'registration_enabled',
@@ -713,6 +709,17 @@ class PublicEventListSerializer(serializers.ModelSerializer):
 
     def get_organizer_name(self, obj):
         return obj.owner.display_name
+
+    def get_organization_info(self, obj):
+        if obj.organization:
+            return {
+                'uuid': str(obj.organization.uuid),
+                'name': obj.organization.name,
+                'slug': obj.organization.slug,
+                'logo_url': obj.organization.effective_logo_url,
+                'primary_color': obj.organization.primary_color,
+            }
+        return None
 
     def get_is_registration_open(self, obj):
         now = timezone.now()
@@ -756,7 +763,7 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
             'learning_objectives',
             'speakers',
         ]
-    
+
     speakers = SpeakerSerializer(many=True, read_only=True)
 
     def get_organizer(self, obj):

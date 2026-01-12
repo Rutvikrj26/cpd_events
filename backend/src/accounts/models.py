@@ -2,6 +2,7 @@
 Accounts app models - User, ZoomConnection, UserSession.
 """
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.core.validators import MinLengthValidator, MinValueValidator
 from django.db import models
@@ -73,6 +74,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     class AccountType(models.TextChoices):
         ATTENDEE = 'attendee', 'Attendee'
         ORGANIZER = 'organizer', 'Organizer'
+        COURSE_MANAGER = 'course_manager', 'Course Manager'
 
     # =========================================
     # Authentication Fields
@@ -199,6 +201,11 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         return self.account_type == self.AccountType.ATTENDEE
 
     @property
+    def is_course_manager(self):
+        """Check if user is a course manager."""
+        return self.account_type == self.AccountType.COURSE_MANAGER
+
+    @property
     def display_name(self):
         """Best name for display."""
         if self.professional_title:
@@ -224,6 +231,12 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         """Upgrade account to organizer."""
         if self.account_type != self.AccountType.ORGANIZER:
             self.account_type = self.AccountType.ORGANIZER
+            self.save(update_fields=['account_type', 'updated_at'])
+
+    def upgrade_to_course_manager(self):
+        """Upgrade account to course manager."""
+        if self.account_type != self.AccountType.COURSE_MANAGER:
+            self.account_type = self.AccountType.COURSE_MANAGER
             self.save(update_fields=['account_type', 'updated_at'])
 
     def downgrade_to_attendee(self):
@@ -278,6 +291,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         Clears personal details and marks as inactive.
         """
         import uuid
+
         self.full_name = "Deleted User"
         self.email = f"deleted-{uuid.uuid4()}@example.com"
         self.professional_title = ""
@@ -290,16 +304,16 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         self.email_verified = False
         self.password_reset_token = ""
         self.password_reset_sent_at = None
-        
+
         # Save all changes and then soft delete
         self.save()
-        
+
         # If the model has soft_delete, use it
         if hasattr(self, 'soft_delete'):
             self.soft_delete()
         else:
             self.delete()
-            
+
         return True
 
     def soft_delete(self):
@@ -571,8 +585,6 @@ class CPDRequirement(BaseModel):
         """
         from decimal import Decimal
 
-        from django.db.models import Sum
-
         from certificates.models import Certificate
 
         start, end = self.get_current_period_bounds()
@@ -593,7 +605,7 @@ class CPDRequirement(BaseModel):
                 total += Decimal(str(val))
             except (TypeError, ValueError):
                 continue
-                
+
         return total
 
     @property
@@ -613,3 +625,92 @@ class CPDRequirement(BaseModel):
         earned = self.get_earned_credits()
         remaining = self.annual_requirement - earned
         return max(remaining, Decimal('0'))
+
+
+class Notification(BaseModel):
+    """
+    In-app notification for a user.
+    """
+
+    class Type(models.TextChoices):
+        ORG_INVITE = 'org_invite', 'Organization Invitation'
+        PAYMENT_FAILED = 'payment_failed', 'Payment Failed'
+        REFUND_PROCESSED = 'refund_processed', 'Refund Processed'
+        TRIAL_ENDING = 'trial_ending', 'Trial Ending'
+        PAYMENT_METHOD_EXPIRED = 'payment_method_expired', 'Payment Method Expired'
+        SYSTEM = 'system', 'System'
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+    )
+    notification_type = models.CharField(
+        max_length=50,
+        choices=Type.choices,
+        default=Type.SYSTEM,
+        db_index=True,
+    )
+    title = models.CharField(max_length=255)
+    message = models.TextField(blank=True)
+    action_url = models.CharField(max_length=500, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'notifications'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'notification_type']),
+            models.Index(fields=['user', 'read_at']),
+            models.Index(fields=['-created_at']),
+        ]
+
+    @property
+    def is_read(self):
+        return self.read_at is not None
+
+    def mark_read(self):
+        if not self.read_at:
+            self.read_at = timezone.now()
+            self.save(update_fields=['read_at', 'updated_at'])
+
+
+class AuditLog(BaseModel):
+    """
+    Audit log entry for sensitive actions.
+    """
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
+    action = models.CharField(max_length=120, db_index=True)
+    object_type = models.CharField(max_length=120, blank=True)
+    object_uuid = models.CharField(max_length=64, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'audit_logs'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['actor', 'action']),
+            models.Index(fields=['organization', 'action']),
+            models.Index(fields=['-created_at']),
+        ]
+
+    def __str__(self):
+        actor = self.actor.email if self.actor else 'system'
+        return f"{actor} - {self.action}"

@@ -48,13 +48,11 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 choices=[
                     ('admin', 'Admin'),
-                    ('instructor', 'Course Instructor'),
                     ('organizer', 'Organizer'),
-                    ('owner', 'Owner'),
-                    ('manager', 'Manager'),
-                    ('member', 'Member'),
+                    ('course_manager', 'Course Manager'),
+                    ('instructor', 'Instructor'),
                 ],
-                default='member',
+                default='organizer',
                 help_text='Role within organization',
                 max_length=20,
             ),
@@ -63,14 +61,8 @@ class Migration(migrations.Migration):
             model_name='organizationsubscription',
             name='plan',
             field=models.CharField(
-                choices=[
-                    ('free', 'Free'),
-                    ('organization', 'Organization'),
-                    ('team', 'Team'),
-                    ('business', 'Business'),
-                    ('enterprise', 'Enterprise'),
-                ],
-                default='free',
+                choices=[('organization', 'Organization')],
+                default='organization',
                 max_length=20,
             ),
         ),

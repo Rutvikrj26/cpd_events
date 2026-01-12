@@ -88,8 +88,8 @@ def add_zoom_registrant(registration_id: int):
     Returns:
         bool: True if successful, False otherwise
     """
-    from registrations.models import Registration
     from accounts.services import zoom_service
+    from registrations.models import Registration
 
     try:
         registration = Registration.objects.select_related('event').get(id=registration_id)
@@ -126,9 +126,7 @@ def add_zoom_registrant(registration_id: int):
             # Update registration
             registration.zoom_registrant_join_url = result['join_url']
             registration.zoom_registrant_id = result['registrant_id']
-            registration.save(
-                update_fields=['zoom_registrant_join_url', 'zoom_registrant_id', 'updated_at']
-            )
+            registration.save(update_fields=['zoom_registrant_join_url', 'zoom_registrant_id', 'updated_at'])
 
             logger.info(f"Added {registration.uuid} to Zoom: {result['registrant_id']}")
             return True

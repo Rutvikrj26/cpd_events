@@ -61,13 +61,13 @@ class CertificateService:
         try:
             from io import BytesIO
 
+            from reportlab.lib.colors import black
             from reportlab.lib.pagesizes import A4
             from reportlab.pdfgen import canvas
-            from reportlab.lib.colors import black
 
             # Try to get template PDF for overlay
             template_bytes = self._download_template(template)
-            
+
             if template_bytes:
                 # Use PyPDF2 to overlay text on template
                 from pypdf import PdfReader, PdfWriter
@@ -153,10 +153,11 @@ class CertificateService:
         """
         try:
             from io import BytesIO
+
             from pypdf import PdfReader, PdfWriter
-            from reportlab.lib.pagesizes import letter, A4
-            from reportlab.pdfgen import canvas
             from reportlab.lib.colors import black
+            from reportlab.lib.pagesizes import A4, letter
+            from reportlab.pdfgen import canvas
 
             # Get template PDF
             template_bytes = self._download_template(template)
@@ -235,8 +236,10 @@ class CertificateService:
                 return gcs_storage.download(path)
             elif file_url.startswith('/media/'):
                 # Local file
-                from django.conf import settings
                 import os
+
+                from django.conf import settings
+
                 local_path = os.path.join(settings.MEDIA_ROOT, file_url.replace('/media/', ''))
                 with open(local_path, 'rb') as f:
                     return f.read()
@@ -250,6 +253,7 @@ class CertificateService:
     def _generate_blank_preview(self, field_positions: dict, sample_data: dict) -> bytes:
         """Generate a blank preview with just the text fields visible."""
         from io import BytesIO
+
         from reportlab.lib.pagesizes import letter
         from reportlab.pdfgen import canvas
 
@@ -287,13 +291,14 @@ class CertificateService:
             URL of uploaded PDF or None
         """
         import os
+
         from django.conf import settings
         from django.utils import timezone
 
         try:
             # Try GCS first if configured
             from common.storage import gcs_storage
-            
+
             # Generate path
             path = f"certificates/{certificate.uuid}.pdf"
 
@@ -330,14 +335,14 @@ class CertificateService:
             # Save file locally
             filename = f"{certificate.uuid}.pdf"
             filepath = os.path.join(cert_dir, filename)
-            
+
             with open(filepath, 'wb') as f:
                 f.write(pdf_bytes)
 
             # Build URL using MEDIA_URL
             media_url = getattr(settings, 'MEDIA_URL', '/media/')
             url = f"{media_url}certificates/{filename}"
-            
+
             certificate.file_url = url
             certificate.file_generated_at = timezone.now()
             certificate.save(update_fields=['file_url', 'file_generated_at', 'updated_at'])
@@ -374,6 +379,7 @@ class CertificateService:
         # For local paths, construct absolute URL
         if file_url.startswith('/'):
             from django.conf import settings
+
             base_url = getattr(settings, 'SITE_URL', 'http://localhost:8000')
             return f"{base_url.rstrip('/')}{file_url}"
 

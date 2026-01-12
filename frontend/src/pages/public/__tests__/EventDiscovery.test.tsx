@@ -8,38 +8,42 @@ vi.mock("@/api/events", () => ({
     getPublicEvents: vi.fn().mockResolvedValue([]),
 }));
 
-const renderEventDiscovery = () => {
-    return render(
+const renderEventDiscovery = async () => {
+    const view = render(
         <BrowserRouter>
             <EventDiscovery />
         </BrowserRouter>
     );
+    await waitFor(() => {
+        expect(screen.getByText(/no events found/i)).toBeInTheDocument();
+    });
+    return view;
 };
 
 describe("EventDiscovery", () => {
-    it("renders page header", () => {
-        renderEventDiscovery();
+    it("renders page header", async () => {
+        await renderEventDiscovery();
 
         expect(screen.getByText("Browse Events")).toBeInTheDocument();
         expect(screen.getByText(/discover professional development/i)).toBeInTheDocument();
     });
 
-    it("renders search input", () => {
-        renderEventDiscovery();
+    it("renders search input", async () => {
+        await renderEventDiscovery();
 
         expect(screen.getByPlaceholderText(/search events/i)).toBeInTheDocument();
     });
 
-    it("renders filter options", () => {
-        renderEventDiscovery();
+    it("renders filter options", async () => {
+        await renderEventDiscovery();
 
         expect(screen.getByText("Event Type")).toBeInTheDocument();
         expect(screen.getByText("Format")).toBeInTheDocument();
         expect(screen.getByText("Registration Fee")).toBeInTheDocument();
     });
 
-    it("has event type filter checkboxes", () => {
-        renderEventDiscovery();
+    it("has event type filter checkboxes", async () => {
+        await renderEventDiscovery();
 
         expect(screen.getByLabelText("Webinar")).toBeInTheDocument();
         expect(screen.getByLabelText("Workshop")).toBeInTheDocument();
@@ -47,32 +51,29 @@ describe("EventDiscovery", () => {
         expect(screen.getByLabelText("Conference")).toBeInTheDocument();
     });
 
-    it("has format filter checkboxes", () => {
-        renderEventDiscovery();
+    it("has format filter checkboxes", async () => {
+        await renderEventDiscovery();
 
         expect(screen.getByLabelText("Online")).toBeInTheDocument();
         expect(screen.getByLabelText("In-Person")).toBeInTheDocument();
         expect(screen.getByLabelText("Hybrid")).toBeInTheDocument();
     });
 
-    it("has sort dropdown", () => {
-        renderEventDiscovery();
+    it("has sort dropdown", async () => {
+        await renderEventDiscovery();
 
         expect(screen.getByText("Upcoming")).toBeInTheDocument();
     });
 
-    it("renders reset filters button", () => {
-        renderEventDiscovery();
+    it("renders reset filters button", async () => {
+        await renderEventDiscovery();
 
         expect(screen.getByRole("button", { name: /reset/i })).toBeInTheDocument();
     });
 
     it("shows empty state when no events loaded", async () => {
-        renderEventDiscovery();
+        await renderEventDiscovery();
 
-        // Wait for loading to finish and check for empty state
-        await waitFor(() => {
-            expect(screen.queryByText(/no events found/i)).toBeInTheDocument();
-        });
+        expect(screen.getByText(/no events found/i)).toBeInTheDocument();
     });
 });

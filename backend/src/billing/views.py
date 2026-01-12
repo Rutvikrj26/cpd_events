@@ -2,12 +2,17 @@
 Billing API views.
 """
 
-from rest_framework import permissions, status, views, viewsets, serializers
+from drf_yasg.utils import swagger_auto_schema
+from rest_framework import permissions, serializers, status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.audit import log_audit_event
 from common.rbac import roles
-from .models import Invoice, PaymentMethod, Subscription, StripeProduct, PayoutRequest, RefundRecord
+from common.utils import error_response
+from registrations.models import Registration
+
+from .models import Invoice, PaymentMethod, PayoutRequest, RefundRecord, StripePrice, StripeProduct, Subscription
 from .serializers import (
     BillingPortalSerializer,
     CheckoutSessionSerializer,
@@ -15,18 +20,16 @@ from .serializers import (
     InvoiceSerializer,
     PaymentMethodCreateSerializer,
     PaymentMethodSerializer,
+    PayoutRequestSerializer,
+    RefundRecordSerializer,
+    RefundRequestSerializer,
+    StripeProductPublicSerializer,
     SubscriptionCreateSerializer,
-    SubscriptionUpdateSerializer,
     SubscriptionSerializer,
     SubscriptionStatusSerializer,
-    StripeProductPublicSerializer,
-    RefundRecordSerializer,
-    PayoutRequestSerializer,
+    SubscriptionUpdateSerializer,
 )
-from .services import stripe_service, stripe_connect_service, RefundService
-from registrations.models import Registration
-from common.utils import error_response
-from drf_yasg.utils import swagger_auto_schema
+from .services import RefundService, stripe_connect_service, stripe_service
 
 
 @roles('attendee', 'organizer', 'admin', route_name='subscriptions')
@@ -45,7 +48,9 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
     def get_object(self):
         """Get or create subscription for current user."""
-        subscription, _ = Subscription.objects.get_or_create(user=self.request.user, defaults={'plan': Subscription.Plan.ATTENDEE})
+        subscription, _ = Subscription.objects.get_or_create(
+            user=self.request.user, defaults={'plan': Subscription.Plan.ATTENDEE}
+        )
         return subscription
 
     def list(self, request, *args, **kwargs):
@@ -63,9 +68,21 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             user=request.user,
             plan=serializer.validated_data['plan'],
             payment_method_id=serializer.validated_data.get('payment_method_id'),
+            billing_interval=serializer.validated_data.get('billing_interval', 'month'),
         )
 
         if result['success']:
+            try:
+                log_audit_event(
+                    actor=request.user,
+                    action='subscription_created',
+                    object_type='subscription',
+                    object_uuid=str(result['subscription'].uuid),
+                    metadata={'plan': result['subscription'].plan},
+                    request=request,
+                )
+            except Exception:
+                pass
             return Response(SubscriptionSerializer(result['subscription']).data, status=status.HTTP_201_CREATED)
         else:
             return error_response(result.get('error', 'Failed to create subscription'), code='SUBSCRIPTION_FAILED')
@@ -84,15 +101,28 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
         new_plan = serializer.validated_data['plan']
         immediate = serializer.validated_data.get('immediate', True)
+        billing_interval = serializer.validated_data.get('billing_interval', 'month')
 
         result = stripe_service.update_subscription(
             subscription=subscription,
             new_plan=new_plan,
             immediate=immediate,
+            billing_interval=billing_interval,
         )
 
         if result['success']:
             subscription.refresh_from_db()
+            try:
+                log_audit_event(
+                    actor=request.user,
+                    action='subscription_updated',
+                    object_type='subscription',
+                    object_uuid=str(subscription.uuid),
+                    metadata={'plan': subscription.plan},
+                    request=request,
+                )
+            except Exception:
+                pass
             return Response(SubscriptionSerializer(subscription).data)
         else:
             return error_response(result.get('error', 'Failed to update subscription'), code='UPDATE_FAILED')
@@ -133,6 +163,17 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
         if success:
             subscription.refresh_from_db()
+            try:
+                log_audit_event(
+                    actor=request.user,
+                    action='subscription_cancelled',
+                    object_type='subscription',
+                    object_uuid=str(subscription.uuid),
+                    metadata={'plan': subscription.plan, 'immediate': immediate},
+                    request=request,
+                )
+            except Exception:
+                pass
             return Response(SubscriptionSerializer(subscription).data)
         else:
             return error_response('Failed to cancel subscription', code='CANCELLATION_FAILED')
@@ -154,6 +195,17 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
         if success:
             subscription.refresh_from_db()
+            try:
+                log_audit_event(
+                    actor=request.user,
+                    action='subscription_reactivated',
+                    object_type='subscription',
+                    object_uuid=str(subscription.uuid),
+                    metadata={'plan': subscription.plan},
+                    request=request,
+                )
+            except Exception:
+                pass
             return Response(SubscriptionSerializer(subscription).data)
         else:
             return error_response('Failed to reactivate subscription', code='REACTIVATION_FAILED')
@@ -231,6 +283,17 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
             return InvoiceListSerializer
         return InvoiceSerializer
 
+    def retrieve(self, request, *args, **kwargs):
+        invoice = self.get_object()
+        if invoice.stripe_invoice_id and stripe_service.is_configured:
+            stripe_invoice = stripe_service.get_invoice(invoice.stripe_invoice_id)
+            if stripe_invoice:
+                invoice.invoice_pdf_url = getattr(stripe_invoice, 'invoice_pdf', '') or invoice.invoice_pdf_url
+                invoice.hosted_invoice_url = getattr(stripe_invoice, 'hosted_invoice_url', '') or invoice.hosted_invoice_url
+                invoice.save(update_fields=['invoice_pdf_url', 'hosted_invoice_url', 'updated_at'])
+        serializer = self.get_serializer(invoice)
+        return Response(serializer.data)
+
 
 @roles('attendee', 'organizer', 'admin', route_name='payment_methods')
 class PaymentMethodViewSet(viewsets.ModelViewSet):
@@ -262,6 +325,17 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
         )
 
         if result['success']:
+            try:
+                log_audit_event(
+                    actor=request.user,
+                    action='payment_method_added',
+                    object_type='payment_method',
+                    object_uuid=str(result['payment_method'].uuid),
+                    metadata={'brand': result['payment_method'].card_brand, 'last4': result['payment_method'].card_last4},
+                    request=request,
+                )
+            except Exception:
+                pass
             return Response(PaymentMethodSerializer(result['payment_method']).data, status=status.HTTP_201_CREATED)
         else:
             return error_response(result.get('error', 'Failed to add payment method'), code='PAYMENT_METHOD_FAILED')
@@ -278,6 +352,17 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
         success = stripe_service.detach_payment_method(payment_method)
 
         if success:
+            try:
+                log_audit_event(
+                    actor=request.user,
+                    action='payment_method_removed',
+                    object_type='payment_method',
+                    object_uuid=str(payment_method.uuid),
+                    metadata={'brand': payment_method.card_brand, 'last4': payment_method.card_last4},
+                    request=request,
+                )
+            except Exception:
+                pass
             return Response(status=status.HTTP_204_NO_CONTENT)
         else:
             return error_response('Failed to remove payment method', code='DELETE_FAILED')
@@ -292,6 +377,17 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
         """Set payment method as default."""
         payment_method = self.get_object()
         payment_method.set_as_default()
+        try:
+            log_audit_event(
+                actor=request.user,
+                action='payment_method_default_set',
+                object_type='payment_method',
+                object_uuid=str(payment_method.uuid),
+                metadata={'brand': payment_method.card_brand, 'last4': payment_method.card_last4},
+                request=request,
+            )
+        except Exception:
+            pass
         return Response(PaymentMethodSerializer(payment_method).data)
 
 
@@ -316,6 +412,7 @@ class CheckoutSessionView(views.APIView):
             plan=serializer.validated_data['plan'],
             success_url=serializer.validated_data['success_url'],
             cancel_url=serializer.validated_data['cancel_url'],
+            billing_interval=serializer.validated_data.get('billing_interval', 'month'),
         )
 
         if result['success']:
@@ -346,9 +443,6 @@ class BillingPortalView(views.APIView):
             return error_response(result.get('error', 'Failed to create portal session'), code='PORTAL_FAILED')
 
 
-
-
-
 @roles('public', route_name='public_pricing')
 class PublicPricingView(views.APIView):
     """
@@ -369,22 +463,25 @@ class PublicPricingView(views.APIView):
     )
     def get(self, request):
         """Get all active pricing products."""
-        from django.db.models import Case, When, IntegerField
+        from django.db.models import Case, IntegerField, Prefetch, When
 
         # Only return active products, ordered by price (low to high)
-        # Custom ordering: professional (lower price) first, then organization
+        # Custom ordering: organizer, lms, then organization
         # Exclude 'attendee' (free tier) and legacy plans
-        products = StripeProduct.objects.filter(
-            is_active=True,
-            plan__in=['professional', 'organization']
-        ).prefetch_related('prices').annotate(
-            plan_order=Case(
-                When(plan='professional', then=1),
-                When(plan='organization', then=2),
-                default=3,
-                output_field=IntegerField(),
+        products = (
+            StripeProduct.objects.filter(is_active=True, plan__in=['organizer', 'lms', 'organization'])
+            .prefetch_related(Prefetch('prices', queryset=StripePrice.objects.filter(is_active=True)))
+            .annotate(
+                plan_order=Case(
+                    When(plan='organizer', then=1),
+                    When(plan='lms', then=2),
+                    When(plan='organization', then=3),
+                    default=3,
+                    output_field=IntegerField(),
+                )
             )
-        ).order_by('plan_order')
+            .order_by('plan_order')
+        )
 
         serializer = StripeProductPublicSerializer(products, many=True)
         return Response(serializer.data)
@@ -394,15 +491,16 @@ class PublicPricingView(views.APIView):
 class RefundView(views.APIView):
     """
     Process a refund for a registration.
-    
+
     POST /registrations/{uuid}/refund/
     """
+
     permission_classes = [permissions.IsAuthenticated]
 
     @swagger_auto_schema(
         operation_summary="Process refund",
         operation_description="Refund a registration (full or partial).",
-        request_body=serializers.Serializer(), # Define a proper serializer for request body validation if needed
+        request_body=serializers.Serializer(),  # Define a proper serializer for request body validation if needed
         responses={200: RefundRecordSerializer, 400: '{"error": "..."}'},
     )
     def post(self, request, registration_uuid):
@@ -416,24 +514,32 @@ class RefundView(views.APIView):
         is_owner = registration.event.owner == request.user or (
             registration.event.organization and registration.event.organization.members.filter(user=request.user).exists()
         )
-        
+
         if not (is_admin or is_owner):
             return error_response('Permission denied', code='PERMISSION_DENIED', status_code=status.HTTP_403_FORBIDDEN)
 
-        amount_cents = request.data.get('amount_cents') # Optional, defaults to full
+        amount_cents = request.data.get('amount_cents')  # Optional, defaults to full
         reason = request.data.get('reason', 'requested_by_customer')
 
         refund_service = RefundService()
         result = refund_service.process_refund(
-            registration=registration,
-            amount_cents=amount_cents,
-            reason=reason,
-            processed_by=request.user
+            registration=registration, amount_cents=amount_cents, reason=reason, processed_by=request.user
         )
 
         if result['success']:
             # Return the created refund record
             refund_record = RefundRecord.objects.filter(stripe_refund_id=result['refund_id']).first()
+            try:
+                log_audit_event(
+                    actor=request.user,
+                    action='refund_processed',
+                    object_type='registration',
+                    object_uuid=str(registration.uuid),
+                    metadata={'refund_id': result['refund_id']},
+                    request=request,
+                )
+            except Exception:
+                pass
             return Response(RefundRecordSerializer(refund_record).data)
         else:
             return error_response(result.get('error', 'Refund failed'), code='REFUND_FAILED')
@@ -443,10 +549,11 @@ class RefundView(views.APIView):
 class PayoutViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Payout management for organizers.
-    
+
     GET /payouts/ - List payout history
     POST /payouts/request/ - Request manual payout
     """
+
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = PayoutRequestSerializer
 
@@ -456,7 +563,7 @@ class PayoutViewSet(viewsets.ReadOnlyModelViewSet):
     @swagger_auto_schema(
         operation_summary="Request payout",
         operation_description="Initiate a manual payout to the external bank account.",
-        request_body=serializers.Serializer(), # Define schema for amount
+        request_body=serializers.Serializer(),  # Define schema for amount
         responses={200: PayoutRequestSerializer, 400: '{"error": "..."}'},
     )
     @action(detail=False, methods=['post'])
@@ -464,14 +571,10 @@ class PayoutViewSet(viewsets.ReadOnlyModelViewSet):
         amount_cents = request.data.get('amount_cents')
         if not amount_cents:
             return error_response('Amount is required', code='MISSING_AMOUNT')
-            
+
         currency = request.data.get('currency', 'usd')
 
-        result = stripe_connect_service.create_payout(
-            user=request.user,
-            amount_cents=int(amount_cents),
-            currency=currency
-        )
+        result = stripe_connect_service.create_payout(user=request.user, amount_cents=int(amount_cents), currency=currency)
 
         if result['success']:
             # Return the created payout request
@@ -487,3 +590,122 @@ class PayoutViewSet(viewsets.ReadOnlyModelViewSet):
         balance = stripe_connect_service.get_available_balance(request.user)
         return Response({'available_cents': balance, 'currency': 'usd'})
 
+
+@roles('organizer', 'admin', route_name='registration_refund')
+class RegistrationRefundView(views.APIView):
+    """
+    Process refund for a registration.
+
+    POST /api/v1/registrations/{uuid}/refund/
+
+    Body:
+        amount_cents (optional): Amount to refund in cents (omit for full refund)
+        reason (optional): Refund reason ('requested_by_customer', 'duplicate', 'fraudulent')
+        description (optional): Optional notes
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="Refund registration",
+        operation_description="Process a refund for a paid event registration. Full or partial refunds supported.",
+        request_body=RefundRequestSerializer,
+        responses={
+            200: RefundRecordSerializer,
+            400: '{"error": {"code": "...", "message": "..."}}',
+            403: '{"error": {"code": "FORBIDDEN", "message": "..."}}',
+            404: '{"error": {"code": "NOT_FOUND", "message": "..."}}',
+        },
+    )
+    def post(self, request, uuid):
+        """Process refund for registration."""
+
+        from registrations.models import Registration
+
+        # Validate input
+        serializer = RefundRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Get registration
+        try:
+            registration = Registration.objects.select_for_update().get(uuid=uuid, deleted_at__isnull=True)
+        except Registration.DoesNotExist:
+            return error_response('Registration not found', code='NOT_FOUND', status_code=404)
+
+        # Check ownership (event owner or org admin)
+        event = registration.event
+        is_owner = event.owner_id == request.user.id
+        is_org_admin = False
+        if event.organization:
+            is_org_admin = event.organization.memberships.filter(user=request.user, role='admin', is_active=True).exists()
+
+        if not (is_owner or is_org_admin or request.user.is_staff):
+            return error_response('You do not have permission to refund this registration', code='FORBIDDEN', status_code=403)
+
+        # Check refund eligibility
+        if registration.payment_status in [Registration.PaymentStatus.NA, Registration.PaymentStatus.REFUNDED]:
+            return error_response('This registration is not eligible for refund', code='NOT_ELIGIBLE')
+
+        if registration.payment_status != Registration.PaymentStatus.PAID:
+            return error_response('Can only refund paid registrations', code='NOT_PAID')
+
+        # Check refund window (optional - you can add time limits here)
+        # Example: No refunds after event has started
+        # if registration.event.starts_at and registration.event.starts_at < timezone.now():
+        #     return error_response('Cannot refund after event has started', code='EVENT_STARTED')
+
+        # Process refund
+        refund_service = RefundService()
+        result = refund_service.process_refund(
+            registration=registration,
+            amount_cents=serializer.validated_data.get('amount_cents'),
+            reason=serializer.validated_data.get('reason', 'requested_by_customer'),
+            processed_by=request.user,
+        )
+
+        if result['success']:
+            # Get the created refund record
+            refund_record = RefundRecord.objects.filter(stripe_refund_id=result['refund_id']).first()
+
+            # Log audit event
+            try:
+                log_audit_event(
+                    actor=request.user,
+                    action='refund_processed',
+                    object_type='registration',
+                    object_uuid=str(registration.uuid),
+                    metadata={
+                        'refund_id': result['refund_id'],
+                        'amount_cents': serializer.validated_data.get('amount_cents'),
+                        'reason': serializer.validated_data.get('reason'),
+                    },
+                    request=request,
+                )
+            except Exception:
+                pass
+
+            return Response(
+                RefundRecordSerializer(refund_record).data if refund_record else {'refund_id': result['refund_id']},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return error_response(result.get('error', 'Refund failed'), code='REFUND_FAILED')
+
+
+@roles('admin', route_name='billing_reconciliation')
+class BillingReconciliationView(views.APIView):
+    """Admin reconciliation snapshot for Stripe vs database payments."""
+
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        from billing.reconciliation import reconcile_payment_intents
+
+        days = int(request.query_params.get('days', 30))
+        limit = int(request.query_params.get('limit', 200))
+
+        result = reconcile_payment_intents(days=days, limit=limit)
+        if not result.get('success'):
+            return error_response(result.get('error', 'Reconciliation failed'), code='RECONCILIATION_FAILED')
+
+        return Response(result)

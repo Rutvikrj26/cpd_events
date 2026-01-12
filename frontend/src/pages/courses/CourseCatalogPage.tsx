@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Search, BookOpen, Clock, Award, Building2, Users, Loader2, ArrowRight } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -174,7 +175,14 @@ export const CourseCatalogPage: React.FC = () => {
                                     {/* Organization */}
                                     {course.organization_name && (
                                         <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                                            <Building2 className="h-4 w-4" />
+                                            <Avatar className="h-6 w-6">
+                                                {course.organization_logo_url ? (
+                                                    <AvatarImage src={course.organization_logo_url} alt={course.organization_name} />
+                                                ) : null}
+                                                <AvatarFallback className="text-xs">
+                                                    {course.organization_name[0]}
+                                                </AvatarFallback>
+                                            </Avatar>
                                             <span>{course.organization_name}</span>
                                         </div>
                                     )}

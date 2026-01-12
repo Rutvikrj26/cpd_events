@@ -14,7 +14,6 @@ import {
     Settings,
     FileText,
     Video,
-    Building2,
     Search,
     Users
 } from 'lucide-react';
@@ -23,81 +22,166 @@ import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
 import { OrganizationSwitcher } from "@/components/organizations/OrganizationSwitcher";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { Subscription } from "@/api/billing/types";
+import { getRoleFlags } from "@/lib/role-utils";
 
-export const Sidebar = () => {
+type NavItemConfig = {
+    routeKey: string;
+    to: string;
+    icon: React.ElementType;
+    label: string;
+    end?: boolean;
+    hideInOrg?: boolean;
+    requiresOrg?: boolean;
+    attendeeOnly?: boolean;
+    learnerOnly?: boolean;
+    organizerOnly?: boolean;
+    courseManagerOnly?: boolean;
+    creatorOnly?: boolean;
+    eventOnly?: boolean;
+    orgRoles?: Array<'admin' | 'organizer' | 'course_manager' | 'instructor'>;
+};
+
+export const Sidebar = ({ subscription }: { subscription?: Subscription | null }) => {
     const { user, logout, hasRoute, hasFeature, manifest } = useAuth();
     const [isCollapsed, setIsCollapsed] = useState(false);
-    const isOrganizer = user?.account_type === 'organizer' || user?.account_type === 'admin';
-
+    const { isOrganizer, isCourseManager, isAttendee } = getRoleFlags(user, subscription);
+    const isLearner = isAttendee || isCourseManager;
+    const isCreator = isOrganizer || isCourseManager;
+    const plan = subscription?.plan;
+    const isLmsPlan = plan === 'lms';
     const { currentOrg, organizations } = useOrganization();
+    const orgRole = currentOrg?.user_role || null;
+    const portalLabel = orgRole === 'instructor'
+        ? 'Instructor Portal'
+        : subscription?.plan === 'organization'
+            ? 'Organization Portal'
+            : isOrganizer
+                ? 'Organizer Portal'
+                : isCourseManager
+                    ? 'Course Manager Portal'
+                    : 'Attendee Portal';
 
     // Define nav items with route keys matching backend ROUTE_REGISTRY
-    const navItems = [
-        { routeKey: 'dashboard', to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-        { routeKey: 'browse_events', to: '/events', icon: Search, label: 'Browse Events', attendeeOnly: true },
-        { routeKey: 'my_events', to: '/events', icon: Calendar, label: 'My Events', organizerOnly: true },
-        // Dynamic Org Courses Link - visible only when context is set (handled in filter)
+    const navItems: NavItemConfig[] = [
+        // --- PERSONAL CONTEXT ITEMS ---
+        { routeKey: 'dashboard', to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', hideInOrg: true },
+        { routeKey: 'browse_events', to: '/events', icon: Search, label: 'Browse Events', attendeeOnly: true, hideInOrg: true, eventOnly: true },
+        { routeKey: 'browse_courses', to: '/courses', icon: BookOpen, label: 'Browse Courses', learnerOnly: true, hideInOrg: true },
+        { routeKey: 'my_events', to: '/events', icon: Calendar, label: 'My Events', organizerOnly: true, hideInOrg: true, eventOnly: true },
+        { routeKey: 'registrations', to: '/registrations', icon: BookOpen, label: 'My Registrations', attendeeOnly: true, hideInOrg: true, eventOnly: true },
+        { routeKey: 'course_enrollments', to: '/my-courses', icon: BookOpen, label: 'My Courses', learnerOnly: true, hideInOrg: true },
+        { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'My Certificates', attendeeOnly: true, hideInOrg: true },
+
+        // Organizer Specific (Personal Context)
+        { routeKey: 'event_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', organizerOnly: true, hideInOrg: true, eventOnly: true },
+        { routeKey: 'zoom_meetings', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', organizerOnly: true, hideInOrg: true, eventOnly: true },
+        { routeKey: 'contacts', to: '/organizer/contacts', icon: Users, label: 'Contacts', organizerOnly: true, hideInOrg: true, eventOnly: true },
+        // NOTE: "Organizations" link is removed as it's replaced by the Context Switcher
+        { routeKey: 'subscriptions', to: '/billing', icon: CreditCard, label: 'Billing', creatorOnly: true, hideInOrg: true },
+
+        // Course Manager Specific (Personal Context)
+        { routeKey: 'courses', to: '/courses/manage', icon: FileText, label: 'Manage Courses', courseManagerOnly: true, hideInOrg: true },
+        { routeKey: 'course_certificates', to: '/courses/certificates', icon: Award, label: 'Course Certificates', courseManagerOnly: true, hideInOrg: true },
+
+        // --- ORGANIZATION CONTEXT ITEMS ---
+        {
+            routeKey: 'org_instructor',
+            to: currentOrg ? `/org/${currentOrg.slug}/instructor` : '#',
+            icon: LayoutDashboard,
+            label: 'Instructor Home',
+            requiresOrg: true,
+            orgRoles: ['instructor'],
+        },
+        {
+            routeKey: 'org_dashboard',
+            to: currentOrg ? `/org/${currentOrg.slug}` : '#',
+            icon: LayoutDashboard,
+            label: 'Overview',
+            requiresOrg: true,
+            orgRoles: ['admin', 'organizer', 'course_manager'],
+        },
+        {
+            routeKey: 'org_events',
+            to: currentOrg ? `/org/${currentOrg.slug}/events` : '#',
+            icon: Calendar,
+            label: 'Events',
+            requiresOrg: true,
+            orgRoles: ['admin', 'organizer'],
+        },
         {
             routeKey: 'org_courses',
-            to: currentOrg ? `/org/${currentOrg.slug}/courses` : '/courses',
+            to: currentOrg ? `/org/${currentOrg.slug}/courses` : '#',
             icon: BookOpen,
             label: 'Courses',
-            organizerOnly: true,
-            requiresOrg: true
+            requiresOrg: true,
+            orgRoles: ['admin', 'course_manager'],
         },
-        { routeKey: 'registrations', to: '/registrations', icon: BookOpen, label: 'My Registrations', attendeeOnly: true },
-        { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'My Certificates', attendeeOnly: true },
-        { routeKey: 'event_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', organizerOnly: true, end: true },
-        // { routeKey: 'cert_templates', to: '/organizer/certificates/templates', icon: FileText, label: 'Cert. Templates', organizerOnly: true }, // REMOVED
+        {
+            routeKey: 'org_team',
+            to: currentOrg ? `/org/${currentOrg.slug}/team` : '#',
+            icon: Users,
+            label: 'Team & Subscription',
+            requiresOrg: true,
+            orgRoles: ['admin', 'course_manager'],
+        },
+        {
+            routeKey: 'org_settings',
+            to: currentOrg ? `/org/${currentOrg.slug}/settings` : '#',
+            icon: Settings,
+            label: 'Settings',
+            requiresOrg: true,
+            orgRoles: ['admin'],
+        },
 
-        { routeKey: 'zoom_meetings', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', organizerOnly: true },
-        { routeKey: 'contacts', to: '/organizer/contacts', icon: Users, label: 'Contacts', organizerOnly: true },
-        { routeKey: 'organizations', to: '/organizations', icon: Building2, label: 'Organizations', organizerOnly: true },
-        { routeKey: 'subscriptions', to: '/billing', icon: CreditCard, label: 'Billing', organizerOnly: true },
+        // --- SHARED ITEMS ---
         { routeKey: 'profile', to: '/settings', icon: UserCircle, label: 'Profile' },
     ];
 
-    // Filter items based on role first, then optionally use manifest for fine-grained control
+    // Filter items based on role first, then listener to context
     const visibleItems = navItems.filter(item => {
-        // FIRST: Apply role-based filtering - this always takes precedence
-        // Hide attendee-only items for organizers
-        if (item.attendeeOnly && isOrganizer) {
-            return false;
-        }
-        // Hide organizer-only items for attendees
-        if (item.organizerOnly && !isOrganizer) {
-            return false;
+        if (isLmsPlan && item.eventOnly) return false;
+
+        // 1. Role-based filtering (Security/UX)
+        if (item.attendeeOnly && !isAttendee) return false;
+        if (item.learnerOnly && !isLearner) return false;
+        if (item.organizerOnly && !isOrganizer) return false;
+        if (item.courseManagerOnly && !isCourseManager) return false;
+        if (item.creatorOnly && !isCreator) return false;
+
+        // 2. Context-based filtering (Personal vs Org)
+        if (currentOrg) {
+            // We are in Organization Context
+            if (item.hideInOrg) return false;
+            if (item.orgRoles && (!orgRole || !item.orgRoles.includes(orgRole))) return false;
+            // requiresOrg items are allowed (and shared items)
+        } else {
+            // We are in Personal Context
+            if (item.requiresOrg) return false;
         }
 
-        // Hide items requiring org context if none selected
-        if (item.requiresOrg && !currentOrg) {
-            return false;
-        }
-
-        // SECOND: If manifest is loaded, use it for additional fine-grained control
+        // 3. Manifest/Feature Flag filtering (Fine-grained control)
         if (manifest && manifest.routes.length > 0) {
-            // Items always visible (not in RBAC registry)
-            if (['dashboard', 'profile', 'my_events', 'browse_events', 'contacts'].includes(item.routeKey)) {
-                return true;
-            }
+            // Always allow basic shared routes and new org routes (assuming they are allowed if we are in the org)
+            // TODO: Ideally check robust permissions for org routes, but checking 'requiresOrg' existence is a proxy for now
+            if (['dashboard', 'profile', 'my_events', 'browse_events', 'browse_courses', 'course_enrollments', 'course_certificates', 'contacts'].includes(item.routeKey)) return true;
+            if (item.requiresOrg) return true; // Assume if they are in the org, they can see the links (page will protect)
 
-            // Use feature flag for certificates since it's not a distinct backend view
-            if (item.routeKey === 'certificates') {
-                return hasFeature('view_own_certificates');
-            }
-            if (item.routeKey === 'browse_events') {
-                return hasFeature('browse_events');
-            }
+            if (item.routeKey === 'certificates') return hasFeature('view_own_certificates');
+            if (item.routeKey === 'browse_events') return hasFeature('browse_events');
+
+            // Check specific route keys
+            if (item.routeKey.startsWith('org_')) return true; // Allow new org routes for now
+
             return hasRoute(item.routeKey);
         }
 
-        // Fallback: no manifest loaded, default to true (role filtering already applied)
         return true;
     });
 
     const toggleSidebar = () => setIsCollapsed(!isCollapsed);
 
-    const NavItem = ({ item }: { item: any }) => (
+    const NavItem = ({ item }: { item: NavItemConfig }) => (
         <NavLink
             to={item.to}
             end={item.end}
@@ -139,15 +223,15 @@ export const Sidebar = () => {
                                 <h1 className="text-xl font-bold gradient-text whitespace-nowrap">
                                     Accredit
                                 </h1>
-                                <p className="text-xs text-muted-foreground mt-1 truncate">{isOrganizer ? 'Organizer Portal' : 'Attendee Portal'}</p>
+                        <p className="text-xs text-muted-foreground mt-1 truncate">{portalLabel}</p>
                             </div>
                         )}
                         {isCollapsed && <span className="font-bold text-primary text-xl">A</span>}
                     </NavLink>
                 </div>
 
-                {/* Organization Switcher - Only for organizers with organizations */}
-                {isOrganizer && organizations && organizations.length > 0 && (
+                {/* Organization Switcher - Available for any org member */}
+                {organizations && organizations.length > 0 && (
                     <OrganizationSwitcher variant={isCollapsed ? "compact" : "default"} />
                 )}
             </div>

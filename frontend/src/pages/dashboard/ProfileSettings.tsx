@@ -50,6 +50,7 @@ import { User as UserType, NotificationPreferences } from "@/api/accounts/types"
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { getPayoutsDashboardLink, getPayoutsStatus, initiatePayoutsConnect, PayoutsStatus } from "@/api/payouts";
+import { getRoleFlags } from "@/lib/role-utils";
 
 // Schema for General Profile
 const profileSchema = z.object({
@@ -89,7 +90,8 @@ export function ProfileSettings() {
 
    // Payouts state
    const { user: authUser } = useAuth();
-   const isOrganizer = authUser?.account_type === 'organizer';
+   const { isOrganizer, isCourseManager } = getRoleFlags(authUser, subscription);
+   const isCreator = isOrganizer || isCourseManager;
    const [payoutsStatus, setPayoutsStatus] = useState<PayoutsStatus | null>(null);
    const [loadingPayouts, setLoadingPayouts] = useState(true);
    const [initiatingConnect, setInitiatingConnect] = useState(false);
@@ -142,16 +144,12 @@ export function ProfileSettings() {
    const loadPaymentData = async () => {
       setLoadingPayment(true);
       try {
-         const promises: Promise<any>[] = [getPaymentMethods()];
-         if (isOrganizer) {
-            promises.push(getSubscription());
-         }
-
-         const [methods, sub] = await Promise.all(promises);
+         const [methods, sub] = await Promise.all([
+            getPaymentMethods(),
+            getSubscription(),
+         ]);
          setPaymentMethods(methods);
-         if (isOrganizer) {
-            setSubscription(sub);
-         }
+         setSubscription(sub);
       } catch (error) {
          console.error("Failed to load payment data:", error);
       } finally {
@@ -180,7 +178,7 @@ export function ProfileSettings() {
 
    // Load payouts status (organizers only)
    useEffect(() => {
-      if (!isOrganizer) {
+      if (!isCreator) {
          setLoadingPayouts(false);
          return;
       }
@@ -195,7 +193,7 @@ export function ProfileSettings() {
          }
       };
       loadPayouts();
-   }, [isOrganizer]);
+   }, [isCreator]);
 
    const handleDeletePaymentMethod = async (uuid: string) => {
       setDeletingId(uuid);
@@ -347,7 +345,7 @@ export function ProfileSettings() {
                      >
                         <Bell className="mr-2 h-4 w-4" /> Notifications
                      </TabsTrigger>
-                     {isOrganizer && (
+                     {isCreator && (
                         <TabsTrigger
                            value="payouts"
                            className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
@@ -419,7 +417,7 @@ export function ProfileSettings() {
                                        </FormItem>
                                     )}
                                  />
-                                 {isOrganizer && (
+                                 {isCreator && (
                                     <FormField
                                        control={profileForm.control}
                                        name="gst_hst_number"
@@ -532,7 +530,7 @@ export function ProfileSettings() {
                      </Card>
 
                      {/* Subscription Status Card - Organizers Only */}
-                     {isOrganizer && (
+                     {isCreator && (
                         <Card>
                            <CardHeader>
                               <CardTitle>Subscription</CardTitle>
@@ -575,7 +573,7 @@ export function ProfileSettings() {
                                        <Alert className="bg-warning/10 border-warning/30">
                                           <AlertCircle className="h-4 w-4 text-warning" />
                                           <AlertDescription>
-                                             Add a payment method to continue using premium features after your trial.
+                                             Add a payment method to continue using paid features after your trial.
                                           </AlertDescription>
                                        </Alert>
                                     )}
@@ -713,7 +711,7 @@ export function ProfileSettings() {
                   </TabsContent>
 
                   {/* PAYOUTS TAB */}
-                  {isOrganizer && (
+                  {isCreator && (
                      <TabsContent value="payouts" className="mt-0 space-y-6">
                         <Card>
                            <CardHeader>

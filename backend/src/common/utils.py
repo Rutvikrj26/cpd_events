@@ -5,15 +5,15 @@ Utility functions for the CPD Events platform.
 import secrets
 import string
 
+from django.utils.text import slugify
 from rest_framework import status
 from rest_framework.response import Response
-from django.utils.text import slugify
 
 
 def error_response(message, code='ERROR', details=None, status_code=status.HTTP_400_BAD_REQUEST):
     """
     Return a consistent error response.
-    
+
     Format:
     {
         "error": {

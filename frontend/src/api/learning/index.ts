@@ -8,8 +8,24 @@ export const getMyLearning = async (): Promise<any[]> => {
     return response.data;
 };
 
-export const updateContentProgress = async (contentUuid: string): Promise<void> => {
-    await client.post(`/learning/progress/content/${contentUuid}/`);
+export interface ContentProgressUpdate {
+    progress_percent?: number;
+    time_spent?: number;
+    position?: Record<string, any>;
+    completed?: boolean;
+}
+
+export const updateContentProgress = async (
+    contentUuid: string,
+    data: ContentProgressUpdate = { progress_percent: 100, completed: true }
+): Promise<void> => {
+    const payload = {
+        progress_percent: data.progress_percent ?? 100,
+        time_spent: data.time_spent ?? 0,
+        position: data.position,
+        completed: data.completed ?? data.progress_percent === 100,
+    };
+    await client.post(`/learning/progress/content/${contentUuid}/`, payload);
 };
 
 // -- Organizer Actions (Nested in Events) --

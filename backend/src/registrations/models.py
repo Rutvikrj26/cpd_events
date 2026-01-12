@@ -87,57 +87,34 @@ class Registration(SoftDeleteModel):
         NA = 'na', 'N/A'  # For free events
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.CONFIRMED, db_index=True)
-    
+
     # Payment Tracking
-    payment_status = models.CharField(
-        max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.NA, db_index=True
-    )
+    payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.NA, db_index=True)
     payment_intent_id = models.CharField(max_length=255, blank=True, db_index=True)
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     platform_fee_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        help_text="Platform service fee charged to attendee"
+        max_digits=10, decimal_places=2, default=0, help_text="Platform service fee charged to attendee"
     )
     service_fee_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        help_text="Service fee charged to attendee"
+        max_digits=10, decimal_places=2, default=0, help_text="Service fee charged to attendee"
     )
     processing_fee_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        help_text="Payment processing fee charged to attendee"
+        max_digits=10, decimal_places=2, default=0, help_text="Payment processing fee charged to attendee"
     )
     tax_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        help_text="Tax amount charged on ticket and service fee"
+        max_digits=10, decimal_places=2, default=0, help_text="Tax amount charged on ticket and service fee"
     )
     total_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        help_text="Total amount charged (ticket + fees + tax)"
+        max_digits=10, decimal_places=2, default=0, help_text="Total amount charged (ticket + fees + tax)"
     )
     stripe_tax_calculation_id = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Stripe Tax Calculation ID used for this charge"
+        max_length=255, blank=True, help_text="Stripe Tax Calculation ID used for this charge"
     )
     stripe_tax_transaction_id = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Stripe Tax Transaction ID created from the tax calculation"
+        max_length=255, blank=True, help_text="Stripe Tax Transaction ID created from the tax calculation"
     )
     stripe_transfer_id = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Stripe Transfer ID created for organizer payout"
+        max_length=255, blank=True, help_text="Stripe Transfer ID created for organizer payout"
     )
 
     # Billing address (for tax calculation)
@@ -195,15 +172,9 @@ class Registration(SoftDeleteModel):
     # Zoom Meeting Registration (unique per registrant)
     # =========================================
     zoom_registrant_join_url = models.URLField(
-        blank=True,
-        max_length=2000,
-        help_text="Unique Zoom join URL for this registrant"
+        blank=True, max_length=2000, help_text="Unique Zoom join URL for this registrant"
     )
-    zoom_registrant_id = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Zoom registrant ID from Zoom API"
-    )
+    zoom_registrant_id = models.CharField(max_length=100, blank=True, help_text="Zoom registrant ID from Zoom API")
 
     class Meta:
         db_table = 'registrations'
@@ -274,7 +245,6 @@ class Registration(SoftDeleteModel):
         # Update event counts
         # Update event counts handled by signals
 
-
         # Promote from waitlist if applicable
         self._promote_next_from_waitlist()
 
@@ -335,12 +305,12 @@ class Registration(SoftDeleteModel):
         # Add to Zoom meeting if confirmed
         if self.status == self.Status.CONFIRMED:
             from registrations.tasks import add_zoom_registrant
-            add_zoom_registrant.delay(self.id)
 
+            add_zoom_registrant.delay(self.id)
 
         # Send email notification to attendee
         from integrations.services import email_service
-        
+
         email_service.send_email(
             template='waitlist_promotion',
             recipient=self.email,
@@ -348,8 +318,8 @@ class Registration(SoftDeleteModel):
                 'user_name': self.full_name,
                 'event_title': self.event.title,
                 # Assuming standard frontend route structure
-                'action_url': f"https://cpdevents.com/events/{self.event.slug}", 
-            }
+                'action_url': f"https://cpdevents.com/events/{self.event.slug}",
+            },
         )
 
     def update_attendance_summary(self):
@@ -363,7 +333,7 @@ class Registration(SoftDeleteModel):
 
         total_minutes = sum(r.duration_minutes for r in records)
         self.total_attendance_minutes = total_minutes
-        
+
         # Attended if joined Zoom OR checked in physically (Hybrid support)
         self.attended = (total_minutes > 0) or (self.check_in_time is not None)
 

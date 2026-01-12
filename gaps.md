@@ -21,7 +21,7 @@ This audit covers the entire payment and account lifecycle including user regist
 
 ### 1. REFUND PROCESSING - MISSING ENTIRELY
 
-**Status**: Model exists (`PaymentStatus.REFUNDED`), but NO implementation
+**Status**: [Partial] `StripePaymentService.refund_payment_intent` exists, but lacks dedicated API endpoint and RefundRecord model.
 
 **What's Missing**:
 - No refund API endpoint (`/registrations/{uuid}/refund/`)
@@ -69,7 +69,7 @@ The `Registration` model has `PaymentStatus.REFUNDED` as an option, but there's 
 
 ### 2. PAYOUT PROCESSING - MISSING ENTIRELY
 
-**Status**: Connect account creation works, but NO payout initiation
+**Status**: [Open] Connect account creation works, but NO payout initiation
 
 **What's Missing**:
 - No `request_payout()` method in `StripeConnectService`
@@ -152,7 +152,7 @@ There's no mechanism to:
 
 ### 4. EMAIL SENDING - NOT IMPLEMENTED
 
-**Status**: Email flows exist but sending is commented out/stubbed
+**Status**: [Open] Email flows exist but sending is commented out/stubbed in accounts views.
 
 **What's Missing**:
 - Email verification emails not actually sent
@@ -235,6 +235,7 @@ The authentication flows create tokens but never send emails:
 
 ### 6. Race Conditions in Payment Processing
 
+**Status**: [Fixed] `select_for_update()` logic implemented in `registrations/services.py`.
 **Location**: `backend/src/registrations/services.py:122-123`, `backend/src/billing/webhooks.py:334`
 
 **Issue**:
@@ -262,6 +263,7 @@ with transaction.atomic():
 
 ### 7. Promo Code Race Conditions
 
+**Status**: [Open] `current_uses` incremented non-atomically.
 **Location**: `backend/src/promo_codes/services.py:206`
 
 **Issue**:

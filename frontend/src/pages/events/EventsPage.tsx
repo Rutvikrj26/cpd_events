@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { Plus, Calendar, MapPin, Users, MoreVertical, Copy, Edit, Eye, Trash2, Loader2, Building2 } from 'lucide-react';
 import { getEvents, getPublicEvents, deleteEvent } from '@/api/events';
 import { duplicateEvent } from '@/api/events/actions';
@@ -26,17 +26,25 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { Subscription } from '@/api/billing/types';
+import { getRoleFlags } from '@/lib/role-utils';
+
+type EventsOutletContext = {
+    subscription: Subscription | null;
+};
 
 export const EventsPage = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const outletContext = useOutletContext<EventsOutletContext | undefined>();
+    const subscription = outletContext?.subscription ?? null;
     const [events, setEvents] = useState<Event[]>([]);
     const [loading, setLoading] = useState(true);
     const [duplicating, setDuplicating] = useState<string | null>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
     const [deleting, setDeleting] = useState(false);
-    const isOrganizer = user?.account_type === 'organizer' || user?.account_type === 'admin';
+    const { isOrganizer } = getRoleFlags(user, subscription);
 
     const fetchEvents = async () => {
         try {

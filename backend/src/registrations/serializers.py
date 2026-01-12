@@ -12,6 +12,7 @@ Field names match the actual model fields:
 """
 
 import logging
+
 from rest_framework import serializers
 
 logger = logging.getLogger(__name__)

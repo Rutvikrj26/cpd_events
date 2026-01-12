@@ -5,36 +5,34 @@ This module provides comprehensive fixtures for testing API endpoints.
 Fixtures use factory_boy factories from factories.py for data generation.
 """
 
-import pytest
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
+import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 # Import factories
 from factories import (
-    UserFactory,
-    OrganizerFactory,
+    AssignmentFactory,
+    CertificateFactory,
+    CertificateTemplateFactory,
+    ContactFactory,
+    ContactListFactory,
+    CourseFactory,
+    EventCustomFieldFactory,
+    EventFactory,
+    EventModuleFactory,
+    EventSessionFactory,
+    ModuleContentFactory,
     OrganizationFactory,
     OrganizationMembershipFactory,
-    EventFactory,
-    EventSessionFactory,
-    EventCustomFieldFactory,
+    OrganizerFactory,
     RegistrationFactory,
-    CertificateTemplateFactory,
-    CertificateFactory,
-    ContactListFactory,
-    ContactFactory,
     TagFactory,
-    SubscriptionFactory,
-    EventModuleFactory,
-    ModuleContentFactory,
-    AssignmentFactory,
-    CourseFactory,
+    UserFactory,
 )
-
 
 User = get_user_model()
 
@@ -63,6 +61,14 @@ def organizer_client(organizer):
     """API client authenticated as an organizer."""
     client = APIClient()
     client.force_authenticate(user=organizer)
+    return client
+
+
+@pytest.fixture
+def course_manager_client(course_manager):
+    """API client authenticated as a course manager."""
+    client = APIClient()
+    client.force_authenticate(user=course_manager)
     return client
 
 
@@ -113,18 +119,41 @@ def organizer(db):
         full_name='Test Organizer',
         organizer_slug='test-organizer',
     )
-    
-    # Update subscription to organization plan so RBAC checks pass
-    # Signal creates subscription with PROFESSIONAL plan, we need ORGANIZATION
+
+    # Update subscription to organization plan with ACTIVE status so tests can create events
+    # Signal creates subscription with TRIALING status, we need ACTIVE to bypass trial expiration
     from billing.models import Subscription
+
     sub = Subscription.objects.get(user=organizer)
     sub.plan = 'organization'
+    sub.status = 'active'  # Set to active to bypass trial expiration checks
     sub.save()
-    
+
     # Refresh to ensure relationship is loaded
     organizer.refresh_from_db()
-    
+
     return organizer
+
+
+@pytest.fixture
+def course_manager(db):
+    """A course manager user."""
+    user = UserFactory(
+        email='course-manager@example.com',
+        full_name='Course Manager',
+        account_type='course_manager',
+    )
+
+    # Update subscription to LMS plan with ACTIVE status so tests can create courses
+    from billing.models import Subscription
+
+    sub = Subscription.objects.get(user=user)
+    sub.plan = 'lms'
+    sub.status = 'active'  # Set to active to bypass trial expiration checks
+    sub.save()
+
+    user.refresh_from_db()
+    return user
 
 
 @pytest.fixture
@@ -163,7 +192,7 @@ def organization(db, organizer):
     OrganizationMembershipFactory(
         organization=org,
         user=organizer,
-        role='owner',
+        role='admin',
     )
     return org
 
@@ -175,7 +204,7 @@ def org_member(db, organization):
     OrganizationMembershipFactory(
         organization=organization,
         user=member_user,
-        role='member',
+        role='instructor',
     )
     return member_user
 
@@ -376,11 +405,9 @@ def tag(db, organizer):
 def subscription(db, organizer):
     """A subscription for the organizer (may already exist from signal)."""
     from billing.models import Subscription
+
     # Signal auto-creates subscription for organizers, so get or update it
-    sub, created = Subscription.objects.get_or_create(
-        user=organizer,
-        defaults={'plan': 'free', 'status': 'active'}
-    )
+    sub, created = Subscription.objects.get_or_create(user=organizer, defaults={'plan': 'free', 'status': 'active'})
     return sub
 
 
@@ -467,11 +494,13 @@ def registration_create_data(user):
 def mock_stripe(settings):
     """Mock Stripe API for billing tests."""
     settings.STRIPE_SECRET_KEY = 'sk_test_mock'
-    with patch('stripe.Customer') as mock_customer, \
-         patch('stripe.Subscription') as mock_sub, \
-         patch('stripe.checkout.Session') as mock_checkout, \
-         patch('stripe.billing_portal.Session') as mock_portal, \
-         patch('stripe.PaymentMethod') as mock_pm:
+    with (
+        patch('stripe.Customer') as mock_customer,
+        patch('stripe.Subscription') as mock_sub,
+        patch('stripe.checkout.Session') as mock_checkout,
+        patch('stripe.billing_portal.Session') as mock_portal,
+        patch('stripe.PaymentMethod') as mock_pm,
+    ):
         mock_customer.create.return_value = MagicMock(id='cus_test123')
         mock_sub.create.return_value = MagicMock(
             id='sub_test123',
@@ -521,18 +550,34 @@ def mock_cloud_tasks():
 
 @pytest.fixture
 def stripe_products(db):
-    from billing.models import StripeProduct, StripePrice
-    if not StripeProduct.objects.filter(plan='professional').exists():
+    from billing.models import StripePrice, StripeProduct
+
+    if not StripeProduct.objects.filter(plan='organizer').exists():
         prod = StripeProduct.objects.create(
-            name='Professional',
-            plan='professional',
-            stripe_product_id='prod_test_prof',
+            name='Organizer',
+            plan='organizer',
+            stripe_product_id='prod_test_org',
             is_active=True,
         )
         StripePrice.objects.create(
             product=prod,
-            stripe_price_id='price_test_prof_month',
+            stripe_price_id='price_test_org_month',
             amount_cents=2900,
+            currency='usd',
+            billing_interval='month',
+            is_active=True,
+        )
+    if not StripeProduct.objects.filter(plan='lms').exists():
+        prod = StripeProduct.objects.create(
+            name='LMS',
+            plan='lms',
+            stripe_product_id='prod_test_lms',
+            is_active=True,
+        )
+        StripePrice.objects.create(
+            product=prod,
+            stripe_price_id='price_test_lms_month',
+            amount_cents=9900,
             currency='usd',
             billing_interval='month',
             is_active=True,

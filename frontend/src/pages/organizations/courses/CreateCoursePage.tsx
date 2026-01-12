@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ArrowLeft, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Video } from 'lucide-react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
@@ -36,19 +36,25 @@ const courseSchema = z.object({
     description: z.string().optional(),
     cpd_credits: z.coerce.number().min(0).default(0),
     is_public: z.boolean().default(true),
-    is_free: z.boolean().default(true),
     price_cents: z.coerce.number().min(0).default(0),
     enrollment_open: z.boolean().default(true),
     estimated_hours: z.coerce.number().min(0).optional(),
+    // Format (Online = self-paced, Hybrid = includes live sessions)
+    format: z.enum(['online', 'hybrid']).default('online'),
+    // Zoom fields (for Hybrid courses)
+    zoom_meeting_url: z.string().url().optional().or(z.literal('')),
+    zoom_meeting_id: z.string().optional(),
+    zoom_meeting_password: z.string().optional(),
 });
 
-type CourseFormValues = any;
+type CourseFormValues = z.infer<typeof courseSchema>;
 
 const CreateCoursePage = () => {
-    const { slug } = useParams<{ slug: string }>();
+    const { slug } = useParams<{ slug?: string }>();
     const navigate = useNavigate();
     const { toast } = useToast();
     const { currentOrg } = useOrganization();
+    const isPersonal = !slug;
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -62,12 +68,18 @@ const CreateCoursePage = () => {
             description: '',
             cpd_credits: 0,
             is_public: true,
-            is_free: true,
             price_cents: 0,
             enrollment_open: true,
             estimated_hours: 1,
+            format: 'online',
+            zoom_meeting_url: '',
+            zoom_meeting_id: '',
+            zoom_meeting_password: '',
         },
     });
+
+    // Watch format to show/hide Zoom fields
+    const courseFormat = form.watch('format');
 
     // Auto-generate slug from title
     const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,17 +97,14 @@ const CreateCoursePage = () => {
     };
 
     const onSubmit = async (values: CourseFormValues) => {
-        if (!slug) return;
-
         setIsSubmitting(true);
         setSubmitError(null);
 
         try {
             const course = await createCourse({
-                organization_slug: slug,
+                ...(isPersonal ? {} : { organization_slug: slug }),
                 ...values,
-                // Ensure numbers are numbers
-                price_cents: values.is_free ? 0 : values.price_cents,
+                // Backend computes is_free from price_cents
             });
 
             toast({
@@ -104,7 +113,7 @@ const CreateCoursePage = () => {
             });
 
             // Navigate to course management/builder
-            navigate(`/org/${slug}/courses/${course.slug}`);
+            navigate(isPersonal ? `/courses/manage/${course.slug}` : `/org/${slug}/courses/${course.slug}`);
 
         } catch (error: any) {
             console.error('Failed to create course:', error);
@@ -117,7 +126,11 @@ const CreateCoursePage = () => {
     return (
         <div className="container mx-auto py-8 px-4 max-w-3xl">
             <div className="mb-6">
-                <Button variant="ghost" className="pl-0 mb-4" onClick={() => navigate(`/org/${slug}/courses`)}>
+                <Button
+                    variant="ghost"
+                    className="pl-0 mb-4"
+                    onClick={() => navigate(isPersonal ? `/courses/manage` : `/org/${slug}/courses`)}
+                >
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to Courses
                 </Button>
@@ -320,6 +333,103 @@ const CreateCoursePage = () => {
                                     </FormItem>
                                 )}
                             />
+                        </CardContent>
+                    </Card>
+
+                    {/* Format & Virtual Settings Card */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Course Format</CardTitle>
+                            <CardDescription>
+                                Choose how this course will be delivered.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <FormField
+                                control={form.control}
+                                name="format"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Delivery Format</FormLabel>
+                                        <FormControl>
+                                            <div className="flex gap-4">
+                                                <Button
+                                                    type="button"
+                                                    variant={field.value === 'online' ? 'default' : 'outline'}
+                                                    onClick={() => field.onChange('online')}
+                                                    className="flex-1"
+                                                >
+                                                    Online (Self-Paced)
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant={field.value === 'hybrid' ? 'default' : 'outline'}
+                                                    onClick={() => field.onChange('hybrid')}
+                                                    className="flex-1"
+                                                >
+                                                    <Video className="mr-2 h-4 w-4" />
+                                                    Hybrid (Live Sessions)
+                                                </Button>
+                                            </div>
+                                        </FormControl>
+                                        <FormDescription>
+                                            Hybrid courses include scheduled live sessions via Zoom.
+                                        </FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            {/* Zoom fields - only shown for Hybrid */}
+                            {courseFormat === 'hybrid' && (
+                                <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                                    <div className="flex items-center gap-2 font-medium">
+                                        <Video className="h-4 w-4" />
+                                        Zoom Meeting Details
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <FormField
+                                            control={form.control}
+                                            name="zoom_meeting_url"
+                                            render={({ field }) => (
+                                                <FormItem className="col-span-2">
+                                                    <FormLabel>Zoom Meeting URL</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="https://zoom.us/j/..." {...field} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="zoom_meeting_id"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Meeting ID</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="123 456 7890" {...field} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="zoom_meeting_password"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Meeting Password</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="Optional password" {...field} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 

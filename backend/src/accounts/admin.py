@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import User, UserSession, ZoomConnection
+from .models import AuditLog, Notification, User, UserSession, ZoomConnection
 
 
 @admin.register(User)
@@ -43,3 +43,19 @@ class UserSessionAdmin(admin.ModelAdmin):
     list_display = ('user', 'device_type', 'is_active', 'last_activity_at')
     list_filter = ('is_active', 'device_type')
     search_fields = ('user__email',)
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ('user', 'notification_type', 'title', 'read_at', 'created_at')
+    list_filter = ('notification_type', 'read_at')
+    search_fields = ('user__email', 'title')
+    ordering = ('-created_at',)
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    list_display = ('actor', 'action', 'object_type', 'object_uuid', 'created_at')
+    list_filter = ('action', 'object_type')
+    search_fields = ('actor__email', 'object_uuid')
+    ordering = ('-created_at',)

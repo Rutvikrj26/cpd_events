@@ -5,10 +5,10 @@ Events app URL routing.
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from certificates.urls import certificate_router
+from integrations.urls import email_router, recording_router
 from registrations.views import EventRegistrationViewSet
 
-from certificates.urls import certificate_router
-from integrations.urls import recording_router, email_router
 from . import views
 
 app_name = 'events'

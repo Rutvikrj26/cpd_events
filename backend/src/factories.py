@@ -9,11 +9,11 @@ Usage:
     users = UserFactory.create_batch(5)  # Creates 5 users
 """
 
-import factory
-from factory.django import DjangoModelFactory
-from django.utils import timezone
 from datetime import timedelta
 
+import factory
+from django.utils import timezone
+from factory.django import DjangoModelFactory
 
 # =============================================================================
 # User Factories
@@ -39,6 +39,7 @@ class UserFactory(DjangoModelFactory):
         self.set_password(password)
         if create:
             self.save()
+
     email_verified = True
     is_active = True
 
@@ -87,15 +88,16 @@ class OrganizationMembershipFactory(DjangoModelFactory):
 
     organization = factory.SubFactory(OrganizationFactory)
     user = factory.SubFactory(OrganizerFactory)
-    role = 'member'
+    role = 'instructor'
     is_active = True
     invited_at = factory.LazyFunction(timezone.now)
     accepted_at = factory.LazyFunction(timezone.now)
 
     class Params:
-        owner = factory.Trait(role='owner')
         admin = factory.Trait(role='admin')
-        manager = factory.Trait(role='manager')
+        organizer = factory.Trait(role='organizer')
+        course_manager = factory.Trait(role='course_manager')
+        instructor = factory.Trait(role='instructor')
         pending = factory.Trait(
             accepted_at=None,
             invitation_token=factory.Faker('uuid4'),
@@ -230,10 +232,12 @@ class CertificateFactory(DjangoModelFactory):
     template = factory.SubFactory(CertificateTemplateFactory)
     issued_by = factory.LazyAttribute(lambda o: o.registration.event.owner)
     status = 'active'
-    certificate_data = factory.LazyAttribute(lambda o: {
-        'recipient_name': o.registration.full_name,
-        'event_title': o.registration.event.title,
-    })
+    certificate_data = factory.LazyAttribute(
+        lambda o: {
+            'recipient_name': o.registration.full_name,
+            'event_title': o.registration.event.title,
+        }
+    )
 
 
 # =============================================================================

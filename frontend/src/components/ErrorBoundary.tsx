@@ -3,6 +3,8 @@ import { AlertCircle, RefreshCw, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
+const isDev = import.meta.env.DEV;
+
 interface Props {
     children: ReactNode;
     fallback?: ReactNode;
@@ -31,7 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
         // Log errors in development for debugging
-        if (process.env.NODE_ENV === "development") {
+        if (isDev) {
             console.error("Uncaught error:", error, errorInfo);
         }
 
@@ -85,7 +87,7 @@ export class ErrorBoundary extends Component<Props, State> {
                                 </p>
                             </div>
 
-                            {process.env.NODE_ENV === "development" && this.state.error && (
+                            {isDev && this.state.error && (
                                 <details className="w-full text-left">
                                     <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground mb-2">
                                         Error Details (Development Only)

@@ -53,7 +53,7 @@ flowchart TD
 
     C --> E[Enter: Email, Name, Password]
     D --> F[Enter: Email, Name, Password]
-    F --> G[Auto-enroll 30-day Professional Trial]
+    F --> G[Auto-enroll organizer trial (days set in admin)]
 
     E --> H[Accept Terms & Conditions]
     G --> H
@@ -67,7 +67,7 @@ flowchart TD
     L --> M[Redirect to "/login" with Success Message]
 
     subgraph "URL Parameters"
-        N["?plan=pro|professional|starter"]
+        N["?plan=organizer|lms|organization"]
         O["?role=organizer"]
     end
 ```
@@ -122,7 +122,7 @@ flowchart TD
     B -->|Yes| D["/organizer/dashboard"]
 
     C --> E["Step 1: Welcome"]
-    E --> F["Display Trial Status: 30 days"]
+    E --> F["Display Trial Status: plan trial days"]
     F --> G["Show Feature Limits"]
     G --> H[Click "Let's Get Started"]
 
@@ -141,7 +141,7 @@ flowchart TD
     R --> S
 
     S --> T["Step 4: Billing Details"]
-    T --> U["Display Plan: $30/mo"]
+    T --> U["Display Plan: pricing from admin configuration"]
     U --> V["Show Trial Countdown"]
     V --> W{Add Payment Method?}
     W -->|Yes| X["Open PaymentMethodModal"]
@@ -668,13 +668,15 @@ flowchart TD
 
     B5 --> C["Plan Change Dialog"]
     C --> D["Plan Grid"]
-    D --> D1["Attendee ($0)"]
-    D --> D2["Organizer ($30/mo)"]
-    D --> D3["Organization (Custom)"]
+    D --> D1["Attendee (Free)"]
+    D --> D2["Organizer (Paid - configurable)"]
+    D --> D3["LMS (Paid - configurable)"]
+    D --> D4["Organization ($199/mo base)"]
 
     D1 --> E{Current Plan?}
     D2 --> E
     D3 --> E
+    D4 --> E
     E -->|Yes| F["'Current Plan' Label"]
     E -->|No - Higher| G["'Upgrade' Button"]
     E -->|No - Lower| H["'Downgrade' Button"]
@@ -941,7 +943,7 @@ flowchart TD
     A --> D["Team Management Link"]
     D --> E["/org/:slug/team"]
     E --> E1["Team Members List"]
-    E --> E2["Roles: Admin, Manager, Organizer"]
+    E --> E2["Roles: Admin, Organizer, Course Manager, Instructor"]
     E --> E3["Add Member by Email"]
     E --> E4["Remove Member"]
     E --> E5["Update Member Role"]

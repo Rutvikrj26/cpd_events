@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
-import { getCourseBySlug, enrollInCourse, getPublicCourses } from '@/api/courses';
+import { getCourseBySlug, enrollInCourse, getPublicCourses, courseCheckout, getEnrollments } from '@/api/courses';
 import { Course } from '@/api/courses/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Loader2, CheckCircle, Clock, BookOpen, Award, Users, Building2, ArrowRight } from 'lucide-react';
 
 export const PublicCourseDetailPage = () => {
@@ -21,6 +22,7 @@ export const PublicCourseDetailPage = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isEnrolling, setIsEnrolling] = useState(false);
     const [relatedCourses, setRelatedCourses] = useState<Course[]>([]);
+    const [isEnrolled, setIsEnrolled] = useState(false);
 
     useEffect(() => {
         const fetchCourse = async () => {
@@ -71,6 +73,21 @@ export const PublicCourseDetailPage = () => {
         fetchRelatedCourses();
     }, [course]);
 
+    useEffect(() => {
+        const fetchEnrollmentStatus = async () => {
+            if (!course || !isAuthenticated) return;
+            try {
+                const enrollments = await getEnrollments();
+                const enrolled = enrollments.some(enrollment => enrollment.course?.uuid === course.uuid);
+                setIsEnrolled(enrolled);
+            } catch (error) {
+                console.error('Failed to fetch enrollments:', error);
+            }
+        };
+
+        fetchEnrollmentStatus();
+    }, [course, isAuthenticated]);
+
     const handleEnroll = async () => {
         if (!isAuthenticated) {
             // Redirect to login with return URL
@@ -80,20 +97,44 @@ export const PublicCourseDetailPage = () => {
 
         if (!course) return;
 
+        if (isEnrolled) {
+            navigate(`/learn/${course.uuid}`);
+            return;
+        }
+
         setIsEnrolling(true);
         try {
-            await enrollInCourse(course.uuid);
-            toast({
-                title: 'Enrolled successfully!',
-                description: 'You have been enrolled in this course.',
-            });
-            navigate('/my-courses'); // Redirect to learner dashboard
+            // Check if this is a paid course
+            if (!course.is_free && course.price_cents > 0) {
+                // Paid course: initiate Stripe Checkout
+                const currentUrl = window.location.origin;
+                const result = await courseCheckout(
+                    course.uuid,
+                    `${currentUrl}/my-courses?enrolled=${course.uuid}`, // Success URL
+                    `${currentUrl}/courses/${slug}` // Cancel URL (return to course page)
+                );
+
+                if (result.success && result.url) {
+                    // Redirect to Stripe Checkout
+                    window.location.href = result.url;
+                } else {
+                    throw new Error(result.error || 'Failed to create checkout session');
+                }
+            } else {
+                // Free course: direct enrollment
+                await enrollInCourse(course.uuid);
+                toast({
+                    title: 'Enrolled successfully!',
+                    description: 'You have been enrolled in this course.',
+                });
+                navigate('/my-courses');
+            }
         } catch (error: any) {
             console.error('Enrollment failed:', error);
             toast({
                 variant: 'destructive',
                 title: 'Enrollment failed',
-                description: error.response?.data?.message || 'Could not enroll in course.',
+                description: error.response?.data?.error?.message || error.message || 'Could not enroll in course.',
             });
         } finally {
             setIsEnrolling(false);
@@ -112,7 +153,7 @@ export const PublicCourseDetailPage = () => {
         return (
             <div className="container mx-auto py-12 text-center">
                 <h2 className="text-2xl font-bold">Course not found</h2>
-                <Button variant="link" onClick={() => navigate('/events/browse')}>Browse other learning</Button>
+                <Button variant="link" onClick={() => navigate('/courses')}>Browse other learning</Button>
             </div>
         );
     }
@@ -125,9 +166,9 @@ export const PublicCourseDetailPage = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                         <div className="lg:col-span-2 space-y-4">
                             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                                <Link to="/events/browse" className="hover:underline">Browse</Link>
+                                <Link to="/courses" className="hover:underline">Browse</Link>
                                 <span>/</span>
-                                <Link to={`/org/${course.organization_slug}`} className="hover:underline text-foreground font-medium">
+                                <Link to={`/organizations/${course.organization_slug}/public`} className="hover:underline text-foreground font-medium">
                                     {course.organization_name}
                                 </Link>
                                 <span>/</span>
@@ -168,9 +209,18 @@ export const PublicCourseDetailPage = () => {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <Button size="lg" className="w-full text-lg" onClick={handleEnroll} disabled={isEnrolling || !course.enrollment_open}>
+                                <Button
+                                    size="lg"
+                                    className="w-full text-lg"
+                                    onClick={handleEnroll}
+                                    disabled={isEnrolling || (!course.enrollment_open && !isEnrolled)}
+                                >
                                     {isEnrolling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                    {!course.enrollment_open ? 'Enrollment Closed' : 'Enroll Now'}
+                                    {!course.enrollment_open
+                                        ? 'Enrollment Closed'
+                                        : isEnrolled
+                                            ? 'Continue Course'
+                                            : 'Enroll Now'}
                                 </Button>
                                 <div className="text-sm text-muted-foreground text-center">
                                     30-day money-back guarantee
@@ -243,9 +293,14 @@ export const PublicCourseDetailPage = () => {
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="h-10 w-10 rounded bg-primary/10 flex items-center justify-center text-primary font-bold">
-                                        <Building2 className="h-5 w-5" />
-                                    </div>
+                                    <Avatar className="h-10 w-10">
+                                        {course.organization_logo_url ? (
+                                            <AvatarImage src={course.organization_logo_url} alt={course.organization_name} />
+                                        ) : null}
+                                        <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                                            {course.organization_name?.[0]}
+                                        </AvatarFallback>
+                                    </Avatar>
                                     <div className="flex-1">
                                         <div className="font-medium text-foreground">{course.organization_name}</div>
                                         <div className="text-xs text-muted-foreground">Organization</div>

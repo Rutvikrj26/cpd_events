@@ -17,11 +17,11 @@ Endpoints tested:
 - POST /api/v1/users/me/link-registrations/
 """
 
-import pytest
 from decimal import Decimal
-from unittest.mock import MagicMock, patch, PropertyMock
-from rest_framework import status
+from unittest.mock import MagicMock, PropertyMock, patch
 
+import pytest
+from rest_framework import status
 
 # =============================================================================
 # Organizer Registration Management Tests
@@ -65,9 +65,12 @@ class TestEventRegistrationViewSet:
     def test_update_registration_attendance(self, organizer_client, registration):
         """Organizer can update attendance for a registration."""
         endpoint = f'/api/v1/events/{registration.event.uuid}/registrations/{registration.uuid}/'
-        response = organizer_client.patch(endpoint, {
-            'attended': True,
-        })
+        response = organizer_client.patch(
+            endpoint,
+            {
+                'attended': True,
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
         registration.refresh_from_db()
         assert registration.attended is True
@@ -222,12 +225,13 @@ class TestWaitlistManagement:
     def test_promote_next(self, organizer_client, published_event, user, db):
         """Organizer can promote next person in waitlist."""
         from factories import RegistrationFactory
+
         # Create waitlisted registrations
         waitlisted = RegistrationFactory(
             event=published_event,
             status='waitlisted',
         )
-        
+
         endpoint = f'/api/v1/events/{published_event.uuid}/registrations/promote-next/'
         response = organizer_client.post(endpoint)
         # May succeed or fail if no waitlist
@@ -246,10 +250,13 @@ class TestAttendanceOverride:
     def test_override_attendance(self, organizer_client, registration):
         """Organizer can override attendance eligibility."""
         endpoint = f'/api/v1/events/{registration.event.uuid}/registrations/{registration.uuid}/override-attendance/'
-        response = organizer_client.post(endpoint, {
-            'eligible': True,
-            'reason': 'Manual verification',
-        })
+        response = organizer_client.post(
+            endpoint,
+            {
+                'eligible': True,
+                'reason': 'Manual verification',
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
         registration.refresh_from_db()
         assert registration.attendance_eligible is True
@@ -295,42 +302,55 @@ class TestPublicRegistration:
     def test_register_authenticated_user(self, auth_client, user, published_event):
         """Authenticated user can register for an event."""
         endpoint = self.get_endpoint(published_event)
-        response = auth_client.post(endpoint, {
-            'email': user.email,
-            'full_name': user.full_name,
-        })
+        response = auth_client.post(
+            endpoint,
+            {
+                'email': user.email,
+                'full_name': user.full_name,
+            },
+        )
         assert response.status_code == status.HTTP_201_CREATED
 
     def test_register_guest(self, api_client, published_event):
         """Guest can register without an account."""
         endpoint = self.get_endpoint(published_event)
-        response = api_client.post(endpoint, {
-            'email': 'guest@example.com',
-            'full_name': 'Guest User',
-        })
+        response = api_client.post(
+            endpoint,
+            {
+                'email': 'guest@example.com',
+                'full_name': 'Guest User',
+            },
+        )
         assert response.status_code == status.HTTP_201_CREATED
 
     def test_register_duplicate_email(self, api_client, registration, published_event):
         """Cannot register twice with same email."""
         endpoint = self.get_endpoint(published_event)
-        response = api_client.post(endpoint, {
-            'email': registration.email,
-            'full_name': 'Another Name',
-        })
+        response = api_client.post(
+            endpoint,
+            {
+                'email': registration.email,
+                'full_name': 'Another Name',
+            },
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_register_closed_event(self, api_client, event):
         """Cannot register for draft (not published) event."""
         endpoint = self.get_endpoint(event)
-        response = api_client.post(endpoint, {
-            'email': 'test@example.com',
-            'full_name': 'Test User',
-        })
+        response = api_client.post(
+            endpoint,
+            {
+                'email': 'test@example.com',
+                'full_name': 'Test User',
+            },
+        )
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_register_full_event_goes_to_waitlist(self, api_client, organizer, db):
         """When event is full, registration goes to waitlist."""
         from factories import EventFactory, RegistrationFactory
+
         # Create event with max 1 attendee
         full_event = EventFactory(
             owner=organizer,
@@ -340,12 +360,15 @@ class TestPublicRegistration:
         )
         # Fill the event
         RegistrationFactory(event=full_event, status='confirmed')
-        
+
         endpoint = self.get_endpoint(full_event)
-        response = api_client.post(endpoint, {
-            'email': 'waitlist@example.com',
-            'full_name': 'Waitlist User',
-        })
+        response = api_client.post(
+            endpoint,
+            {
+                'email': 'waitlist@example.com',
+                'full_name': 'Waitlist User',
+            },
+        )
         # Should be created but waitlisted
         assert response.status_code in [status.HTTP_201_CREATED, status.HTTP_200_OK]
         if response.status_code == status.HTTP_201_CREATED:
@@ -354,9 +377,12 @@ class TestPublicRegistration:
     def test_register_missing_email(self, api_client, published_event):
         """Email is required."""
         endpoint = self.get_endpoint(published_event)
-        response = api_client.post(endpoint, {
-            'full_name': 'No Email User',
-        })
+        response = api_client.post(
+            endpoint,
+            {
+                'full_name': 'No Email User',
+            },
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
@@ -380,8 +406,10 @@ class TestRegistrationPaymentFlow:
             price=Decimal('100.00'),
         )
 
-        with patch('billing.services.StripePaymentService.is_configured', new_callable=PropertyMock) as mock_config, \
-             patch('registrations.services.stripe_payment_service.create_payment_intent') as mock_create:
+        with (
+            patch('billing.services.StripePaymentService.is_configured', new_callable=PropertyMock) as mock_config,
+            patch('registrations.services.stripe_payment_service.create_payment_intent') as mock_create,
+        ):
             mock_config.return_value = True
             mock_create.return_value = {
                 'success': True,
@@ -419,7 +447,6 @@ class TestRegistrationPaymentFlow:
     def test_payment_intent_blocks_full_event(self, api_client, organizer, db):
         """Payment intent endpoint blocks payment when event is full."""
         from factories import EventFactory, RegistrationFactory
-        from registrations.models import Registration
 
         event = EventFactory(
             owner=organizer,
@@ -467,9 +494,11 @@ class TestRegistrationPaymentFlow:
         mock_intent.status = 'requires_payment_method'
         mock_intent.client_secret = 'cs_existing'
 
-        with patch('billing.services.StripePaymentService.is_configured', new_callable=PropertyMock) as mock_config, \
-             patch('billing.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'), \
-             patch('billing.services.stripe_payment_service.retrieve_payment_intent', return_value=mock_intent):
+        with (
+            patch('billing.services.StripePaymentService.is_configured', new_callable=PropertyMock) as mock_config,
+            patch('billing.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'),
+            patch('billing.services.stripe_payment_service.retrieve_payment_intent', return_value=mock_intent),
+        ):
             mock_config.return_value = True
             response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/payment-intent/')
 
@@ -511,10 +540,12 @@ class TestRegistrationPaymentFlow:
         intent.status = 'succeeded'
         intent.amount_received = 10200
 
-        with patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config, \
-             patch('registrations.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'), \
-             patch('registrations.services.stripe_payment_service.retrieve_payment_intent', return_value=intent), \
-             patch('registrations.services.stripe_payment_service.refund_payment_intent', return_value={'success': True}):
+        with (
+            patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config,
+            patch('registrations.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'),
+            patch('registrations.services.stripe_payment_service.retrieve_payment_intent', return_value=intent),
+            patch('registrations.services.stripe_payment_service.refund_payment_intent', return_value={'success': True}),
+        ):
             mock_config.return_value = True
             response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/confirm-payment/')
 
@@ -557,10 +588,12 @@ class TestRegistrationPaymentFlow:
         intent.status = 'succeeded'
         intent.amount_received = 7650
 
-        with patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config, \
-             patch('registrations.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'), \
-             patch('registrations.services.stripe_payment_service.retrieve_payment_intent', return_value=intent), \
-             patch('registrations.tasks.add_zoom_registrant.delay'):
+        with (
+            patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config,
+            patch('registrations.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'),
+            patch('registrations.services.stripe_payment_service.retrieve_payment_intent', return_value=intent),
+            patch('registrations.tasks.add_zoom_registrant.delay'),
+        ):
             mock_config.return_value = True
             response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/confirm-payment/')
 
@@ -570,6 +603,7 @@ class TestRegistrationPaymentFlow:
         pending.refresh_from_db()
         assert pending.payment_status == Registration.PaymentStatus.PAID
         assert pending.status == Registration.Status.CONFIRMED
+
 
 # =============================================================================
 # My Registrations Tests
@@ -616,7 +650,7 @@ class TestMyRegistrationViewSet:
         """Cannot cancel already cancelled registration."""
         registration.status = 'cancelled'
         registration.save()
-        
+
         response = auth_client.post(f'{self.endpoint}{registration.uuid}/cancel/')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -640,6 +674,7 @@ class TestLinkRegistrationsView:
     def test_link_guest_registrations(self, auth_client, user, published_event, db):
         """User can link guest registrations made with their email."""
         from factories import RegistrationFactory
+
         # Create guest registration with user's email
         guest_reg = RegistrationFactory(
             event=published_event,
@@ -647,10 +682,10 @@ class TestLinkRegistrationsView:
             email=user.email,
             full_name='Guest',
         )
-        
+
         response = auth_client.post(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
-        
+
         guest_reg.refresh_from_db()
         assert guest_reg.user == user
 

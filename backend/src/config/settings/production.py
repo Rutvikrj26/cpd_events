@@ -52,10 +52,7 @@ SERVER_EMAIL = os.environ.get('SERVER_EMAIL', 'server@accredit.store')
 # SMTP provider API (optional, for advanced features)
 SMTP_API_KEY = os.environ.get('SMTP_API_KEY') or os.environ.get('MAILGUN_API_KEY')
 SMTP_DOMAIN = os.environ.get('SMTP_DOMAIN') or os.environ.get('MAILGUN_DOMAIN')
-SMTP_API_BASE_URL = (
-    os.environ.get('SMTP_API_BASE_URL')
-    or os.environ.get('MAILGUN_API_BASE_URL', 'https://api.mailgun.net/v3')
-)
+SMTP_API_BASE_URL = os.environ.get('SMTP_API_BASE_URL') or os.environ.get('MAILGUN_API_BASE_URL', 'https://api.mailgun.net/v3')
 
 # CORS Settings
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',')

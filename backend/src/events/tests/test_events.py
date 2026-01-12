@@ -18,11 +18,11 @@ Endpoints tested:
 - GET /api/v1/events/dashboard/
 """
 
-import pytest
-from rest_framework import status
-from django.utils import timezone
 from datetime import timedelta
 
+import pytest
+from django.utils import timezone
+from rest_framework import status
 
 # =============================================================================
 # Event List Tests
@@ -50,6 +50,24 @@ class TestEventList:
         assert str(event.uuid) in event_uuids
         assert str(other_organizer_event.uuid) not in event_uuids
 
+    def test_org_admin_can_list_org_events(self, organizer_client, organization, other_organizer):
+        """Org admin can list events from other organizers in the org."""
+        from factories import EventFactory
+        from organizations.models import OrganizationMembership
+
+        OrganizationMembership.objects.create(
+            organization=organization,
+            user=other_organizer,
+            role=OrganizationMembership.Role.ORGANIZER,
+            is_active=True,
+        )
+        org_event = EventFactory(owner=other_organizer, organization=organization)
+
+        response = organizer_client.get(self.endpoint)
+        assert response.status_code == status.HTTP_200_OK
+        event_uuids = [e['uuid'] for e in response.data['results']]
+        assert str(org_event.uuid) in event_uuids
+
     def test_list_events_attendee_forbidden(self, auth_client):
         """Attendees cannot access organizer event list."""
         response = auth_client.get(self.endpoint)
@@ -70,6 +88,7 @@ class TestEventList:
     def test_list_events_pagination(self, organizer_client, organizer, db):
         """Event list is paginated."""
         from factories import EventFactory
+
         # Create many events
         EventFactory.create_batch(15, owner=organizer)
         response = organizer_client.get(self.endpoint)
@@ -181,6 +200,7 @@ class TestEventDetail:
     def test_retrieve_nonexistent_event(self, organizer_client):
         """404 for non-existent event."""
         import uuid
+
         fake_uuid = uuid.uuid4()
         response = organizer_client.get(f'/api/v1/events/{fake_uuid}/')
         assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -197,11 +217,14 @@ class TestEventUpdate:
 
     def test_update_event(self, organizer_client, event):
         """Organizer can update their event."""
-        response = organizer_client.patch(f'/api/v1/events/{event.uuid}/', {
-            'title': 'Updated Event Title',
-            'description': 'Updated description',
-            'certificates_enabled': False,
-        })
+        response = organizer_client.patch(
+            f'/api/v1/events/{event.uuid}/',
+            {
+                'title': 'Updated Event Title',
+                'description': 'Updated description',
+                'certificates_enabled': False,
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
         event.refresh_from_db()
         assert event.title == 'Updated Event Title'
@@ -212,24 +235,58 @@ class TestEventUpdate:
         event.certificate_template = None
         event.save(update_fields=['certificates_enabled', 'certificate_template', 'updated_at'])
 
-        response = organizer_client.patch(f'/api/v1/events/{event.uuid}/', {
-            'certificates_enabled': True,
-        })
+        response = organizer_client.patch(
+            f'/api/v1/events/{event.uuid}/',
+            {
+                'certificates_enabled': True,
+            },
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'certificate_template' in response.data['error']['details']
 
     def test_update_other_organizer_event_forbidden(self, organizer_client, other_organizer_event):
         """Cannot update another organizer's event."""
-        response = organizer_client.patch(f'/api/v1/events/{other_organizer_event.uuid}/', {
-            'title': 'Hacked Title',
-        })
+        response = organizer_client.patch(
+            f'/api/v1/events/{other_organizer_event.uuid}/',
+            {
+                'title': 'Hacked Title',
+            },
+        )
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_org_admin_can_update_org_event(self, organizer_client, organization, other_organizer):
+        """Org admin can update events owned by other organizers in the org."""
+        from factories import EventFactory
+        from organizations.models import OrganizationMembership
+
+        OrganizationMembership.objects.create(
+            organization=organization,
+            user=other_organizer,
+            role=OrganizationMembership.Role.ORGANIZER,
+            is_active=True,
+        )
+        org_event = EventFactory(owner=other_organizer, organization=organization)
+        org_event.certificates_enabled = False
+        org_event.save(update_fields=['certificates_enabled', 'updated_at'])
+
+        response = organizer_client.patch(
+            f'/api/v1/events/{org_event.uuid}/',
+            {
+                'title': 'Updated Title',
+            },
+        )
+        assert response.status_code == status.HTTP_200_OK
+        org_event.refresh_from_db()
+        assert org_event.title == 'Updated Title'
 
     def test_update_completed_event_limited(self, organizer_client, completed_event):
         """Limited fields can be updated on completed event."""
-        response = organizer_client.patch(f'/api/v1/events/{completed_event.uuid}/', {
-            'title': 'Updated Completed Event',
-        })
+        response = organizer_client.patch(
+            f'/api/v1/events/{completed_event.uuid}/',
+            {
+                'title': 'Updated Completed Event',
+            },
+        )
         # Might be allowed or restricted
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
 
@@ -393,9 +450,12 @@ class TestEventPermissions:
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
         # Update
-        response = organizer_client.patch(f'/api/v1/events/{other_organizer_event.uuid}/', {
-            'title': 'Hacked',
-        })
+        response = organizer_client.patch(
+            f'/api/v1/events/{other_organizer_event.uuid}/',
+            {
+                'title': 'Hacked',
+            },
+        )
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
         # Delete

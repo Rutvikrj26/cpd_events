@@ -6,9 +6,9 @@
 // Organization Types
 // ============================================================================
 
-export type OrganizationRole = 'owner' | 'admin' | 'manager' | 'member';
+export type OrganizationRole = 'admin' | 'organizer' | 'course_manager' | 'instructor';
 
-export type OrganizationPlan = 'free' | 'team' | 'business' | 'enterprise';
+export type OrganizationPlan = 'organization';
 
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid';
 
@@ -23,11 +23,18 @@ export interface OrganizationSubscription {
     active_organizer_seats: number;
     available_seats: number;
     seat_price_cents: number;
+    org_paid_organizers_count?: number;  // Count of organizers paid by org
     events_created_this_period: number;
     courses_created_this_period: number;
     current_period_start: string | null;
     current_period_end: string | null;
     trial_ends_at: string | null;
+    is_trialing: boolean;
+    is_trial_expired: boolean;
+    days_until_trial_ends?: number;
+    is_in_grace_period: boolean;
+    is_access_blocked: boolean;
+    stripe_subscription_id?: string | null;
 }
 
 export interface OrganizationListItem {
@@ -107,17 +114,27 @@ export interface OrganizationMember {
     linked_from_individual: boolean;
     invited_by_name: string | null;
     created_at: string;
+    assigned_course_uuid?: string | null;
+    assigned_course_title?: string | null;
+    assigned_course_slug?: string | null;
+    // Organizer billing fields (only for organizer role)
+    organizer_billing_payer?: 'organization' | 'organizer' | null;
+    linked_subscription_uuid?: string | null;
 }
 
 export interface InviteMemberRequest {
     email: string;
     role: OrganizationRole;
     title?: string;
+    // For organizer role only
+    billing_payer?: 'organization' | 'organizer';
+    assigned_course_uuid?: string | null;
 }
 
 export interface UpdateMemberRequest {
     role?: OrganizationRole;
     title?: string;
+    assigned_course_uuid?: string | null;
 }
 
 // ============================================================================

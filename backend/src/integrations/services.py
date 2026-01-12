@@ -32,6 +32,8 @@ class EmailService:
         'payment_failed': 'emails/payment_failed.html',
         'waitlist_promotion': 'emails/waitlist_promotion.html',
         'refund_processed': 'emails/refund_processed.html',
+        'payment_method_expired': 'emails/payment_method_expired.html',
+        'trial_ending': 'emails/trial_ending.html',
     }
 
     # Subject lines
@@ -47,6 +49,8 @@ class EmailService:
         'payment_failed': "Payment Failed: Invoice #{invoice_number}",
         'waitlist_promotion': "Spot Available: {event_title}",
         'refund_processed': "Refund Processed: {event_title}",
+        'payment_method_expired': "Payment Method Expired",
+        'trial_ending': "Your Trial Is Ending Soon",
     }
 
     def send_email(self, template: str, recipient: str, context: dict[str, Any], subject: str | None = None) -> bool:
@@ -165,10 +169,14 @@ class EmailService:
             lines.append(f"<p><strong>{context.get('event_title', 'Your event')}</strong> starts soon.</p>")
 
         elif template == 'organization_invitation':
-            lines.append(f"<p>{context.get('inviter_name', 'Someone')} has invited you to join <strong>{context.get('organization_name', 'their organization')}</strong> as a <strong>{context.get('role', 'member')}</strong>.</p>")
+            lines.append(
+                f"<p>{context.get('inviter_name', 'Someone')} has invited you to join <strong>{context.get('organization_name', 'their organization')}</strong> as a <strong>{context.get('role', 'member')}</strong>.</p>"
+            )
             if context.get('invitation_url'):
-                lines.append(f"<p><a href='{context['invitation_url']}' style='background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Accept Invitation</a></p>")
-            lines.append(f"<p>This invitation will expire in 7 days.</p>")
+                lines.append(
+                    f"<p><a href='{context['invitation_url']}' style='background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Accept Invitation</a></p>"
+                )
+            lines.append("<p>This invitation will expire in 7 days.</p>")
 
         else:
             for key, value in context.items():
@@ -228,20 +236,21 @@ class WebhookProcessor:
 
     def _handle_participant_joined(self, payload: dict) -> bool:
         """Handle participant join event."""
+        from django.utils.dateparse import parse_datetime
+
         from events.models import Event
         from registrations.models import AttendanceRecord, Registration
-        from django.utils.dateparse import parse_datetime
 
         # Extract data
         meeting_id = str(payload.get('object', {}).get('id', ''))
         participant = payload.get('object', {}).get('participant', {})
-        
+
         zoom_user_id = participant.get('user_id', '')
         user_name = participant.get('user_name', '')
         user_email = participant.get('email', '')
-        participant_uuid = participant.get('id', '') # Unique for this session
+        participant_uuid = participant.get('id', '')  # Unique for this session
         join_time_str = participant.get('join_time')
-        
+
         join_time = parse_datetime(join_time_str) if join_time_str else None
 
         logger.info(f"Participant joined meeting {meeting_id}: {user_email}")
@@ -255,16 +264,12 @@ class WebhookProcessor:
             event = Event.objects.get(zoom_meeting_id=meeting_id)
         except Event.DoesNotExist:
             logger.warning(f"Event not found for Zoom meeting ID: {meeting_id}")
-            return True # Return True to acknowledge webhook receipt
+            return True  # Return True to acknowledge webhook receipt
 
         # Find Registration (if any)
         registration = None
         if user_email:
-            registration = Registration.objects.filter(
-                event=event, 
-                email__iexact=user_email,
-                deleted_at__isnull=True
-            ).first()
+            registration = Registration.objects.filter(event=event, email__iexact=user_email, deleted_at__isnull=True).first()
 
         # Create Attendance Record
         # We use get_or_create to handle potential duplicate webhooks
@@ -278,34 +283,35 @@ class WebhookProcessor:
                 'zoom_user_email': user_email,
                 'zoom_user_name': user_name,
                 'is_matched': registration is not None,
-                'matched_at': timezone.now() if registration else None
-            }
+                'matched_at': timezone.now() if registration else None,
+            },
         )
 
         # Update registration summary immediately if matched
         if registration:
             registration.update_attendance_summary()
-            
+
         return True
 
     def _handle_participant_left(self, payload: dict) -> bool:
         """Handle participant leave event."""
+        from django.utils.dateparse import parse_datetime
+
         from events.models import Event
         from registrations.models import AttendanceRecord
-        from django.utils.dateparse import parse_datetime
 
         meeting_id = str(payload.get('object', {}).get('id', ''))
         participant = payload.get('object', {}).get('participant', {})
-        
+
         participant_uuid = participant.get('id', '')
         leave_time_str = participant.get('leave_time')
-        
+
         leave_time = parse_datetime(leave_time_str) if leave_time_str else None
 
         logger.info(f"Participant left meeting {meeting_id}")
-        
+
         if not meeting_id or not participant_uuid or not leave_time:
-             return False
+            return False
 
         try:
             event = Event.objects.get(zoom_meeting_id=meeting_id)
@@ -313,11 +319,11 @@ class WebhookProcessor:
             return True
 
         # Find the specific open record
-        record = AttendanceRecord.objects.filter(
-            event=event,
-            zoom_participant_id=participant_uuid,
-            leave_time__isnull=True
-        ).order_by('-join_time').first()
+        record = (
+            AttendanceRecord.objects.filter(event=event, zoom_participant_id=participant_uuid, leave_time__isnull=True)
+            .order_by('-join_time')
+            .first()
+        )
 
         if record:
             record.participant_left(leave_time=leave_time)

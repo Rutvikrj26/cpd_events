@@ -26,7 +26,7 @@ class OrganizationSubscriptionInline(admin.StackedInline):
         'plan',
         'status',
         ('included_seats', 'additional_seats', 'active_organizer_seats'),
-        ('current_period_start', 'current_period_end'),
+        ('current_period_start', 'current_period_end', 'trial_ends_at'),
         'stripe_subscription_id',
         'stripe_customer_id',
     ]
@@ -45,26 +45,44 @@ class OrganizationAdmin(admin.ModelAdmin):
     inlines = [OrganizationMembershipInline, OrganizationSubscriptionInline]
 
     fieldsets = [
-        ('Identity', {
-            'fields': ['name', 'slug', 'description', 'uuid'],
-        }),
-        ('Branding', {
-            'fields': ['logo', 'logo_url', 'website', 'primary_color', 'secondary_color'],
-        }),
-        ('Contact', {
-            'fields': ['contact_email', 'contact_phone'],
-        }),
-        ('Status', {
-            'fields': ['is_active', 'is_verified', 'created_by'],
-        }),
-        ('Stats', {
-            'fields': ['members_count', 'events_count', 'courses_count'],
-            'classes': ['collapse'],
-        }),
-        ('Timestamps', {
-            'fields': ['created_at', 'updated_at'],
-            'classes': ['collapse'],
-        }),
+        (
+            'Identity',
+            {
+                'fields': ['name', 'slug', 'description', 'uuid'],
+            },
+        ),
+        (
+            'Branding',
+            {
+                'fields': ['logo', 'logo_url', 'website', 'primary_color', 'secondary_color'],
+            },
+        ),
+        (
+            'Contact',
+            {
+                'fields': ['contact_email', 'contact_phone'],
+            },
+        ),
+        (
+            'Status',
+            {
+                'fields': ['is_active', 'is_verified', 'created_by'],
+            },
+        ),
+        (
+            'Stats',
+            {
+                'fields': ['members_count', 'events_count', 'courses_count'],
+                'classes': ['collapse'],
+            },
+        ),
+        (
+            'Timestamps',
+            {
+                'fields': ['created_at', 'updated_at'],
+                'classes': ['collapse'],
+            },
+        ),
     ]
 
 
@@ -79,21 +97,33 @@ class OrganizationMembershipAdmin(admin.ModelAdmin):
     raw_id_fields = ['user', 'organization', 'invited_by']
 
     fieldsets = [
-        ('Membership', {
-            'fields': ['organization', 'user', 'role', 'title', 'is_active'],
-        }),
-        ('Invitation', {
-            'fields': ['invited_by', 'invited_at', 'accepted_at', 'invitation_token', 'invitation_email', 'is_pending'],
-            'classes': ['collapse'],
-        }),
-        ('Linking', {
-            'fields': ['linked_from_individual', 'linked_at'],
-            'classes': ['collapse'],
-        }),
-        ('Metadata', {
-            'fields': ['uuid', 'created_at', 'updated_at'],
-            'classes': ['collapse'],
-        }),
+        (
+            'Membership',
+            {
+                'fields': ['organization', 'user', 'role', 'title', 'is_active'],
+            },
+        ),
+        (
+            'Invitation',
+            {
+                'fields': ['invited_by', 'invited_at', 'accepted_at', 'invitation_token', 'invitation_email', 'is_pending'],
+                'classes': ['collapse'],
+            },
+        ),
+        (
+            'Linking',
+            {
+                'fields': ['linked_from_individual', 'linked_at'],
+                'classes': ['collapse'],
+            },
+        ),
+        (
+            'Metadata',
+            {
+                'fields': ['uuid', 'created_at', 'updated_at'],
+                'classes': ['collapse'],
+            },
+        ),
     ]
 
     @admin.display(boolean=True, description='Pending')
@@ -106,41 +136,80 @@ class OrganizationMembershipAdmin(admin.ModelAdmin):
 class OrganizationSubscriptionAdmin(admin.ModelAdmin):
     """Admin for OrganizationSubscription model."""
 
-    list_display = ['organization', 'plan', 'status', 'active_organizer_seats', 'total_seats', 'current_period_end']
+    list_display = [
+        'organization',
+        'plan',
+        'status',
+        'is_trialing',
+        'active_organizer_seats',
+        'total_seats',
+        'current_period_end',
+    ]
     list_filter = ['plan', 'status', 'created_at']
     search_fields = ['organization__name', 'stripe_subscription_id', 'stripe_customer_id']
     readonly_fields = ['uuid', 'created_at', 'updated_at', 'active_organizer_seats', 'total_seats', 'available_seats']
     raw_id_fields = ['organization']
 
     fieldsets = [
-        ('Organization', {
-            'fields': ['organization'],
-        }),
-        ('Plan', {
-            'fields': ['plan', 'status'],
-        }),
-        ('Seats', {
-            'fields': ['included_seats', 'additional_seats', 'seat_price_cents', 'active_organizer_seats', 'total_seats', 'available_seats'],
-        }),
-        ('Billing Period', {
-            'fields': ['current_period_start', 'current_period_end', 'trial_ends_at'],
-        }),
-        ('Stripe', {
-            'fields': ['stripe_subscription_id', 'stripe_customer_id'],
-            'classes': ['collapse'],
-        }),
-        ('Cancellation', {
-            'fields': ['cancel_at_period_end', 'canceled_at', 'cancellation_reason'],
-            'classes': ['collapse'],
-        }),
-        ('Usage', {
-            'fields': ['events_created_this_period', 'courses_created_this_period'],
-            'classes': ['collapse'],
-        }),
-        ('Metadata', {
-            'fields': ['uuid', 'created_at', 'updated_at'],
-            'classes': ['collapse'],
-        }),
+        (
+            'Organization',
+            {
+                'fields': ['organization'],
+            },
+        ),
+        (
+            'Plan',
+            {
+                'fields': ['plan', 'status'],
+            },
+        ),
+        (
+            'Seats',
+            {
+                'fields': [
+                    'included_seats',
+                    'additional_seats',
+                    'seat_price_cents',
+                    'active_organizer_seats',
+                    'total_seats',
+                    'available_seats',
+                ],
+            },
+        ),
+        (
+            'Billing Period',
+            {
+                'fields': ['current_period_start', 'current_period_end', 'trial_ends_at'],
+            },
+        ),
+        (
+            'Stripe',
+            {
+                'fields': ['stripe_subscription_id', 'stripe_customer_id'],
+                'classes': ['collapse'],
+            },
+        ),
+        (
+            'Cancellation',
+            {
+                'fields': ['cancel_at_period_end', 'canceled_at', 'cancellation_reason'],
+                'classes': ['collapse'],
+            },
+        ),
+        (
+            'Usage',
+            {
+                'fields': ['events_created_this_period', 'courses_created_this_period'],
+                'classes': ['collapse'],
+            },
+        ),
+        (
+            'Metadata',
+            {
+                'fields': ['uuid', 'created_at', 'updated_at'],
+                'classes': ['collapse'],
+            },
+        ),
     ]
 
     @admin.display(description='Total Seats')
@@ -152,3 +221,7 @@ class OrganizationSubscriptionAdmin(admin.ModelAdmin):
     def available_seats(self, obj):
         """Display available seats."""
         return obj.available_seats
+
+    @admin.display(boolean=True, description='Trialing')
+    def is_trialing(self, obj):
+        return obj.is_trialing

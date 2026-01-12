@@ -7,11 +7,11 @@ Endpoints tested:
 - Email logs
 """
 
+from unittest.mock import patch
+
 import pytest
 from django.utils import timezone
 from rest_framework import status
-from unittest.mock import patch, MagicMock
-
 
 # =============================================================================
 # Event Recordings Tests
@@ -33,22 +33,20 @@ class TestEventRecordingViewSet:
 
     def test_update_recording_access(self, organizer_client, completed_event, organizer, db):
         """Organizer can update recording access settings."""
-        from integrations.models import ZoomRecording, EmailLog
+        from integrations.models import ZoomRecording
+
         # Create a recording
         # Create a recording
         recording = ZoomRecording.objects.create(
             event=completed_event,
             title='Test Recording',
-            zoom_recording_id='rec_123', # Adding required fields if any
+            zoom_recording_id='rec_123',  # Adding required fields if any
             zoom_meeting_id='123456789',
             recording_start=completed_event.starts_at,
             recording_end=completed_event.ends_at,
         )
-        
-        response = organizer_client.patch(
-            f'{self.get_endpoint(completed_event)}{recording.uuid}/',
-            {'is_public': True}
-        )
+
+        response = organizer_client.patch(f'{self.get_endpoint(completed_event)}{recording.uuid}/', {'is_public': True})
         assert response.status_code == status.HTTP_200_OK
 
 
@@ -57,7 +55,7 @@ class TestEventRecordingViewSet:
 # =============================================================================
 
 
-@pytest.mark.django_db  
+@pytest.mark.django_db
 class TestMyRecordingsViewSet:
     """Tests for attendee recording access."""
 
@@ -89,13 +87,16 @@ class TestZoomOAuth:
     def test_zoom_callback(self, mock_complete_oauth, organizer_client, organizer, db):
         """Zoom OAuth callback is handled."""
         mock_complete_oauth.return_value = {'success': True}
-        
+
         # Callback with authorization code
-        response = organizer_client.get('/api/v1/integrations/zoom/callback/', {
-            'code': 'test_auth_code',
-            'state': 'test_state',
-        })
-        
+        response = organizer_client.get(
+            '/api/v1/integrations/zoom/callback/',
+            {
+                'code': 'test_auth_code',
+                'state': 'test_state',
+            },
+        )
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data['status'] == 'connected'
 
@@ -108,8 +109,10 @@ class TestZoomOAuth:
     def test_disconnect_zoom(self, organizer_client, mock_zoom, organizer, db):
         """Organizer can disconnect Zoom."""
         # Create a Zoom connection
-        from accounts.models import ZoomConnection
         from django.utils import timezone
+
+        from accounts.models import ZoomConnection
+
         ZoomConnection.objects.create(
             user=organizer,
             access_token='test_token',
@@ -117,7 +120,7 @@ class TestZoomOAuth:
             token_expires_at=timezone.now() + timezone.timedelta(hours=1),
             zoom_user_id='test_user_id',
         )
-        
+
         response = organizer_client.post('/api/v1/integrations/zoom/disconnect/')
         assert response.status_code == status.HTTP_200_OK
 
@@ -135,8 +138,10 @@ class TestZoomMeetingsList:
 
     def test_list_zoom_meetings(self, organizer_client, organizer, db):
         """Organizer can list their Zoom meetings."""
-        from accounts.models import ZoomConnection
         from django.utils import timezone
+
+        from accounts.models import ZoomConnection
+
         ZoomConnection.objects.create(
             user=organizer,
             access_token='test_token',
@@ -144,7 +149,7 @@ class TestZoomMeetingsList:
             token_expires_at=timezone.now() + timezone.timedelta(hours=1),
             zoom_user_id='test_user_id',
         )
-        
+
         response = organizer_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
 
@@ -171,7 +176,7 @@ class TestZoomWebhook:
             'event': 'endpoint.url_validation',
             'payload': {
                 'plainToken': 'test_token',
-            }
+            },
         }
         response = api_client.post(
             self.endpoint,
@@ -188,7 +193,7 @@ class TestZoomWebhook:
         mock_verify.return_value = True
         completed_event.zoom_meeting_id = '123456789'
         completed_event.save()
-        
+
         data = {
             'event': 'recording.completed',
             'payload': {
@@ -200,9 +205,9 @@ class TestZoomWebhook:
                             'recording_type': 'shared_screen_with_speaker_view',
                             'download_url': 'https://zoom.us/rec/download/123',
                         }
-                    ]
+                    ],
                 }
-            }
+            },
         }
         response = api_client.post(
             self.endpoint,
@@ -251,7 +256,7 @@ class TestZoomWebhook:
                             'user_name': 'Attendee Example',
                             'email': registration.email,
                             'join_time': join_time.isoformat(),
-                        }
+                        },
                     }
                 }
             },
@@ -271,7 +276,7 @@ class TestZoomWebhook:
                         'participant': {
                             'id': 'participant-1',
                             'leave_time': leave_time.isoformat(),
-                        }
+                        },
                     }
                 }
             },

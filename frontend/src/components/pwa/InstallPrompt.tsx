@@ -8,9 +8,20 @@ interface BeforeInstallPromptEvent extends Event {
     userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+const wasDismissedRecently = () => {
+    if (typeof window === "undefined") return false;
+    const dismissed = localStorage.getItem("installPromptDismissed");
+    if (!dismissed) return false;
+    const dismissedTime = parseInt(dismissed, 10);
+    if (Number.isNaN(dismissedTime)) return false;
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    return Date.now() - dismissedTime < sevenDays;
+};
+
 export function InstallPrompt() {
     const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
     const [showPrompt, setShowPrompt] = useState(false);
+    const isDev = import.meta.env.DEV;
 
     useEffect(() => {
         const handler = (e: Event) => {
@@ -19,7 +30,9 @@ export function InstallPrompt() {
             // Stash the event so it can be triggered later
             setDeferredPrompt(e as BeforeInstallPromptEvent);
             // Show our custom install prompt
-            setShowPrompt(true);
+            if (!wasDismissedRecently()) {
+                setShowPrompt(true);
+            }
         };
 
         window.addEventListener("beforeinstallprompt", handler);
@@ -36,7 +49,7 @@ export function InstallPrompt() {
         // Wait for the user to respond to the prompt
         const { outcome } = await deferredPrompt.userChoice;
 
-        if (process.env.NODE_ENV === "development") {
+        if (isDev) {
             console.log(`Install prompt ${outcome === "accepted" ? "accepted" : "dismissed"}`);
         }
 
@@ -50,18 +63,6 @@ export function InstallPrompt() {
         // Store dismissal in localStorage to not show again for a while
         localStorage.setItem("installPromptDismissed", Date.now().toString());
     };
-
-    // Don't show if dismissed recently (within 7 days)
-    useEffect(() => {
-        const dismissed = localStorage.getItem("installPromptDismissed");
-        if (dismissed) {
-            const dismissedTime = parseInt(dismissed);
-            const sevenDays = 7 * 24 * 60 * 60 * 1000;
-            if (Date.now() - dismissedTime < sevenDays) {
-                setShowPrompt(false);
-            }
-        }
-    }, []);
 
     if (!showPrompt || !deferredPrompt) return null;
 

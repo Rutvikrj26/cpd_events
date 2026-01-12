@@ -30,14 +30,12 @@ export function CreateListDialog({
     const [loading, setLoading] = useState(false);
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [isDefault, setIsDefault] = useState(false);
 
     // Reset form when dialog opens
     React.useEffect(() => {
         if (open) {
             setName('');
             setDescription('');
-            setIsDefault(false);
         }
     }, [open]);
 
@@ -54,7 +52,6 @@ export function CreateListDialog({
             const data: CreateContactListParams = {
                 name: name.trim(),
                 description: description.trim() || undefined,
-                is_default: isDefault,
             };
             const result = await createContactList(data);
             toast.success('Contact list created successfully');
@@ -103,20 +100,7 @@ export function CreateListDialog({
                             />
                         </div>
 
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                                <Label htmlFor="default">Set as default</Label>
-                                <p className="text-xs text-muted-foreground">
-                                    New contacts will be added to this list by default
-                                </p>
-                            </div>
-                            <Switch
-                                id="default"
-                                checked={isDefault}
-                                onCheckedChange={setIsDefault}
-                                disabled={loading}
-                            />
-                        </div>
+
                     </div>
 
                     <DialogFooter>

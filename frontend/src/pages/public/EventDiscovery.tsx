@@ -248,6 +248,16 @@ function EventCard({ event }: { event: Event }) {
               <span className="text-xs font-medium text-slate-400">Closed</span>
             )}
           </div>
+
+          {event.organization_info ? (
+            <div className="mt-3 text-xs text-muted-foreground">
+              Hosted by <span className="font-medium text-foreground">{event.organization_info.name}</span>
+            </div>
+          ) : event.organizer_name ? (
+            <div className="mt-3 text-xs text-muted-foreground">
+              Hosted by <span className="font-medium text-foreground">{event.organizer_name}</span>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </Link>

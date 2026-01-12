@@ -7,13 +7,14 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     BillingPortalView,
+    BillingReconciliationView,
     CheckoutSessionView,
     InvoiceViewSet,
     PaymentMethodViewSet,
-    PublicPricingView,
-    SubscriptionViewSet,
-    RefundView,
     PayoutViewSet,
+    PublicPricingView,
+    RefundView,
+    SubscriptionViewSet,
 )
 
 router = DefaultRouter()
@@ -32,4 +33,5 @@ urlpatterns = [
     path('billing/checkout/', CheckoutSessionView.as_view(), name='checkout'),
     path('billing/portal/', BillingPortalView.as_view(), name='portal'),
     path('registrations/<uuid:registration_uuid>/refund/', RefundView.as_view(), name='refund'),
+    path('admin/reconciliation/', BillingReconciliationView.as_view(), name='billing-reconciliation'),
 ]

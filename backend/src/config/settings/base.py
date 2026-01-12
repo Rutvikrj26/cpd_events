@@ -241,35 +241,12 @@ STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
 # Billing configuration imported from common.config.billing
 # These are re-exported here for backward compatibility with code that imports from settings
 from common.config.billing import (
-    PlatformFees,
-    PricingConfig,
-    StripePriceIds,
     DefaultPlan,
+    PlatformFees,
 )
-
-# Stripe Price IDs for each plan (set in Stripe Dashboard)
-STRIPE_PRICE_IDS = StripePriceIds.as_dict()
 
 # Platform fee for paid event registrations (percentage of transaction)
 PLATFORM_FEE_PERCENT = PlatformFees.FEE_PERCENT
 
-# Plan Pricing (in cents, for display purposes - actual pricing in Stripe)
-BILLING_PRICES = {
-    'attendee': PricingConfig.ATTENDEE,
-    'starter': PricingConfig.STARTER_MONTHLY,
-    'starter_annual': PricingConfig.STARTER_ANNUAL,
-    'professional': PricingConfig.PROFESSIONAL_MONTHLY,
-    'professional_annual': PricingConfig.PROFESSIONAL_ANNUAL,
-    'premium': PricingConfig.PREMIUM_MONTHLY,
-    'premium_annual': PricingConfig.PREMIUM_ANNUAL,
-    'team': PricingConfig.ORGANIZATION_MONTHLY,
-    'team_annual': PricingConfig.ORGANIZATION_ANNUAL,
-    'enterprise': 0, # Custom
-    # Legacy plans
-    'organizer': PricingConfig.ORGANIZATION_MONTHLY,
-    'organization': PricingConfig.ORGANIZATION_MONTHLY,
-}
-
 # Default plan for new organizers
 BILLING_DEFAULT_PLAN = DefaultPlan.NAME
-

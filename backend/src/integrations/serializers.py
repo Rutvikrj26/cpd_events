@@ -236,4 +236,3 @@ class ZoomMeetingListSerializer(serializers.Serializer):
     zoom_join_url = serializers.URLField()
     zoom_password = serializers.CharField()
     created_at = serializers.DateTimeField(source='event_created_at')
-

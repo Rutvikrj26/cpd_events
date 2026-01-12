@@ -15,7 +15,6 @@ Endpoints tested:
 import pytest
 from rest_framework import status
 
-
 # =============================================================================
 # Event Certificate Management Tests
 # =============================================================================
@@ -37,16 +36,20 @@ class TestEventCertificateViewSet:
     def test_issue_certificate(self, organizer_client, attended_registration, certificate_template, completed_event):
         """Organizer can issue a certificate."""
         endpoint = f'{self.get_endpoint(completed_event)}issue/'
-        response = organizer_client.post(endpoint, {
-            'registration_uuid': str(attended_registration.uuid),
-            'template_uuid': str(certificate_template.uuid),
-        })
+        response = organizer_client.post(
+            endpoint,
+            {
+                'registration_uuid': str(attended_registration.uuid),
+                'template_uuid': str(certificate_template.uuid),
+            },
+        )
         # Should succeed or indicate already issued
         assert response.status_code in [status.HTTP_201_CREATED, status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
 
     def test_issue_bulk_certificates(self, organizer_client, completed_event, certificate_template, db):
         """Organizer can issue certificates in bulk."""
         from factories import RegistrationFactory
+
         # Create eligible registrations
         regs = [
             RegistrationFactory(
@@ -57,21 +60,27 @@ class TestEventCertificateViewSet:
             )
             for _ in range(3)
         ]
-        
+
         endpoint = f'{self.get_endpoint(completed_event)}issue/'
-        response = organizer_client.post(endpoint, {
-            'issue_all_eligible': True,
-            'template_uuid': str(certificate_template.uuid),
-        })
+        response = organizer_client.post(
+            endpoint,
+            {
+                'issue_all_eligible': True,
+                'template_uuid': str(certificate_template.uuid),
+            },
+        )
         # Bulk issuance may return different status
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
 
     def test_revoke_certificate(self, organizer_client, certificate, completed_event):
         """Organizer can revoke a certificate."""
         endpoint = f'/api/v1/events/{certificate.registration.event.uuid}/certificates/{certificate.uuid}/revoke/'
-        response = organizer_client.post(endpoint, {
-            'reason': 'Issued in error',
-        })
+        response = organizer_client.post(
+            endpoint,
+            {
+                'reason': 'Issued in error',
+            },
+        )
         assert response.status_code == status.HTTP_200_OK
         certificate.refresh_from_db()
         assert certificate.status == 'revoked'
@@ -133,11 +142,12 @@ class TestMyCertificateViewSet:
 
     def test_cannot_see_others_certificates(self, auth_client, other_organizer, db):
         """User cannot see certificates issued to others."""
-        from factories import CertificateFactory, RegistrationFactory, EventFactory
+        from factories import CertificateFactory, EventFactory, RegistrationFactory
+
         other_event = EventFactory(owner=other_organizer, status='completed')
         other_reg = RegistrationFactory(event=other_event, attended=True)
         other_cert = CertificateFactory(registration=other_reg, issued_by=other_organizer)
-        
+
         response = auth_client.get(f'{self.endpoint}{other_cert.uuid}/')
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -172,7 +182,7 @@ class TestCertificateVerification:
         """Revoked certificate shows as invalid."""
         certificate.status = 'revoked'
         certificate.save()
-        
+
         response = api_client.get(f'/api/v1/public/certificates/verify/{certificate.verification_code}/')
         assert response.status_code == status.HTTP_200_OK
         assert response.data['is_valid'] is False
@@ -208,27 +218,36 @@ class TestCertificateEligibility:
     def test_cannot_issue_to_non_eligible(self, organizer_client, completed_event, certificate_template, db):
         """Cannot issue certificate to non-eligible registration."""
         from factories import RegistrationFactory
+
         non_eligible = RegistrationFactory(
             event=completed_event,
             status='confirmed',
             attended=False,
             attendance_eligible=False,
         )
-        
+
         endpoint = f'/api/v1/events/{completed_event.uuid}/certificates/issue/'
-        response = organizer_client.post(endpoint, {
-            'registration_uuid': str(non_eligible.uuid),
-            'template_uuid': str(certificate_template.uuid),
-        })
+        response = organizer_client.post(
+            endpoint,
+            {
+                'registration_uuid': str(non_eligible.uuid),
+                'template_uuid': str(certificate_template.uuid),
+            },
+        )
         # Should fail or indicate not eligible
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_cannot_issue_duplicate(self, organizer_client, certificate, attended_registration, certificate_template, completed_event):
+    def test_cannot_issue_duplicate(
+        self, organizer_client, certificate, attended_registration, certificate_template, completed_event
+    ):
         """Cannot issue duplicate certificate to same registration."""
         endpoint = f'/api/v1/events/{completed_event.uuid}/certificates/issue/'
-        response = organizer_client.post(endpoint, {
-            'registration_uuid': str(attended_registration.uuid),
-            'template_uuid': str(certificate_template.uuid),
-        })
+        response = organizer_client.post(
+            endpoint,
+            {
+                'registration_uuid': str(attended_registration.uuid),
+                'template_uuid': str(certificate_template.uuid),
+            },
+        )
         # Should fail - already issued
         assert response.status_code == status.HTTP_400_BAD_REQUEST

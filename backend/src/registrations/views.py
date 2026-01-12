@@ -2,16 +2,16 @@
 Registrations app views and viewsets.
 """
 
+import logging
 from decimal import Decimal
 
-from django.db.models import Max
 from django.utils import timezone
 from django_filters import rest_framework as filters
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema
 
 from common.pagination import SmallPagination
 from common.permissions import IsOrganizer
@@ -21,6 +21,8 @@ from common.viewsets import ReadOnlyModelViewSet, SoftDeleteModelViewSet
 
 from . import serializers
 from .models import Registration
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Filters
@@ -125,7 +127,6 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
         # Update event counts
         # Update event counts handled by signals
 
-
         return Response(
             {
                 'created': len(created),
@@ -148,7 +149,7 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
         else:
             instance.attended = False
             instance.check_in_time = None  # Clear check-in time when marked absent
-        
+
         if 'attendance_eligible' in serializer.validated_data:
             instance.attendance_eligible = serializer.validated_data['attendance_eligible']
         instance.save()
@@ -262,6 +263,12 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 
         reason = serializer.validated_data.get('reason', 'Organizer cancelled registration')
         registration.cancel(reason=reason, cancelled_by=request.user)
+        try:
+            from promo_codes.models import PromoCodeUsage
+
+            PromoCodeUsage.release_for_registration(registration)
+        except Exception as e:
+            logger.warning("Failed to release promo code usage for %s: %s", registration.uuid, e)
 
         return Response(serializers.RegistrationDetailSerializer(registration).data)
 
@@ -304,6 +311,12 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 
         registration.payment_status = Registration.PaymentStatus.REFUNDED
         registration.save(update_fields=['payment_status', 'updated_at'])
+        try:
+            from promo_codes.models import PromoCodeUsage
+
+            PromoCodeUsage.release_for_registration(registration)
+        except Exception as e:
+            logger.warning("Failed to release promo code usage for %s: %s", registration.uuid, e)
 
         return Response(serializers.RegistrationDetailSerializer(registration).data)
 
@@ -315,8 +328,9 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
     @action(detail=True, methods=['post'], url_path='add-to-contacts')
     def add_to_contacts(self, request, event_uuid=None, uuid=None):
         """Add registrant to organizer's contacts."""
-        from contacts.models import Contact, ContactList
         from django.utils import timezone
+
+        from contacts.models import Contact, ContactList
 
         registration = self.get_object()
         organizer = request.user
@@ -334,23 +348,18 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
             if not target_list:
                 target_list = ContactList.objects.filter(owner=organizer).first()
             if not target_list:
-                target_list = ContactList.objects.create(
-                    owner=organizer,
-                    name="Default",
-                    is_default=True
-                )
+                target_list = ContactList.objects.create(owner=organizer, name="Default", is_default=True)
 
         # Check if contact already exists
-        existing = Contact.objects.filter(
-            contact_list__owner=organizer,
-            email__iexact=registration.email
-        ).first()
+        existing = Contact.objects.filter(contact_list__owner=organizer, email__iexact=registration.email).first()
 
         if existing:
-            return Response({
-                'message': 'Contact already exists.',
-                'contact_uuid': str(existing.uuid),
-            })
+            return Response(
+                {
+                    'message': 'Contact already exists.',
+                    'contact_uuid': str(existing.uuid),
+                }
+            )
 
         # Create new contact
         contact = Contact.objects.create(
@@ -367,10 +376,13 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
         )
         target_list.update_contact_count()
 
-        return Response({
-            'message': 'Contact added.',
-            'contact_uuid': str(contact.uuid),
-        }, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                'message': 'Contact added.',
+                'contact_uuid': str(contact.uuid),
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 # =============================================================================
@@ -390,17 +402,22 @@ class PublicRegistrationView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
     def create(self, request, event_uuid=None):
-        from events.models import Event
-        from .services import registration_service
-        from rest_framework.exceptions import ValidationError
         import logging
+
+        from rest_framework.exceptions import ValidationError
+
+        from events.models import Event
+
+        from .services import registration_service
 
         logger = logging.getLogger(__name__)
 
         try:
             event = Event.objects.get(uuid=event_uuid, status='published', registration_enabled=True, deleted_at__isnull=True)
         except Event.DoesNotExist:
-            return error_response('Event not found or registration closed.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+            return error_response(
+                'Event not found or registration closed.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND
+            )
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -408,11 +425,7 @@ class PublicRegistrationView(generics.CreateAPIView):
         user = request.user if request.user.is_authenticated else None
 
         try:
-            result = registration_service.register_participant(
-                event=event, 
-                data=serializer.validated_data, 
-                user=user
-            )
+            result = registration_service.register_participant(event=event, data=serializer.validated_data, user=user)
 
             # Map service result to API response
             reg = result['registration']
@@ -443,17 +456,19 @@ class PublicRegistrationView(generics.CreateAPIView):
         except ValidationError as e:
             # Map validation errors to error codes
             msg = str(e.detail[0]) if isinstance(e.detail, list) else str(e)
-            
+
             error_code = 'VALIDATION_ERROR'
             if 'capacity' in msg.lower():
                 error_code = 'EVENT_FULL'
             elif 'already registered' in msg.lower():
                 error_code = 'ALREADY_REGISTERED'
-            
+
             return error_response(msg, code=error_code, status_code=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
+        except Exception:
             logger.exception("Registration failed")
-            return error_response("An unexpected error occurred.", code='INTERNAL_ERROR', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return error_response(
+                "An unexpected error occurred.", code='INTERNAL_ERROR', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 @roles('public', route_name='payment_intent')
@@ -533,9 +548,7 @@ class RegistrationPaymentIntentView(generics.GenericAPIView):
 
         billing_country = (request.data.get('billing_country') or request.data.get('billingCountry') or '').upper().strip()
         billing_state = (request.data.get('billing_state') or request.data.get('billingState') or '').strip()
-        billing_postal_code = (
-            request.data.get('billing_postal_code') or request.data.get('billingPostalCode') or ''
-        ).strip()
+        billing_postal_code = (request.data.get('billing_postal_code') or request.data.get('billingPostalCode') or '').strip()
         billing_city = (request.data.get('billing_city') or request.data.get('billingCity') or '').strip()
         updated_fields = []
 
@@ -629,7 +642,7 @@ class ConfirmPaymentView(generics.GenericAPIView):
         responses={
             200: '{"status": "paid", "registration_uuid": "...", "amount_paid": 99.00}',
             400: '{"error": {"code": "...", "message": "..."}}',
-            404: '{"error": {"code": "NOT_FOUND", "message": "Registration not found"}}'
+            404: '{"error": {"code": "NOT_FOUND", "message": "Registration not found"}}',
         },
     )
     def post(self, request, uuid=None):
@@ -643,12 +656,14 @@ class ConfirmPaymentView(generics.GenericAPIView):
 
         # Check if already paid (idempotent)
         if registration.payment_status == Registration.PaymentStatus.PAID:
-            return Response({
-                'status': 'paid',
-                'registration_uuid': str(registration.uuid),
-                'amount_paid': float(registration.amount_paid),
-                'message': 'Payment already confirmed.'
-            })
+            return Response(
+                {
+                    'status': 'paid',
+                    'registration_uuid': str(registration.uuid),
+                    'amount_paid': float(registration.amount_paid),
+                    'message': 'Payment already confirmed.',
+                }
+            )
 
         # Check if payment is expected
         if registration.payment_status == Registration.PaymentStatus.NA:
@@ -660,7 +675,9 @@ class ConfirmPaymentView(generics.GenericAPIView):
         if result['status'] == 'paid':
             return Response(result, status=status.HTTP_200_OK)
         elif result['status'] == 'event_full':
-            return error_response(result.get('message', 'Event is fully booked.'), code='EVENT_FULL', status_code=status.HTTP_409_CONFLICT)
+            return error_response(
+                result.get('message', 'Event is fully booked.'), code='EVENT_FULL', status_code=status.HTTP_409_CONFLICT
+            )
         elif result['status'] == 'processing':
             return Response(result, status=status.HTTP_202_ACCEPTED)
         elif result['status'] == 'failed':
@@ -713,6 +730,12 @@ class MyRegistrationViewSet(ReadOnlyModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         registration.cancel(reason=serializer.validated_data.get('reason', 'User requested cancellation'))
+        try:
+            from promo_codes.models import PromoCodeUsage
+
+            PromoCodeUsage.release_for_registration(registration)
+        except Exception as e:
+            logger.warning("Failed to release promo code usage for %s: %s", registration.uuid, e)
 
         return Response({'message': 'Registration cancelled.'})
 

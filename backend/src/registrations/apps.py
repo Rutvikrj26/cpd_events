@@ -7,4 +7,4 @@ class RegistrationsConfig(AppConfig):
     verbose_name = 'Registrations'
 
     def ready(self):
-        import registrations.signals
+        pass

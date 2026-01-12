@@ -14,18 +14,19 @@ from django.utils import timezone
 def create_subscription_for_organizer(sender, instance, created, **kwargs):
     """
     Create a subscription when a new organizer is created.
-    
+
     Plans:
     - 'attendee': Creates ATTENDEE plan (no events, for attendees only)
-    - 'organizer': Creates PROFESSIONAL plan with ACTIVE status (paid plan)
-    - 'organization': Enterprise plan (custom setup)
+    - 'organizer': Creates ORGANIZER plan with trial
+    - 'course_manager': Creates LMS plan with trial
+    - 'organization': Organization plan (custom setup)
     """
     from billing.models import Subscription
 
     if not created:
         return
-        
-    if instance.account_type != 'organizer':
+
+    if instance.account_type not in ['organizer', 'course_manager']:
         # Attendees get ATTENDEE plan
         Subscription.objects.get_or_create(
             user=instance,
@@ -36,20 +37,22 @@ def create_subscription_for_organizer(sender, instance, created, **kwargs):
         )
         return
 
-    # Organizers get PROFESSIONAL plan with trial period
+    # Organizers and course managers get trial plan
     from billing.models import StripeProduct
-    
-    # Try to find configured trial days for Professional plan
+
+    plan = Subscription.Plan.ORGANIZER if instance.account_type == 'organizer' else Subscription.Plan.LMS
+
+    # Try to find configured trial days for plan
     try:
-        product = StripeProduct.objects.filter(plan=Subscription.Plan.PROFESSIONAL, is_active=True).first()
-        trial_days = product.trial_period_days if product else 30  # Default to 30 if product missing
+        product = StripeProduct.objects.filter(plan=plan, is_active=True).first()
+        trial_days = product.trial_period_days if product else 0
     except Exception:
-        trial_days = 30  # Safe fallback
-        
+        trial_days = 0
+
     Subscription.objects.get_or_create(
         user=instance,
         defaults={
-            'plan': Subscription.Plan.PROFESSIONAL,
+            'plan': plan,
             'status': Subscription.Status.TRIALING,
             'trial_ends_at': timezone.now() + timedelta(days=trial_days),
         },

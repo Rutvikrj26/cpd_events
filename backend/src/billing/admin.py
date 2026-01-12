@@ -4,7 +4,7 @@ Admin configuration for billing app.
 
 from django.contrib import admin, messages
 
-from .models import Invoice, PaymentMethod, Subscription, StripeProduct, StripePrice
+from .models import DisputeRecord, Invoice, PaymentMethod, StripePrice, StripeProduct, Subscription
 
 
 @admin.register(Subscription)
@@ -15,9 +15,11 @@ class SubscriptionAdmin(admin.ModelAdmin):
         'user',
         'plan',
         'status',
+        'billing_interval',
         'current_period_end',
         'events_created_this_period',
         'certificates_issued_this_period',
+        'last_usage_reset_at',
     ]
     list_filter = ['plan', 'status', 'cancel_at_period_end']
     search_fields = ['user__email', 'stripe_subscription_id', 'stripe_customer_id']
@@ -25,11 +27,15 @@ class SubscriptionAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('User', {'fields': ('user',)}),
-        ('Plan Details', {'fields': ('plan', 'status')}),
+        ('Plan Details', {'fields': ('plan', 'status', 'billing_interval')}),
+        (
+            'Pending Change',
+            {'fields': ('pending_plan', 'pending_billing_interval', 'pending_change_at'), 'classes': ('collapse',)},
+        ),
         ('Stripe Integration', {'fields': ('stripe_subscription_id', 'stripe_customer_id'), 'classes': ('collapse',)}),
         ('Billing Period', {'fields': ('current_period_start', 'current_period_end', 'trial_ends_at')}),
         ('Cancellation', {'fields': ('cancel_at_period_end', 'canceled_at', 'cancellation_reason'), 'classes': ('collapse',)}),
-        ('Usage', {'fields': ('events_created_this_period', 'certificates_issued_this_period')}),
+        ('Usage', {'fields': ('events_created_this_period', 'certificates_issued_this_period', 'last_usage_reset_at')}),
         ('Metadata', {'fields': ('uuid', 'created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
 
@@ -84,30 +90,38 @@ class StripeProductAdmin(admin.ModelAdmin):
     readonly_fields = ['uuid', 'stripe_product_id', 'created_at', 'updated_at']
 
     fieldsets = (
-        ('Product Details', {
-            'fields': ('name', 'description', 'plan', 'is_active')
-        }),
-        ('Pricing Display', {
-            'fields': ('show_contact_sales',),
-            'description': 'Check this to hide pricing and show "Contact Sales" button instead (for custom/enterprise plans)'
-        }),
-        ('Trial Configuration', {
-            'fields': ('trial_period_days',),
-            'description': 'Set trial period in days (leave blank to use global default of 14 days)'
-        }),
-        ('Feature Limits', {
-            'fields': ('events_per_month', 'certificates_per_month', 'max_attendees_per_event'),
-            'description': 'Set feature limits for this plan (leave blank for unlimited). These limits affect both subscription enforcement and pricing page features display.'
-        }),
-        ('Stripe Integration', {
-            'fields': ('stripe_product_id',),
-            'classes': ('collapse',),
-            'description': 'Stripe product ID is auto-populated when you save. Click "Sync to Stripe" to push updates.'
-        }),
-        ('Metadata', {
-            'fields': ('uuid', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
+        ('Product Details', {'fields': ('name', 'description', 'plan', 'is_active')}),
+        (
+            'Pricing Display',
+            {
+                'fields': ('show_contact_sales',),
+                'description': 'Check this to hide pricing and show "Contact Sales" button instead (for custom/enterprise plans)',
+            },
+        ),
+        ('Trial Configuration', {'fields': ('trial_period_days',), 'description': 'Set trial period in days for this plan.'}),
+        (
+            'Feature Limits',
+            {
+                'fields': ('events_per_month', 'courses_per_month', 'certificates_per_month', 'max_attendees_per_event'),
+                'description': 'Set feature limits for this plan (leave blank for unlimited). These limits affect both subscription enforcement and pricing page features display.',
+            },
+        ),
+        (
+            'Seat Configuration',
+            {
+                'fields': ('included_seats', 'seat_price_cents'),
+                'description': 'Seat limits and pricing for organization plans.',
+            },
+        ),
+        (
+            'Stripe Integration',
+            {
+                'fields': ('stripe_product_id',),
+                'classes': ('collapse',),
+                'description': 'Stripe product ID is auto-populated when you save. Click "Sync to Stripe" to push updates.',
+            },
+        ),
+        ('Metadata', {'fields': ('uuid', 'created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
 
     actions = ['sync_to_stripe_action']
@@ -121,7 +135,7 @@ class StripeProductAdmin(admin.ModelAdmin):
             if obj.stripe_product_id:
                 messages.success(request, f"✓ Product synced to Stripe: {obj.stripe_product_id}")
             else:
-                messages.success(request, f"✓ Product created in Stripe")
+                messages.success(request, "✓ Product created in Stripe")
         else:
             messages.error(request, f"✗ Failed to sync to Stripe: {result['error']}")
 
@@ -163,23 +177,23 @@ class StripePriceAdmin(admin.ModelAdmin):
     raw_id_fields = ['product']
 
     fieldsets = (
-        ('Price Details', {
-            'fields': ('product', 'amount_cents', 'currency', 'billing_interval', 'is_active'),
-            'description': 'Amount in cents (e.g., 9900 = $99.00)'
-        }),
-        ('Preview', {
-            'fields': ('amount_display',),
-            'description': 'Read-only preview of the price'
-        }),
-        ('Stripe Integration', {
-            'fields': ('stripe_price_id',),
-            'classes': ('collapse',),
-            'description': 'Stripe price ID is auto-populated when you save. Click "Sync to Stripe" to push updates.'
-        }),
-        ('Metadata', {
-            'fields': ('uuid', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
+        (
+            'Price Details',
+            {
+                'fields': ('product', 'amount_cents', 'currency', 'billing_interval', 'is_active'),
+                'description': 'Amount in cents (e.g., 9900 = $99.00)',
+            },
+        ),
+        ('Preview', {'fields': ('amount_display',), 'description': 'Read-only preview of the price'}),
+        (
+            'Stripe Integration',
+            {
+                'fields': ('stripe_price_id',),
+                'classes': ('collapse',),
+                'description': 'Stripe price ID is auto-populated when you save. Click "Sync to Stripe" to push updates.',
+            },
+        ),
+        ('Metadata', {'fields': ('uuid', 'created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
 
     actions = ['sync_to_stripe_action']
@@ -187,6 +201,7 @@ class StripePriceAdmin(admin.ModelAdmin):
     def amount_display_formatted(self, obj):
         """Display formatted price in list view."""
         return f"${obj.amount_display}"
+
     amount_display_formatted.short_description = 'Amount'
 
     def save_model(self, request, obj, form, change):
@@ -198,9 +213,19 @@ class StripePriceAdmin(admin.ModelAdmin):
             if obj.stripe_price_id:
                 messages.success(request, f"✓ Price synced to Stripe: {obj.stripe_price_id}")
             else:
-                messages.success(request, f"✓ Price created in Stripe")
+                messages.success(request, "✓ Price created in Stripe")
         else:
             messages.error(request, f"✗ Failed to sync to Stripe: {result['error']}")
+
+
+@admin.register(DisputeRecord)
+class DisputeRecordAdmin(admin.ModelAdmin):
+    """Admin for DisputeRecord model."""
+
+    list_display = ['stripe_dispute_id', 'status', 'amount_cents', 'currency', 'created_at']
+    list_filter = ['status', 'currency']
+    search_fields = ['stripe_dispute_id', 'stripe_charge_id', 'stripe_payment_intent_id']
+    readonly_fields = ['uuid', 'stripe_dispute_id', 'created_at', 'updated_at']
 
     @admin.action(description='Sync selected prices to Stripe')
     def sync_to_stripe_action(self, request, queryset):

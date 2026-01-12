@@ -9,7 +9,6 @@ Endpoints tested:
 import pytest
 from rest_framework import status
 
-
 # =============================================================================
 # Event Module Tests
 # =============================================================================
@@ -40,26 +39,19 @@ class TestEventModuleViewSet:
 
     def test_update_module(self, organizer_client, event, event_module):
         """Organizer can update a module."""
-        response = organizer_client.patch(
-            f'{self.get_endpoint(event)}{event_module.uuid}/',
-            {'title': 'Updated Module'}
-        )
+        response = organizer_client.patch(f'{self.get_endpoint(event)}{event_module.uuid}/', {'title': 'Updated Module'})
         assert response.status_code == status.HTTP_200_OK
         event_module.refresh_from_db()
         assert event_module.title == 'Updated Module'
 
     def test_delete_module(self, organizer_client, event, event_module):
         """Organizer can delete a module."""
-        response = organizer_client.delete(
-            f'{self.get_endpoint(event)}{event_module.uuid}/'
-        )
+        response = organizer_client.delete(f'{self.get_endpoint(event)}{event_module.uuid}/')
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
     def test_publish_module(self, organizer_client, event, event_module):
         """Organizer can publish a module."""
-        response = organizer_client.post(
-            f'{self.get_endpoint(event)}{event_module.uuid}/publish/'
-        )
+        response = organizer_client.post(f'{self.get_endpoint(event)}{event_module.uuid}/publish/')
         assert response.status_code == status.HTTP_200_OK
         event_module.refresh_from_db()
         assert event_module.is_published is True
@@ -68,10 +60,8 @@ class TestEventModuleViewSet:
         """Organizer can unpublish a module."""
         event_module.is_published = True
         event_module.save()
-        
-        response = organizer_client.post(
-            f'{self.get_endpoint(event)}{event_module.uuid}/unpublish/'
-        )
+
+        response = organizer_client.post(f'{self.get_endpoint(event)}{event_module.uuid}/unpublish/')
         assert response.status_code == status.HTTP_200_OK
         event_module.refresh_from_db()
         assert event_module.is_published is False
@@ -165,7 +155,8 @@ class TestSubmissionViewSet:
     def test_create_submission(self, auth_client, registration):
         """User can submit an assignment."""
         # Create assignment for the registered event
-        from factories import EventModuleFactory, AssignmentFactory
+        from factories import AssignmentFactory, EventModuleFactory
+
         module = EventModuleFactory(event=registration.event)
         assignment = AssignmentFactory(module=module)
 
@@ -211,10 +202,7 @@ class TestContentProgress:
 
     def test_update_content_progress(self, auth_client, module_content, registration):
         """User can update their content progress."""
-        response = auth_client.post(
-            f'/api/v1/learning/progress/content/{module_content.uuid}/',
-            {'completed': True}
-        )
+        response = auth_client.post(f'/api/v1/learning/progress/content/{module_content.uuid}/', {'completed': True})
         # May succeed or fail based on access
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
 
@@ -238,6 +226,15 @@ class TestCourseViewSet:
     def test_create_course(self, organizer_client, course):
         """Organizer can create a course."""
         # Need organization slug
+        from organizations.models import OrganizationMembership
+
+        membership = OrganizationMembership.objects.get(
+            organization=course.organization,
+            user=course.organization.created_by,
+        )
+        membership.role = OrganizationMembership.Role.COURSE_MANAGER
+        membership.save(update_fields=['role'])
+
         data = {
             'title': 'New Course',
             'slug': 'new-course',
@@ -249,8 +246,44 @@ class TestCourseViewSet:
 
     def test_publish_course(self, organizer_client, course):
         """Organizer can publish a course."""
+        from organizations.models import OrganizationMembership
+
+        membership = OrganizationMembership.objects.get(
+            organization=course.organization,
+            user=course.organization.created_by,
+        )
+        membership.role = OrganizationMembership.Role.COURSE_MANAGER
+        membership.save(update_fields=['role'])
+
         response = organizer_client.post(f'{self.endpoint}{course.uuid}/publish/')
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
+
+    def test_org_admin_can_update_org_course(self, organizer_client, organization, course_manager):
+        """Org admin can update courses owned by other course managers in the org."""
+        from factories import CourseFactory
+        from organizations.models import OrganizationMembership
+
+        OrganizationMembership.objects.create(
+            organization=organization,
+            user=course_manager,
+            role=OrganizationMembership.Role.COURSE_MANAGER,
+            is_active=True,
+        )
+        course = CourseFactory(
+            organization=organization,
+            created_by=course_manager,
+            title='Org Course',
+        )
+
+        response = organizer_client.patch(
+            f'{self.endpoint}{course.uuid}/',
+            {
+                'title': 'Updated Course Title',
+            },
+        )
+        assert response.status_code == status.HTTP_200_OK
+        course.refresh_from_db()
+        assert course.title == 'Updated Course Title'
 
 
 # =============================================================================
@@ -273,8 +306,11 @@ class TestCourseEnrollmentViewSet:
         """User can enroll in a course."""
         course.status = 'published'
         course.save()
-        
-        response = auth_client.post(self.endpoint, {
-            'course_uuid': str(course.uuid),
-        })
+
+        response = auth_client.post(
+            self.endpoint,
+            {
+                'course_uuid': str(course.uuid),
+            },
+        )
         assert response.status_code in [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST]

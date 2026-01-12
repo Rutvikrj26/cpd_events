@@ -5,24 +5,32 @@ from registrations.models import Registration
 
 from .models import EventFeedback
 
+
 class EventFeedbackSerializer(serializers.ModelSerializer):
     """
     Serializer for submitting and viewing event feedback.
     """
+
     attendee_name = serializers.SerializerMethodField()
     event = serializers.SlugRelatedField(slug_field='uuid', queryset=Event.objects.all())
     registration = serializers.SlugRelatedField(slug_field='uuid', queryset=Registration.objects.all())
-    
+
     class Meta:
         model = EventFeedback
         fields = [
-            'uuid', 'event', 'registration', 'rating', 
-            'content_quality_rating', 'speaker_rating', 
-            'comments', 'is_anonymous', 'created_at',
-            'attendee_name'
+            'uuid',
+            'event',
+            'registration',
+            'rating',
+            'content_quality_rating',
+            'speaker_rating',
+            'comments',
+            'is_anonymous',
+            'created_at',
+            'attendee_name',
         ]
         read_only_fields = ['uuid', 'created_at', 'attendee_name']
-        
+
     def get_attendee_name(self, obj):
         if obj.is_anonymous:
             return "Anonymous"

@@ -46,6 +46,7 @@ class GCSStorage:
                 # Use emulator if configured
                 if hasattr(settings, 'GCS_EMULATOR_HOST') and settings.GCS_EMULATOR_HOST:
                     import os
+
                     os.environ['STORAGE_EMULATOR_HOST'] = settings.GCS_EMULATOR_HOST
                     self._client = storage.Client(project=settings.GCP_PROJECT_ID)
                 else:

@@ -15,7 +15,7 @@ All constants are validated at import time - invalid values will raise
 ImproperlyConfigured exceptions immediately.
 
 Modules:
-- billing: Trial periods, plan limits, pricing, Stripe configuration
+- billing: Trial periods, plan limits, Stripe configuration
 - events: Duration limits, attendance thresholds, session defaults
 - accounts: Token expiry, JWT settings, Zoom integration
 - learning: Scoring defaults, assignment settings, course settings
@@ -24,58 +24,54 @@ Modules:
 """
 
 # Billing configuration
-from .billing import (
-    PlatformFees,
-    TicketingFees,
-    TicketingTaxCodes,
-    IndividualPlanLimits,
-    OrganizationPlanLimits,
-    PricingConfig,
-    StripePriceIds,
-    DefaultPlan,
-)
-
-# Events configuration
-from .events import (
-    EventDuration,
-    AttendanceThresholds,
-    SessionDefaults,
-    EventDuplication,
-)
-
 # Accounts configuration
 from .accounts import (
+    JwtConfig,
     TokenExpiry,
     TokenLength,
-    JwtConfig,
     ZoomConfig,
-)
-
-# Learning configuration
-from .learning import (
-    ScoringDefaults,
-    AssignmentDefaults,
-    CourseDefaults,
-    ModuleDefaults,
-)
-
-# Integrations configuration
-from .integrations import (
-    WebhookConfig,
-    ErrorTruncation,
-    FeedbackRatings,
-    TimeConstants,
 )
 
 # API configuration
 from .api import (
+    CertificateTemplateDimensions,
     Pagination,
     ThrottleRates,
     UploadLimits,
-    CertificateTemplateDimensions,
     VerificationCodes,
 )
+from .billing import (
+    DefaultPlan,
+    IndividualPlanLimits,
+    OrganizationPlanLimits,
+    PlatformFees,
+    TicketingFees,
+    TicketingTaxCodes,
+)
 
+# Events configuration
+from .events import (
+    AttendanceThresholds,
+    EventDuplication,
+    EventDuration,
+    SessionDefaults,
+)
+
+# Integrations configuration
+from .integrations import (
+    ErrorTruncation,
+    FeedbackRatings,
+    TimeConstants,
+    WebhookConfig,
+)
+
+# Learning configuration
+from .learning import (
+    AssignmentDefaults,
+    CourseDefaults,
+    ModuleDefaults,
+    ScoringDefaults,
+)
 
 __all__ = [
     # Billing
@@ -84,8 +80,6 @@ __all__ = [
     'TicketingTaxCodes',
     'IndividualPlanLimits',
     'OrganizationPlanLimits',
-    'PricingConfig',
-    'StripePriceIds',
     'DefaultPlan',
     # Events
     'EventDuration',

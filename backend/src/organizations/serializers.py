@@ -22,6 +22,7 @@ class OrganizationListSerializer(serializers.ModelSerializer):
             'logo_url',
             'is_active',
             'is_verified',
+            'is_public',
             'members_count',
             'events_count',
             'user_role',
@@ -69,6 +70,7 @@ class OrganizationDetailSerializer(serializers.ModelSerializer):
             'gst_hst_number',
             'is_active',
             'is_verified',
+            'is_public',
             'members_count',
             'events_count',
             'courses_count',
@@ -131,6 +133,7 @@ class OrganizationCreateSerializer(serializers.ModelSerializer):
             'primary_color',
             'contact_email',
             'gst_hst_number',
+            'is_public',
         ]
 
     def create(self, validated_data):
@@ -152,7 +155,7 @@ class OrganizationCreateSerializer(serializers.ModelSerializer):
             accepted_at=__import__('django.utils.timezone', fromlist=['now']).now(),
         )
 
-        # Create FREE subscription (by default)
+        # Create ORGANIZATION subscription (by default, starts trialing)
         OrganizationSubscription.create_for_organization(organization)
 
         # Update counts
@@ -176,21 +179,55 @@ class OrganizationUpdateSerializer(serializers.ModelSerializer):
             'contact_email',
             'contact_phone',
             'gst_hst_number',
+            'is_public',
         ]
+
+
+class OrganizationPublicSerializer(serializers.ModelSerializer):
+    """Serializer for public organization profiles."""
+
+    logo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Organization
+        fields = [
+            'uuid',
+            'name',
+            'slug',
+            'description',
+            'logo_url',
+            'website',
+            'primary_color',
+            'secondary_color',
+            'contact_email',
+            'contact_phone',
+            'is_verified',
+            'members_count',
+            'events_count',
+            'courses_count',
+        ]
+        read_only_fields = fields
+
+    def get_logo_url(self, obj):
+        return obj.effective_logo_url
 
 
 # =============================================================================
 # Membership Serializers
 # =============================================================================
 
+
 class OrganizationMembershipListSerializer(serializers.ModelSerializer):
     """Serializer for listing organization members."""
 
-    user_email = serializers.CharField(source='user.email', read_only=True)
-    user_name = serializers.CharField(source='user.full_name', read_only=True)
-    user_uuid = serializers.UUIDField(source='user.uuid', read_only=True)
+    user_email = serializers.SerializerMethodField()
+    user_name = serializers.SerializerMethodField()
+    user_uuid = serializers.UUIDField(source='user.uuid', read_only=True, allow_null=True)
     invited_by_name = serializers.CharField(source='invited_by.full_name', read_only=True)
     linked_subscription_uuid = serializers.UUIDField(source='linked_subscription.uuid', read_only=True)
+    assigned_course_uuid = serializers.UUIDField(source='assigned_course.uuid', read_only=True, allow_null=True)
+    assigned_course_title = serializers.CharField(source='assigned_course.title', read_only=True, allow_null=True)
+    assigned_course_slug = serializers.CharField(source='assigned_course.slug', read_only=True, allow_null=True)
 
     class Meta:
         model = OrganizationMembership
@@ -206,11 +243,24 @@ class OrganizationMembershipListSerializer(serializers.ModelSerializer):
             'linked_from_individual',
             'invited_by_name',
             'created_at',
+            'assigned_course_uuid',
+            'assigned_course_title',
+            'assigned_course_slug',
             # Organizer billing fields
             'organizer_billing_payer',
             'linked_subscription_uuid',
         ]
         read_only_fields = fields
+
+    def get_user_email(self, obj):
+        if obj.user:
+            return obj.user.email
+        return obj.invitation_email
+
+    def get_user_name(self, obj):
+        if obj.user:
+            return obj.user.full_name
+        return None
 
 
 class OrganizationMembershipInviteSerializer(serializers.Serializer):
@@ -222,6 +272,7 @@ class OrganizationMembershipInviteSerializer(serializers.Serializer):
         default=OrganizationMembership.Role.INSTRUCTOR,
     )
     title = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    assigned_course_uuid = serializers.UUIDField(required=False, allow_null=True)
     billing_payer = serializers.ChoiceField(
         choices=['organization', 'organizer'],
         required=False,
@@ -234,14 +285,16 @@ class OrganizationMembershipInviteSerializer(serializers.Serializer):
         billing_payer = attrs.get('billing_payer')
 
         if role == OrganizationMembership.Role.ORGANIZER and not billing_payer:
-            raise serializers.ValidationError({
-                'billing_payer': 'billing_payer is required for organizer role'
-            })
+            raise serializers.ValidationError({'billing_payer': 'billing_payer is required for organizer role'})
 
         if role != OrganizationMembership.Role.ORGANIZER and billing_payer:
-            raise serializers.ValidationError({
-                'billing_payer': 'billing_payer can only be set for organizer role'
-            })
+            raise serializers.ValidationError({'billing_payer': 'billing_payer can only be set for organizer role'})
+
+        assigned_course_uuid = attrs.get('assigned_course_uuid')
+        if assigned_course_uuid and role != OrganizationMembership.Role.INSTRUCTOR:
+            raise serializers.ValidationError(
+                {'assigned_course_uuid': 'assigned_course_uuid can only be set for instructor role'}
+            )
 
         return attrs
 
@@ -249,9 +302,42 @@ class OrganizationMembershipInviteSerializer(serializers.Serializer):
 class OrganizationMembershipUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating a membership (role, title)."""
 
+    assigned_course_uuid = serializers.UUIDField(required=False, allow_null=True, write_only=True)
+
     class Meta:
         model = OrganizationMembership
-        fields = ['role', 'title']
+        fields = ['role', 'title', 'assigned_course_uuid']
+
+    def validate(self, attrs):
+        role = attrs.get('role', self.instance.role if self.instance else None)
+        if 'assigned_course_uuid' in self.initial_data and role != OrganizationMembership.Role.INSTRUCTOR:
+            raise serializers.ValidationError({'assigned_course_uuid': 'Only instructors can be assigned a course.'})
+        return attrs
+
+    def update(self, instance, validated_data):
+        assigned_course_uuid = validated_data.pop('assigned_course_uuid', None)
+        new_role = validated_data.get('role', instance.role)
+
+        if 'assigned_course_uuid' in self.initial_data:
+            if assigned_course_uuid is None:
+                instance.assigned_course = None
+            else:
+                from learning.models import Course
+
+                course = Course.objects.filter(
+                    uuid=assigned_course_uuid,
+                    organization=instance.organization,
+                ).first()
+                if not course:
+                    raise serializers.ValidationError(
+                        {'assigned_course_uuid': 'Assigned course not found for this organization.'}
+                    )
+                instance.assigned_course = course
+
+        if new_role != OrganizationMembership.Role.INSTRUCTOR:
+            instance.assigned_course = None
+
+        return super().update(instance, validated_data)
 
 
 class LinkOrganizerSerializer(serializers.Serializer):
@@ -286,6 +372,7 @@ class CreateOrgFromAccountSerializer(serializers.Serializer):
 # Subscription Serializers
 # =============================================================================
 
+
 class OrganizationSubscriptionSerializer(serializers.ModelSerializer):
     """Serializer for organization subscription details."""
 
@@ -314,5 +401,11 @@ class OrganizationSubscriptionSerializer(serializers.ModelSerializer):
             'current_period_start',
             'current_period_end',
             'trial_ends_at',
+            'is_trialing',
+            'is_trial_expired',
+            'days_until_trial_ends',
+            'is_in_grace_period',
+            'is_access_blocked',
+            'stripe_subscription_id',
         ]
         read_only_fields = fields

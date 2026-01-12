@@ -5,24 +5,23 @@ URL routes for learning API.
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from .payment_views import CourseCheckoutView
 from .views import (
     AssignmentViewSet,
     AttendeeSubmissionViewSet,
     ContentProgressView,
+    CourseAnnouncementViewSet,
+    CourseAssignmentViewSet,
     CourseEnrollmentViewSet,
+    CourseModuleContentViewSet,
+    CourseModuleViewSet,
+    CourseSubmissionsViewSet,
     CourseViewSet,
     EventModuleViewSet,
     ModuleContentViewSet,
     MyLearningViewSet,
     OrganizerSubmissionsViewSet,
-    CourseModuleViewSet,
-    CourseModuleContentViewSet,
-    EventModuleViewSet,
-    ModuleContentViewSet,
-    MyLearningViewSet,
-    OrganizerSubmissionsViewSet,
 )
-from .payment_views import CourseCheckoutView
 
 # Main router
 router = DefaultRouter()
@@ -36,18 +35,68 @@ urlpatterns = [
     # Learning routes
     path('', include(router.urls)),
     # Course Modules (Custom implementation since it's a wrapper)
-    path('courses/<uuid:course_uuid>/modules/', CourseModuleViewSet.as_view({'get': 'list', 'post': 'create'}), name='course-module-list'),
-    path('courses/<uuid:course_uuid>/modules/<uuid:uuid>/', CourseModuleViewSet.as_view({'get': 'retrieve', 'delete': 'destroy', 'patch': 'update_content'}), name='course-module-detail'),
-    
+    path(
+        'courses/<uuid:course_uuid>/modules/',
+        CourseModuleViewSet.as_view({'get': 'list', 'post': 'create'}),
+        name='course-module-list',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/modules/<uuid:uuid>/',
+        CourseModuleViewSet.as_view({'get': 'retrieve', 'delete': 'destroy', 'patch': 'update_content'}),
+        name='course-module-detail',
+    ),
     # Reuse valid content routes but mapped under course structure for consistency?
     # Actually, we can reuse the ViewSets if they are generic enough.
     # ModuleContentViewSet expects 'module_uuid'.
-    path('courses/<uuid:course_uuid>/modules/<uuid:module_uuid>/contents/', CourseModuleContentViewSet.as_view({'get': 'list', 'post': 'create'}), name='course-module-content-list'),
-    path('courses/<uuid:course_uuid>/modules/<uuid:module_uuid>/contents/<uuid:uuid>/', CourseModuleContentViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='course-module-content-detail'),
-
+    path(
+        'courses/<uuid:course_uuid>/modules/<uuid:module_uuid>/contents/',
+        CourseModuleContentViewSet.as_view({'get': 'list', 'post': 'create'}),
+        name='course-module-content-list',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/modules/<uuid:module_uuid>/contents/<uuid:uuid>/',
+        CourseModuleContentViewSet.as_view(
+            {'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}
+        ),
+        name='course-module-content-detail',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/modules/<uuid:module_uuid>/assignments/',
+        CourseAssignmentViewSet.as_view({'get': 'list', 'post': 'create'}),
+        name='course-module-assignment-list',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/modules/<uuid:module_uuid>/assignments/<uuid:uuid>/',
+        CourseAssignmentViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}),
+        name='course-module-assignment-detail',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/submissions/',
+        CourseSubmissionsViewSet.as_view({'get': 'list'}),
+        name='course-submission-list',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/submissions/<uuid:uuid>/',
+        CourseSubmissionsViewSet.as_view({'get': 'retrieve'}),
+        name='course-submission-detail',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/submissions/<uuid:uuid>/grade/',
+        CourseSubmissionsViewSet.as_view({'post': 'grade'}),
+        name='course-submission-grade',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/announcements/',
+        CourseAnnouncementViewSet.as_view({'get': 'list', 'post': 'create'}),
+        name='course-announcement-list',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/announcements/<uuid:uuid>/',
+        CourseAnnouncementViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update', 'delete': 'destroy'}),
+        name='course-announcement-detail',
+    ),
     # Progress update
     path('learning/progress/content/<uuid:content_uuid>/', ContentProgressView.as_view(), name='content-progress'),
-
     # Payments
     path('courses/<uuid:uuid>/checkout/', CourseCheckoutView.as_view(), name='course-checkout'),
 ]

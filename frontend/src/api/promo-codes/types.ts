@@ -6,6 +6,7 @@ export interface PromoCode {
   uuid: string;
   code: string;
   description: string;
+  currency: string;
   discount_type: 'percentage' | 'fixed_amount';
   discount_value: string;
   max_discount_amount: string | null;
@@ -54,6 +55,7 @@ export interface PromoCodeValidationResult {
 export interface CreatePromoCodeRequest {
   code: string;
   description?: string;
+  currency?: string;
   discount_type: 'percentage' | 'fixed_amount';
   discount_value: number;
   max_discount_amount?: number;
@@ -67,7 +69,7 @@ export interface CreatePromoCodeRequest {
   event_uuids?: string[];
 }
 
-export interface UpdatePromoCodeRequest extends Partial<CreatePromoCodeRequest> {}
+export type UpdatePromoCodeRequest = Partial<CreatePromoCodeRequest>;
 
 export interface ValidatePromoCodeRequest {
   code: string;
