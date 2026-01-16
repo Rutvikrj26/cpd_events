@@ -423,7 +423,7 @@ class CertificateService:
                 return {'success': False, 'error': 'No certificate template configured'}
 
             # Check if certificate already exists
-            existing = Certificate.objects.filter(registration=registration, status='issued').first()
+            existing = Certificate.objects.filter(registration=registration, status='active').first()
 
             if existing:
                 return {'success': True, 'certificate': existing, 'already_issued': True}

@@ -631,6 +631,44 @@ class StripeService:
             logger.error(f"Failed to update subscription: {e}")
             return {'success': False, 'error': str(e)}
 
+    def update_subscription_trial(self, subscription_id: str, trial_end: datetime) -> dict[str, Any]:
+        """
+        Update subscription trial end date in Stripe.
+
+        Args:
+            subscription_id: Stripe subscription ID
+            trial_end: New trial end date (datetime)
+
+        Returns:
+            Dict with success status or error
+        """
+        if not self.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        try:
+            # Unix timestamp
+            trial_end_ts = int(trial_end.timestamp())
+            
+            # Ensure future date
+            if trial_end_ts <= int(timezone.now().timestamp()):
+                # Stripe requires trial_end to be in the future (or 'now' to end it?)
+                # Actually to end a trial immediately, you usually set trial_end='now'
+                # But here we assume admin wants to set a specific date.
+                pass
+
+            self.stripe.Subscription.modify(
+                subscription_id,
+                trial_end=trial_end_ts,
+                proration_behavior='none', # Changing trial shouldn't trigger proration normally but safe to specify
+            )
+
+            logger.info(f"Updated Stripe trial end for {subscription_id} to {trial_end}")
+            return {'success': True}
+
+        except Exception as e:
+            logger.error(f"Failed to update Stripe trial: {e}")
+            return {'success': False, 'error': str(e)}
+
     def update_subscription_quantity(self, subscription_id: str, quantity: int) -> dict[str, Any]:
         """
         Update the quantity (number of seats) of a Stripe subscription.

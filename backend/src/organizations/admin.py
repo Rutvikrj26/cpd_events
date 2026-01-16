@@ -396,3 +396,23 @@ class OrganizationSubscriptionAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description='Trialing')
     def is_trialing(self, obj):
         return obj.is_trialing
+
+    def save_model(self, request, obj, form, change):
+        """Override save to sync trial changes to Stripe."""
+        super().save_model(request, obj, form, change)
+
+        # Check if trial_ends_at changed
+        if 'trial_ends_at' in form.changed_data:
+            if obj.stripe_subscription_id and obj.trial_ends_at:
+                from billing.services import StripeService
+
+                service = StripeService()
+                result = service.update_subscription_trial(obj.stripe_subscription_id, obj.trial_ends_at)
+
+                if result['success']:
+                    messages.success(request, f"✓ Trial end updated in Stripe for {obj.organization.name}")
+                else:
+                    messages.error(request, f"✗ Failed to sync trial end to Stripe: {result['error']}")
+            elif 'trial_ends_at' in form.changed_data and not obj.trial_ends_at:
+                # Handle trial removal if needed
+                pass
