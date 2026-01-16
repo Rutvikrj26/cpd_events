@@ -16,7 +16,11 @@ import {
     FileCheck,
     Zap,
     ChevronRight,
-    BookOpen
+    BookOpen,
+    CreditCard,
+    Mail,
+    UserCheck,
+    Tag
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,18 +61,24 @@ export function FeaturesPage() {
                         </div>
 
                         {/* Feature Navigation Cards */}
-                        <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
+                        <div className="mt-16 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-6xl mx-auto">
                             <a href="#event-management" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
                                 <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
                                     <Calendar className="h-5 w-5" />
                                 </div>
-                                <h3 className="font-semibold text-sm">Event Management</h3>
+                                <h3 className="font-semibold text-sm">Events</h3>
                             </a>
                             <a href="#course-management" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
                                 <div className="h-10 w-10 mx-auto bg-accent/10 rounded-lg flex items-center justify-center text-accent mb-3 group-hover:bg-accent group-hover:text-white transition-colors">
                                     <BookOpen className="h-5 w-5" />
                                 </div>
-                                <h3 className="font-semibold text-sm">Course Management</h3>
+                                <h3 className="font-semibold text-sm">Courses</h3>
+                            </a>
+                            <a href="#zoom-integration" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
+                                <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
+                                    <Video className="h-5 w-5" />
+                                </div>
+                                <h3 className="font-semibold text-sm">Zoom</h3>
                             </a>
                             <a href="#certificates" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
                                 <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
@@ -76,11 +86,17 @@ export function FeaturesPage() {
                                 </div>
                                 <h3 className="font-semibold text-sm">Certificates</h3>
                             </a>
+                            <a href="#crm" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
+                                <div className="h-10 w-10 mx-auto bg-accent/10 rounded-lg flex items-center justify-center text-accent mb-3 group-hover:bg-accent group-hover:text-white transition-colors">
+                                    <Users className="h-5 w-5" />
+                                </div>
+                                <h3 className="font-semibold text-sm">CRM</h3>
+                            </a>
                             <a href="#organizations" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
                                 <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
                                     <Building2 className="h-5 w-5" />
                                 </div>
-                                <h3 className="font-semibold text-sm">Organizations</h3>
+                                <h3 className="font-semibold text-sm">Teams</h3>
                             </a>
                         </div>
                     </div>
@@ -125,42 +141,80 @@ export function FeaturesPage() {
                 ctaText="Start Building Courses"
             />
 
-            {/* Feature Highlight 3: Certificates */}
+            {/* Feature Highlight 3: Zoom Integration */}
+            <FeatureSection
+                id="zoom-integration"
+                badge="Zoom Integration"
+                title="Seamless Virtual Event Hosting"
+                description="Connect your Zoom account and run virtual events with automatic attendance tracking. No manual check-ins required."
+                features={[
+                    "One-click Zoom meeting and webinar creation",
+                    "Real-time attendance tracking per participant",
+                    "Automatic recording ingestion with visibility controls",
+                    "Session-level attendance for multi-day events",
+                    "Attendance threshold for certificate eligibility"
+                ]}
+                visual={<ZoomIntegrationVisual />}
+                reversed={false}
+                ctaLink="/signup?role=organizer"
+                ctaText="Connect Zoom Now"
+            />
+
+            {/* Feature Highlight 4: Certificates */}
             <FeatureSection
                 id="certificates"
                 badge="Certificates"
                 title="Professional Certificates, Automatically Issued"
                 description="Generate beautiful PDF certificates for attendees who meet attendance requirements or learners who complete a course."
                 features={[
-                    "Customizable PDF certificate templates",
-                    "Automatic issuance rules (Attendance or Course Completion)",
-                    "Unique verification codes for each certificate",
+                    "Drag-and-drop certificate template builder",
+                    "Automatic issuance on attendance or course completion",
+                    "Unique verification codes with QR support",
                     "Public verification page for employers",
-                    "Bulk issuance for large cohorts"
+                    "CPD credit tracking and compliance reporting"
                 ]}
                 visual={<CertificatesVisual />}
-                reversed={false}
+                reversed={true}
                 ctaLink="/features/certificates"
                 ctaText="Learn More About Certificates"
             />
 
-            {/* Feature Highlight 4: Team Management */}
+            {/* Feature Highlight 5: CRM & Contacts */}
+            <FeatureSection
+                id="crm"
+                badge="CRM & Contacts"
+                title="Centralized Contact Management"
+                description="Keep track of all your event registrants and course learners in one place. Segment, tag, and communicate effectively."
+                features={[
+                    "Unified contacts across all events and courses",
+                    "Segmentation via lists and tags",
+                    "Engagement history and attendance records",
+                    "Transactional email notifications",
+                    "Marketing opt-out compliance"
+                ]}
+                visual={<CRMVisual />}
+                reversed={false}
+                ctaLink="/signup?role=organizer"
+                ctaText="Start Managing Contacts"
+            />
+
+            {/* Feature Highlight 6: Team Management */}
             <FeatureSection
                 id="organizations"
                 badge="Organizations"
-                title="Manage Everything as a Team"
-                description="Create organizations and invite team members with specific roles. Collaborate on events and courses and share resources across your organization."
+                title="Team Collaboration at Scale"
+                description="Create organizations and invite team members with specific roles. Collaborate on events and courses with shared resources and centralized billing."
                 features={[
-                    "Team roles: Admin, Organizer, Course Manager, Instructor",
-                    "Shared events and courses library",
-                    "Centralized certificate templates",
-                    "Organization-wide analytics and reporting",
-                    "Consolidated billing for the entire team"
+                    "Admin: Full control over events, courses, billing & team",
+                    "Organizer: Create events, manage registrations",
+                    "Course Manager: Build courses, track enrollments",
+                    "Instructor: Manage assigned courses, grade assignments",
+                    "Organization branding with logos and custom domains"
                 ]}
                 visual={<TeamManagementVisual />}
                 reversed={true}
-                ctaLink="/signup"
-                ctaText="Create Your Organization"
+                ctaLink="/products/organizations"
+                ctaText="Learn About Organizations"
             />
 
             {/* All Features Grid */}
@@ -177,12 +231,12 @@ export function FeaturesPage() {
 
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
                         <FeatureCard icon={Calendar} title="Event Scheduling" description="Flexible scheduling with timezone support" />
-                        <FeatureCard icon={Users} title="Registration" description="Manage registrations with capacity limits" />
-                        <FeatureCard icon={Clock} title="Session Tracking" description="Track attendance per session for multi-day events" />
+                        <FeatureCard icon={CreditCard} title="Stripe Payments" description="Collect payments with Stripe Connect" />
+                        <FeatureCard icon={Tag} title="Promo Codes" description="Create discount codes for events" />
                         <FeatureCard icon={BarChart3} title="Analytics" description="Event performance and attendance insights" />
                         <FeatureCard icon={Shield} title="Verification" description="Public certificate verification portal" />
                         <FeatureCard icon={Globe} title="Hybrid Events" description="Support for mixed virtual and in-person" />
-                        <FeatureCard icon={Settings} title="Customization" description="Brand your events and certificates" />
+                        <FeatureCard icon={Mail} title="Email Notifications" description="Automated transactional emails" />
                         <FeatureCard icon={FileCheck} title="CPD Compliance" description="Track CPD credits and requirements" />
                     </div>
                 </div>
@@ -521,6 +575,63 @@ function CourseManagementVisual() {
                     <Button className="w-full bg-accent hover:bg-accent/90" size="sm">
                         Continue Learning
                     </Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function CRMVisual() {
+    return (
+        <div className="bg-card rounded-2xl border border-border shadow-elevated p-6">
+            <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Users className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                        <h3 className="font-semibold text-foreground">Contacts</h3>
+                        <p className="text-xs text-muted-foreground">1,234 total contacts</p>
+                    </div>
+                </div>
+                <Badge className="bg-primary/10 text-primary border-0">All Events</Badge>
+            </div>
+
+            <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg">
+                    <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-xs font-medium text-white">JD</div>
+                        <div>
+                            <p className="text-sm font-medium text-foreground">John Doe</p>
+                            <p className="text-xs text-muted-foreground">john@example.com</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">5 events</Badge>
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg">
+                    <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-accent/80 flex items-center justify-center text-xs font-medium text-white">SM</div>
+                        <div>
+                            <p className="text-sm font-medium text-foreground">Sarah Miller</p>
+                            <p className="text-xs text-muted-foreground">sarah@company.org</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">3 events</Badge>
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg">
+                    <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">+89</div>
+                        <div>
+                            <p className="text-sm font-medium text-foreground">89 more contacts</p>
+                            <p className="text-xs text-muted-foreground">From recent events</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

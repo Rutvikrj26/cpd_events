@@ -107,6 +107,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     <NavigationMenuTrigger>Resources</NavigationMenuTrigger>
                     <NavigationMenuContent>
                       <ul className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2">
+                        <ListItem href="/features" title="Features">
+                          Explore all platform capabilities.
+                        </ListItem>
                         <ListItem href="/faq" title="FAQ">
                           Common questions and answers.
                         </ListItem>
@@ -395,13 +398,13 @@ const ListItem = React.forwardRef<
         <a
           ref={ref}
           className={cn(
-            "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+            "group block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
             className
           )}
           {...props}
         >
           <div className="text-sm font-medium leading-none">{title}</div>
-          <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
+          <p className="line-clamp-2 text-sm leading-snug text-muted-foreground transition-colors group-hover:text-accent-foreground/70 group-focus:text-accent-foreground/70">
             {children}
           </p>
         </a>
