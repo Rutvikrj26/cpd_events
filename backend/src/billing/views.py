@@ -32,7 +32,7 @@ from .serializers import (
 from .services import RefundService, stripe_connect_service, stripe_service
 
 
-@roles('attendee', 'organizer', 'admin', route_name='subscriptions')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='subscriptions')
 class SubscriptionViewSet(viewsets.GenericViewSet):
     """
     Subscription management for the authenticated user.
@@ -263,7 +263,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             return error_response(result.get('error', 'Checkout confirmation failed'), code='CHECKOUT_CONFIRMATION_FAILED')
 
 
-@roles('attendee', 'organizer', 'admin', route_name='invoices')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='invoices')
 class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Invoice history for the authenticated user.
@@ -295,7 +295,7 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
-@roles('attendee', 'organizer', 'admin', route_name='payment_methods')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='payment_methods')
 class PaymentMethodViewSet(viewsets.ModelViewSet):
     """
     Payment method management.
@@ -391,7 +391,7 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
         return Response(PaymentMethodSerializer(payment_method).data)
 
 
-@roles('attendee', 'organizer', 'admin', route_name='checkout_session')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='checkout_session')
 class CheckoutSessionView(views.APIView):
     """
     Create Stripe checkout session.
@@ -421,7 +421,7 @@ class CheckoutSessionView(views.APIView):
             return error_response(result.get('error', 'Failed to create checkout session'), code='CHECKOUT_FAILED')
 
 
-@roles('attendee', 'organizer', 'admin', route_name='billing_portal')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='billing_portal')
 class BillingPortalView(views.APIView):
     """
     Create Stripe billing portal session.

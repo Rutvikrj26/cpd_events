@@ -47,6 +47,7 @@ export interface OrganizationListItem {
     members_count: number;
     events_count: number;
     user_role: OrganizationRole | null;
+    onboarding_completed?: boolean;
 }
 
 export interface Organization {
@@ -74,6 +75,7 @@ export interface Organization {
     stripe_connect_id?: string;
     stripe_account_status?: string;
     stripe_charges_enabled?: boolean;
+    onboarding_completed?: boolean;
 }
 
 export interface OrganizationCreateRequest {

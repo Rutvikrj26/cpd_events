@@ -15,6 +15,11 @@ interface AuthContextType {
     hasRoute: (routeKey: string) => boolean;
     hasFeature: (feature: keyof Manifest['features']) => boolean;
     refreshManifest: () => Promise<void>;
+    refreshUser: () => Promise<void>;
+    setToken: (access: string, refresh: string) => void;
+    setIsAuthenticated: (value: boolean) => void;
+    setUser: (user: User | null) => void;
+    fetchManifest: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,6 +37,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setManifest(data);
         } catch (error) {
             console.error('Failed to fetch manifest', error);
+        }
+    };
+
+    // Fetch user profile from backend
+    const refreshUser = async () => {
+        try {
+            const userProfile = await getCurrentUser();
+            setUser(userProfile);
+        } catch (error) {
+            console.error('Failed to refresh user profile', error);
         }
     };
 
@@ -101,7 +116,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const register = async (data: SignupRequest) => {
         try {
-            await apiSignup(data);
+            const response = await apiSignup(data);
+
+            // If we got tokens, log the user in (legacy/Google/future-proof)
+            if (response.access && response.refresh && response.user) {
+                setToken(response.access, response.refresh);
+                setIsAuthenticated(true);
+                setUser(response.user);
+                await fetchManifest();
+            }
+            // If no tokens (email verification required), we just return successfully
+            // The calling component (SignupPage) will handle the redirect.
         } catch (error) {
             console.error("Registration failed", error);
             throw error;
@@ -128,6 +153,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             hasRoute,
             hasFeature,
             refreshManifest: fetchManifest,
+            refreshUser,
+            setToken,
+            setIsAuthenticated,
+            setUser,
+            fetchManifest,
         }}>
             {children}
         </AuthContext.Provider>

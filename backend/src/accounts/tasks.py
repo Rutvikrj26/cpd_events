@@ -14,10 +14,10 @@ User = get_user_model()
 
 
 @task()
-def send_email_verification(user_id, verification_url):
+def send_email_verification(user_uuid, verification_url):
     """Send email verification link."""
     try:
-        user = User.objects.get(pk=user_id)
+        user = User.objects.get(uuid=user_uuid)
         subject = "Verify your email address - CPD Events"
         html_message = render_to_string('emails/verification.html', {'user': user, 'verification_url': verification_url})
         plain_message = strip_tags(html_message)
@@ -31,16 +31,16 @@ def send_email_verification(user_id, verification_url):
         )
         logger.info(f"Verification email sent to {user.email}")
     except User.DoesNotExist:
-        logger.error(f"User {user_id} not found for verification email")
+        logger.error(f"User {user_uuid} not found for verification email")
     except Exception as e:
-        logger.error(f"Failed to send verify email to user {user_id}: {e}")
+        logger.error(f"Failed to send verify email to user {user_uuid}: {e}")
 
 
 @task()
-def send_password_reset(user_id, reset_url):
+def send_password_reset(user_uuid, reset_url):
     """Send password reset link."""
     try:
-        user = User.objects.get(pk=user_id)
+        user = User.objects.get(uuid=user_uuid)
         subject = "Reset your password - CPD Events"
         html_message = render_to_string('emails/password_reset.html', {'user': user, 'reset_url': reset_url})
         plain_message = strip_tags(html_message)
@@ -54,9 +54,9 @@ def send_password_reset(user_id, reset_url):
         )
         logger.info(f"Password reset email sent to {user.email}")
     except User.DoesNotExist:
-        logger.error(f"User {user_id} not found for password reset email")
+        logger.error(f"User {user_uuid} not found for password reset email")
     except Exception as e:
-        logger.error(f"Failed to send password reset email to user {user_id}: {e}")
+        logger.error(f"Failed to send password reset email to user {user_uuid}: {e}")
 
 
 @task()

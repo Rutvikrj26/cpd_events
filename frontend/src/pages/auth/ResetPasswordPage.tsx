@@ -37,7 +37,6 @@ export function ResetPasswordPage() {
     const [isSuccess, setIsSuccess] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
 
-    const uidb64 = searchParams.get("uid") || searchParams.get("uidb64") || "";
     const token = searchParams.get("token") || "";
 
     const form = useForm<z.infer<typeof resetPasswordSchema>>({
@@ -49,7 +48,7 @@ export function ResetPasswordPage() {
     });
 
     // Validate URL parameters
-    if (!uidb64 || !token) {
+    if (!token) {
         return (
             <Card className="w-full max-w-md mx-auto shadow-lg">
                 <CardHeader className="text-center">
@@ -83,9 +82,8 @@ export function ResetPasswordPage() {
 
         try {
             await confirmPasswordReset({
-                uidb64,
                 token,
-                password: values.password,
+                new_password: values.password,
             });
             setIsSuccess(true);
             toast.success("Password reset successfully!");

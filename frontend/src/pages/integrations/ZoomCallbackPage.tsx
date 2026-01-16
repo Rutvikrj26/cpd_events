@@ -19,13 +19,26 @@ export const ZoomCallbackPage = () => {
         const code = searchParams.get('code');
         const error = searchParams.get('error');
 
+        // Check for onboarding redirect (set when connecting Zoom during onboarding)
+        const onboardingRedirect = sessionStorage.getItem('onboarding_redirect');
+        const defaultRedirect = '/organizer/dashboard';
+
+        const getRedirectUrl = () => {
+            if (onboardingRedirect) {
+                // Clear the redirect after use
+                sessionStorage.removeItem('onboarding_redirect');
+                return onboardingRedirect;
+            }
+            return defaultRedirect;
+        };
+
         if (error) {
             toast({
                 title: "Connection Failed",
                 description: `Zoom authorization failed: ${error}`,
                 variant: "destructive",
             });
-            navigate('/organizer/dashboard');
+            navigate(getRedirectUrl());
             return;
         }
 
@@ -35,7 +48,7 @@ export const ZoomCallbackPage = () => {
                 description: "No authorization code found.",
                 variant: "destructive",
             });
-            navigate('/organizer/dashboard');
+            navigate(getRedirectUrl());
             return;
         }
 
@@ -53,7 +66,7 @@ export const ZoomCallbackPage = () => {
                     variant: "destructive",
                 });
             } finally {
-                navigate('/organizer/dashboard');
+                navigate(getRedirectUrl());
             }
         };
 

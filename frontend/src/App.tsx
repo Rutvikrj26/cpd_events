@@ -40,9 +40,11 @@ import OrganizationsProductPage from './pages/public/products/OrganizationsProdu
 // Auth Pages
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { SignupPage } from "@/pages/auth/SignupPage";
-import { AuthCallback } from "@/pages/auth/AuthCallback";
+import { VerifyEmailPage } from "@/pages/auth/VerifyEmailPage";
+import { CheckEmailPage } from "@/pages/auth/CheckEmailPage";
 import { ForgotPasswordPage } from "@/pages/auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "@/pages/auth/ResetPasswordPage";
+import { OAuthCallbackPage } from "@/pages/auth/OAuthCallbackPage";
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { EventsPage } from './pages/events/EventsPage';
 import { EventCreatePage } from './pages/events/EventCreatePage';
@@ -73,7 +75,7 @@ import { ZoomManagement } from './pages/dashboard/organizer/ZoomManagement';
 import { OrganizerCertificatesPage } from './pages/dashboard/organizer/OrganizerCertificatesPage';
 
 // Organization Pages
-import { OrganizationsListPage, CreateOrganizationPage, OrganizationDashboard, InstructorDashboard, OrgEventsPage, TeamManagementPage, OrganizationSettingsPage, OrgCoursesPage, CreateCoursePage, AcceptInvitationPage, OrganizationBillingPage } from './pages/organizations';
+import { OrganizationsListPage, CreateOrganizationPage, OrganizationDashboard, InstructorDashboard, OrgEventsPage, TeamManagementPage, OrganizationSettingsPage, OrgCoursesPage, CreateCoursePage, AcceptInvitationPage, OrganizationBillingPage, OrganizationOnboardingWizard } from './pages/organizations';
 import { CourseManagementPage } from './pages/organizations/courses/CourseManagementPage';
 
 // Course Pages
@@ -216,6 +218,7 @@ export default function App() {
                 } />
 
                 {/* Public Certificate Verification */}
+                <Route path="/verify" element={<CertificateVerify />} />
                 <Route path="/verify/:code" element={<CertificateVerify />} />
 
                 {/* Public Courses */}
@@ -239,7 +242,9 @@ export default function App() {
                   </AuthLayout>
                 } />
 
-                <Route path="/auth/callback" element={<AuthCallback />} />
+                {/* Email Verification */}
+                <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
+                <Route path="/auth/check-email" element={<CheckEmailPage />} />
 
                 {/* Accept Organization Invitation - Public but requires auth */}
                 <Route path="/accept-invite/:token" element={<AcceptInvitationPage />} />
@@ -255,6 +260,9 @@ export default function App() {
                     <ResetPasswordPage />
                   </AuthLayout>
                 } />
+
+                {/* OAuth Callback */}
+                <Route path="/auth/callback" element={<OAuthCallbackPage />} />
 
                 {/* Protected Routes - Unified Dashboard */}
                 <Route element={<ProtectedRoute />}>
@@ -305,7 +313,6 @@ export default function App() {
                     {/* Shared pages */}
                     <Route path="login" element={<LoginPage />} />
                     <Route path="signup" element={<SignupPage />} />
-                    <Route path="auth/callback" element={<AuthCallback />} />
                     <Route path="forgot-password" element={<ForgotPasswordPage />} />
                     <Route path="/billing" element={
                       <ProtectedRoute requiredFeature="view_billing">
@@ -331,6 +338,10 @@ export default function App() {
                         <CreateOrganizationPage />
                       </ProtectedRoute>
                     } />
+
+                    {/* Organization Onboarding - OUTSIDE OrganizationLayout */}
+                    <Route path="/org/:slug/onboarding" element={<OrganizationOnboardingWizard />} />
+
                     <Route element={<OrganizationLayout />}>
                       <Route path="/org/:slug" element={<OrganizationDashboard />} />
                       <Route path="/org/:slug/instructor" element={<InstructorDashboard />} />

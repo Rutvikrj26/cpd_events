@@ -76,6 +76,14 @@ export const deleteOrganization = async (uuid: string): Promise<void> => {
     await client.delete(`${BASE_URL}/${uuid}/`);
 };
 
+/**
+ * Mark organization onboarding as complete.
+ */
+export const completeOrganizationOnboarding = async (orgUuid: string): Promise<{ message: string; onboarding_completed: boolean }> => {
+    const response = await client.post<{ message: string; onboarding_completed: boolean }>(`${BASE_URL}/${orgUuid}/onboarding/complete/`);
+    return response.data;
+};
+
 // ============================================================================
 // Organization Oversight
 // ============================================================================

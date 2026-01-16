@@ -128,15 +128,15 @@ export default function OrganizationsProductPage() {
                                 Perfect for training organizations, associations, and enterprise L&D.
                             </p>
                             <div className="flex flex-col sm:flex-row gap-4">
-                                <Link to="/register?type=organization">
+                                <Link to="/contact">
                                     <Button size="lg" className="h-12 px-8 text-base shadow-lg shadow-primary/20 glow-primary w-full sm:w-auto">
-                                        Create Organization
+                                        Contact Sales
                                         <ArrowRight className="ml-2 h-4 w-4" />
                                     </Button>
                                 </Link>
-                                <Link to="/contact">
+                                <Link to="/pricing">
                                     <Button variant="outline" size="lg" className="h-12 px-8 text-base w-full sm:w-auto">
-                                        Contact Sales
+                                        View Pricing
                                     </Button>
                                 </Link>
                             </div>
@@ -197,11 +197,11 @@ export default function OrganizationsProductPage() {
                 <div className="container px-4 mx-auto text-center">
                     <h2 className="text-3xl font-bold tracking-tight text-foreground mb-6">Ready to scale?</h2>
                     <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-                        Get your organization set up in minutes. No credit card required for the first 14 days.
+                        Let our team help you set up the perfect solution for your training organization.
                     </p>
-                    <Link to="/register?type=organization">
+                    <Link to="/contact">
                         <Button size="lg" className="h-14 px-10 text-lg shadow-xl shadow-primary/20 glow-primary">
-                            Start Organization Trial
+                            Contact Sales
                         </Button>
                     </Link>
                 </div>

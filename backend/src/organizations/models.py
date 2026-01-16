@@ -85,6 +85,18 @@ class Organization(SoftDeleteModel):
     events_count = models.PositiveIntegerField(default=0, help_text="Number of events")
     courses_count = models.PositiveIntegerField(default=0, help_text="Number of courses")
 
+    # =========================================
+    # Onboarding
+    # =========================================
+    onboarding_completed = models.BooleanField(
+        default=False,
+        help_text="Whether organization completed initial onboarding"
+    )
+    onboarding_completed_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When onboarding was completed"
+    )
+
     class Meta:
         db_table = 'organizations'
         verbose_name = 'Organization'

@@ -738,6 +738,11 @@ class Course(BaseModel):
         ).exists()
 
     @property
+    def owner(self):
+        """Map created_by to owner for Zoom service compatibility."""
+        return self.created_by
+
+    @property
     def is_free(self):
         return self.price_cents == 0
 
@@ -851,13 +856,26 @@ class CourseEnrollment(BaseModel):
         DROPPED = 'dropped', 'Dropped'
         EXPIRED = 'expired', 'Expired'
 
+    class AccessType(models.TextChoices):
+        LIFETIME = 'lifetime', 'Lifetime Access'
+        LIMITED = 'limited', 'Limited Access'
+        SUBSCRIPTION = 'subscription', 'Subscription Access'
+
     # Relationships
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='enrollments')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='course_enrollments')
 
     # Status
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True)
+    access_type = models.CharField(max_length=20, choices=AccessType.choices, default=AccessType.LIFETIME)
 
+    # Billing
+    stripe_checkout_session_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe Checkout Session ID")
+    
+    # Zoom (for hybrid courses)
+    zoom_join_url = models.URLField(max_length=500, blank=True, help_text="Unique Zoom join URL")
+    zoom_registrant_id = models.CharField(max_length=255, blank=True, help_text="Zoom Registrant ID")
+    
     # Timestamps
     enrolled_at = models.DateTimeField(auto_now_add=True, help_text="When user enrolled")
     started_at = models.DateTimeField(null=True, blank=True, help_text="When user started learning")

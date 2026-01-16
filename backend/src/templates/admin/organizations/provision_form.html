@@ -1,0 +1,47 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='organizations' %}">Organizations</a>
+    &rsaquo; <a href="{% url 'admin:organizations_organization_changelist' %}">Organizations</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h1>{{ title }}</h1>
+    <p>Create a new organization with an admin user. An email will be sent to the admin to verify their email and set
+        their password.</p>
+
+    <form method="post" id="provision-form">
+        {% csrf_token %}
+
+        <fieldset class="module aligned">
+            <h2>Organization Details</h2>
+            {% for field in form %}
+            <div class="form-row{% if field.errors %} errors{% endif %}">
+                <div>
+                    {{ field.errors }}
+                    <label{% if field.field.required %} class="required" {% endif %} for="{{ field.id_for_label }}">
+                        {{ field.label }}:
+                        </label>
+                        {{ field }}
+                        {% if field.help_text %}
+                        <p class="help">{{ field.help_text }}</p>
+                        {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </fieldset>
+
+        <div class="submit-row">
+            <input type="submit" value="Provision Organization" class="default">
+            <a href="{% url 'admin:organizations_organization_changelist' %}" class="deletelink"
+                style="margin-left: 10px;">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

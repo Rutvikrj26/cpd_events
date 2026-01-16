@@ -81,6 +81,17 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     # =========================================
     email = LowercaseEmailField(unique=True, db_index=True, help_text="Primary email address (used for login)")
 
+    # OAuth integration fields
+    google_user_id = models.CharField(
+        max_length=255, blank=True, null=True, unique=True, db_index=True, help_text="Google user ID for OAuth"
+    )
+    auth_provider = models.CharField(
+        max_length=20,
+        choices=[('local', 'Local'), ('google', 'Google'), ('zoom', 'Zoom')],
+        default='local',
+        help_text="Original authentication method used for account creation",
+    )
+
     # =========================================
     # Profile Fields
     # =========================================
@@ -105,6 +116,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
 
     is_active = models.BooleanField(default=True, help_text="Whether user can log in")
     is_staff = models.BooleanField(default=False, help_text="Can access admin site")
+    onboarding_completed = models.BooleanField(default=False, help_text="Whether user completed initial onboarding")
 
     # =========================================
     # Email Verification

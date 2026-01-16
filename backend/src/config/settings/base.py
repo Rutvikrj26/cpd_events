@@ -88,7 +88,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -218,6 +218,11 @@ ZOOM_CLIENT_ID = os.environ.get('ZOOM_CLIENT_ID')
 ZOOM_CLIENT_SECRET = os.environ.get('ZOOM_CLIENT_SECRET')
 ZOOM_REDIRECT_URI = os.environ.get('ZOOM_REDIRECT_URI')
 ZOOM_WEBHOOK_SECRET = os.environ.get('ZOOM_WEBHOOK_SECRET')
+
+# Google OAuth
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
+GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI')
 
 # =============================================================================
 # Email Settings (Brevo via Anymail)

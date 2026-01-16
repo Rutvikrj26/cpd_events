@@ -5,7 +5,7 @@ Learning API views.
 from django.db import models
 from django.shortcuts import get_object_or_404
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import parsers, permissions, status, views, viewsets
+from rest_framework import parsers, permissions, status, views, viewsets, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -840,6 +840,33 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
                 {'error': result.get('error', 'Failed to create checkout session')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+    @swagger_auto_schema(
+        operation_summary="Confirm course enrollment",
+        operation_description="Confirm enrollment after Stripe Checkout. Synchrnously creates/activates enrollment.",
+        request_body=serializers.Serializer(), 
+        responses={200: CourseEnrollmentSerializer, 400: '{"error": "..."}'},
+    )
+    @action(detail=False, methods=['post'], url_path='confirm-checkout')
+    def confirm_checkout(self, request):
+        """
+        Confirm course enrollment from Stripe Checkout.
+        Expects: {"session_id": "cs_test_..."}
+        """
+        session_id = request.data.get('session_id')
+        if not session_id:
+            return error_response('session_id is required', code='MISSING_SESSION_ID')
+
+        from .services import CourseService
+        service = CourseService()
+        
+        result = service.confirm_enrollment(request.user, session_id)
+        
+        if result['success']:
+            serializer = self.get_serializer(result['enrollment'])
+            return Response(serializer.data)
+        else:
+             return error_response(result.get('error', 'Enrollment confirmation failed'), code='ENROLLMENT_FAILED')
 
     def _create_course_checkout_session(self, user, course, success_url: str, cancel_url: str) -> dict:
         """

@@ -124,7 +124,7 @@ export default function EventsProductPage() {
                                 Automate certificates, sync with Zoom, and manage registrations effortlessly.
                             </p>
                             <div className="flex flex-col sm:flex-row gap-4">
-                                <Link to="/register">
+                                <Link to="/signup?role=organizer&plan=organizer">
                                     <Button size="lg" className="h-12 px-8 text-base shadow-lg shadow-primary/20 glow-primary w-full sm:w-auto">
                                         Start Hosting
                                         <ArrowRight className="ml-2 h-4 w-4" />
@@ -195,7 +195,7 @@ export default function EventsProductPage() {
                     <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
                         Join thousands of organizers who trust Accredit for their professional development events.
                     </p>
-                    <Link to="/register">
+                    <Link to="/signup?role=organizer&plan=organizer">
                         <Button size="lg" className="h-14 px-10 text-lg shadow-xl shadow-primary/20 glow-primary">
                             Get Started for Free
                         </Button>

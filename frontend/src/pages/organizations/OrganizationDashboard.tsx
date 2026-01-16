@@ -99,6 +99,13 @@ const OrganizationDashboard: React.FC = () => {
         }
     }, [org?.user_role, slug, navigate]);
 
+    // Redirect admin to onboarding if not completed
+    useEffect(() => {
+        if (org && !org.onboarding_completed && org.user_role === 'admin' && slug) {
+            navigate(`/org/${slug}/onboarding`, { replace: true });
+        }
+    }, [org, slug, navigate]);
+
     const getRoleIcon = (role: OrganizationRole) => {
         switch (role) {
             case 'admin':
@@ -443,11 +450,11 @@ const OrganizationDashboard: React.FC = () => {
                                                 Status: <span className="capitalize">{org.subscription.status}</span>
                                             </p>
                                         </div>
-                                    {isAdmin && (
-                                        <Button variant="outline" onClick={handleManageBilling} disabled={isManagingBilling}>
-                                            {isManagingBilling ? 'Opening...' : 'Manage Billing'}
-                                        </Button>
-                                    )}
+                                        {isAdmin && (
+                                            <Button variant="outline" onClick={handleManageBilling} disabled={isManagingBilling}>
+                                                {isManagingBilling ? 'Opening...' : 'Manage Billing'}
+                                            </Button>
+                                        )}
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">

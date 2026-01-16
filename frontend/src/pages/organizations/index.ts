@@ -12,3 +12,5 @@ export { default as OrgCoursesPage } from './courses/OrgCoursesPage';
 export { default as CreateCoursePage } from './courses/CreateCoursePage';
 export { default as AcceptInvitationPage } from './AcceptInvitationPage';
 export { OrganizationBillingPage } from './OrganizationBillingPage';
+export { OrganizationOnboardingWizard } from './OrganizationOnboardingWizard';
+

@@ -3,6 +3,7 @@ import {
     LoginRequest,
     SignupRequest,
     AuthResponse,
+    SignupResponse,
     User,
     RefreshTokenRequest,
     PasswordResetRequest,
@@ -13,8 +14,8 @@ import {
 } from './types';
 
 // Authentication
-export const signup = async (data: SignupRequest): Promise<User> => {
-    const response = await client.post<User>('/auth/signup/', data);
+export const signup = async (data: SignupRequest): Promise<SignupResponse> => {
+    const response = await client.post<SignupResponse>('/auth/signup/', data);
     return response.data;
 };
 
@@ -28,8 +29,9 @@ export const refreshToken = async (data: RefreshTokenRequest): Promise<{ access:
     return response.data;
 };
 
-export const verifyEmail = async (token: string): Promise<void> => {
-    await client.post('/auth/verify-email/', { token });
+export const verifyEmail = async (token: string): Promise<SignupResponse> => {
+    const response = await client.post<SignupResponse>('/auth/verify-email/', { token });
+    return response.data;
 };
 
 export const resetPassword = async (data: PasswordResetRequest): Promise<void> => {
@@ -67,5 +69,11 @@ export const getNotificationPreferences = async (): Promise<NotificationPreferen
 
 export const updateNotificationPreferences = async (data: NotificationPreferences): Promise<NotificationPreferences> => {
     const response = await client.patch<NotificationPreferences>('/users/me/notifications/', data);
+    return response.data;
+};
+
+// Onboarding
+export const completeOnboarding = async (): Promise<{ message: string; onboarding_completed: boolean }> => {
+    const response = await client.post<{ message: string; onboarding_completed: boolean }>('/users/me/onboarding/complete/');
     return response.data;
 };

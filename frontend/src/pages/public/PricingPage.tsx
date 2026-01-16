@@ -237,7 +237,7 @@ export function PricingPage() {
             <section className="py-16 bg-background">
                 <div className="container mx-auto px-4">
                     <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto">
-                        {allPlans.map((plan) => {
+                        {allPlans.filter(plan => plan.plan !== 'organization').map((plan) => {
                             const Icon = plan.icon;
                             const planInterval = billingInterval === 'year' && plan.annualPrice != null ? 'year' : 'month';
                             const displayPrice = planInterval === 'year' ? plan.annualPrice : plan.monthlyPrice;
@@ -311,6 +311,53 @@ export function PricingPage() {
                                 </Card>
                             );
                         })}
+                    </div>
+                </div>
+            </section>
+
+            {/* Organization Plans Banner */}
+            <section className="py-16 bg-gradient-to-br from-primary/5 via-background to-primary/5">
+                <div className="container mx-auto px-4">
+                    <div className="max-w-4xl mx-auto">
+                        <Card className="border-primary/20 bg-card shadow-lg">
+                            <CardHeader className="text-center pb-4">
+                                <div className="flex items-center justify-center gap-3 mb-4">
+                                    <div className="h-12 w-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                                        <Building2 className="h-6 w-6 text-primary" />
+                                    </div>
+                                </div>
+                                <CardTitle className="text-2xl">Organization Plans</CardTitle>
+                                <CardDescription className="text-base max-w-2xl mx-auto">
+                                    For training agencies, enterprise L&D teams, and professional associations.
+                                    Our organization plans are tailored to your specific needs and usage.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="text-center">
+                                <div className="grid sm:grid-cols-3 gap-6 mb-8">
+                                    <div className="p-4 bg-secondary/30 rounded-lg">
+                                        <p className="font-semibold text-foreground">Multi-user Access</p>
+                                        <p className="text-sm text-muted-foreground">Team collaboration tools</p>
+                                    </div>
+                                    <div className="p-4 bg-secondary/30 rounded-lg">
+                                        <p className="font-semibold text-foreground">Custom Branding</p>
+                                        <p className="text-sm text-muted-foreground">White-label options</p>
+                                    </div>
+                                    <div className="p-4 bg-secondary/30 rounded-lg">
+                                        <p className="font-semibold text-foreground">Volume Pricing</p>
+                                        <p className="text-sm text-muted-foreground">Based on your usage</p>
+                                    </div>
+                                </div>
+                                <p className="text-muted-foreground mb-6">
+                                    Pricing is finalized based on your proposed team size, expected event/course volume, and specific feature requirements.
+                                </p>
+                                <Button asChild size="lg">
+                                    <Link to="/contact">
+                                        Contact Sales
+                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Link>
+                                </Button>
+                            </CardContent>
+                        </Card>
                     </div>
                 </div>
             </section>

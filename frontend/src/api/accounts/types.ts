@@ -3,6 +3,8 @@ export interface User {
     email: string;
     full_name: string;
     account_type: 'attendee' | 'organizer' | 'course_manager' | 'admin';
+    email_verified?: boolean;
+    onboarding_completed?: boolean;
     is_active: boolean;
     date_joined: string;
     profile_image?: string;
@@ -37,9 +39,8 @@ export interface PasswordResetRequest {
 }
 
 export interface PasswordResetConfirm {
-    uidb64: string;
     token: string;
-    password: string;
+    new_password: string;
 }
 
 export interface OrganizerProfile {
@@ -57,6 +58,13 @@ export interface UpgradeOrganizerRequest {
 export interface AuthResponse {
     access: string;
     refresh: string;
+    user?: User;
+}
+
+export interface SignupResponse {
+    message: string;
+    access?: string;
+    refresh?: string;
     user?: User;
 }
 

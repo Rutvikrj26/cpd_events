@@ -184,6 +184,18 @@ class TestTokenObtainView:
         response = api_client.post(self.endpoint, data)
         assert response.status_code == status.HTTP_200_OK
 
+    def test_login_unverified_user_blocked(self, api_client, unverified_user):
+        """Unverified users cannot log in."""
+        data = {
+            'email': unverified_user.email,
+            'password': 'testpass123',
+        }
+        response = api_client.post(self.endpoint, data)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        # Check error message is present
+        error_data = response.data.get('error', {}).get('details', response.data)
+        assert 'non_field_errors' in error_data or 'email' in error_data
+
 
 # =============================================================================
 # Token Refresh Tests
@@ -441,4 +453,41 @@ class TestManifestView:
     def test_manifest_unauthenticated(self, api_client):
         """Unauthenticated request is rejected."""
         response = api_client.get(self.endpoint)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# =============================================================================
+# Onboarding Completion Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestCompleteOnboardingView:
+    """Tests for POST /api/v1/users/me/onboarding/complete/"""
+
+    endpoint = '/api/v1/users/me/onboarding/complete/'
+
+    def test_complete_onboarding_success(self, auth_client, user):
+        """Successfully complete onboarding for authenticated user."""
+        assert user.onboarding_completed is False
+
+        response = auth_client.post(self.endpoint)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['onboarding_completed'] is True
+
+        user.refresh_from_db()
+        assert user.onboarding_completed is True
+
+    def test_complete_onboarding_idempotent(self, auth_client, user):
+        """Completing onboarding multiple times is idempotent."""
+        user.onboarding_completed = True
+        user.save()
+
+        response = auth_client.post(self.endpoint)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['onboarding_completed'] is True
+
+    def test_complete_onboarding_unauthenticated(self, api_client):
+        """Unauthenticated request is rejected."""
+        response = api_client.post(self.endpoint)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED

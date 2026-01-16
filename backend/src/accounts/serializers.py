@@ -63,11 +63,7 @@ class SignupSerializer(serializers.ModelSerializer):
         user.account_type = account_type
         user.save()
 
-        # Link any guest registrations
-        from registrations.models import Registration
-
-        Registration.link_registrations_for_user(user)
-
+        # Note: Registration linking is handled in SignupView after user creation
         return user
 
 
@@ -76,6 +72,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
+
+        # Block unverified users from logging in
+        if not self.user.email_verified:
+            raise serializers.ValidationError({
+                'non_field_errors': ['Please verify your email address before logging in.']
+            })
 
         data['user'] = {
             'uuid': str(self.user.uuid),
@@ -204,6 +206,7 @@ class UserSerializer(SoftDeleteModelSerializer):
             'profile_photo_url',
             'account_type',
             'email_verified',
+            'onboarding_completed',
             'timezone',
             # Organizer-specific
             'organizer_logo_url',
@@ -223,6 +226,7 @@ class UserSerializer(SoftDeleteModelSerializer):
             'email',
             'account_type',
             'email_verified',
+            'onboarding_completed',
             'created_at',
             'updated_at',
         ]

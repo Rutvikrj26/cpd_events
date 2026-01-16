@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Rocket,
@@ -23,7 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/AuthContext';
-import { updateProfile } from '@/api/accounts';
+import { updateProfile, completeOnboarding } from '@/api/accounts';
 import { initiateZoomOAuth, getZoomStatus } from '@/api/integrations';
 import { ZoomStatus } from '@/api/integrations/types';
 import { createCheckoutSession } from '@/api/billing';
@@ -37,8 +37,12 @@ interface OnboardingWizardProps {
 
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     const navigate = useNavigate();
-    const { user, refreshManifest } = useAuth();
-    const [currentStep, setCurrentStep] = useState(0);
+    const { user, refreshManifest, refreshUser } = useAuth();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [currentStep, setCurrentStep] = useState(() => {
+        const stepParam = searchParams.get('step');
+        return stepParam ? parseInt(stepParam, 10) : 0;
+    });
     const [isLoading, setIsLoading] = useState(false);
 
     // Profile state
@@ -57,23 +61,28 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     const [addingPayment, setAddingPayment] = useState(false);
 
     const isLmsOnly = subscription?.plan === 'lms' || (!subscription && user?.account_type === 'course_manager');
-    const planLabel = subscription?.plan_display || (isLmsOnly ? 'LMS' : 'Organizer');
+    const isAttendee = user?.account_type === 'attendee';
+    const planLabel = subscription?.plan_display || (isLmsOnly ? 'LMS' : isAttendee ? 'Free' : 'Organizer');
 
-    const steps = isLmsOnly
+    const steps = isAttendee
         ? [
             { id: 'welcome', title: 'Welcome', icon: Rocket },
-            { id: 'profile', title: 'Your Profile', icon: User },
-            { id: 'course_setup', title: 'Course Setup', icon: BookOpen },
-            { id: 'billing', title: 'Billing', icon: CreditCard },
-            { id: 'complete', title: 'Get Started', icon: BookOpen },
-        ]
-        : [
-            { id: 'welcome', title: 'Welcome', icon: Rocket },
-            { id: 'profile', title: 'Your Profile', icon: User },
-            { id: 'integrations', title: 'Integrations', icon: Video },
-            { id: 'billing', title: 'Billing', icon: CreditCard },
             { id: 'complete', title: 'Get Started', icon: Calendar },
-        ];
+        ]
+        : isLmsOnly
+            ? [
+                { id: 'welcome', title: 'Welcome', icon: Rocket },
+                { id: 'profile', title: 'Your Profile', icon: User },
+                { id: 'billing', title: 'Billing', icon: CreditCard },
+                { id: 'complete', title: 'Get Started', icon: BookOpen },
+            ]
+            : [
+                { id: 'welcome', title: 'Welcome', icon: Rocket },
+                { id: 'profile', title: 'Your Profile', icon: User },
+                { id: 'billing', title: 'Billing', icon: CreditCard },
+                { id: 'integrations', title: 'Integrations', icon: Video },
+                { id: 'complete', title: 'Get Started', icon: Calendar },
+            ];
 
     const progress = ((currentStep + 1) / steps.length) * 100;
     const stepId = steps[currentStep]?.id;
@@ -163,8 +172,10 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
     const handleComplete = async () => {
         try {
-            // Mark onboarding as complete (could be an API call)
-            await refreshManifest();
+            // Mark onboarding as complete on the backend
+            await completeOnboarding();
+            // Refresh user state and manifest to reflect the change
+            await Promise.all([refreshUser(), refreshManifest()]);
             toast.success("You're all set! Welcome aboard.");
 
             if (onComplete) {
@@ -173,9 +184,16 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                 navigate('/dashboard');
             }
         } catch (error) {
+            // If API fails, still navigate to dashboard
+            console.error('Failed to complete onboarding:', error);
             navigate('/dashboard');
         }
     };
+
+    // Sync currentStep with URL
+    React.useEffect(() => {
+        setSearchParams({ step: currentStep.toString() }, { replace: true });
+    }, [currentStep, setSearchParams]);
 
     // Load zoom status when reaching integrations step
     React.useEffect(() => {
@@ -190,6 +208,70 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             checkBillingStatus();
         }
     }, [stepId, billingChecked]);
+
+    // Handle checkout success/canceled return from Stripe
+    React.useEffect(() => {
+        const checkoutStatus = searchParams.get('checkout');
+        const sessionId = searchParams.get('session_id');
+
+        if (checkoutStatus === 'success' && sessionId) {
+            // Call confirmCheckout to sync subscription from Stripe
+            (async () => {
+                try {
+                    // Import confirmCheckout from billing API
+                    const { confirmCheckout } = await import('@/api/billing');
+
+                    // Confirm checkout with Stripe session ID - this syncs the subscription
+                    const updatedSub = await confirmCheckout(sessionId);
+                    setSubscription(updatedSub);
+                    setBillingChecked(true);
+
+                    // Payment method is now confirmed, advance to next step
+                    toast.success('Payment method added successfully!');
+                    // Clear the checkout params and advance to the next step (integrations for organizers)
+                    const nextStepIndex = getStepIndex('billing') + 1;
+                    setSearchParams({ step: nextStepIndex.toString() }, { replace: true });
+                    setCurrentStep(nextStepIndex);
+                } catch (error: any) {
+                    console.error('Failed to confirm checkout:', error);
+                    toast.error(error?.response?.data?.error?.message || 'Failed to confirm payment. Please try again.');
+                    // Still try to refresh subscription status
+                    try {
+                        const sub = await getSubscription();
+                        setSubscription(sub);
+                        setBillingChecked(true);
+                    } catch {
+                        // ignore
+                    }
+                    // Clear checkout params but stay on billing step
+                    setSearchParams({ step: currentStep.toString() }, { replace: true });
+                }
+            })();
+        } else if (checkoutStatus === 'success' && !sessionId) {
+            // Fallback: checkout=success but no session_id (shouldn't happen but handle gracefully)
+            console.warn('Checkout success but no session_id in URL');
+            (async () => {
+                try {
+                    const sub = await getSubscription();
+                    setSubscription(sub);
+                    setBillingChecked(true);
+                    if (sub?.has_payment_method) {
+                        toast.success('Payment method added!');
+                        // Advance to the next step (integrations for organizers)
+                        const nextStepIndex = getStepIndex('billing') + 1;
+                        setSearchParams({ step: nextStepIndex.toString() }, { replace: true });
+                        setCurrentStep(nextStepIndex);
+                    }
+                } catch (error) {
+                    console.error('Failed to refresh subscription:', error);
+                }
+            })();
+        } else if (checkoutStatus === 'canceled') {
+            toast.info('Checkout was canceled. You can try again or skip for now.');
+            // Clear the checkout param
+            setSearchParams({ step: currentStep.toString() }, { replace: true });
+        }
+    }, [searchParams]);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 flex items-center justify-center p-4">
@@ -243,43 +325,75 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                         </div>
                                         <CardTitle className="text-2xl">Welcome to Accredit! 🎉</CardTitle>
                                         <CardDescription className="text-base">
-                                            {isLmsOnly
-                                                ? "Let's get you set up to launch impactful courses"
-                                                : "Let's get you set up to create amazing CPD events"}
+                                            {isAttendee
+                                                ? "You're all set to discover professional development opportunities"
+                                                : isLmsOnly
+                                                    ? "Let's get you set up to launch impactful courses"
+                                                    : "Let's get you set up to create amazing CPD events"}
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-6 text-center">
-                                        <div className="bg-primary/5 rounded-lg p-4 border border-primary/20">
-                                            <div className="flex items-center justify-center gap-2 text-primary font-medium mb-1">
-                                                <Crown className="h-4 w-4" />
-                                                <span>Professional Trial Active</span>
-                                            </div>
-                                            <p className="text-sm text-muted-foreground">
-                                                You have 30 days of full access to all features
-                                            </p>
-                                        </div>
+                                        {isAttendee ? (
+                                            <>
+                                                <div className="grid grid-cols-3 gap-4 text-center">
+                                                    <div className="p-4 bg-muted/30 rounded-lg">
+                                                        <div className="h-8 w-8 mx-auto rounded-lg bg-primary/10 flex items-center justify-center mb-2">
+                                                            <Calendar className="h-4 w-4 text-primary" />
+                                                        </div>
+                                                        <div className="text-sm font-medium text-foreground">Browse Events</div>
+                                                        <div className="text-xs text-muted-foreground">Find CPD opportunities</div>
+                                                    </div>
+                                                    <div className="p-4 bg-muted/30 rounded-lg">
+                                                        <div className="h-8 w-8 mx-auto rounded-lg bg-accent/10 flex items-center justify-center mb-2">
+                                                            <BookOpen className="h-4 w-4 text-accent" />
+                                                        </div>
+                                                        <div className="text-sm font-medium text-foreground">Take Courses</div>
+                                                        <div className="text-xs text-muted-foreground">Learn at your pace</div>
+                                                    </div>
+                                                    <div className="p-4 bg-muted/30 rounded-lg">
+                                                        <div className="h-8 w-8 mx-auto rounded-lg bg-success/10 flex items-center justify-center mb-2">
+                                                            <Check className="h-4 w-4 text-success" />
+                                                        </div>
+                                                        <div className="text-sm font-medium text-foreground">Earn Certificates</div>
+                                                        <div className="text-xs text-muted-foreground">Track your CPD</div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="bg-primary/5 rounded-lg p-4 border border-primary/20">
+                                                    <div className="flex items-center justify-center gap-2 text-primary font-medium mb-1">
+                                                        <Crown className="h-4 w-4" />
+                                                        <span>Professional Trial Active</span>
+                                                    </div>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        You have {subscription?.days_until_trial_ends || 30} days of full access to all features
+                                                    </p>
+                                                </div>
 
-                                        <div className="grid grid-cols-3 gap-4 text-center">
-                                            <div className="p-4 bg-muted/30 rounded-lg">
-                                                <div className="text-2xl font-bold text-primary">∞</div>
-                                                <div className="text-sm text-muted-foreground">
-                                                    {isLmsOnly ? 'Courses' : 'Events'}
+                                                <div className="grid grid-cols-3 gap-4 text-center">
+                                                    <div className="p-4 bg-muted/30 rounded-lg">
+                                                        <div className="text-2xl font-bold text-primary">∞</div>
+                                                        <div className="text-sm text-muted-foreground">
+                                                            {isLmsOnly ? 'Courses' : 'Events'}
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-4 bg-muted/30 rounded-lg">
+                                                        <div className="text-2xl font-bold text-primary">500</div>
+                                                        <div className="text-sm text-muted-foreground">
+                                                            {isLmsOnly ? 'Learners/Course' : 'Attendees/Event'}
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-4 bg-muted/30 rounded-lg">
+                                                        <div className="text-2xl font-bold text-primary">∞</div>
+                                                        <div className="text-sm text-muted-foreground">Certificates</div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div className="p-4 bg-muted/30 rounded-lg">
-                                                <div className="text-2xl font-bold text-primary">500</div>
-                                                <div className="text-sm text-muted-foreground">
-                                                    {isLmsOnly ? 'Learners/Course' : 'Attendees/Event'}
-                                                </div>
-                                            </div>
-                                            <div className="p-4 bg-muted/30 rounded-lg">
-                                                <div className="text-2xl font-bold text-primary">∞</div>
-                                                <div className="text-sm text-muted-foreground">Certificates</div>
-                                            </div>
-                                        </div>
+                                            </>
+                                        )}
 
                                         <Button size="lg" onClick={nextStep} className="w-full">
-                                            Let's Get Started
+                                            {isAttendee ? "Let's Go!" : "Let's Get Started"}
                                             <ArrowRight className="ml-2 h-4 w-4" />
                                         </Button>
                                     </CardContent>
@@ -420,58 +534,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                 </>
                             )}
 
-                            {/* Step 2: Course Setup (LMS) */}
-                            {stepId === 'course_setup' && (
-                                <>
-                                    <CardHeader className="text-center pb-2">
-                                        <div className="mx-auto bg-primary/10 rounded-full p-4 w-16 h-16 flex items-center justify-center mb-2">
-                                            <BookOpen className="h-8 w-8 text-primary" />
-                                        </div>
-                                        <CardTitle>Prepare Your First Course</CardTitle>
-                                        <CardDescription>
-                                            Build modules, track progress, and issue certificates on completion
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <div className="bg-muted/30 rounded-lg p-4 space-y-2">
-                                            <h4 className="font-medium">Why create a course now?</h4>
-                                            <ul className="text-sm text-muted-foreground space-y-1">
-                                                <li className="flex items-center gap-2">
-                                                    <Check className="h-4 w-4 text-primary" />
-                                                    Launch self-paced learning quickly
-                                                </li>
-                                                <li className="flex items-center gap-2">
-                                                    <Check className="h-4 w-4 text-primary" />
-                                                    Track completions and outcomes
-                                                </li>
-                                                <li className="flex items-center gap-2">
-                                                    <Check className="h-4 w-4 text-primary" />
-                                                    Auto-issue completion certificates
-                                                </li>
-                                            </ul>
-                                        </div>
 
-                                        <Button
-                                            className="w-full"
-                                            onClick={() => navigate('/courses/manage/new')}
-                                        >
-                                            <BookOpen className="mr-2 h-4 w-4" />
-                                            Create Course
-                                        </Button>
-
-                                        <div className="flex gap-3 pt-2">
-                                            <Button variant="outline" onClick={prevStep}>
-                                                <ArrowLeft className="mr-2 h-4 w-4" />
-                                                Back
-                                            </Button>
-                                            <Button className="flex-1" onClick={nextStep}>
-                                                Continue
-                                                <ArrowRight className="ml-2 h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </>
-                            )}
 
                             {/* Step 3: Billing (Optional) */}
                             {stepId === 'billing' && (
@@ -507,7 +570,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                     </div>
                                                     <div className="flex items-center justify-between">
                                                         <span className="text-sm text-muted-foreground">Trial ends</span>
-                                                        <Badge variant="secondary">30 days remaining</Badge>
+                                                        <Badge variant="secondary">{subscription?.days_until_trial_ends || 30} days remaining</Badge>
                                                     </div>
                                                     <p className="text-xs text-muted-foreground pt-2 border-t">
                                                         Your card won't be charged until your trial ends. Cancel anytime.
@@ -557,43 +620,82 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                     </CardHeader>
                                     <CardContent className="space-y-4">
                                         <div className="grid gap-3">
-                                            <Button
-                                                size="lg"
-                                                className="w-full h-auto py-4"
-                                                onClick={() => {
-                                                    handleComplete();
-                                                    navigate(isLmsOnly ? '/courses/manage/new' : '/events/create');
-                                                }}
-                                            >
-                                                {isLmsOnly ? (
-                                                    <BookOpen className="mr-3 h-5 w-5" />
-                                                ) : (
-                                                    <Calendar className="mr-3 h-5 w-5" />
-                                                )}
-                                                <div className="text-left">
-                                                    <div className="font-medium">
-                                                        {isLmsOnly ? 'Create Your First Course' : 'Create Your First Event'}
-                                                    </div>
-                                                    <div className="text-xs opacity-80">
-                                                        {isLmsOnly ? 'Launch your first learning experience' : 'Start engaging your audience'}
-                                                    </div>
-                                                </div>
-                                                <ArrowRight className="ml-auto h-5 w-5" />
-                                            </Button>
+                                            {isAttendee ? (
+                                                <>
+                                                    <Button
+                                                        size="lg"
+                                                        className="w-full h-auto py-4"
+                                                        onClick={() => {
+                                                            handleComplete();
+                                                            navigate('/events/browse');
+                                                        }}
+                                                    >
+                                                        <Calendar className="mr-3 h-5 w-5" />
+                                                        <div className="text-left">
+                                                            <div className="font-medium">Browse Events</div>
+                                                            <div className="text-xs opacity-80">Find CPD opportunities</div>
+                                                        </div>
+                                                        <ArrowRight className="ml-auto h-5 w-5" />
+                                                    </Button>
 
-                                            <Button
-                                                variant="outline"
-                                                size="lg"
-                                                className="w-full h-auto py-4"
-                                                onClick={handleComplete}
-                                            >
-                                                <Rocket className="mr-3 h-5 w-5 text-muted-foreground" />
-                                                <div className="text-left">
-                                                    <div className="font-medium">Explore Dashboard</div>
-                                                    <div className="text-xs text-muted-foreground">Get familiar with the platform</div>
-                                                </div>
-                                                <ArrowRight className="ml-auto h-5 w-5" />
-                                            </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="lg"
+                                                        className="w-full h-auto py-4"
+                                                        onClick={() => {
+                                                            handleComplete();
+                                                            navigate('/courses');
+                                                        }}
+                                                    >
+                                                        <BookOpen className="mr-3 h-5 w-5 text-muted-foreground" />
+                                                        <div className="text-left">
+                                                            <div className="font-medium">Explore Courses</div>
+                                                            <div className="text-xs text-muted-foreground">Learn at your own pace</div>
+                                                        </div>
+                                                        <ArrowRight className="ml-auto h-5 w-5" />
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Button
+                                                        size="lg"
+                                                        className="w-full h-auto py-4"
+                                                        onClick={() => {
+                                                            handleComplete();
+                                                            navigate(isLmsOnly ? '/courses/manage/new' : '/events/create');
+                                                        }}
+                                                    >
+                                                        {isLmsOnly ? (
+                                                            <BookOpen className="mr-3 h-5 w-5" />
+                                                        ) : (
+                                                            <Calendar className="mr-3 h-5 w-5" />
+                                                        )}
+                                                        <div className="text-left">
+                                                            <div className="font-medium">
+                                                                {isLmsOnly ? 'Create Your First Course' : 'Create Your First Event'}
+                                                            </div>
+                                                            <div className="text-xs opacity-80">
+                                                                {isLmsOnly ? 'Launch your first learning experience' : 'Start engaging your audience'}
+                                                            </div>
+                                                        </div>
+                                                        <ArrowRight className="ml-auto h-5 w-5" />
+                                                    </Button>
+
+                                                    <Button
+                                                        variant="outline"
+                                                        size="lg"
+                                                        className="w-full h-auto py-4"
+                                                        onClick={handleComplete}
+                                                    >
+                                                        <Rocket className="mr-3 h-5 w-5 text-muted-foreground" />
+                                                        <div className="text-left">
+                                                            <div className="font-medium">Explore Dashboard</div>
+                                                            <div className="text-xs text-muted-foreground">Get familiar with the platform</div>
+                                                        </div>
+                                                        <ArrowRight className="ml-auto h-5 w-5" />
+                                                    </Button>
+                                                </>
+                                            )}
                                         </div>
                                     </CardContent>
                                 </>

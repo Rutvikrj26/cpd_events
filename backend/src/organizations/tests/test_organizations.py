@@ -315,3 +315,169 @@ class TestLinkOrganizer:
         response = organizer_client.post(f'/api/v1/organizations/{organization.uuid}/link-organizer/', {'confirm': True})
         # May succeed or fail based on business logic
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
+
+
+# =============================================================================
+# Organization Onboarding Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestOrganizationOnboarding:
+    """Tests for organization onboarding endpoints."""
+
+    endpoint = '/api/v1/organizations/'
+
+    def test_complete_onboarding_success(self, organizer_client, organization):
+        """Admin can complete onboarding."""
+        assert organization.onboarding_completed is False
+
+        response = organizer_client.post(
+            f'{self.endpoint}{organization.uuid}/onboarding/complete/'
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['onboarding_completed'] is True
+        assert response.data['message'] == 'Onboarding completed.'
+
+        organization.refresh_from_db()
+        assert organization.onboarding_completed is True
+        assert organization.onboarding_completed_at is not None
+
+    def test_complete_onboarding_idempotent(self, organizer_client, organization):
+        """Completing onboarding multiple times is safe."""
+        from django.utils import timezone
+        
+        original_timestamp = timezone.now()
+        organization.onboarding_completed = True
+        organization.onboarding_completed_at = original_timestamp
+        organization.save()
+
+        response = organizer_client.post(
+            f'{self.endpoint}{organization.uuid}/onboarding/complete/'
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['onboarding_completed'] is True
+
+        # Timestamp should not be updated
+        organization.refresh_from_db()
+        assert organization.onboarding_completed_at == original_timestamp
+
+    def test_non_admin_cannot_complete_onboarding(self, organization, org_member):
+        """Non-admin members (instructors) cannot complete onboarding."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=org_member)
+
+        response = client.post(
+            f'{self.endpoint}{organization.uuid}/onboarding/complete/'
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert 'Admin access required' in response.data['detail']
+
+    def test_unauthenticated_cannot_complete_onboarding(self, api_client, organization):
+        """Unauthenticated users cannot complete onboarding."""
+        response = api_client.post(
+            f'{self.endpoint}{organization.uuid}/onboarding/complete/'
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_non_member_cannot_complete_onboarding(self, other_organizer_client, organization):
+        """Non-members cannot complete onboarding (blocked by RBAC)."""
+        response = other_organizer_client.post(
+            f'{self.endpoint}{organization.uuid}/onboarding/complete/'
+        )
+        # RBAC decorator blocks non-members before they can access the org
+        assert response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
+
+    def test_onboarding_completed_sets_timestamp(self, organizer_client, organization):
+        """Completing onboarding sets the timestamp."""
+        from django.utils import timezone
+
+        before = timezone.now()
+        response = organizer_client.post(
+            f'{self.endpoint}{organization.uuid}/onboarding/complete/'
+        )
+        after = timezone.now()
+
+        assert response.status_code == status.HTTP_200_OK
+        organization.refresh_from_db()
+        assert before <= organization.onboarding_completed_at <= after
+
+    def test_organization_list_includes_onboarding_completed(self, organizer_client, organization):
+        """Organization list endpoint includes onboarding_completed field."""
+        response = organizer_client.get(self.endpoint)
+        assert response.status_code == status.HTTP_200_OK
+        
+        # Find our org in results
+        results = response.data.get('results', response.data)
+        org_data = next((o for o in results if o['uuid'] == str(organization.uuid)), None)
+        assert org_data is not None
+        assert 'onboarding_completed' in org_data
+        assert org_data['onboarding_completed'] is False
+
+    def test_organization_detail_includes_onboarding_completed(self, organizer_client, organization):
+        """Organization detail endpoint includes onboarding_completed field."""
+        response = organizer_client.get(f'{self.endpoint}{organization.uuid}/')
+        assert response.status_code == status.HTTP_200_OK
+        assert 'onboarding_completed' in response.data
+        assert response.data['onboarding_completed'] is False
+
+    def test_organizer_role_cannot_complete_onboarding(self, organization, db):
+        """Organizer role members (not admin) cannot complete onboarding."""
+        from factories import OrganizerFactory, OrganizationMembershipFactory
+        from rest_framework.test import APIClient
+
+        # Create an organizer member (not admin)
+        organizer_member = OrganizerFactory()
+        OrganizationMembershipFactory(
+            organization=organization,
+            user=organizer_member,
+            role='organizer',
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=organizer_member)
+
+        response = client.post(
+            f'{self.endpoint}{organization.uuid}/onboarding/complete/'
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_course_manager_cannot_complete_onboarding(self, organization, db):
+        """Course manager role members cannot complete onboarding."""
+        from factories import OrganizerFactory, OrganizationMembershipFactory
+        from rest_framework.test import APIClient
+
+        # Create a course manager member
+        cm_user = OrganizerFactory()
+        OrganizationMembershipFactory(
+            organization=organization,
+            user=cm_user,
+            role='course_manager',
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=cm_user)
+
+        response = client.post(
+            f'{self.endpoint}{organization.uuid}/onboarding/complete/'
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_newly_created_org_has_onboarding_incomplete(self, organizer_client):
+        """Newly created organizations have onboarding_completed=False."""
+        from organizations.models import Organization
+
+        data = {
+            'name': 'New Onboarding Test Org',
+            'description': 'Testing onboarding default',
+        }
+        response = organizer_client.post(self.endpoint, data)
+        assert response.status_code == status.HTTP_201_CREATED
+        
+        # Check database value (create serializer may not include all fields)
+        org = Organization.objects.get(name='New Onboarding Test Org')
+        assert org.onboarding_completed is False
+        assert org.onboarding_completed_at is None
+

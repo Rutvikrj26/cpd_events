@@ -19,6 +19,7 @@ import {
 import { Loader2, Crown, Award } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { initiateGoogleSignIn } from "@/api/auth/googleAuth";
 
 const formSchema = z.object({
   email: z.string().email({
@@ -44,10 +45,12 @@ export function SignupPage() {
   const [searchParams] = useSearchParams();
   const { register } = useAuth();
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
 
-  // Get plan and role from URL
+  // Get plan, role, and returnUrl from URL
   const planFromUrl = searchParams.get('plan') || 'free';
   const roleFromUrl = searchParams.get('role');
+  const returnUrl = searchParams.get('returnUrl');
   const isOrganizer = roleFromUrl === 'organizer';
   const isCourseManager = roleFromUrl === 'course_manager';
   const isTrialPlan = ['organizer', 'lms', 'organization'].includes(planFromUrl.toLowerCase());
@@ -75,18 +78,34 @@ export function SignupPage() {
         account_type: accountType,
       });
 
-      if (isOrganizer) {
-        toast.success("Welcome! Your 30-day Organizer trial has started.");
-      } else if (isCourseManager) {
-        toast.success("Welcome! Your 30-day LMS trial has started.");
-      } else {
-        toast.success("Account created! Please check your email to verify.");
-      }
-      navigate("/login");
+      // Check if we are authenticated (have tokens)
+      // If NOT authenticated, it means we need email verification (local flow)
+      // We can check this by seeing if the register function stored tokens (which updates auth state)
+      // But since state updates might be async, we key off the fact that register didn't throw.
+      // A better check is to see if we have a returnUrl usage or just force check-email for local.
+
+      // Actually, my AuthContext change means we WON'T have tokens for local signup.
+      // So we should navigate to check-email.
+
+      // However, we need to distinguish slightly or just assume local always needs it now?
+      // Yes, local always needs it now. Google sign-in is handled separately.
+
+      navigate("/auth/check-email", { state: { email: values.email } });
+
     } catch (error) {
       // Error toast is handled globally by API client
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    setIsGoogleLoading(true);
+    try {
+      await initiateGoogleSignIn();
+    } catch (error) {
+      toast.error("Failed to initiate Google sign-in");
+      setIsGoogleLoading(false);
     }
   }
 
@@ -274,28 +293,76 @@ export function SignupPage() {
 
           <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isOrganizer ? 'Create Organizer Account' : 'Create Attendee Account'}
+            {isOrganizer ? 'Create Organizer Account' : isCourseManager ? 'Create Course Manager Account' : 'Create Attendee Account'}
           </Button>
         </form>
       </Form>
 
-      {/* Mode Switching Links */}
-      <div className="text-center text-sm text-muted-foreground pt-2">
-        {isOrganizer ? (
-          <p>
-            Looking for events?{" "}
-            <Link to="/signup" className="text-primary hover:text-primary/80 font-medium">
-              Create an Attendee Account
-            </Link>
-          </p>
+      {/* Divider */}
+      <div className="relative my-6">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+        </div>
+      </div>
+
+      {/* Google Sign-In */}
+      <Button
+        variant="outline"
+        className="w-full"
+        onClick={handleGoogleSignIn}
+        disabled={isGoogleLoading || isLoading}
+      >
+        {isGoogleLoading ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
         ) : (
-          <p>
-            Want to organize events?{" "}
-            <Link to="/signup?role=organizer" className="text-primary hover:text-primary/80 font-medium">
-              Create an Organizer Account
-            </Link>
-          </p>
+          <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
+            <path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
+          </svg>
         )}
+        Sign up with Google
+      </Button>
+
+      {/* Mode Switching Links */}
+      <div className="text-center text-sm text-muted-foreground pt-4 space-y-2 border-t border-border mt-2">
+        <p className="text-xs text-muted-foreground mb-3">Looking for a different account type?</p>
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+          {!isOrganizer && !isCourseManager && (
+            <>
+              <Link to="/signup?role=organizer&plan=organizer" className="text-primary hover:text-primary/80 font-medium">
+                Host Events
+              </Link>
+              <span className="text-border">•</span>
+              <Link to="/signup?role=course_manager&plan=lms" className="text-accent hover:text-accent/80 font-medium">
+                Create Courses
+              </Link>
+            </>
+          )}
+          {isOrganizer && (
+            <>
+              <Link to="/signup" className="text-primary hover:text-primary/80 font-medium">
+                Attend Events
+              </Link>
+              <span className="text-border">•</span>
+              <Link to="/signup?role=course_manager&plan=lms" className="text-accent hover:text-accent/80 font-medium">
+                Create Courses
+              </Link>
+            </>
+          )}
+          {isCourseManager && (
+            <>
+              <Link to="/signup" className="text-primary hover:text-primary/80 font-medium">
+                Attend Events
+              </Link>
+              <span className="text-border">•</span>
+              <Link to="/signup?role=organizer&plan=organizer" className="text-primary hover:text-primary/80 font-medium">
+                Host Events
+              </Link>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -99,6 +99,28 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         organization.soft_delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=True, methods=['post'], url_path='onboarding/complete')
+    def complete_onboarding(self, request, pk=None):
+        """Mark organization onboarding as complete."""
+        organization = self.get_object()
+
+        # Verify user is admin
+        if not organization.memberships.filter(user=request.user, role='admin', is_active=True).exists():
+            return Response(
+                {'detail': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not organization.onboarding_completed:
+            organization.onboarding_completed = True
+            organization.onboarding_completed_at = timezone.now()
+            organization.save(update_fields=['onboarding_completed', 'onboarding_completed_at', 'updated_at'])
+
+        return Response({
+            'message': 'Onboarding completed.',
+            'onboarding_completed': organization.onboarding_completed,
+        })
+
     @action(detail=True, methods=['get'])
     def members(self, request, pk=None):
         """List organization members (active and pending)."""
@@ -1292,7 +1314,7 @@ class AcceptInvitationView(APIView):
         )
 
 
-@roles('attendee', 'organizer', 'admin', route_name='my_invitations')
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='my_invitations')
 class MyInvitationsView(APIView):
     """Get current user's pending organization invitations."""
 

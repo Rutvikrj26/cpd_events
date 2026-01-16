@@ -98,9 +98,9 @@ const CreateOrganizationPage: React.FC = () => {
             setSuccess(true);
             await refreshOrganizations();
 
-            // Navigate to new org after short delay
+            // Navigate to onboarding wizard after short delay
             setTimeout(() => {
-                navigate(`/org/${org.slug}`);
+                navigate(`/org/${org.slug}/onboarding`);
             }, 1500);
 
         } catch (err: any) {

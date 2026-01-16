@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { getSubscription, getInvoices, getBillingPortal, createCheckoutSession, cancelSubscription, reactivateSubscription, updateSubscription, getPublicPricing, syncSubscription, confirmCheckout } from '@/api/billing';
 import { Subscription, Invoice, PricingProduct } from '@/api/billing/types';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -115,6 +116,7 @@ export const BillingPage = () => {
         },
     ]);
     const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
+    const { refreshUser } = useAuth();
 
     const checkoutStatus = searchParams.get('checkout');
 
@@ -126,8 +128,9 @@ export const BillingPage = () => {
                 // Atomic confirmation via new endpoint
                 toast.success("Payment successful! Confirming subscription...");
                 confirmCheckout(sessionId)
-                    .then(sub => {
+                    .then(async sub => {
                         setSubscription(sub);
+                        await refreshUser();
                         toast.success("Your account has been upgraded!");
                         // Clear query params and refresh
                         window.history.replaceState({}, '', '/billing');
@@ -138,6 +141,7 @@ export const BillingPage = () => {
                         try {
                             const synced = await syncSubscription();
                             setSubscription(synced);
+                            await refreshUser();
                             toast.success("Your account has been upgraded!");
                             window.history.replaceState({}, '', '/billing');
                         } catch (syncErr) {

@@ -1,7 +1,7 @@
 """
 URL routes for learning API.
 """
-
+app_name = 'learning'
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 

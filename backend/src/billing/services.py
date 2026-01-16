@@ -903,6 +903,20 @@ class StripeService:
             logger.error(f"Failed to create checkout session: {e}")
             return {'success': False, 'error': str(e)}
 
+    def retrieve_checkout_session(self, session_id: str) -> dict[str, Any]:
+        """
+        Retrieve a checkout session from Stripe.
+        """
+        if not self.is_configured:
+            return {'success': False, 'error': 'Stripe not configured'}
+
+        try:
+            session = self._with_retry(self.stripe.checkout.Session.retrieve, session_id)
+            return {'success': True, 'session': session}
+        except Exception as e:
+            logger.error(f"Failed to retrieve checkout session {session_id}: {e}")
+            return {'success': False, 'error': str(e)}
+
     def confirm_checkout_session(self, user, session_id: str, max_retries: int = 3) -> dict[str, Any]:
         """
         Atomically confirm checkout session and sync subscription.
@@ -958,7 +972,23 @@ class StripeService:
                 if isinstance(stripe_sub, str):
                     stripe_sub = self.stripe.Subscription.retrieve(stripe_sub)
 
-                # 4. Check for duplicate subscription (uniqueness enforcement)
+                # 4. Idempotency Check & Duplicate Handling
+                # Check if subscription is already updated (e.g. by webhook) to avoid locking
+                try:
+                    existing_sub = Subscription.objects.get(user=user)
+                    if (
+                        existing_sub.stripe_subscription_id == stripe_sub.id
+                        and existing_sub.status == stripe_sub.status
+                    ):
+                        logger.info(f"Checkout session {session_id}: Subscription already up to date, skipping DB write")
+                        
+                        # Ensure payment methods are synced (outside transaction)
+                        sync_result = self.sync_payment_methods(user, customer_id=session.customer)
+                        
+                        return {'success': True, 'subscription': existing_sub}
+                except Subscription.DoesNotExist:
+                    pass
+
                 # If user already has a different subscription, cancel the new one
                 with transaction.atomic():
                     subscription, created = Subscription.objects.select_for_update().get_or_create(user=user)
@@ -1027,8 +1057,9 @@ class StripeService:
                 return {'success': True, 'subscription': subscription}
 
             except Exception as e:
-                if 'unique constraint' in str(e).lower() and attempt < max_retries - 1:
-                    time.sleep(0.5)
+                error_str = str(e).lower()
+                if ('unique constraint' in error_str or 'database is locked' in error_str) and attempt < max_retries - 1:
+                    time.sleep(1)  # Increased backoff
                     continue
                 logger.error(f"Failed to confirm checkout session {session_id}: {e}")
                 return {'success': False, 'error': str(e)}
@@ -1303,28 +1334,46 @@ class StripeService:
                 self.stripe.Customer.modify(
                     subscription.stripe_customer_id, invoice_settings={'default_payment_method': payment_method_id}
                 )
-
-            # Store locally
-            payment_method, _ = PaymentMethod.objects.update_or_create(
-                stripe_payment_method_id=payment_method_id,
-                defaults={
-                    'user': user,
-                    'card_brand': pm.card.brand if pm.card else '',
-                    'card_last4': pm.card.last4 if pm.card else '',
-                    'card_exp_month': pm.card.exp_month if pm.card else None,
-                    'card_exp_year': pm.card.exp_year if pm.card else None,
-                    'is_default': set_as_default,
-                },
-            )
-
-            if set_as_default:
-                payment_method.set_as_default()
-
-            return {'success': True, 'payment_method': payment_method}
-
         except Exception as e:
-            logger.error(f"Failed to attach payment method: {e}")
+            logger.error(f"Failed to attach payment method to Stripe: {e}")
             return {'success': False, 'error': str(e)}
+
+        # Database operations with retry for locking
+        import time
+        from django.db import transaction, OperationalError
+
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with transaction.atomic():
+                    # Store locally
+                    payment_method, _ = PaymentMethod.objects.update_or_create(
+                        stripe_payment_method_id=payment_method_id,
+                        defaults={
+                            'user': user,
+                            'card_brand': pm.card.brand if pm.card else '',
+                            'card_last4': pm.card.last4 if pm.card else '',
+                            'card_exp_month': pm.card.exp_month if pm.card else None,
+                            'card_exp_year': pm.card.exp_year if pm.card else None,
+                            'is_default': set_as_default,
+                        },
+                    )
+
+                    if set_as_default:
+                        payment_method.set_as_default()
+
+                return {'success': True, 'payment_method': payment_method}
+
+            except OperationalError as e:
+                # Retry on SQLite database locked error
+                if 'locked' in str(e).lower() and attempt < max_retries - 1:
+                    time.sleep(0.5)
+                    continue
+                logger.error(f"Database locked in attach_payment_method: {e}")
+                return {'success': False, 'error': 'Database busy, please try again'}
+            except Exception as e:
+                logger.error(f"Failed to attach payment method locally: {e}")
+                return {'success': False, 'error': str(e)}
 
     def detach_payment_method(self, payment_method) -> bool:
         """Detach a payment method."""

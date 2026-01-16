@@ -2,7 +2,9 @@
 Accounts app views and viewsets.
 """
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
 from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status, viewsets
@@ -51,30 +53,38 @@ class SignupView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        # Generate tokens
-        from rest_framework_simplejwt.tokens import RefreshToken
-
-        refresh = RefreshToken.for_user(user)
-
-        # Link any guest registrations to this new user account
-        from registrations.models import Registration
-
-        Registration.link_registrations_for_user(user)
-
-        # Generate verification token and send email
+        # Generate verification token
         token = user.generate_email_verification_token()
-        from django.conf import settings
 
-        from .tasks import send_email_verification
-
-        verification_url = f"{settings.FRONTEND_URL}/auth/verify-email?token={token}"
-        send_email_verification.delay(user.uuid, verification_url)
+        # Send verification email
+        try:
+            verification_url = f"{settings.FRONTEND_URL}/auth/verify-email?token={token}"
+            
+            # Print URL prominently for dev testing (the email body below is mangled by quoted-printable encoding)
+            print("\n" + "=" * 80)
+            print("📧 VERIFICATION LINK (copy this, NOT the email body below):")
+            print(f"   {verification_url}")
+            print("=" * 80 + "\n")
+            
+            send_mail(
+                subject='Verify your email address',
+                message=f'Please click the following link to verify your email address: {verification_url}',
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            # Log error but don't fail signup? Or fail?
+            # Better to log and maybe return a warning, or fail if critical.
+            # Ideally use a task so it doesn't fail the request.
+            # For now, let's log.
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to send verification email to {user.email}: {e}")
 
         return Response(
             {
-                'message': 'Account created successfully. Please check your email.',
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
+                'message': 'Account created successfully. Please check your email to verify your account.',
                 'user': {
                     'uuid': str(user.uuid),
                     'email': user.email,
@@ -128,7 +138,22 @@ class EmailVerificationView(generics.GenericAPIView):
 
         Registration.link_registrations_for_user(user)
 
-        return Response({'message': 'Email verified successfully.'})
+        # Generate JWT tokens for auto-login
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        refresh = RefreshToken.for_user(user)
+
+        return Response({
+            'message': 'Email verified successfully.',
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': {
+                'uuid': str(user.uuid),
+                'email': user.email,
+                'full_name': user.full_name,
+                'account_type': user.account_type,
+            },
+        })
 
 
 @roles('public', route_name='password_reset_request')
@@ -528,6 +553,29 @@ class DowngradeToAttendeeView(generics.GenericAPIView):
 
 
 # =============================================================================
+# Onboarding Completion
+# =============================================================================
+
+
+@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='complete_onboarding')
+class CompleteOnboardingView(generics.GenericAPIView):
+    """POST /api/v1/users/me/onboarding/complete/ - Mark onboarding as complete."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if not user.onboarding_completed:
+            user.onboarding_completed = True
+            user.save(update_fields=['onboarding_completed', 'updated_at'])
+
+        return Response({
+            'message': 'Onboarding completed.',
+            'onboarding_completed': user.onboarding_completed,
+        })
+
+
+# =============================================================================
 # CPD Requirement Views
 # =============================================================================
 
@@ -740,6 +788,158 @@ class ZoomCallbackView(generics.GenericAPIView):
 
             # 6. Redirect to frontend
             frontend_url = settings.CORS_ALLOWED_ORIGINS[0]  # Assuming first one is main frontend
+            redirect_url = f"{frontend_url}/auth/callback?access={str(refresh.access_token)}&refresh={str(refresh)}"
+
+            from django.http import HttpResponseRedirect
+
+            return HttpResponseRedirect(redirect_url)
+
+
+# =============================================================================
+# Google OAuth Views
+# =============================================================================
+
+
+@roles('public', route_name='google_auth')
+class GoogleAuthView(generics.GenericAPIView):
+    """
+    GET /api/v1/auth/google/login/
+
+    Returns the Google OAuth authorization URL for user to authenticate.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [AuthThrottle]
+
+    def get(self, request):
+        from .google_oauth import get_google_auth_url
+
+        url = get_google_auth_url()
+        return Response({'url': url})
+
+
+@roles('public', route_name='google_callback')
+class GoogleCallbackView(generics.GenericAPIView):
+    """
+    GET /api/v1/auth/google/callback/
+
+    Handles the OAuth callback from Google.
+    Exchanges code for tokens, gets user info, logs in or creates user.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [AuthThrottle]
+
+    def get(self, request):
+        code = request.query_params.get('code')
+        error = request.query_params.get('error')
+
+        if error:
+            return error_response(f"Google OAuth error: {error}", code='GOOGLE_AUTH_ERROR')
+
+        if not code:
+            return error_response("Authorization code missing.", code='MISSING_CODE')
+
+        from django.conf import settings
+        from django.db import transaction
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        from .google_oauth import exchange_code_for_token, get_google_user_info
+        from .models import User
+
+        # 1. Exchange code for tokens
+        token_data = exchange_code_for_token(code)
+        if not token_data:
+            return error_response("Failed to exchange code for token.", code='TOKEN_EXCHANGE_FAILED')
+
+        access_token = token_data.get('access_token')
+        id_token = token_data.get('id_token')
+
+        # 2. Get user info from Google
+        user_info = get_google_user_info(access_token)
+        if not user_info:
+            return error_response("Failed to fetch user info from Google.", code='USER_INFO_FAILED')
+
+        google_user_id = user_info.get('id')
+        email = user_info.get('email', '').lower()
+        name = user_info.get('name', '')
+        given_name = user_info.get('given_name', '')
+        family_name = user_info.get('family_name', '')
+        picture = user_info.get('picture', '')
+        email_verified = user_info.get('verified_email', False)
+
+        if not email:
+            return error_response("Google account must have an email address.", code='MISSING_EMAIL')
+
+        if not email_verified:
+            return error_response("Google email must be verified.", code='EMAIL_NOT_VERIFIED')
+
+        # Use name from Google, fallback to constructing from given/family names
+        full_name = name or f"{given_name} {family_name}".strip() or email.split('@')[0]
+
+        # 3. Find or create user
+        with transaction.atomic():
+            # Try to match by google_user_id first
+            user = User.objects.filter(google_user_id=google_user_id).first()
+
+            if user:
+                # Existing Google user - just log them in
+                pass
+            else:
+                # Try to match by email (link accounts)
+                user = User.objects.filter(email=email).first()
+
+                if user:
+                    # Existing user with same email - link Google account
+                    # Since Google verifies emails, we can safely link
+                    user.google_user_id = google_user_id
+                    if not user.email_verified:
+                        user.email_verified = True
+                        user.email_verified_at = timezone.now()
+                    # Update auth provider if it was local
+                    if user.auth_provider == 'local':
+                        user.auth_provider = 'google'
+                    if picture and not user.profile_photo_url:
+                        user.profile_photo_url = picture
+                    user.save(
+                        update_fields=[
+                            'google_user_id',
+                            'email_verified',
+                            'email_verified_at',
+                            'auth_provider',
+                            'profile_photo_url',
+                            'updated_at',
+                        ]
+                    )
+                else:
+                    # Create new user with Google OAuth
+                    user = User.objects.create_user(
+                        email=email,
+                        full_name=full_name,
+                        email_verified=True,
+                        password=None,  # No password for OAuth users
+                        google_user_id=google_user_id,
+                        auth_provider='google',
+                        profile_photo_url=picture,
+                    )
+
+            # Ensure user is active
+            if not user.is_active:
+                return error_response("Account is disabled.", code='ACCOUNT_DISABLED')
+
+            # Link any guest registrations
+            from registrations.models import Registration
+
+            Registration.link_registrations_for_user(user)
+
+            # Record login
+            user.record_login()
+
+            # 4. Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+
+            # 5. Redirect to frontend with tokens
+            frontend_url = settings.CORS_ALLOWED_ORIGINS[0] if settings.CORS_ALLOWED_ORIGINS else 'http://localhost:5173'
             redirect_url = f"{frontend_url}/auth/callback?access={str(refresh.access_token)}&refresh={str(refresh)}"
 
             from django.http import HttpResponseRedirect

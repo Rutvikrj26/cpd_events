@@ -34,25 +34,36 @@ export function LandingPage() {
             One platform to host live events, build self-paced courses, and manage your organization's entire training delivery.
           </p>
 
-          <div className="flex flex-wrap justify-center gap-6">
-            <Link to="/products/events">
-              <Button variant="outline" size="lg" className="h-14 px-8 text-lg hover:border-primary/50 hover:bg-primary/5">
-                <Calendar className="mr-2 h-5 w-5 text-primary" />
-                Explore Events
+          <div className="flex flex-col items-center gap-6">
+            <Link to="/signup?role=organizer&plan=organizer">
+              <Button size="lg" className="h-14 px-10 text-lg shadow-xl shadow-primary/20 glow-primary">
+                Get Started Free
+                <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
-            <Link to="/products/lms">
-              <Button variant="outline" size="lg" className="h-14 px-8 text-lg hover:border-accent/50 hover:bg-accent/5">
-                <BookOpen className="mr-2 h-5 w-5 text-accent" />
-                Explore LMS
-              </Button>
-            </Link>
-            <Link to="/products/organizations">
-              <Button variant="outline" size="lg" className="h-14 px-8 text-lg hover:border-foreground/50 hover:bg-foreground/5">
-                <Building2 className="mr-2 h-5 w-5 text-foreground" />
-                Explore Orgs
-              </Button>
-            </Link>
+
+            <p className="text-sm text-muted-foreground">Or explore our products</p>
+
+            <div className="flex flex-wrap justify-center gap-4">
+              <Link to="/products/events">
+                <Button variant="outline" size="lg" className="h-12 px-6 text-base hover:border-primary/50 hover:bg-primary/5">
+                  <Calendar className="mr-2 h-4 w-4 text-primary" />
+                  Events
+                </Button>
+              </Link>
+              <Link to="/products/lms">
+                <Button variant="outline" size="lg" className="h-12 px-6 text-base hover:border-accent/50 hover:bg-accent/5">
+                  <BookOpen className="mr-2 h-4 w-4 text-accent" />
+                  LMS
+                </Button>
+              </Link>
+              <Link to="/products/organizations">
+                <Button variant="outline" size="lg" className="h-12 px-6 text-base hover:border-foreground/50 hover:bg-foreground/5">
+                  <Building2 className="mr-2 h-4 w-4 text-foreground" />
+                  Organizations
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
 
