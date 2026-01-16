@@ -18,3 +18,25 @@ export interface ApiErrorPayload {
 export interface ApiErrorResponse {
     error: ApiErrorPayload;
 }
+
+/**
+ * Standard paginated response from the backend.
+ * Matches common/pagination.py StandardPagination format.
+ */
+export interface PaginatedResponse<T> {
+    count: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+    next: string | null;
+    previous: string | null;
+    results: T[];
+}
+
+/**
+ * Pagination query parameters accepted by list endpoints.
+ */
+export interface PaginationParams {
+    page?: number;
+    page_size?: number;
+}

@@ -1,62 +1,64 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getPublicCourses, Course } from '@/api/courses';
+import { getPublicCourses, Course, PublicCourseListParams } from '@/api/courses';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Search, BookOpen, Clock, Award, Building2, Users, Loader2, ArrowRight } from 'lucide-react';
+import { Search, BookOpen, Clock, Award, Users, ArrowRight } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Pagination } from '@/components/ui/pagination';
 
 export const CourseCatalogPage: React.FC = () => {
     const [courses, setCourses] = useState<Course[]>([]);
-    const [filteredCourses, setFilteredCourses] = useState<Course[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const navigate = useNavigate();
 
-    useEffect(() => {
-        const fetchCourses = async () => {
-            try {
-                const data = await getPublicCourses();
-                // Filter only published and public courses
-                const publicCourses = data.filter(
-                    course => course.status === 'published' && course.is_public
-                );
-                setCourses(publicCourses);
-                setFilteredCourses(publicCourses);
-            } catch (error) {
-                console.error('Failed to load courses:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchCourses();
-    }, []);
+    // Pagination state
+    const [page, setPage] = useState(1);
+    const [pageSize] = useState(12);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
 
-    useEffect(() => {
-        if (!searchQuery.trim()) {
-            setFilteredCourses(courses);
-            return;
+    const fetchCourses = useCallback(async () => {
+        setLoading(true);
+        try {
+            const params: PublicCourseListParams = {
+                page,
+                page_size: pageSize,
+                search: searchQuery || undefined,
+            };
+            const response = await getPublicCourses(params);
+            // Filter only published and public courses (client-side for now)
+            const publicCourses = response.results.filter(
+                course => course.status === 'published' && course.is_public
+            );
+            setCourses(publicCourses);
+            setTotalPages(response.total_pages);
+            setTotalCount(response.count);
+        } catch (error) {
+            console.error('Failed to load courses:', error);
+        } finally {
+            setLoading(false);
         }
+    }, [page, pageSize, searchQuery]);
 
-        const query = searchQuery.toLowerCase();
-        const filtered = courses.filter(
-            course =>
-                course.title.toLowerCase().includes(query) ||
-                course.description?.toLowerCase().includes(query) ||
-                course.short_description?.toLowerCase().includes(query) ||
-                course.organization_name?.toLowerCase().includes(query)
-        );
-        setFilteredCourses(filtered);
-    }, [searchQuery, courses]);
+    useEffect(() => {
+        fetchCourses();
+    }, [fetchCourses]);
+
+    // Reset to page 1 when search changes
+    useEffect(() => {
+        setPage(1);
+    }, [searchQuery]);
 
     const handleEnroll = (courseUuid: string) => {
         navigate(`/courses/${courseUuid}`);
     };
 
-    if (loading) {
+    if (loading && page === 1) {
         return (
             <div className="container mx-auto py-8 px-4 max-w-7xl">
                 <div className="mb-8">
@@ -107,7 +109,7 @@ export const CourseCatalogPage: React.FC = () => {
                         />
                     </div>
                     <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
-                        <span>{filteredCourses.length} courses found</span>
+                        <span>{totalCount} courses found</span>
                         {searchQuery && (
                             <Button variant="ghost" size="sm" onClick={() => setSearchQuery('')}>
                                 Clear search
@@ -117,7 +119,7 @@ export const CourseCatalogPage: React.FC = () => {
                 </div>
 
                 {/* Course Grid */}
-                {filteredCourses.length === 0 ? (
+                {courses.length === 0 ? (
                     <div className="text-center py-16">
                         <BookOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
                         <h3 className="text-xl font-semibold mb-2">No courses found</h3>
@@ -133,113 +135,127 @@ export const CourseCatalogPage: React.FC = () => {
                         )}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredCourses.map((course) => (
-                            <Card
-                                key={course.uuid}
-                                className="group hover:shadow-lg transition-shadow duration-200 flex flex-col"
-                            >
-                                <CardHeader className="pb-4">
-                                    {/* Course Image */}
-                                    <div className="relative aspect-video bg-muted rounded-lg mb-4 overflow-hidden">
-                                        {course.featured_image_url ? (
-                                            <img
-                                                src={course.featured_image_url}
-                                                alt={course.title}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
-                                                <BookOpen className="h-16 w-16 text-primary/30" />
-                                            </div>
-                                        )}
-                                        {!course.is_free && (
-                                            <div className="absolute top-3 right-3">
-                                                <Badge className="bg-white/90 text-foreground border">
-                                                    ${(course.price_cents / 100).toFixed(0)}
-                                                </Badge>
-                                            </div>
-                                        )}
-                                        {course.is_free && (
-                                            <div className="absolute top-3 right-3">
-                                                <Badge className="bg-success/90 text-white">Free</Badge>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Course Title */}
-                                    <CardTitle className="text-xl group-hover:text-primary transition-colors line-clamp-2">
-                                        {course.title}
-                                    </CardTitle>
-
-                                    {/* Organization */}
-                                    {course.organization_name && (
-                                        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                                            <Avatar className="h-6 w-6">
-                                                {course.organization_logo_url ? (
-                                                    <AvatarImage src={course.organization_logo_url} alt={course.organization_name} />
-                                                ) : null}
-                                                <AvatarFallback className="text-xs">
-                                                    {course.organization_name[0]}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <span>{course.organization_name}</span>
+                    <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {courses.map((course) => (
+                                <Card
+                                    key={course.uuid}
+                                    className="group hover:shadow-lg transition-shadow duration-200 flex flex-col"
+                                >
+                                    <CardHeader className="pb-4">
+                                        {/* Course Image */}
+                                        <div className="relative aspect-video bg-muted rounded-lg mb-4 overflow-hidden">
+                                            {course.featured_image_url ? (
+                                                <img
+                                                    src={course.featured_image_url}
+                                                    alt={course.title}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
+                                                    <BookOpen className="h-16 w-16 text-primary/30" />
+                                                </div>
+                                            )}
+                                            {!course.is_free && (
+                                                <div className="absolute top-3 right-3">
+                                                    <Badge className="bg-white/90 text-foreground border">
+                                                        ${(course.price_cents / 100).toFixed(0)}
+                                                    </Badge>
+                                                </div>
+                                            )}
+                                            {course.is_free && (
+                                                <div className="absolute top-3 right-3">
+                                                    <Badge className="bg-success/90 text-white">Free</Badge>
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                </CardHeader>
 
-                                <CardContent className="flex-grow pb-4">
-                                    {/* Description */}
-                                    <CardDescription className="line-clamp-3 mb-4">
-                                        {course.short_description || course.description}
-                                    </CardDescription>
+                                        {/* Course Title */}
+                                        <CardTitle className="text-xl group-hover:text-primary transition-colors line-clamp-2">
+                                            {course.title}
+                                        </CardTitle>
 
-                                    {/* Course Stats */}
-                                    <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                                        {course.estimated_hours && (
-                                            <div className="flex items-center gap-1">
-                                                <Clock className="h-4 w-4" />
-                                                <span>{course.estimated_hours}h</span>
+                                        {/* Organization */}
+                                        {course.organization_name && (
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                                                <Avatar className="h-6 w-6">
+                                                    {course.organization_logo_url ? (
+                                                        <AvatarImage src={course.organization_logo_url} alt={course.organization_name} />
+                                                    ) : null}
+                                                    <AvatarFallback className="text-xs">
+                                                        {course.organization_name[0]}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <span>{course.organization_name}</span>
                                             </div>
                                         )}
-                                        {course.cpd_credits && (
-                                            <div className="flex items-center gap-1">
-                                                <Award className="h-4 w-4" />
-                                                <span>{course.cpd_credits} CPD</span>
-                                            </div>
-                                        )}
-                                        {course.enrollment_count > 0 && (
-                                            <div className="flex items-center gap-1">
-                                                <Users className="h-4 w-4" />
-                                                <span>{course.enrollment_count} enrolled</span>
-                                            </div>
-                                        )}
-                                    </div>
+                                    </CardHeader>
 
-                                    {/* Modules Count */}
-                                    {course.module_count > 0 && (
-                                        <div className="mt-3 text-sm text-muted-foreground">
-                                            {course.module_count} module{course.module_count !== 1 ? 's' : ''}
+                                    <CardContent className="flex-grow pb-4">
+                                        {/* Description */}
+                                        <CardDescription className="line-clamp-3 mb-4">
+                                            {course.short_description || course.description}
+                                        </CardDescription>
+
+                                        {/* Course Stats */}
+                                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                                            {course.estimated_hours && (
+                                                <div className="flex items-center gap-1">
+                                                    <Clock className="h-4 w-4" />
+                                                    <span>{course.estimated_hours}h</span>
+                                                </div>
+                                            )}
+                                            {course.cpd_credits && (
+                                                <div className="flex items-center gap-1">
+                                                    <Award className="h-4 w-4" />
+                                                    <span>{course.cpd_credits} CPD</span>
+                                                </div>
+                                            )}
+                                            {course.enrollment_count > 0 && (
+                                                <div className="flex items-center gap-1">
+                                                    <Users className="h-4 w-4" />
+                                                    <span>{course.enrollment_count} enrolled</span>
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                </CardContent>
 
-                                <CardFooter className="pt-4 border-t">
-                                    <Button
-                                        className="w-full group/btn"
-                                        onClick={() => handleEnroll(course.uuid)}
-                                    >
-                                        View Course
-                                        <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        ))}
-                    </div>
+                                        {/* Modules Count */}
+                                        {course.module_count > 0 && (
+                                            <div className="mt-3 text-sm text-muted-foreground">
+                                                {course.module_count} module{course.module_count !== 1 ? 's' : ''}
+                                            </div>
+                                        )}
+                                    </CardContent>
+
+                                    <CardFooter className="pt-4 border-t">
+                                        <Button
+                                            className="w-full group/btn"
+                                            onClick={() => handleEnroll(course.uuid)}
+                                        >
+                                            View Course
+                                            <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
+                                        </Button>
+                                    </CardFooter>
+                                </Card>
+                            ))}
+                        </div>
+
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                totalCount={totalCount}
+                                pageSize={pageSize}
+                                onPageChange={setPage}
+                                className="mt-8"
+                            />
+                        )}
+                    </>
                 )}
 
                 {/* Call to Action */}
-                {filteredCourses.length > 0 && (
+                {courses.length > 0 && (
                     <div className="mt-16 text-center bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg p-8">
                         <h2 className="text-2xl font-bold mb-2">Looking to create your own courses?</h2>
                         <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">

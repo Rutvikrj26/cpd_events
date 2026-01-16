@@ -6,12 +6,24 @@ import {
     RegistrationPaymentIntentRequest,
     RegistrationResponse,
 } from './types';
+import { PaginatedResponse, PaginationParams } from '../types';
 
 // My Registrations (Attendee)
-export const getMyRegistrations = async (): Promise<Registration[]> => {
-    // registrations/urls.py is mounted at /api/v1/registrations/
-    const response = await client.get<any>('/registrations/');
-    return Array.isArray(response.data) ? response.data : response.data.results;
+export const getMyRegistrations = async (params?: PaginationParams): Promise<PaginatedResponse<Registration>> => {
+    const response = await client.get<PaginatedResponse<Registration>>('/registrations/', { params });
+    // Handle both paginated and non-paginated responses
+    if (Array.isArray(response.data)) {
+        return {
+            count: response.data.length,
+            page: 1,
+            page_size: response.data.length,
+            total_pages: 1,
+            next: null,
+            previous: null,
+            results: response.data,
+        };
+    }
+    return response.data;
 };
 
 export const getMyRegistration = async (uuid: string): Promise<Registration> => {

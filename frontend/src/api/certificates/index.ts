@@ -1,14 +1,27 @@
 import client from '../client';
 export * from './types';
 import { Certificate, CertificateTemplate, CertificateIssueRequest, CertificateSummary } from './types';
+import { PaginatedResponse, PaginationParams } from '../types';
 
 // ============================================
 // My Certificates (Attendee)
 // ============================================
 
-export const getMyCertificates = async (): Promise<Certificate[]> => {
-    const response = await client.get<any>('/certificates/');
-    return Array.isArray(response.data) ? response.data : response.data.results;
+export const getMyCertificates = async (params?: PaginationParams): Promise<PaginatedResponse<Certificate>> => {
+    const response = await client.get<PaginatedResponse<Certificate>>('/certificates/', { params });
+    // Handle both paginated and non-paginated responses
+    if (Array.isArray(response.data)) {
+        return {
+            count: response.data.length,
+            page: 1,
+            page_size: response.data.length,
+            total_pages: 1,
+            next: null,
+            previous: null,
+            results: response.data,
+        };
+    }
+    return response.data;
 };
 
 export const getMyCertificate = async (uuid: string): Promise<Certificate> => {

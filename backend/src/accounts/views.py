@@ -624,6 +624,48 @@ class CPDRequirementViewSet(viewsets.ModelViewSet):
         }
         return Response(data)
 
+    @swagger_auto_schema(
+        operation_summary="Export CPD report",
+        operation_description="Export CPD report in various formats. Use export_format=json|csv|txt.",
+    )
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        """Export CPD report."""
+        from datetime import datetime
+
+        from .cpd_export_service import CPDExportService
+
+        export_format = request.query_params.get('export_format', 'json').lower()
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        cpd_type = request.query_params.get('cpd_type')
+
+        # Parse dates if provided
+        filters = {}
+        if start_date:
+            try:
+                filters['start_date'] = datetime.strptime(start_date, '%Y-%m-%d').date()
+            except ValueError:
+                return Response({'error': 'Invalid start_date format. Use YYYY-MM-DD.'}, status=400)
+        if end_date:
+            try:
+                filters['end_date'] = datetime.strptime(end_date, '%Y-%m-%d').date()
+            except ValueError:
+                return Response({'error': 'Invalid end_date format. Use YYYY-MM-DD.'}, status=400)
+        if cpd_type:
+            filters['cpd_type'] = cpd_type
+
+        service = CPDExportService(request.user)
+
+        if export_format == 'csv':
+            return service.export_csv(**filters)
+        elif export_format == 'txt':
+            return service.export_txt(**filters)
+        elif export_format == 'pdf':
+            return service.export_pdf(**filters)
+        else:
+            return service.export_json(**filters)
+
 
 # =============================================================================
 # RBAC Manifest Views

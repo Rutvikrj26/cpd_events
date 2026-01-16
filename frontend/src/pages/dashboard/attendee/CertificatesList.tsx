@@ -19,7 +19,7 @@ export function CertificatesList() {
     async function fetchData() {
       try {
         const data = await getMyCertificates();
-        setCertificates(data);
+        setCertificates(data.results);
       } catch (error) {
         toast.error("Failed to load certificates");
         console.error(error);

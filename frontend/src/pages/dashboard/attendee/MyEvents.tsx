@@ -21,7 +21,7 @@ export function MyEvents() {
   const fetchRegistrations = async () => {
     try {
       const data = await getMyRegistrations();
-      setRegistrations(data);
+      setRegistrations(data.results);
     } catch (error) {
       console.error("Failed to load registrations", error);
     } finally {

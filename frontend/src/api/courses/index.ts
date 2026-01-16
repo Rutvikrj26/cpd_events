@@ -7,6 +7,7 @@ import {
     AssignmentSubmissionStaff,
     CourseAnnouncement,
 } from './types';
+import { PaginatedResponse, PaginationParams } from '../types';
 
 export * from './types';
 
@@ -263,11 +264,24 @@ export const gradeCourseSubmission = async (
 // Public Courses (Browse/Catalog)
 // ============================================
 
-export const getPublicCourses = async (filters?: { search?: string; org?: string }): Promise<Course[]> => {
-    const response = await client.get<any>('/courses/', {
-        params: {
-            ...filters,
-        }
-    });
-    return Array.isArray(response.data) ? response.data : response.data.results || [];
+export interface PublicCourseListParams extends PaginationParams {
+    search?: string;
+    org?: string;
+}
+
+export const getPublicCourses = async (params?: PublicCourseListParams): Promise<PaginatedResponse<Course>> => {
+    const response = await client.get<PaginatedResponse<Course>>('/courses/', { params });
+    // Handle both paginated and non-paginated responses
+    if (Array.isArray(response.data)) {
+        return {
+            count: response.data.length,
+            page: 1,
+            page_size: response.data.length,
+            total_pages: 1,
+            next: null,
+            previous: null,
+            results: response.data,
+        };
+    }
+    return response.data;
 };

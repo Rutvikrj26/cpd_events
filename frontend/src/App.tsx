@@ -132,11 +132,7 @@ export default function App() {
                   </PublicLayout>
                 } />
 
-                <Route path="/courses" element={
-                  <PublicLayout>
-                    <CourseCatalogPage />
-                  </PublicLayout>
-                } />
+
 
                 <Route path="/organizations/:slug/public" element={
                   <PublicLayout>
@@ -296,6 +292,7 @@ export default function App() {
                     <Route path="/registrations" element={<MyRegistrationsPage />} />
                     <Route path="/certificates" element={<CertificatesPage />} />
                     <Route path="/my-events" element={<MyEvents />} />
+                    <Route path="/courses" element={<CourseCatalogPage />} />
                     <Route path="/my-courses" element={<MyCoursesPage />} />
                     <Route path="/courses/certificates" element={<CourseCertificatesPage />} />
                     <Route path="/courses/manage" element={<OrgCoursesPage />} />

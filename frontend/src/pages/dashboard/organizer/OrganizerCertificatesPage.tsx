@@ -43,11 +43,11 @@ export const OrganizerCertificatesPage = () => {
             try {
                 // Get all organizer's events
                 const eventsData = await getEvents();
-                setEvents(eventsData);
+                setEvents(eventsData.results);
 
                 // Fetch certificates from all events
                 const allCerts: CertificateWithEvent[] = [];
-                for (const event of eventsData) {
+                for (const event of eventsData.results) {
                     try {
                         const certs = await getEventCertificates(event.uuid);
                         certs.forEach(cert => {

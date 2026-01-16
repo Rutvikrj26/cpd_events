@@ -45,7 +45,7 @@ export function OrganizerDashboard() {
           getEvents(),
           getZoomStatus(),
         ]);
-        setEvents(eventsData);
+        setEvents(eventsData.results);
         setZoomStatus(zoomData);
       } catch (error) {
         console.error("Failed to fetch dashboard data", error);

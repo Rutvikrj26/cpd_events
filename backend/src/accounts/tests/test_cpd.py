@@ -147,3 +147,38 @@ class TestCPDRequirementValidation:
         }
         response = auth_client.post(endpoint, data)
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+class TestCPDExport:
+    """Tests for CPD report export."""
+
+    def test_export_json(self, auth_client, cpd_requirement):
+        """User can export CPD report as JSON."""
+        response = auth_client.get('/api/v1/cpd-requirements/export/?export_format=json')
+        assert response.status_code == status.HTTP_200_OK
+        assert 'application/json' in response['Content-Type']
+
+    def test_export_csv(self, auth_client, cpd_requirement):
+        """User can export CPD report as CSV."""
+        response = auth_client.get('/api/v1/cpd-requirements/export/?export_format=csv')
+        assert response.status_code == status.HTTP_200_OK
+        assert 'text/csv' in response['Content-Type']
+
+    def test_export_txt(self, auth_client, cpd_requirement):
+        """User can export CPD report as TXT."""
+        response = auth_client.get('/api/v1/cpd-requirements/export/?export_format=txt')
+        assert response.status_code == status.HTTP_200_OK
+        assert 'text/plain' in response['Content-Type']
+
+    def test_export_default_json(self, auth_client, cpd_requirement):
+        """Default export format is JSON."""
+        response = auth_client.get('/api/v1/cpd-requirements/export/')
+        assert response.status_code == status.HTTP_200_OK
+        assert 'application/json' in response['Content-Type']
+
+    def test_export_unauthenticated(self, client):
+        """Unauthenticated user cannot export."""
+        response = client.get('/api/v1/cpd-requirements/export/')
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+

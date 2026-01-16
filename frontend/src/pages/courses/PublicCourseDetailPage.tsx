@@ -57,7 +57,7 @@ export const PublicCourseDetailPage = () => {
             try {
                 const allCourses = await getPublicCourses({ org: course.organization_slug });
                 // Filter published and public courses, exclude current course
-                const orgCourses = allCourses
+                const orgCourses = allCourses.results
                     .filter(c =>
                         c.status === 'published' &&
                         c.is_public &&

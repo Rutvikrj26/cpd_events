@@ -15,7 +15,8 @@ import {
     FileText,
     Video,
     Search,
-    Users
+    Users,
+    TrendingUp
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -64,14 +65,13 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
 
     // Define nav items with route keys matching backend ROUTE_REGISTRY
     const navItems: NavItemConfig[] = [
-        // --- PERSONAL CONTEXT ITEMS ---
         { routeKey: 'dashboard', to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', hideInOrg: true },
         { routeKey: 'browse_events', to: '/events', icon: Search, label: 'Browse Events', attendeeOnly: true, hideInOrg: true, eventOnly: true },
-        { routeKey: 'browse_courses', to: '/courses', icon: BookOpen, label: 'Browse Courses', learnerOnly: true, hideInOrg: true },
+        { routeKey: 'browse_courses', to: '/courses', icon: BookOpen, label: 'Browse Courses', attendeeOnly: true, hideInOrg: true },
         { routeKey: 'my_events', to: '/events', icon: Calendar, label: 'My Events', organizerOnly: true, hideInOrg: true, eventOnly: true },
         { routeKey: 'registrations', to: '/registrations', icon: BookOpen, label: 'My Registrations', attendeeOnly: true, hideInOrg: true, eventOnly: true },
-        { routeKey: 'course_enrollments', to: '/my-courses', icon: BookOpen, label: 'My Courses', learnerOnly: true, hideInOrg: true },
         { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'My Certificates', attendeeOnly: true, hideInOrg: true },
+        { routeKey: 'cpd_tracking', to: '/cpd', icon: TrendingUp, label: 'CPD Tracking', attendeeOnly: true, hideInOrg: true },
 
         // Organizer Specific (Personal Context)
         { routeKey: 'event_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', organizerOnly: true, hideInOrg: true, eventOnly: true },
@@ -164,7 +164,7 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
         if (manifest && manifest.routes.length > 0) {
             // Always allow basic shared routes and new org routes (assuming they are allowed if we are in the org)
             // TODO: Ideally check robust permissions for org routes, but checking 'requiresOrg' existence is a proxy for now
-            if (['dashboard', 'profile', 'my_events', 'browse_events', 'browse_courses', 'course_enrollments', 'course_certificates', 'contacts'].includes(item.routeKey)) return true;
+            if (['dashboard', 'profile', 'my_events', 'browse_events', 'browse_courses', 'course_certificates', 'contacts', 'cpd_tracking'].includes(item.routeKey)) return true;
             if (item.requiresOrg) return true; // Assume if they are in the org, they can see the links (page will protect)
 
             if (item.routeKey === 'certificates') return hasFeature('view_own_certificates');
@@ -223,7 +223,7 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
                                 <h1 className="text-xl font-bold gradient-text whitespace-nowrap">
                                     Accredit
                                 </h1>
-                        <p className="text-xs text-muted-foreground mt-1 truncate">{portalLabel}</p>
+                                <p className="text-xs text-muted-foreground mt-1 truncate">{portalLabel}</p>
                             </div>
                         )}
                         {isCollapsed && <span className="font-bold text-primary text-xl">A</span>}

@@ -1,11 +1,29 @@
 import client from '../client';
 import { Event, EventCreateRequest, EventUpdateRequest, EventSession, EventCustomField } from './types';
+import { PaginatedResponse, PaginationParams } from '../types';
 
 // -- Organizer / Admin Routes --
 
-export const getEvents = async (): Promise<Event[]> => {
-    const response = await client.get<any>('/events/');
-    return Array.isArray(response.data) ? response.data : response.data.results;
+export interface EventListParams extends PaginationParams {
+    status?: string;
+    search?: string;
+}
+
+export const getEvents = async (params?: EventListParams): Promise<PaginatedResponse<Event>> => {
+    const response = await client.get<PaginatedResponse<Event>>('/events/', { params });
+    // Handle both paginated and non-paginated responses for backwards compatibility
+    if (Array.isArray(response.data)) {
+        return {
+            count: response.data.length,
+            page: 1,
+            page_size: response.data.length,
+            total_pages: 1,
+            next: null,
+            previous: null,
+            results: response.data,
+        };
+    }
+    return response.data;
 };
 
 export const getEvent = async (uuid: string): Promise<Event> => {
@@ -57,9 +75,28 @@ export const getEventCustomFields = async (eventUuid: string): Promise<EventCust
 
 // -- Public Routes --
 
-export const getPublicEvents = async (): Promise<Event[]> => {
-    const response = await client.get<any>('/public/events/');
-    return Array.isArray(response.data) ? response.data : response.data.results;
+export interface PublicEventListParams extends PaginationParams {
+    search?: string;
+    event_type?: string;
+    format?: string;
+    is_free?: boolean;
+}
+
+export const getPublicEvents = async (params?: PublicEventListParams): Promise<PaginatedResponse<Event>> => {
+    const response = await client.get<PaginatedResponse<Event>>('/public/events/', { params });
+    // Handle both paginated and non-paginated responses for backwards compatibility
+    if (Array.isArray(response.data)) {
+        return {
+            count: response.data.length,
+            page: 1,
+            page_size: response.data.length,
+            total_pages: 1,
+            next: null,
+            previous: null,
+            results: response.data,
+        };
+    }
+    return response.data;
 };
 
 export const getPublicEvent = async (slug: string): Promise<Event> => {

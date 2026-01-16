@@ -120,7 +120,7 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
                         title: 'Create your first event',
                         description: 'Set up a webinar, workshop, or training',
                         icon: Calendar,
-                        completed: events.length > 0,
+                        completed: events.results.length > 0,
                         href: '/events/create',
                         action: 'Create Event'
                     });

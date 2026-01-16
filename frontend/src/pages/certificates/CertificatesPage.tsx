@@ -28,7 +28,7 @@ export const CertificatesPage = () => {
         const fetchCerts = async () => {
             try {
                 const data = await getMyCertificates();
-                setCertificates(data);
+                setCertificates(data.results);
             } catch (error) {
                 console.error("Failed to load certificates", error);
                 toast.error("Failed to load certificates");

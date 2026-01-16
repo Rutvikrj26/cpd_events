@@ -20,7 +20,7 @@ export function AttendeeDashboard() {
     async function fetchRegistrations() {
       try {
         const data = await getMyRegistrations();
-        setRegistrations(data);
+        setRegistrations(data.results);
       } catch (error) {
         console.error("Failed to fetch registrations", error);
       } finally {
