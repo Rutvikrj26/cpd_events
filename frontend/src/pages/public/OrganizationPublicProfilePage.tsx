@@ -45,7 +45,7 @@ export const OrganizationPublicProfilePage: React.FC = () => {
                 setOrganization(orgData);
 
                 // Filter for published and public courses
-                const publicCourses = coursesData.filter(
+                const publicCourses = coursesData.results.filter(
                     course => course.status === 'published' && course.is_public
                 );
                 setCourses(publicCourses);

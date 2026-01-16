@@ -73,7 +73,7 @@ export function EventDetail() {
       setCheckingRegistration(true);
       try {
         const registrations = await getMyRegistrations();
-        const myReg = registrations.find(
+        const myReg = registrations.results.find(
           reg => reg.event.uuid === event.uuid && reg.status !== 'cancelled'
         );
         setUserRegistration(myReg || null);
@@ -95,7 +95,7 @@ export function EventDetail() {
       try {
         const allEvents = await getPublicEvents();
         // Filter for same organization, exclude current event
-        const orgEvents = allEvents
+        const orgEvents = allEvents.results
           .filter(e =>
             e.organization_info?.slug === event.organization_info?.slug &&
             e.uuid !== event.uuid

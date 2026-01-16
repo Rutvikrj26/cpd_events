@@ -47,9 +47,9 @@ export const MyRegistrationsPage = () => {
     const fetchRegistrations = async () => {
         try {
             const data = await getMyRegistrations();
-            setRegistrations(data);
+            setRegistrations(data.results);
             // Check feedback status for past events
-            checkFeedbackStatus(data);
+            checkFeedbackStatus(data.results);
         } catch (error) {
             console.error("Failed to load registrations", error);
         } finally {
