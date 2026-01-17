@@ -204,10 +204,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
     // Load billing status when reaching billing step
     React.useEffect(() => {
-        if (stepId === 'billing' && !billingChecked) {
+        // Fetch subscription data on mount for non-attendees (needed for trial days on welcome step)
+        if (!isAttendee && !billingChecked) {
             checkBillingStatus();
         }
-    }, [stepId, billingChecked]);
+    }, [isAttendee, billingChecked]);
 
     // Handle checkout success/canceled return from Stripe
     React.useEffect(() => {
@@ -367,21 +368,15 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                         <span>Professional Trial Active</span>
                                                     </div>
                                                     <p className="text-sm text-muted-foreground">
-                                                        You have {subscription?.days_until_trial_ends || 30} days of full access to all features
+                                                        You have {subscription?.days_until_trial_ends ?? '...'} days of full access to all features
                                                     </p>
                                                 </div>
 
-                                                <div className="grid grid-cols-3 gap-4 text-center">
+                                                <div className="grid grid-cols-2 gap-4 text-center">
                                                     <div className="p-4 bg-muted/30 rounded-lg">
                                                         <div className="text-2xl font-bold text-primary">∞</div>
                                                         <div className="text-sm text-muted-foreground">
                                                             {isLmsOnly ? 'Courses' : 'Events'}
-                                                        </div>
-                                                    </div>
-                                                    <div className="p-4 bg-muted/30 rounded-lg">
-                                                        <div className="text-2xl font-bold text-primary">500</div>
-                                                        <div className="text-sm text-muted-foreground">
-                                                            {isLmsOnly ? 'Learners/Course' : 'Attendees/Event'}
                                                         </div>
                                                     </div>
                                                     <div className="p-4 bg-muted/30 rounded-lg">
@@ -570,7 +565,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                     </div>
                                                     <div className="flex items-center justify-between">
                                                         <span className="text-sm text-muted-foreground">Trial ends</span>
-                                                        <Badge variant="secondary">{subscription?.days_until_trial_ends || 30} days remaining</Badge>
+                                                        <Badge variant="secondary">{subscription?.days_until_trial_ends ?? '...'} days remaining</Badge>
                                                     </div>
                                                     <p className="text-xs text-muted-foreground pt-2 border-t">
                                                         Your card won't be charged until your trial ends. Cancel anytime.

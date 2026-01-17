@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
+import { getBadgeTemplates, BadgeTemplate } from '@/api/badges';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getPayoutsStatus, PayoutsStatus } from '@/api/payouts';
@@ -20,7 +21,9 @@ export const StepSettings = () => {
     const { currentOrg } = useOrganization();
     const { user } = useAuth();
     const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
+    const [badgeTemplates, setBadgeTemplates] = useState<BadgeTemplate[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
+    const [loadingBadgeTemplates, setLoadingBadgeTemplates] = useState(false);
 
     // Payouts state for individual organizers
     const [userPayoutsEnabled, setUserPayoutsEnabled] = useState(false);
@@ -54,6 +57,26 @@ export const StepSettings = () => {
 
         fetchTemplates();
     }, [formData.certificates_enabled]);
+
+    // Fetch badge templates when badges are enabled
+    useEffect(() => {
+        const fetchBadgeTemplates = async () => {
+            if (formData.badges_enabled) {
+                setLoadingBadgeTemplates(true);
+                try {
+                    const response = await getBadgeTemplates();
+                    setBadgeTemplates(response.results);
+                } catch (error) {
+                    console.error("Failed to fetch badge templates", error);
+                    toast.error("Failed to load badge templates.");
+                } finally {
+                    setLoadingBadgeTemplates(false);
+                }
+            }
+        };
+
+        fetchBadgeTemplates();
+    }, [formData.badges_enabled]);
 
     // Fetch individual user payouts status if not using an org
     useEffect(() => {
@@ -314,6 +337,64 @@ export const StepSettings = () => {
                                 </div>
                                 <p className="text-xs text-muted-foreground">Calculated from minutes and duration.</p>
                             </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <Separator />
+
+            {/* Badge Settings */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                        <Label className="text-base">Badges</Label>
+                        <p className="text-sm text-muted-foreground">Issue digital badges to verified attendees.</p>
+                    </div>
+                    <Switch
+                        checked={formData.badges_enabled}
+                        onCheckedChange={(checked) => updateFormData({ badges_enabled: checked })}
+                    />
+                </div>
+
+                {formData.badges_enabled && (
+                    <div className="pl-6 border-l-2 border-slate-100 ml-2 space-y-4">
+                        <div className="space-y-2">
+                            <Label>Badge Template</Label>
+                            <Select
+                                value={formData.badge_template || ''}
+                                onValueChange={(value) => updateFormData({ badge_template: value === 'none' ? null : value })}
+                            >
+                                <SelectTrigger className="w-full max-w-sm">
+                                    <SelectValue placeholder={loadingBadgeTemplates ? "Loading templates..." : "Select a template"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">None</SelectItem>
+                                    {badgeTemplates.map((tpl) => (
+                                        <SelectItem key={tpl.uuid} value={tpl.uuid}>
+                                            {tpl.name}
+                                        </SelectItem>
+                                    ))}
+                                    {badgeTemplates.length === 0 && !loadingBadgeTemplates && (
+                                        <div className="p-2 text-sm text-muted-foreground">No badge templates found. Create one first.</div>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">The image template used for generating badges.</p>
+                            {formData.badges_enabled && !formData.badge_template && (
+                                <p className="text-xs text-amber-600">Select a template to enable badge issuance.</p>
+                            )}
+                        </div>
+
+                        <div className="flex items-center justify-between max-w-sm">
+                            <div className="space-y-0.5">
+                                <Label className="text-sm">Auto-issue</Label>
+                                <p className="text-xs text-muted-foreground">Issue automatically when event completes.</p>
+                            </div>
+                            <Switch
+                                checked={formData.auto_issue_badges}
+                                onCheckedChange={(checked) => updateFormData({ auto_issue_badges: checked })}
+                            />
                         </div>
                     </div>
                 )}

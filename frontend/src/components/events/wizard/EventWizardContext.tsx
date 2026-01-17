@@ -51,6 +51,9 @@ const initialFormData: Partial<EventCreateRequest> = {
     certificates_enabled: false,
     auto_issue_certificates: false,
     certificate_template: null,
+    badges_enabled: false,
+    auto_issue_badges: false,
+    badge_template: null,
 
     // Payment Settings
     price: 0,

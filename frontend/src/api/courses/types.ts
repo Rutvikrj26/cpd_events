@@ -52,6 +52,11 @@ export interface Course {
     certificate_template?: string | null;
     auto_issue_certificates: boolean;
 
+    // Badges
+    badges_enabled: boolean;
+    badge_template?: string | null;
+    auto_issue_badges: boolean;
+
     // Stats
     enrollment_count: number;
     completion_count: number;
@@ -82,7 +87,12 @@ export interface CourseCreateRequest {
     estimated_hours?: number;
     passing_score?: number;
     certificates_enabled?: boolean;
-    certificate_template?: string;
+    certificate_template?: string | null;
+    auto_issue_certificates?: boolean;
+    // Badge settings
+    badges_enabled?: boolean;
+    badge_template?: string | null;
+    auto_issue_badges?: boolean;
     // Format & Virtual fields
     format?: CourseFormat;
     zoom_meeting_id?: string;

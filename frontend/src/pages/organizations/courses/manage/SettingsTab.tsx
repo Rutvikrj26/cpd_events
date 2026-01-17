@@ -11,7 +11,16 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import { updateCourse, deleteCourse, publishCourse } from '@/api/courses';
 import { Course } from '@/api/courses/types';
+import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
+import { getBadgeTemplates, BadgeTemplate } from '@/api/badges';
 import { Loader2, Save, Trash2, Globe, Lock, AlertTriangle } from 'lucide-react';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -54,7 +63,43 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
         enrollment_open: course.enrollment_open ?? true,
         max_enrollments: course.max_enrollments ?? 0,
         certificates_enabled: course.certificates_enabled ?? false,
+        certificate_template: course.certificate_template || null,
+        auto_issue_certificates: course.auto_issue_certificates ?? true,
+        badges_enabled: course.badges_enabled ?? false,
+        badge_template: course.badge_template || null,
+        auto_issue_badges: course.auto_issue_badges ?? true,
     });
+
+    const [certTemplates, setCertTemplates] = useState<CertificateTemplate[]>([]);
+    const [badgeTemplates, setBadgeTemplates] = useState<BadgeTemplate[]>([]);
+    const [loadingCerts, setLoadingCerts] = useState(false);
+    const [loadingBadges, setLoadingBadges] = useState(false);
+
+    // Fetch templates
+    React.useEffect(() => {
+        async function fetchTemplates() {
+            setLoadingCerts(true);
+            try {
+                const response = await getAvailableCertificateTemplates();
+                setCertTemplates(response.templates);
+            } catch (error) {
+                console.error('Failed to fetch certificate templates:', error);
+            } finally {
+                setLoadingCerts(false);
+            }
+
+            setLoadingBadges(true);
+            try {
+                const response = await getBadgeTemplates();
+                setBadgeTemplates(response.results);
+            } catch (error) {
+                console.error('Failed to fetch badge templates:', error);
+            } finally {
+                setLoadingBadges(false);
+            }
+        }
+        fetchTemplates();
+    }, []);
 
     const handleSave = async () => {
         setSaving(true);
@@ -260,6 +305,93 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
                             onCheckedChange={(checked) => setFormData({ ...formData, certificates_enabled: checked })}
                         />
                     </div>
+
+                    {formData.certificates_enabled && (
+                        <div className="pl-6 border-l-2 border-slate-100 ml-2 space-y-4 py-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="certificate_template">Certificate Template</Label>
+                                <Select
+                                    value={formData.certificate_template || ''}
+                                    onValueChange={(val) => setFormData({ ...formData, certificate_template: val })}
+                                >
+                                    <SelectTrigger id="certificate_template">
+                                        <SelectValue placeholder={loadingCerts ? "Loading..." : "Select a template"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {certTemplates.map(t => (
+                                            <SelectItem key={t.uuid} value={t.uuid}>
+                                                {t.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <div className="space-y-0.5">
+                                    <Label className="text-sm">Auto-issue Certificate</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Issue automatically upon completion
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={formData.auto_issue_certificates}
+                                    onCheckedChange={(checked) => setFormData({ ...formData, auto_issue_certificates: checked })}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <Separator />
+
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                            <Label className="text-base">Digital Badges Enabled</Label>
+                            <p className="text-sm text-muted-foreground">
+                                Award verifiable digital badges
+                            </p>
+                        </div>
+                        <Switch
+                            checked={formData.badges_enabled}
+                            onCheckedChange={(checked) => setFormData({ ...formData, badges_enabled: checked })}
+                        />
+                    </div>
+
+                    {formData.badges_enabled && (
+                        <div className="pl-6 border-l-2 border-slate-100 ml-2 space-y-4 py-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="badge_template">Badge Template</Label>
+                                <Select
+                                    value={formData.badge_template || ''}
+                                    onValueChange={(val) => setFormData({ ...formData, badge_template: val })}
+                                >
+                                    <SelectTrigger id="badge_template">
+                                        <SelectValue placeholder={loadingBadges ? "Loading..." : "Select a template"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {badgeTemplates.map(t => (
+                                            <SelectItem key={t.uuid} value={t.uuid}>
+                                                {t.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <div className="space-y-0.5">
+                                    <Label className="text-sm">Auto-issue Badge</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Issue automatically upon completion
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={formData.auto_issue_badges}
+                                    onCheckedChange={(checked) => setFormData({ ...formData, auto_issue_badges: checked })}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     <div className="space-y-2">
                         <Label htmlFor="max_enrollments">Maximum Enrollments</Label>

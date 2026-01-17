@@ -81,7 +81,7 @@ class BadgeServiceTest(TestCase):
             status='confirmed'
         )
 
-        result = badge_service.issue_badge(registration, self.template, issued_by=self.user)
+        result = badge_service.issue_badge(template=self.template, registration=registration, issued_by=self.user)
         
         self.assertTrue(result['success'], msg=f"Issue failed with: {result.get('error')}")
         self.assertIsNotNone(result['badge'])
@@ -111,7 +111,7 @@ class BadgeServiceTest(TestCase):
         self.template.save()
             
         with mock.patch('badges.services.badge_service.issue_badge') as mock_issue:
-            mock_issue.side_effect = lambda reg, tmpl, issuer: {'success': True}
+            mock_issue.side_effect = lambda template, registration, issued_by: {'success': True}
             
             results = badge_service.issue_bulk(event, issued_by=self.user)
             

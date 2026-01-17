@@ -37,8 +37,8 @@ export function OrganizerIssuedBadgesList() {
 
     async function fetchBadges() {
         try {
-            const data = await getIssuedBadgesByMe();
-            setBadges(data);
+            const response = await getIssuedBadgesByMe();
+            setBadges(response.results);
         } catch (error) {
             toast.error("Failed to load issued badges");
         } finally {

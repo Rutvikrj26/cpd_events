@@ -41,6 +41,11 @@ export interface Event {
     minimum_attendance_minutes?: number;
     minimum_attendance_percent?: number;
 
+    // Badges
+    badges_enabled?: boolean;
+    auto_issue_badges?: boolean;
+    badge_template?: string | null;
+
     // Pricing
     price?: number;
     currency?: string;
@@ -114,6 +119,11 @@ export interface EventCreateRequest {
     certificate_template?: string | null;
     minimum_attendance_minutes?: number;
     minimum_attendance_percent?: number;
+
+    // Badges
+    badges_enabled?: boolean;
+    auto_issue_badges?: boolean;
+    badge_template?: string | null;
 
     // Zoom
     zoom_settings?: any;

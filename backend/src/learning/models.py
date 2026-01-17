@@ -678,6 +678,20 @@ class Course(BaseModel):
     auto_issue_certificates = models.BooleanField(default=True, help_text="Auto-issue when course is completed")
 
     # =========================================
+    # Badge Settings
+    # =========================================
+    badges_enabled = models.BooleanField(default=False, help_text="Issue badges on completion")
+    badge_template = models.ForeignKey(
+        'badges.BadgeTemplate',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='courses',
+        help_text="Template for badges",
+    )
+    auto_issue_badges = models.BooleanField(default=True, help_text="Auto-issue badges when course is completed")
+
+    # =========================================
     # Stats (denormalized)
     # =========================================
     enrollment_count = models.PositiveIntegerField(default=0, help_text="Total enrollments")
@@ -969,6 +983,19 @@ class CourseEnrollment(BaseModel):
 
                     self.certificate_issued = True
                     self.certificate_issued_at = timezone.now()
+
+        # Issue badge if enabled
+        if self.course.badges_enabled and self.course.auto_issue_badges and self.course.badge_template:
+            from badges.models import IssuedBadge
+            from badges.services import badge_service
+
+            # Check for existing badge first (avoid duplicates)
+            if not IssuedBadge.objects.filter(course_enrollment=self, template=self.course.badge_template).exists():
+                badge_service.issue_badge(
+                    course_enrollment=self,
+                    template=self.course.badge_template,
+                    issued_by=self.course.created_by or self.user,
+                )
 
         self.save(
             update_fields=[

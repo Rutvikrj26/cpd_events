@@ -155,27 +155,42 @@ class BadgeService:
             logger.error(f"Badge upload failed: {e}")
             return None
 
-    def issue_badge(self, registration, template, issued_by=None) -> dict[str, Any]:
+    def issue_badge(self, template, issued_by=None, registration=None, course_enrollment=None) -> dict[str, Any]:
         """
-        Issue a badge for a registration.
+        Issue a badge for a registration or course enrollment.
+        
+        Args:
+            template: BadgeTemplate to use
+            issued_by: User who is issuing the badge
+            registration: Optional Registration (for events)
+            course_enrollment: Optional CourseEnrollment (for courses)
         """
         from badges.models import IssuedBadge
         
+        if not registration and not course_enrollment:
+            return {'success': False, 'error': 'Must provide registration or course_enrollment'}
+        
+        if registration and course_enrollment:
+            return {'success': False, 'error': 'Cannot provide both registration and course_enrollment'}
+        
         try:
+            # Determine recipient and context
+            if registration:
+                recipient = registration.user
+                existing_filter = {'registration': registration, 'template': template, 'status': 'active'}
+                owner = registration.event.owner
+            else:
+                recipient = course_enrollment.user
+                existing_filter = {'course_enrollment': course_enrollment, 'template': template, 'status': 'active'}
+                owner = course_enrollment.course.created_by
+            
             # Check existing
-            existing = IssuedBadge.objects.filter(
-                registration=registration, 
-                template=template,
-                status='active'
-            ).first()
+            existing = IssuedBadge.objects.filter(**existing_filter).first()
             
             if existing:
                  return {'success': True, 'badge': existing, 'already_issued': True}
 
-            # Check subscription limits (using certificate limit as proxy for now)
-            event = registration.event
-            owner = event.owner
-            
+            # Check subscription limits
             subscription = None
             try:
                 subscription = owner.subscription
@@ -196,8 +211,9 @@ class BadgeService:
             # Create badge
             badge = IssuedBadge.objects.create(
                 registration=registration,
+                course_enrollment=course_enrollment,
                 template=template,
-                recipient=registration.user,
+                recipient=recipient,
                 issued_by=issued_by,
                 status='active'
             )
@@ -247,7 +263,7 @@ class BadgeService:
         results = {'total': len(registrations), 'success': 0, 'failed': 0, 'errors': []}
 
         for reg in registrations:
-             res = self.issue_badge(reg, template, issued_by)
+             res = self.issue_badge(template=template, registration=reg, issued_by=issued_by)
              if res['success']:
                  results['success'] += 1
              else:

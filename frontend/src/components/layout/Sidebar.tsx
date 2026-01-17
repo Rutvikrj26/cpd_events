@@ -76,7 +76,7 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
 
         // Organizer Specific (Personal Context)
         { routeKey: 'event_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', organizerOnly: true, hideInOrg: true, eventOnly: true },
-        { routeKey: 'event_badges', to: '/organizer/badges', icon: Award, label: 'Badges', organizerOnly: true, hideInOrg: true, eventOnly: true },
+        { routeKey: 'event_badges', to: '/organizer/badges', icon: Award, label: 'Badges', creatorOnly: true, hideInOrg: true },
         { routeKey: 'zoom_meetings', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', organizerOnly: true, hideInOrg: true, eventOnly: true },
         { routeKey: 'contacts', to: '/organizer/contacts', icon: Users, label: 'Contacts', organizerOnly: true, hideInOrg: true, eventOnly: true },
         // NOTE: "Organizations" link is removed as it's replaced by the Context Switcher
@@ -166,7 +166,7 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
         if (manifest && manifest.routes.length > 0) {
             // Always allow basic shared routes and new org routes (assuming they are allowed if we are in the org)
             // TODO: Ideally check robust permissions for org routes, but checking 'requiresOrg' existence is a proxy for now
-            if (['dashboard', 'profile', 'my_events', 'browse_events', 'browse_courses', 'course_certificates', 'contacts', 'cpd_tracking'].includes(item.routeKey)) return true;
+            if (['dashboard', 'profile', 'my_events', 'browse_events', 'browse_courses', 'course_certificates', 'contacts', 'cpd_tracking', 'event_badges', 'badges'].includes(item.routeKey)) return true;
             if (item.requiresOrg) return true; // Assume if they are in the org, they can see the links (page will protect)
 
             if (item.routeKey === 'certificates') return hasFeature('view_own_certificates');

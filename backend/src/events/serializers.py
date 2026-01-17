@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import serializers
 
+from badges.models import BadgeTemplate
 from certificates.models import CertificateTemplate
 from common.serializers import BaseModelSerializer, SoftDeleteModelSerializer
 from common.utils import generate_unique_slug
@@ -284,6 +285,24 @@ def _validate_certificate_settings(attrs, instance=None):
     return attrs
 
 
+def _validate_badge_settings(attrs, instance=None):
+    badges_enabled = attrs.get('badges_enabled')
+    badge_template = attrs.get('badge_template')
+
+    if instance is not None:
+        if badges_enabled is None:
+            badges_enabled = instance.badges_enabled
+        if badge_template is None:
+            badge_template = instance.badge_template
+
+    if badges_enabled and not badge_template:
+        raise serializers.ValidationError(
+            {'badge_template': 'Select a badge template when badges are enabled.'}
+        )
+
+    return attrs
+
+
 class EventListSerializer(SoftDeleteModelSerializer):
     """Lightweight event for list views."""
 
@@ -360,6 +379,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
     attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
     attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
     certificate_template = serializers.SlugRelatedField(read_only=True, slug_field='uuid')
+    badge_template = serializers.SlugRelatedField(read_only=True, slug_field='uuid')
     speakers = SpeakerSerializer(many=True, read_only=True)
     sessions = EventSessionListSerializer(many=True, read_only=True)
 
@@ -410,6 +430,10 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'certificate_template',
             'auto_issue_certificates',
             'require_feedback_for_certificate',
+            # Badges
+            'badges_enabled',
+            'badge_template',
+            'auto_issue_badges',
             # Branding
             'featured_image_url',
             'location',
@@ -484,6 +508,11 @@ class EventCreateSerializer(serializers.ModelSerializer):
     certificate_template = serializers.SlugRelatedField(
         slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
+    badges_enabled = serializers.BooleanField(required=False, default=False)
+    auto_issue_badges = serializers.BooleanField(required=False, default=False)
+    badge_template = serializers.SlugRelatedField(
+        slug_field='uuid', queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
+    )
     organization = serializers.UUIDField(required=False, allow_null=True, write_only=True)
     speakers = serializers.SlugRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
 
@@ -521,6 +550,10 @@ class EventCreateSerializer(serializers.ModelSerializer):
             'certificate_template',
             'auto_issue_certificates',
             'require_feedback_for_certificate',
+            # Badges
+            'badges_enabled',
+            'badge_template',
+            'auto_issue_badges',
             # Branding
             'is_public',
             # Attendance
@@ -542,7 +575,9 @@ class EventCreateSerializer(serializers.ModelSerializer):
         read_only_fields = ['uuid', 'slug']
 
     def validate(self, attrs):
-        return _validate_certificate_settings(attrs)
+        attrs = _validate_certificate_settings(attrs)
+        attrs = _validate_badge_settings(attrs)
+        return attrs
 
     def create(self, validated_data):
         custom_fields_data = validated_data.pop('custom_fields', [])
@@ -581,6 +616,9 @@ class EventUpdateSerializer(serializers.ModelSerializer):
     certificate_template = serializers.SlugRelatedField(
         slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
+    badge_template = serializers.SlugRelatedField(
+        slug_field='uuid', queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
+    )
     speakers = serializers.SlugRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
 
     class Meta:
@@ -612,6 +650,10 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             'certificate_template',
             'auto_issue_certificates',
             'require_feedback_for_certificate',
+            # Badges
+            'badges_enabled',
+            'badge_template',
+            'auto_issue_badges',
             # Branding
             # Branding
             'is_public',
@@ -635,7 +677,10 @@ class EventUpdateSerializer(serializers.ModelSerializer):
         instance = self.instance
         if instance and instance.starts_at <= timezone.now():
             raise serializers.ValidationError("Cannot edit event details after the event has started.")
-        return _validate_certificate_settings(attrs, instance=instance)
+        
+        attrs = _validate_certificate_settings(attrs, instance=instance)
+        attrs = _validate_badge_settings(attrs, instance=instance)
+        return attrs
 
 
 class EventStatusChangeSerializer(serializers.Serializer):

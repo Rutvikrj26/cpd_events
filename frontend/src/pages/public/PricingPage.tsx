@@ -13,43 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { getPublicPricing } from "@/api/billing";
 import type { PricingProduct } from "@/api/billing/types";
 
-// Plan features mapped by plan type (fallback if backend doesn't provide features)
-const PLAN_FEATURES = {
-    attendee: [
-        "Browse & register for events",
-        "Track attendance history",
-        "Download earned certificates",
-        "Manage your profile",
-        "Email notifications",
-    ],
-    organizer: [
-        "30 events per month",
-        "500 certificates/month",
-        "Zoom integration",
-        "Custom certificate templates",
-        "Priority email support",
-    ],
-    lms: [
-        "30 courses per month",
-        "500 certificates/month",
-        "Self-paced course builder",
-        "Learner progress tracking",
-        "Priority email support",
-    ],
-    organization: [
-        "Unlimited events",
-        "Unlimited courses",
-        "Unlimited certificates",
-        "Multi-user team access",
-        "White-label options",
-        "API access",
-        "Priority support",
-        "Team collaboration",
-        "Shared templates",
-        "Dedicated account manager",
-    ],
-};
-
 const PLAN_ICONS = {
     attendee: User,
     organizer: Users,
@@ -106,7 +69,9 @@ export function PricingPage() {
             question: "Is there a free trial?",
             answer: loading
                 ? "Loading trial information..."
-                : `The Attendee plan is completely free forever. All paid plans include a ${products[0]?.trial_days || 30}-day free trial with full access to all features - no credit card required to start!`,
+                : products[0]?.trial_days
+                    ? `The Attendee plan is completely free forever. All paid plans include a ${products[0].trial_days}-day free trial with full access to all features - no credit card required to start!`
+                    : "The Attendee plan is completely free forever. All paid plans include a free trial with full access to all features - no credit card required to start!",
         },
         {
             question: "What happens to my data if I downgrade?",
@@ -155,7 +120,7 @@ export function PricingPage() {
         }
     };
 
-    // Build plans array: Attendee (hardcoded free) + fetched products
+    // Build plans array: Attendee (hardcoded free tier) + fetched products
     const allPlans = [
         {
             name: "Attendee",
@@ -164,7 +129,13 @@ export function PricingPage() {
             description: "For professionals who want to attend events and track their learning history.",
             monthlyPrice: 0,
             annualPrice: null,
-            features: PLAN_FEATURES.attendee,
+            features: [
+                "Browse & register for events",
+                "Track attendance history",
+                "Download earned certificates",
+                "Manage your profile",
+                "Email notifications",
+            ],
             cta: "Get Started",
             ctaLink: "/signup",
             variant: "outline" as const,

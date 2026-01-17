@@ -224,6 +224,20 @@ class Event(SoftDeleteModel):
     )
 
     # =========================================
+    # Badge Settings
+    # =========================================
+    badges_enabled = models.BooleanField(default=False, help_text="Issue badges for this event")
+    badge_template = models.ForeignKey(
+        'badges.BadgeTemplate',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='events',
+        help_text="Template for badges",
+    )
+    auto_issue_badges = models.BooleanField(default=False, help_text="Auto-issue badges when event completes")
+
+    # =========================================
     # Media & Location
     # =========================================
     cover_image_url = models.URLField(blank=True, help_text="Cover image URL")
@@ -406,6 +420,10 @@ class Event(SoftDeleteModel):
         if self.auto_issue_certificates and self.certificates_enabled:
             self._auto_issue_certificates()
 
+        # Auto-issue badges if enabled
+        if self.auto_issue_badges and self.badges_enabled:
+            self._auto_issue_badges()
+
     def close(self, user=None):
         """Close the event (no more changes)."""
         self._change_status(self.Status.CLOSED, user, 'Event closed')
@@ -458,6 +476,34 @@ class Event(SoftDeleteModel):
 
         return issued_count
 
+    def _auto_issue_badges(self):
+        """Auto-issue badges to all eligible attendees."""
+        from badges.services import badge_service
+        from registrations.models import Registration
+
+        if not self.badge_template:
+            return 0
+
+        # Get all eligible registrations
+        eligible = (
+            Registration.objects.filter(event=self, status='confirmed', deleted_at__isnull=True)
+            .filter(models.Q(attendance_eligible=True) | models.Q(attendance_override=True))
+        )
+
+        issued_count = 0
+        for registration in eligible:
+            # Check if badge already issued for this registration
+            if not registration.badges.filter(template=self.badge_template).exists():
+                result = badge_service.issue_badge(
+                    template=self.badge_template,
+                    registration=registration,
+                    issued_by=self.owner
+                )
+                if result.get('success'):
+                    issued_count += 1
+
+        return issued_count
+
     def duplicate(self, new_title=None, new_start=None):
         """
         Create a copy of this event.
@@ -492,6 +538,9 @@ class Event(SoftDeleteModel):
             certificate_template=self.certificate_template,
             auto_issue_certificates=self.auto_issue_certificates,
             require_feedback_for_certificate=self.require_feedback_for_certificate,
+            badges_enabled=self.badges_enabled,
+            badge_template=self.badge_template,
+            auto_issue_badges=self.auto_issue_badges,
             recording_enabled=self.recording_enabled,
             is_public=self.is_public,
         )

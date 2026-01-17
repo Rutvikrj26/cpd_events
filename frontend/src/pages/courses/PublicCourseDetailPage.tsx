@@ -222,9 +222,7 @@ export const PublicCourseDetailPage = () => {
                                             ? 'Continue Course'
                                             : 'Enroll Now'}
                                 </Button>
-                                <div className="text-sm text-muted-foreground text-center">
-                                    30-day money-back guarantee
-                                </div>
+
                             </CardContent>
                         </Card>
                     </div>

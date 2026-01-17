@@ -445,6 +445,10 @@ class CourseSerializer(serializers.ModelSerializer):
             'certificates_enabled',
             'certificate_template',
             'auto_issue_certificates',
+            # Badge settings
+            'badges_enabled',
+            'badge_template',
+            'auto_issue_badges',
             # Stats
             'enrollment_count',
             'completion_count',
@@ -499,6 +503,42 @@ class CourseListSerializer(serializers.ModelSerializer):
         ]
 
 
+def _validate_certificate_settings(attrs, instance=None):
+    certificates_enabled = attrs.get('certificates_enabled')
+    certificate_template = attrs.get('certificate_template')
+
+    if instance is not None:
+        if certificates_enabled is None:
+            certificates_enabled = instance.certificates_enabled
+        if certificate_template is None:
+            certificate_template = instance.certificate_template
+
+    if certificates_enabled and not certificate_template:
+        raise serializers.ValidationError(
+            {'certificate_template': 'Select a certificate template when certificates are enabled.'}
+        )
+
+    return attrs
+
+
+def _validate_badge_settings(attrs, instance=None):
+    badges_enabled = attrs.get('badges_enabled')
+    badge_template = attrs.get('badge_template')
+
+    if instance is not None:
+        if badges_enabled is None:
+            badges_enabled = instance.badges_enabled
+        if badge_template is None:
+            badge_template = instance.badge_template
+
+    if badges_enabled and not badge_template:
+        raise serializers.ValidationError(
+            {'badge_template': 'Select a badge template when badges are enabled.'}
+        )
+
+    return attrs
+
+
 class CourseCreateSerializer(serializers.ModelSerializer):
     """Create/update course."""
 
@@ -534,7 +574,17 @@ class CourseCreateSerializer(serializers.ModelSerializer):
             'passing_score',
             'certificates_enabled',
             'certificate_template',
+            'auto_issue_certificates',
+            # Badge settings
+            'badges_enabled',
+            'badge_template',
+            'auto_issue_badges',
         ]
+
+    def validate(self, attrs):
+        attrs = _validate_certificate_settings(attrs, self.instance)
+        attrs = _validate_badge_settings(attrs, self.instance)
+        return attrs
 
 
 class CourseEnrollmentSerializer(serializers.ModelSerializer):

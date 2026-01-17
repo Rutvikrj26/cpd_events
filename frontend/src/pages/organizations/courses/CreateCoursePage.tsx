@@ -19,11 +19,26 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { createCourse } from '@/api/courses';
+import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
+import { getBadgeTemplates, BadgeTemplate } from '@/api/badges';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -45,6 +60,13 @@ const courseSchema = z.object({
     zoom_meeting_url: z.string().url().optional().or(z.literal('')),
     zoom_meeting_id: z.string().optional(),
     zoom_meeting_password: z.string().optional(),
+    // Certificate & Badge settings
+    certificates_enabled: z.boolean().default(false),
+    certificate_template: z.string().uuid().optional().nullable(),
+    auto_issue_certificates: z.boolean().default(true),
+    badges_enabled: z.boolean().default(false),
+    badge_template: z.string().uuid().optional().nullable(),
+    auto_issue_badges: z.boolean().default(true),
 });
 
 type CourseFormValues = z.infer<typeof courseSchema>;
@@ -75,8 +97,45 @@ const CreateCoursePage = () => {
             zoom_meeting_url: '',
             zoom_meeting_id: '',
             zoom_meeting_password: '',
+            certificates_enabled: false,
+            certificate_template: null,
+            auto_issue_certificates: true,
+            badges_enabled: false,
+            badge_template: null,
+            auto_issue_badges: true,
         },
     });
+
+    const [certTemplates, setCertTemplates] = useState<CertificateTemplate[]>([]);
+    const [badgeTemplates, setBadgeTemplates] = useState<BadgeTemplate[]>([]);
+    const [loadingCerts, setLoadingCerts] = useState(false);
+    const [loadingBadges, setLoadingBadges] = useState(false);
+
+    // Fetch templates
+    React.useEffect(() => {
+        async function fetchTemplates() {
+            setLoadingCerts(true);
+            try {
+                const response = await getAvailableCertificateTemplates();
+                setCertTemplates(response.templates);
+            } catch (error) {
+                console.error('Failed to fetch certificate templates:', error);
+            } finally {
+                setLoadingCerts(false);
+            }
+
+            setLoadingBadges(true);
+            try {
+                const response = await getBadgeTemplates();
+                setBadgeTemplates(response.results);
+            } catch (error) {
+                console.error('Failed to fetch badge templates:', error);
+            } finally {
+                setLoadingBadges(false);
+            }
+        }
+        fetchTemplates();
+    }, []);
 
     // Watch format to show/hide Zoom fields
     const courseFormat = form.watch('format');
@@ -430,6 +489,173 @@ const CreateCoursePage = () => {
                                     </div>
                                 </div>
                             )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Recognition Settings (Certificates & Badges) */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Recognition & Completion</CardTitle>
+                            <CardDescription>
+                                Reward learners with certificates and badges upon completion.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            {/* Certificate Section */}
+                            <div className="space-y-4">
+                                <FormField
+                                    control={form.control}
+                                    name="certificates_enabled"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                            <div className="space-y-0.5">
+                                                <FormLabel className="text-base">Enable Certificates</FormLabel>
+                                                <FormDescription>
+                                                    Issue a PDF certificate when learners complete the course.
+                                                </FormDescription>
+                                            </div>
+                                            <FormControl>
+                                                <Switch
+                                                    checked={field.value}
+                                                    onCheckedChange={field.onChange}
+                                                />
+                                            </FormControl>
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {form.watch('certificates_enabled') && (
+                                    <div className="pl-6 border-l-2 border-slate-100 ml-2 space-y-4">
+                                        <FormField
+                                            control={form.control}
+                                            name="certificate_template"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Certificate Template</FormLabel>
+                                                    <Select
+                                                        value={field.value || ''}
+                                                        onValueChange={field.onChange}
+                                                    >
+                                                        <FormControl>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder={loadingCerts ? "Loading..." : "Select a template"} />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            {certTemplates.map(t => (
+                                                                <SelectItem key={t.uuid} value={t.uuid}>
+                                                                    {t.name}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        <FormField
+                                            control={form.control}
+                                            name="auto_issue_certificates"
+                                            render={({ field }) => (
+                                                <FormItem className="flex flex-row items-center justify-between">
+                                                    <div className="space-y-0.5">
+                                                        <FormLabel>Auto-issue Certificate</FormLabel>
+                                                        <FormDescription className="text-xs">
+                                                            Issue automatically upon 100% course completion.
+                                                        </FormDescription>
+                                                    </div>
+                                                    <FormControl>
+                                                        <Switch
+                                                            checked={field.value}
+                                                            onCheckedChange={field.onChange}
+                                                        />
+                                                    </FormControl>
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <Separator />
+
+                            {/* Badge Section */}
+                            <div className="space-y-4">
+                                <FormField
+                                    control={form.control}
+                                    name="badges_enabled"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                            <div className="space-y-0.5">
+                                                <FormLabel className="text-base">Enable Digital Badges</FormLabel>
+                                                <FormDescription>
+                                                    Award a verifiable digital badge for course completion.
+                                                </FormDescription>
+                                            </div>
+                                            <FormControl>
+                                                <Switch
+                                                    checked={field.value}
+                                                    onCheckedChange={field.onChange}
+                                                />
+                                            </FormControl>
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {form.watch('badges_enabled') && (
+                                    <div className="pl-6 border-l-2 border-slate-100 ml-2 space-y-4">
+                                        <FormField
+                                            control={form.control}
+                                            name="badge_template"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Badge Template</FormLabel>
+                                                    <Select
+                                                        value={field.value || ''}
+                                                        onValueChange={field.onChange}
+                                                    >
+                                                        <FormControl>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder={loadingBadges ? "Loading..." : "Select a template"} />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            {badgeTemplates.map(t => (
+                                                                <SelectItem key={t.uuid} value={t.uuid}>
+                                                                    {t.name}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        <FormField
+                                            control={form.control}
+                                            name="auto_issue_badges"
+                                            render={({ field }) => (
+                                                <FormItem className="flex flex-row items-center justify-between">
+                                                    <div className="space-y-0.5">
+                                                        <FormLabel>Auto-issue Badge</FormLabel>
+                                                        <FormDescription className="text-xs">
+                                                            Issue automatically upon 100% course completion.
+                                                        </FormDescription>
+                                                    </div>
+                                                    <FormControl>
+                                                        <Switch
+                                                            checked={field.value}
+                                                            onCheckedChange={field.onChange}
+                                                        />
+                                                    </FormControl>
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
 

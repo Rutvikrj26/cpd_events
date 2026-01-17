@@ -27,18 +27,18 @@ export const OrganizerBadgesPage = () => {
                 <p className="text-muted-foreground mt-1">Manage digital badges and templates</p>
             </div>
 
-            <Tabs defaultValue="templates" className="w-full">
+            <Tabs defaultValue="issued" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 max-w-[400px] mb-6">
-                    <TabsTrigger value="templates">Templates</TabsTrigger>
                     <TabsTrigger value="issued">Issued Badges</TabsTrigger>
+                    <TabsTrigger value="templates">Templates</TabsTrigger>
                 </TabsList>
-
-                <TabsContent value="templates">
-                    <BadgeTemplatesList />
-                </TabsContent>
 
                 <TabsContent value="issued">
                     <OrganizerIssuedBadgesList />
+                </TabsContent>
+
+                <TabsContent value="templates">
+                    <BadgeTemplatesList />
                 </TabsContent>
             </Tabs>
         </div>

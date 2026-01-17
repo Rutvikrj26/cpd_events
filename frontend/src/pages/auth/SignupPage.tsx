@@ -20,6 +20,7 @@ import { Loader2, Crown, Award } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { initiateGoogleSignIn } from "@/api/auth/googleAuth";
+import { getPublicPricing } from "@/api/billing";
 
 const formSchema = z.object({
   email: z.string().email({
@@ -46,6 +47,7 @@ export function SignupPage() {
   const { register } = useAuth();
   const [isLoading, setIsLoading] = React.useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
+  const [trialDays, setTrialDays] = React.useState<number | null>(null);
 
   // Get plan, role, and returnUrl from URL
   const planFromUrl = searchParams.get('plan') || 'free';
@@ -54,6 +56,27 @@ export function SignupPage() {
   const isOrganizer = roleFromUrl === 'organizer';
   const isCourseManager = roleFromUrl === 'course_manager';
   const isTrialPlan = ['organizer', 'lms', 'organization'].includes(planFromUrl.toLowerCase());
+
+  // Fetch trial days from backend pricing API
+  React.useEffect(() => {
+    async function fetchTrialDays() {
+      try {
+        const products = await getPublicPricing();
+        // Find the matching product based on the plan
+        const planKey = isCourseManager ? 'lms' : isOrganizer ? 'organizer' : planFromUrl.toLowerCase();
+        const product = products.find(p => p.plan === planKey);
+        if (product?.trial_days) {
+          setTrialDays(product.trial_days);
+        }
+      } catch (error) {
+        // Fallback handled by trialDays being null
+        console.error('Failed to fetch pricing:', error);
+      }
+    }
+    if (isTrialPlan) {
+      fetchTrialDays();
+    }
+  }, [isTrialPlan, isOrganizer, isCourseManager, planFromUrl]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -139,7 +162,7 @@ export function SignupPage() {
         <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 text-center">
           <div className="flex items-center justify-center gap-2 text-primary font-medium mb-1">
             <Crown className="h-4 w-4" />
-            <span>30-Day Trial</span>
+            <span>{trialDays ? `${trialDays}-Day Trial` : 'Free Trial'}</span>
           </div>
           <p className="text-sm text-muted-foreground">
             Full access to all features. No credit card required.

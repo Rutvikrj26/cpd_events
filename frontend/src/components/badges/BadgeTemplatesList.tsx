@@ -76,8 +76,8 @@ export function BadgeTemplatesList() {
 
     async function fetchTemplates() {
         try {
-            const data = await getBadgeTemplates();
-            setTemplates(data);
+            const response = await getBadgeTemplates();
+            setTemplates(response.results);
         } catch (error) {
             toast.error("Failed to load badge templates");
         } finally {
@@ -90,17 +90,26 @@ export function BadgeTemplatesList() {
             toast.error("Template name is required");
             return;
         }
+        if (!pendingFile) {
+            toast.error("Please upload a badge image");
+            return;
+        }
 
         setSubmitting(true);
         try {
-            const newTemplate = await createBadgeTemplate({
-                name: formData.name,
-                description: formData.description,
-            });
+            const data = new FormData();
+            data.append('name', formData.name);
+            data.append('description', formData.description);
+            data.append('start_image', pendingFile);
+
+            const newTemplate = await createBadgeTemplate(data);
             setTemplates([newTemplate, ...templates]);
             setShowCreateDialog(false);
             setFormData({ name: "", description: "" });
+            setPendingFile(null);
+            setCreateStep(1);
             toast.success("Template created successfully");
+            setShowDesigner(newTemplate.uuid);
         } catch (error: any) {
             toast.error(error?.response?.data?.detail || "Failed to create template");
         } finally {
@@ -360,26 +369,15 @@ export function BadgeTemplatesList() {
 
                         {createStep === 1 && !editingTemplate && (
                             <Button
-                                onClick={async () => {
-                                    if (!formData.name.trim()) return;
-                                    setSubmitting(true);
-                                    try {
-                                        const newTemplate = await createBadgeTemplate({
-                                            name: formData.name,
-                                            description: formData.description,
-                                        });
-                                        setNewTemplateUuid(newTemplate.uuid);
-                                        setTemplates([newTemplate, ...templates]);
-                                        setCreateStep(2);
-                                    } catch (e) { /* Error handled in generic handler usually, but here just inline */
-                                        toast.error("Failed");
-                                    } finally {
-                                        setSubmitting(false);
+                                onClick={() => {
+                                    if (!formData.name.trim()) {
+                                        toast.error("Template name is required");
+                                        return;
                                     }
+                                    setCreateStep(2);
                                 }}
-                                disabled={submitting}
                             >
-                                {submitting ? "Saving..." : "Next"}
+                                Next
                             </Button>
                         )}
 
@@ -391,25 +389,10 @@ export function BadgeTemplatesList() {
 
                         {createStep === 2 && (
                             <Button
-                                onClick={async () => {
-                                    if (!pendingFile || !newTemplateUuid) return;
-                                    setUploading(true);
-                                    try {
-                                        await uploadBadgeTemplateImage(newTemplateUuid, pendingFile);
-                                        await fetchTemplates();
-                                        toast.success("Badge created!");
-                                        setShowCreateDialog(false);
-                                        // Open designer?
-                                        setShowDesigner(newTemplateUuid);
-                                    } catch (e) {
-                                        toast.error("Failed to upload");
-                                    } finally {
-                                        setUploading(false);
-                                    }
-                                }}
-                                disabled={uploading}
+                                onClick={handleCreateTemplate}
+                                disabled={submitting || !pendingFile}
                             >
-                                {uploading ? "Uploading..." : "Finish & Design"}
+                                {submitting ? "Creating..." : "Finish & Design"}
                             </Button>
                         )}
                     </DialogFooter>

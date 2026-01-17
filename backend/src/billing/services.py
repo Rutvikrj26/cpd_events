@@ -1629,9 +1629,12 @@ class RefundService:
         """
         Process a refund for a registration.
 
+        If amount_cents is None (full refund request), we retrieve the original Stripe processing fee
+        and deduct it from the refund amount so the platform doesn't pay the fee.
+
         Args:
             registration: Registration object
-            amount_cents: Amount to refund (None for full refund)
+            amount_cents: Amount to refund (None for "full" refund minus fees)
             reason: Reason code
             processed_by: User who initiated the refund (optional)
 
@@ -1650,17 +1653,43 @@ class RefundService:
             return {'success': False, 'error': 'Registration has no payment record'}
 
         # Default to full refund if amount not specified
-        is_full_refund = amount_cents is None
+        is_full_refund_request = amount_cents is None
 
         try:
-            # 1. Create Refund in Stripe
+            # 1. Retrieve Payment Intent to get Fees
+            # We need to expand latest_charge.balance_transaction to get the fee details
+            pi = self._stripe.PaymentIntent.retrieve(
+                registration.payment_intent_id,
+                expand=['latest_charge.balance_transaction'],
+            )
+
+            stripe_fee = 0
+            if (
+                pi.latest_charge
+                and getattr(pi.latest_charge, 'balance_transaction', None)
+            ):
+                # balance_transaction can be an object or ID, but expand ensures object
+                bt = pi.latest_charge.balance_transaction
+                if hasattr(bt, 'fee'):
+                     stripe_fee = bt.fee
+
+            # Calculate Refund Amount
+            if is_full_refund_request:
+                # Deduct Stripe fee from the total refundable amount
+                # pi.amount_received is what the customer paid
+                amount_cents = max(0, pi.amount_received - stripe_fee)
+            
+            # Check if amount is valid
+            if amount_cents <= 0:
+                 return {'success': False, 'error': 'Refund amount after fees is zero or negative.'}
+
+            # 2. Create Refund in Stripe
             refund_params = {
                 'payment_intent': registration.payment_intent_id,
+                'amount': amount_cents,
                 'reason': reason if reason in ['duplicate', 'fraudulent', 'requested_by_customer'] else 'requested_by_customer',
                 'reverse_transfer': True,
             }
-            if not is_full_refund:
-                refund_params['amount'] = amount_cents
 
             # If application fee was taken, we might want to refund it too
             # For now, we accept the default behavior (platform keeps fee unless specified)
@@ -1668,7 +1697,7 @@ class RefundService:
 
             stripe_refund = self._stripe.Refund.create(**refund_params)
 
-            # 2. Record in DB
+            # 3. Record in DB
             with transaction.atomic():
                 RefundRecord.objects.create(
                     registration=registration,
@@ -1683,10 +1712,18 @@ class RefundService:
                     reason=reason,
                 )
 
-                # Update Registration Status if full refund
+                # Update Registration Status if full refund (or close to it)
                 total_amount_cents = int((registration.total_amount or registration.amount_paid) * 100)
-                is_full_refund_effective = is_full_refund or (amount_cents and amount_cents >= total_amount_cents)
-                if is_full_refund_effective:
+                
+                # Check if this is effectively a full refund (allowing for fee deduction)
+                # If we refunded everything minus the fee, it counts as a "full" cancellation
+                is_effectively_full = False
+                if is_full_refund_request:
+                     is_effectively_full = True
+                elif amount_cents >= (total_amount_cents - stripe_fee):
+                     is_effectively_full = True
+
+                if is_effectively_full:
                     registration.payment_status = Registration.PaymentStatus.REFUNDED
                     registration.status = Registration.Status.CANCELLED
                     registration.save(update_fields=['payment_status', 'status', 'updated_at'])
@@ -1724,7 +1761,7 @@ class RefundService:
             return {'success': True, 'refund_id': stripe_refund.id}
 
         except Exception as e:
-            logger.error(f"Refund failed for registration {registration.uuid}: {e}")
+            logger.error(f"Refund failed for registration {registration.uuid}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
 
