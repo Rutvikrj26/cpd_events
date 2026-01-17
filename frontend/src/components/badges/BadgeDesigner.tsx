@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Move, ZoomIn, ZoomOut, Download, RefreshCw } from "lucide-react";
+import { Move, ZoomIn, ZoomOut, Download, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
     Dialog,
     DialogContent,
@@ -22,6 +23,7 @@ interface DraggableField {
     y: number;
     fontSize: number;
     color: string;
+    enabled: boolean;
 }
 
 interface BadgeDesignerProps {
@@ -32,9 +34,9 @@ interface BadgeDesignerProps {
 }
 
 const DEFAULT_FIELDS: DraggableField[] = [
-    { id: "attendee_name", label: "Attendee Name", x: 50, y: 50, fontSize: 24, color: "#000000" },
-    { id: "event_title", label: "Event Title", x: 50, y: 100, fontSize: 18, color: "#000000" },
-    { id: "issued_date", label: "Issue Date", x: 50, y: 150, fontSize: 14, color: "#000000" },
+    { id: "attendee_name", label: "Attendee Name", x: 50, y: 50, fontSize: 24, color: "#000000", enabled: true },
+    { id: "event_title", label: "Event Title", x: 50, y: 100, fontSize: 18, color: "#000000", enabled: true },
+    { id: "issued_date", label: "Issue Date", x: 50, y: 150, fontSize: 14, color: "#000000", enabled: true },
 ];
 
 export function BadgeDesigner({
@@ -62,6 +64,7 @@ export function BadgeDesigner({
                 y: saved.y ?? field.y,
                 fontSize: saved.fontSize ?? field.fontSize,
                 color: saved.color ?? field.color,
+                enabled: saved.enabled ?? field.enabled,
             };
         });
         setFields(initFields);
@@ -78,11 +81,6 @@ export function BadgeDesigner({
         if (!dragging || !containerRef.current) return;
 
         const rect = containerRef.current.getBoundingClientRect();
-        // Calculate position relative to image
-        // Scale is handled visually, but logical coords should be relative to unscaled image?
-        // Actually simplest is: logical coords = pixels on original image.
-        // Screen coords = logical * scale.
-
         const x = (e.clientX - rect.left) / scale;
         const y = (e.clientY - rect.top) / scale;
 
@@ -114,7 +112,8 @@ export function BadgeDesigner({
                     x: Math.round(f.x),
                     y: Math.round(f.y),
                     fontSize: f.fontSize,
-                    color: f.color
+                    color: f.color,
+                    enabled: f.enabled
                 };
             });
 
@@ -140,7 +139,7 @@ export function BadgeDesigner({
                         Badge Designer
                     </DialogTitle>
                     <DialogDescription>
-                        Drag fields to position them on your badge.
+                        Enable fields and drag them to position them on your badge.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -170,13 +169,13 @@ export function BadgeDesigner({
                                 </div>
                             )}
 
-                            {/* Overlays */}
-                            {fields.map((field) => (
+                            {/* Overlays - Only render if enabled */}
+                            {fields.map((field) => field.enabled && (
                                 <div
                                     key={field.id}
                                     className={`absolute px-2 py-1 rounded cursor-move whitespace-nowrap z-50 ${selectedField === field.id
-                                            ? "ring-2 ring-blue-500 bg-blue-100/90 text-blue-800"
-                                            : "bg-yellow-100/50 hover:bg-yellow-200/90 text-yellow-900"
+                                        ? "ring-2 ring-blue-500 bg-blue-100/90 text-blue-800"
+                                        : "bg-yellow-100/50 hover:bg-yellow-200/90 text-yellow-900"
                                         }`}
                                     style={{
                                         left: field.x * scale,
@@ -210,8 +209,30 @@ export function BadgeDesigner({
                         </div>
 
                         <div className="space-y-4">
-                            <h3 className="font-semibold text-foreground border-b pb-2">Selected Field</h3>
-                            {selectedFieldData ? (
+                            <h3 className="font-semibold text-foreground border-b pb-2">Fields Visibility</h3>
+                            <div className="space-y-3">
+                                {fields.map((field) => (
+                                    <div key={field.id} className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            {field.enabled ? <Eye className="h-4 w-4 text-blue-500" /> : <EyeOff className="h-4 w-4 text-gray-400" />}
+                                            <span className={`text-sm ${!field.enabled ? 'text-gray-400' : ''}`}>{field.label}</span>
+                                        </div>
+                                        <Switch
+                                            checked={field.enabled}
+                                            onCheckedChange={(checked) => {
+                                                updateFieldProperty(field.id, 'enabled', checked);
+                                                if (checked) setSelectedField(field.id);
+                                                else if (selectedField === field.id) setSelectedField(null);
+                                            }}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <h3 className="font-semibold text-foreground border-b pb-2">Selected Field Properties</h3>
+                            {selectedFieldData && selectedFieldData.enabled ? (
                                 <div className="space-y-4">
                                     <div className="text-sm font-medium text-blue-600 bg-blue-50 p-2 rounded">
                                         {selectedFieldData.label}
@@ -267,7 +288,9 @@ export function BadgeDesigner({
                                 </div>
                             ) : (
                                 <p className="text-sm text-muted-foreground italic py-4">
-                                    Select a field to edit properties
+                                    {selectedFieldData && !selectedFieldData.enabled
+                                        ? "Enable this field to edit its properties"
+                                        : "Select an enabled field to edit properties"}
                                 </p>
                             )}
                         </div>

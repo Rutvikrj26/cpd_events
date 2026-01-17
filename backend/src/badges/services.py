@@ -66,6 +66,10 @@ class BadgeService:
 
                 # Draw text fields
                 for field_name, field_data in positions.items():
+                    # Check if field is enabled (defaults to True for backward compatibility)
+                    if field_data.get('enabled', True) is False:
+                        continue
+                        
                     text = data.get(field_name, '')
                     if not text:
                         continue
@@ -179,10 +183,12 @@ class BadgeService:
                 recipient = registration.user
                 existing_filter = {'registration': registration, 'template': template, 'status': 'active'}
                 owner = registration.event.owner
-            else:
+            elif course_enrollment:
                 recipient = course_enrollment.user
                 existing_filter = {'course_enrollment': course_enrollment, 'template': template, 'status': 'active'}
                 owner = course_enrollment.course.created_by
+            else:
+                return {'success': False, 'error': 'Invalid state: no registration or enrollment provided'}
             
             # Check existing
             existing = IssuedBadge.objects.filter(**existing_filter).first()

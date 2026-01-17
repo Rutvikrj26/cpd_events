@@ -185,6 +185,7 @@ class Event(SoftDeleteModel):
     zoom_settings = models.JSONField(
         default=dict, validators=[validate_zoom_settings_schema], blank=True, help_text="Zoom meeting settings"
     )
+    zoom_error = models.TextField(blank=True, help_text="Last Zoom integration error message")
 
     # =========================================
     # CPD Settings

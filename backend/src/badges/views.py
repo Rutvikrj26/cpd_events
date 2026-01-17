@@ -12,6 +12,7 @@ class BadgeTemplateViewSet(viewsets.ModelViewSet):
     """
     serializer_class = BadgeTemplateSerializer
     permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
 
     def get_queryset(self):
         return BadgeTemplate.objects.filter(owner=self.request.user)
@@ -45,6 +46,7 @@ class IssuedBadgeViewSet(viewsets.ReadOnlyModelViewSet):
     """
     serializer_class = IssuedBadgeSerializer
     permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
 
     def get_queryset(self):
         # Badges earned by the user

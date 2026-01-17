@@ -328,26 +328,25 @@ class ZoomService:
             if event.zoom_settings:
                 payload['settings'].update(event.zoom_settings)
 
-            # 4. Make request
-            headers = {
-                'Authorization': f'Bearer {access_token}',
-                'Content-Type': 'application/json',
-            }
+            # 4. Make request using helper with retry logic
+            path = "users/me/meetings"
+            result = self._make_zoom_request('POST', path, connection, payload)
 
-            response = requests.post(f"{self.API_URL}/users/me/meetings", headers=headers, json=payload, timeout=30)
-
-            if response.status_code != 201:
-                logger.error(f"Zoom meeting creation failed: {response.text}")
-                error_msg = f"Zoom API error: {response.status_code}"
+            if not result['success']:
+                error_msg = f"Zoom API error: {result.get('status_code')}"
                 try:
-                    error_detail = response.json()
+                    error_detail = result.get('data') or {}
+                    if not error_detail and result.get('text'):
+                        import json
+                        error_detail = json.loads(result['text'])
+
                     if 'message' in error_detail:
                         error_msg = f"Zoom: {error_detail['message']}"
                 except Exception:
                     pass
                 return {'success': False, 'error': error_msg}
 
-            data = response.json()
+            data = result['data']
 
             # 5. Update event
             event.zoom_meeting_id = str(data.get('id', ''))
@@ -375,6 +374,43 @@ class ZoomService:
             return {'success': False, 'error': 'User does not have connected Zoom account'}
         except Exception as e:
             logger.error(f"Create meeting failed: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def _make_zoom_request(self, method: str, path: str, connection, payload: dict[str, Any] | None = None, retry_on_401: bool = True) -> dict[str, Any]:
+        """
+        Make an authenticated request to Zoom API with automatic 401 retry.
+        """
+        access_token = self.get_access_token(connection)
+        if not access_token:
+            return {'success': False, 'error': 'Could not get valid Zoom access token'}
+
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+        }
+        url = f"{self.API_URL}/{path.lstrip('/')}"
+
+        try:
+            if method.upper() == 'POST':
+                response = requests.post(url, headers=headers, json=payload, timeout=30)
+            elif method.upper() == 'GET':
+                response = requests.get(url, headers=headers, timeout=30)
+            else:
+                return {'success': False, 'error': f'Unsupported method: {method}'}
+
+            if response.status_code == 401 and retry_on_401:
+                logger.warning(f"Zoom API returned 401. Forcing token refresh and retrying.")
+                if self.refresh_tokens(connection):
+                    return self._make_zoom_request(method, path, connection, payload, retry_on_401=False)
+
+            return {
+                'success': response.status_code in [200, 201],
+                'status_code': response.status_code,
+                'data': response.json() if response.status_code in [200, 201] else {},
+                'text': response.text,
+            }
+        except Exception as e:
+            logger.error(f"Zoom request failed: {e}")
             return {'success': False, 'error': str(e)}
 
     def add_meeting_registrant(self, event, email: str, first_name: str, last_name: str) -> dict[str, Any]:

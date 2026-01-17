@@ -262,6 +262,10 @@ class PublicCertificateVerificationSerializer(serializers.ModelSerializer):
 
 
     file_url = serializers.SerializerMethodField()
+    is_valid = serializers.SerializerMethodField()
+    event = serializers.SerializerMethodField()
+    registrant = serializers.SerializerMethodField()
+    organizer = serializers.SerializerMethodField()
 
     class Meta:
         model = Certificate

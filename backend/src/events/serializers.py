@@ -21,7 +21,7 @@ from .models import Event, EventCustomField, EventSession, EventStatusHistory, S
 class EventCustomFieldSerializer(BaseModelSerializer):
     """Custom field definition."""
 
-    class Meta:
+    class Meta(BaseModelSerializer.Meta):
         model = EventCustomField
         fields = [
             'uuid',
@@ -66,7 +66,7 @@ class SpeakerSerializer(BaseModelSerializer):
 
     owner_name = serializers.SerializerMethodField()
 
-    class Meta:
+    class Meta(BaseModelSerializer.Meta):
         model = Speaker
         fields = [
             'uuid',
@@ -97,7 +97,7 @@ class EventSessionListSerializer(BaseModelSerializer):
     is_past = serializers.BooleanField(read_only=True)
     ends_at = serializers.DateTimeField(read_only=True)
 
-    class Meta:
+    class Meta(BaseModelSerializer.Meta):
         model = EventSession
         fields = [
             'uuid',
@@ -127,7 +127,7 @@ class EventSessionDetailSerializer(BaseModelSerializer):
     minimum_required_minutes = serializers.IntegerField(read_only=True)
     attendance_count = serializers.SerializerMethodField()
 
-    class Meta:
+    class Meta(BaseModelSerializer.Meta):
         model = EventSession
         fields = [
             'uuid',
@@ -235,7 +235,7 @@ class SessionAttendanceSerializer(BaseModelSerializer):
     attendance_percent = serializers.IntegerField(read_only=True)
     final_eligibility = serializers.BooleanField(read_only=True)
 
-    class Meta:
+    class Meta(BaseModelSerializer.Meta):
         model = SessionAttendance
         fields = [
             'uuid',
@@ -314,7 +314,7 @@ class EventListSerializer(SoftDeleteModelSerializer):
     waitlist_count = serializers.IntegerField(read_only=True)
     featured_image_url = serializers.SerializerMethodField()
 
-    class Meta:
+    class Meta(SoftDeleteModelSerializer.Meta):
         model = Event
         fields = [
             'uuid',
@@ -383,7 +383,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
     speakers = SpeakerSerializer(many=True, read_only=True)
     sessions = EventSessionListSerializer(many=True, read_only=True)
 
-    class Meta:
+    class Meta(SoftDeleteModelSerializer.Meta):
         model = Event
         fields = [
             'uuid',
@@ -405,6 +405,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'minimum_attendance_minutes',
             # Registration
             'registration_enabled',
+            'registration_deadline',
             'registration_opens_at',
             'registration_closes_at',
             'price',
@@ -415,13 +416,10 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'waitlist_auto_promote',
             # Zoom
             'zoom_meeting_id',
-            'registration_enabled',
-            'registration_deadline',
-            'registration_opens_at',
-            'registration_closes_at',
             'zoom_join_url',
             'zoom_passcode',
             'zoom_settings',
+            'zoom_error',
             # CPD
             'cpd_credits',
             'cpd_type',
@@ -556,14 +554,13 @@ class EventCreateSerializer(serializers.ModelSerializer):
             'auto_issue_badges',
             # Branding
             'is_public',
+            'custom_fields',
             # Attendance
             'minimum_attendance_percent',
             'minimum_attendance_minutes',
-            'custom_fields',
             'zoom_settings',
             # Location
             'location',
-            # Multi-session
             # Multi-session
             'is_multi_session',
             # Education
@@ -655,14 +652,12 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             'badge_template',
             'auto_issue_badges',
             # Branding
-            # Branding
             'is_public',
             'minimum_attendance_percent',
             'minimum_attendance_minutes',
             'zoom_settings',
             # Location
             'location',
-            # Multi-session
             # Multi-session
             'is_multi_session',
             # Education
@@ -836,7 +831,7 @@ class EventStatusHistorySerializer(BaseModelSerializer):
 
     changed_by_name = serializers.CharField(source='changed_by.full_name', read_only=True)
 
-    class Meta:
+    class Meta(BaseModelSerializer.Meta):
         model = EventStatusHistory
         fields = [
             'uuid',

@@ -15,6 +15,11 @@ def trigger_zoom_creation(sender, instance, created, **kwargs):
     Trigger Zoom meeting creation when event is created/updated
     with Zoom settings but no meeting ID.
     """
+    # Prevent infinite recursion when the task itself updates the event
+    update_fields = kwargs.get('update_fields')
+    if update_fields and 'zoom_error' in update_fields and len(update_fields) <= 2:
+        return
+
     # Check if we should create a Zoom meeting
     # 1. zoom_settings is present (not empty)
     # 2. zoom_meeting_id is empty (not already created)
