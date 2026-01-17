@@ -41,6 +41,7 @@ LOCAL_APPS = [
     'organizations',
     'feedback',
     'promo_codes',
+    'badges',
 ]
 
 THIRD_PARTY_APPS = [

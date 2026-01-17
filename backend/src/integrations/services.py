@@ -24,6 +24,7 @@ class EmailService:
         'registration_confirmation': 'emails/registration_confirmation.html',
         'event_reminder': 'emails/event_reminder.html',
         'certificate_issued': 'emails/certificate_issued.html',
+        'badge_issued': 'emails/badge_issued.html',
         'event_cancelled': 'emails/event_cancelled.html',
         'password_reset': 'emails/password_reset.html',
         'email_verification': 'emails/email_verification.html',
@@ -41,6 +42,7 @@ class EmailService:
         'registration_confirmation': 'Registration Confirmed: {event_title}',
         'event_reminder': 'Reminder: {event_title} starts soon',
         'certificate_issued': 'Your Certificate: {event_title}',
+        'badge_issued': 'You earned a badge: {badge_name}',
         'event_cancelled': 'Event Cancelled: {event_title}',
         'password_reset': 'Password Reset Request',
         'email_verification': 'Verify Your Email',
@@ -161,6 +163,12 @@ class EmailService:
             lines.append(f"<p>Your certificate for <strong>{context.get('event_title', 'the event')}</strong> is ready.</p>")
             if context.get('certificate_url'):
                 lines.append(f"<p><a href='{context['certificate_url']}'>Download Certificate</a></p>")
+
+        elif template == 'badge_issued':
+            lines.append(f"<p>Congratulations! You have earned the <strong>{context.get('badge_name', 'Badge')}</strong> for <strong>{context.get('event_title', 'the event')}</strong>.</p>")
+            if context.get('badge_url'):
+                lines.append(f"<p><img src='{context['badge_url']}' alt='Badge' width='200' /></p>")
+                lines.append(f"<p><a href='{context.get('verification_url', '#')}'>View & Verify Badge</a></p>")
 
         elif template == 'registration_confirmation':
             lines.append(f"<p>You are registered for <strong>{context.get('event_title', 'the event')}</strong>.</p>")

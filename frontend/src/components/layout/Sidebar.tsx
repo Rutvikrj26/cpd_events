@@ -71,10 +71,12 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
         { routeKey: 'my_events', to: '/events', icon: Calendar, label: 'My Events', organizerOnly: true, hideInOrg: true, eventOnly: true },
         { routeKey: 'registrations', to: '/registrations', icon: BookOpen, label: 'My Registrations', attendeeOnly: true, hideInOrg: true, eventOnly: true },
         { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'My Certificates', attendeeOnly: true, hideInOrg: true },
+        { routeKey: 'badges', to: '/badges', icon: Award, label: 'My Badges', attendeeOnly: true, hideInOrg: true },
         { routeKey: 'cpd_tracking', to: '/cpd', icon: TrendingUp, label: 'CPD Tracking', attendeeOnly: true, hideInOrg: true },
 
         // Organizer Specific (Personal Context)
         { routeKey: 'event_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', organizerOnly: true, hideInOrg: true, eventOnly: true },
+        { routeKey: 'event_badges', to: '/organizer/badges', icon: Award, label: 'Badges', organizerOnly: true, hideInOrg: true, eventOnly: true },
         { routeKey: 'zoom_meetings', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', organizerOnly: true, hideInOrg: true, eventOnly: true },
         { routeKey: 'contacts', to: '/organizer/contacts', icon: Users, label: 'Contacts', organizerOnly: true, hideInOrg: true, eventOnly: true },
         // NOTE: "Organizations" link is removed as it's replaced by the Context Switcher

@@ -73,6 +73,9 @@ import { ReportsPage } from './pages/dashboard/organizer/ReportsPage';
 import { EventManagement } from './pages/dashboard/organizer/EventManagement';
 import { ZoomManagement } from './pages/dashboard/organizer/ZoomManagement';
 import { OrganizerCertificatesPage } from './pages/dashboard/organizer/OrganizerCertificatesPage';
+import { OrganizerBadgesPage } from './pages/dashboard/organizer/OrganizerBadgesPage';
+import { PublicBadgePage } from './pages/badges/PublicBadgePage';
+import { MyBadgesPage } from './pages/badges/MyBadgesPage';
 
 // Organization Pages
 import { OrganizationsListPage, CreateOrganizationPage, OrganizationDashboard, InstructorDashboard, OrgEventsPage, TeamManagementPage, OrganizationSettingsPage, OrgCoursesPage, CreateCoursePage, AcceptInvitationPage, OrganizationBillingPage, OrganizationOnboardingWizard } from './pages/organizations';
@@ -216,6 +219,7 @@ export default function App() {
                 {/* Public Certificate Verification */}
                 <Route path="/verify" element={<CertificateVerify />} />
                 <Route path="/verify/:code" element={<CertificateVerify />} />
+                <Route path="/badges/verify/:code" element={<PublicBadgePage />} />
 
                 {/* Public Courses */}
                 <Route path="/courses/:slug" element={
@@ -305,6 +309,7 @@ export default function App() {
                     <Route path="/learn/:courseUuid" element={<CoursePlayerPage />} />
                     <Route path="/my-certificates" element={<Navigate to="/certificates" replace />} />
                     <Route path="/my-certificates/:id" element={<Navigate to="/certificates" replace />} />
+                    <Route path="/badges" element={<MyBadgesPage />} />
                     <Route path="/cpd" element={<CPDTracking />} />
 
                     {/* Shared pages */}
@@ -326,6 +331,7 @@ export default function App() {
 
                     <Route path="/organizer/certificates" element={<OrganizerCertificatesPage />} />
                     <Route path="/organizer/events/:uuid/manage" element={<EventManagement />} />
+                    <Route path="/organizer/badges" element={<OrganizerBadgesPage />} />
                     <Route path="/organizer/zoom" element={<ZoomManagement />} />
 
                     {/* Organization Routes */}

@@ -35,6 +35,7 @@ urlpatterns = [
     path('api/v1/organizations/', include('organizations.urls')),
     path('api/v1/feedback/', include('feedback.urls')),
     path('api/v1/', include('promo_codes.urls')),
+    path('api/v1/badges/', include('badges.urls')),
     # Public registration (needs to be at root, not under /registrations/)
     path(
         'api/v1/public/events/<uuid:event_uuid>/register/',
