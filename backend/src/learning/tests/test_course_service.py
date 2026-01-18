@@ -5,7 +5,6 @@ Tests for CourseService.
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.utils import timezone
 
 from learning.models import CourseEnrollment
 from learning.services import CourseService
@@ -91,7 +90,7 @@ class TestCourseService:
             'success': True,
             'session': mock_session,
         }
-        
+
         # Setup Zoom Mock
         mock_zoom_service.add_meeting_registrant.return_value = {
             'success': True,
@@ -108,7 +107,7 @@ class TestCourseService:
         # Second call
         result2 = course_service.confirm_enrollment(user, 'sess_123')
         assert result2['success'] is True, f"Second call failed: {result2.get('error')}"
-        
+
         # Verify only one enrollment exists
         assert CourseEnrollment.objects.filter(user=user, course=course).count() == 1
 
@@ -149,6 +148,6 @@ class TestCourseService:
         assert result['success'] is True
         enrollment = result['enrollment']
         assert enrollment.status == CourseEnrollment.Status.ACTIVE
-        
+
         # But no Zoom URL
         assert not enrollment.zoom_join_url

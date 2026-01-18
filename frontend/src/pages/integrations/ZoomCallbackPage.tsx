@@ -21,7 +21,7 @@ export const ZoomCallbackPage = () => {
 
         // Check for onboarding redirect (set when connecting Zoom during onboarding)
         const onboardingRedirect = sessionStorage.getItem('onboarding_redirect');
-        const defaultRedirect = '/organizer/dashboard';
+        const defaultRedirect = '/dashboard';
 
         const getRedirectUrl = () => {
             if (onboardingRedirect) {

@@ -41,6 +41,7 @@ import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/cer
 import { getBadgeTemplates, BadgeTemplate } from '@/api/badges';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { SessionScheduler, SessionDraft } from '@/components/courses/SessionScheduler';
 
 // Schema for course creation
 const courseSchema = z.object({
@@ -56,10 +57,17 @@ const courseSchema = z.object({
     estimated_hours: z.coerce.number().min(0).optional(),
     // Format (Online = self-paced, Hybrid = includes live sessions)
     format: z.enum(['online', 'hybrid']).default('online'),
-    // Zoom fields (for Hybrid courses)
-    zoom_meeting_url: z.string().url().optional().or(z.literal('')),
-    zoom_meeting_id: z.string().optional(),
-    zoom_meeting_password: z.string().optional(),
+    // Hybrid completion
+    hybrid_completion_criteria: z.enum(['modules_only', 'sessions_only', 'both', 'either', 'min_sessions']).optional(),
+    min_sessions_required: z.coerce.number().min(1).default(1),
+    // Zoom settings (for Hybrid courses - auto-create meeting)
+    zoom_settings: z.object({
+        enabled: z.boolean().default(false),
+    }).default({ enabled: false }),
+    // Live session scheduling
+    live_session_start: z.string().optional(),
+    live_session_end: z.string().optional(),
+    live_session_timezone: z.string().default('UTC'),
     // Certificate & Badge settings
     certificates_enabled: z.boolean().default(false),
     certificate_template: z.string().uuid().optional().nullable(),
@@ -94,9 +102,12 @@ const CreateCoursePage = () => {
             enrollment_open: true,
             estimated_hours: 1,
             format: 'online',
-            zoom_meeting_url: '',
-            zoom_meeting_id: '',
-            zoom_meeting_password: '',
+            hybrid_completion_criteria: 'both',
+            min_sessions_required: 1,
+            zoom_settings: { enabled: false },
+            live_session_start: '',
+            live_session_end: '',
+            live_session_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
             certificates_enabled: false,
             certificate_template: null,
             auto_issue_certificates: true,
@@ -106,10 +117,13 @@ const CreateCoursePage = () => {
         },
     });
 
+
     const [certTemplates, setCertTemplates] = useState<CertificateTemplate[]>([]);
     const [badgeTemplates, setBadgeTemplates] = useState<BadgeTemplate[]>([]);
     const [loadingCerts, setLoadingCerts] = useState(false);
     const [loadingBadges, setLoadingBadges] = useState(false);
+    // Sessions for hybrid courses (stored locally until course is created)
+    const [scheduledSessions, setScheduledSessions] = useState<SessionDraft[]>([]);
 
     // Fetch templates
     React.useEffect(() => {
@@ -159,16 +173,51 @@ const CreateCoursePage = () => {
         setIsSubmitting(true);
         setSubmitError(null);
 
+        // Sanitize date fields: remove empty strings to avoid backend validation error
+        const cleanValues = { ...values };
+        if (!cleanValues.live_session_start) delete (cleanValues as any).live_session_start;
+        if (!cleanValues.live_session_end) delete (cleanValues as any).live_session_end;
+
         try {
             const course = await createCourse({
                 ...(isPersonal ? {} : { organization_slug: slug }),
-                ...values,
+                ...cleanValues,
                 // Backend computes is_free from price_cents
             });
 
+            // For hybrid courses, create the scheduled sessions
+            if (values.format === 'hybrid' && scheduledSessions.length > 0) {
+                const { createCourseSession } = await import('@/api/courses');
+
+                for (let i = 0; i < scheduledSessions.length; i++) {
+                    const session = scheduledSessions[i];
+                    try {
+                        await createCourseSession(course.uuid, {
+                            title: session.title,
+                            description: session.description,
+                            order: i + 1,
+                            session_type: session.session_type,
+                            starts_at: session.starts_at,
+                            duration_minutes: session.duration_minutes,
+                            timezone: session.timezone,
+                            zoom_settings: { enabled: session.zoom_enabled },
+                            cpd_credits: session.cpd_credits,
+                            is_mandatory: session.is_mandatory,
+                            minimum_attendance_percent: session.minimum_attendance_percent,
+                            is_published: true,
+                        });
+                    } catch (sessionError) {
+                        console.error(`Failed to create session ${session.title}:`, sessionError);
+                        // Continue creating other sessions even if one fails
+                    }
+                }
+            }
+
             toast({
                 title: "Course created",
-                description: "Your course has been created successfully.",
+                description: values.format === 'hybrid' && scheduledSessions.length > 0
+                    ? `Your course and ${scheduledSessions.length} session(s) have been created.`
+                    : "Your course has been created successfully.",
             });
 
             // Navigate to course management/builder
@@ -439,56 +488,87 @@ const CreateCoursePage = () => {
                                 )}
                             />
 
-                            {/* Zoom fields - only shown for Hybrid */}
+
+                            {/* Live Session Settings - only shown for Hybrid */}
                             {courseFormat === 'hybrid' && (
                                 <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
                                     <div className="flex items-center gap-2 font-medium">
                                         <Video className="h-4 w-4" />
-                                        Zoom Meeting Details
+                                        Live Sessions
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <p className="text-sm text-muted-foreground">
+                                        Schedule multiple live sessions for your hybrid course. Sessions will be created after saving the course.
+                                    </p>
+                                    <SessionScheduler
+                                        sessions={scheduledSessions}
+                                        onChange={setScheduledSessions}
+                                        disabled={isSubmitting}
+                                    />
+                                    {scheduledSessions.length === 0 && (
+                                        <p className="text-sm text-amber-600">
+                                            ⚠️ Add at least one live session for a hybrid course.
+                                        </p>
+                                    )}
+
+                                    <div className="pt-4 border-t mt-4">
                                         <FormField
                                             control={form.control}
-                                            name="zoom_meeting_url"
-                                            render={({ field }) => (
-                                                <FormItem className="col-span-2">
-                                                    <FormLabel>Zoom Meeting URL</FormLabel>
-                                                    <FormControl>
-                                                        <Input placeholder="https://zoom.us/j/..." {...field} />
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name="zoom_meeting_id"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Meeting ID</FormLabel>
-                                                    <FormControl>
-                                                        <Input placeholder="123 456 7890" {...field} />
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name="zoom_meeting_password"
+                                            name="hybrid_completion_criteria"
                                             render={({ field }) => (
                                                 <FormItem>
-                                                    <FormLabel>Meeting Password</FormLabel>
-                                                    <FormControl>
-                                                        <Input placeholder="Optional password" {...field} />
-                                                    </FormControl>
+                                                    <FormLabel>Completion Criteria</FormLabel>
+                                                    <Select
+                                                        onValueChange={field.onChange}
+                                                        defaultValue={field.value}
+                                                    >
+                                                        <FormControl>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Select completion criteria" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="both">Complete Modules AND Attend Sessions</SelectItem>
+                                                            <SelectItem value="modules_only">Complete Modules Only</SelectItem>
+                                                            <SelectItem value="sessions_only">Attend Sessions Only</SelectItem>
+                                                            <SelectItem value="either">Complete Modules OR Attend Sessions</SelectItem>
+                                                            <SelectItem value="min_sessions">Complete Modules + Min Sessions</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormDescription>
+                                                        Determine how learners complete this hybrid course.
+                                                    </FormDescription>
                                                     <FormMessage />
                                                 </FormItem>
                                             )}
                                         />
+
+                                        {form.watch('hybrid_completion_criteria') === 'min_sessions' && (
+                                            <FormField
+                                                control={form.control}
+                                                name="min_sessions_required"
+                                                render={({ field }) => (
+                                                    <FormItem className="mt-4">
+                                                        <FormLabel>Minimum Sessions Required</FormLabel>
+                                                        <FormControl>
+                                                            <Input
+                                                                type="number"
+                                                                min={1}
+                                                                {...field}
+                                                                onChange={e => field.onChange(parseInt(e.target.value))}
+                                                            />
+                                                        </FormControl>
+                                                        <FormDescription>
+                                                            Number of live sessions a learner must attend.
+                                                        </FormDescription>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        )}
                                     </div>
                                 </div>
                             )}
+
                         </CardContent>
                     </Card>
 

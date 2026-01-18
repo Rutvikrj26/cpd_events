@@ -15,6 +15,7 @@ from .views import (
     CourseEnrollmentViewSet,
     CourseModuleContentViewSet,
     CourseModuleViewSet,
+    CourseSessionViewSet,
     CourseSubmissionsViewSet,
     CourseViewSet,
     EventModuleViewSet,
@@ -95,11 +96,48 @@ urlpatterns = [
         CourseAnnouncementViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update', 'delete': 'destroy'}),
         name='course-announcement-detail',
     ),
+    # Course Sessions (for hybrid courses)
+    path(
+        'courses/<uuid:course_uuid>/sessions/',
+        CourseSessionViewSet.as_view({'get': 'list', 'post': 'create'}),
+        name='course-session-list',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/sessions/<uuid:uuid>/',
+        CourseSessionViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}),
+        name='course-session-detail',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/sessions/<uuid:uuid>/publish/',
+        CourseSessionViewSet.as_view({'post': 'publish'}),
+        name='course-session-publish',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/sessions/<uuid:uuid>/unpublish/',
+        CourseSessionViewSet.as_view({'post': 'unpublish'}),
+        name='course-session-unpublish',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/sessions/<uuid:uuid>/sync_attendance/',
+        CourseSessionViewSet.as_view({'post': 'sync_attendance'}),
+        name='course-session-sync-attendance',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/sessions/<uuid:uuid>/unmatched_participants/',
+        CourseSessionViewSet.as_view({'get': 'unmatched_participants'}),
+        name='course-session-unmatched-participants',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/sessions/<uuid:uuid>/match_participant/',
+        CourseSessionViewSet.as_view({'post': 'match_participant'}),
+        name='course-session-match-participant',
+    ),
     # Progress update
     path('learning/progress/content/<uuid:content_uuid>/', ContentProgressView.as_view(), name='content-progress'),
     # Payments
     path('courses/<uuid:uuid>/checkout/', CourseCheckoutView.as_view(), name='course-checkout'),
 ]
+
 
 # Event-nested module routes (to be included in events/urls.py)
 # /events/{event_uuid}/modules/

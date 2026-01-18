@@ -60,11 +60,11 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-3 group">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent text-white shadow-sm group-hover:shadow-md transition-all duration-300">
-                <Layout className="h-5 w-5" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white border border-border/50 overflow-hidden shadow-sm group-hover:shadow-md transition-all duration-300">
+                <img src="/letter-a.png" alt="Accredit Logo" className="h-full w-full object-contain p-1" />
               </div>
               <div className="flex flex-col">
-                <span className="text-lg font-bold tracking-tight gradient-text leading-tight">Accredit</span>
+                <span className="text-lg font-bold tracking-wide gradient-text leading-tight font-outfit">Accredit</span>
                 <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider hidden sm:block">Professional Development</span>
               </div>
             </Link>
@@ -316,10 +316,10 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             {/* Brand Column */}
             <div className="col-span-2 lg:col-span-2">
               <Link to="/" className="flex items-center gap-3 mb-4">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent text-white">
-                  <Layout className="h-5 w-5" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white border border-border/50 overflow-hidden shadow-sm">
+                  <img src="/letter-a.png" alt="Accredit Logo" className="h-full w-full object-contain p-1" />
                 </div>
-                <span className="text-lg font-bold gradient-text">Accredit</span>
+                <span className="text-lg font-bold gradient-text font-outfit tracking-wide">Accredit</span>
               </Link>
               <p className="text-sm text-muted-foreground max-w-xs mb-6">
                 The all-in-one platform for managing professional development events, tracking attendance, and issuing verifiable certificates.

@@ -92,7 +92,7 @@ export function PublicBadgePage() {
 
                         <div className="mt-8 pt-6 border-t">
                             <p className="text-xs text-gray-400 text-center">
-                                Verified by CPD Events Platform
+                                Verified by Accredit
                             </p>
                         </div>
                     </div>

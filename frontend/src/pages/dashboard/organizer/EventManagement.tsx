@@ -13,7 +13,8 @@ import {
    RefreshCw,
    Trash2,
    MessageSquare,
-   Star
+   Star,
+   AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,7 @@ import {
 
 
 import { EditAttendanceDialog } from "@/components/events/EditAttendanceDialog";
+import { AttendanceReconciliation } from "@/components/events/AttendanceReconciliation";
 import { FeedbackCard, FeedbackSummary } from "@/components/feedback";
 import { getEventFeedback, calculateFeedbackSummary } from "@/api/feedback";
 import { EventFeedback } from "@/api/feedback/types";
@@ -524,6 +526,23 @@ export function EventManagement() {
                         </Button>
                      )}
                   </div>
+                  {/* Zoom Error Display */}
+                  {event.zoom_error && !event.zoom_meeting_id && (
+                     <div className="mt-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900">
+                        <div className="flex items-start gap-2">
+                           <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                           <div className="flex-1">
+                              <p className="text-sm font-medium text-red-700 dark:text-red-300">Meeting Creation Failed</p>
+                              <p className="text-xs text-red-600 dark:text-red-400 mt-1">{event.zoom_error}</p>
+                              {event.zoom_error_at && (
+                                 <p className="text-xs text-red-500 dark:text-red-500 mt-1">
+                                    Failed at {new Date(event.zoom_error_at).toLocaleString()}
+                                 </p>
+                              )}
+                           </div>
+                        </div>
+                     </div>
+                  )}
                </CardHeader>
                {event.zoom_meeting_id && (
                   <CardContent className="pt-0">
@@ -800,7 +819,12 @@ export function EventManagement() {
             </AlertDialog>
 
             {/* ATTENDANCE TAB */}
-            <TabsContent value="attendance" className="mt-0">
+            <TabsContent value="attendance" className="mt-0 space-y-4">
+               {/* Attendance Reconciliation - for online/hybrid with Zoom */}
+               {(event.format === 'online' || event.format === 'hybrid') && event.zoom_meeting_id && (
+                  <AttendanceReconciliation eventUuid={event.uuid} onReconciled={() => fetchEvent()} />
+               )}
+
                <Card>
                   <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
                      <div className="text-sm text-muted-foreground">

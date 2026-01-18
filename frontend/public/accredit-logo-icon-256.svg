@@ -1,0 +1,19 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gradient Background -->
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:hsl(155, 25%, 38%);stop-opacity:1" />
+      <stop offset="100%" style="stop-color:hsl(160, 18%, 48%);stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Rounded Rectangle Background -->
+  <rect width="256" height="256" rx="51.2" fill="url(#gradient)"/>
+  
+  <!-- Layout Icon -->
+  <g transform="translate(56.89, 56.89)">
+    <rect x="0" y="0" width="142.22" height="142.22" rx="7.11" ry="7.11" stroke="white" stroke-width="10.67" fill="none"/>
+    <line x1="0" y1="49.78" x2="142.22" y2="49.78" stroke="white" stroke-width="10.67"/>
+    <line x1="49.78" y1="49.78" x2="49.78" y2="142.22" stroke="white" stroke-width="10.67"/>
+  </g>
+</svg>

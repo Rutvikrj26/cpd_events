@@ -285,3 +285,118 @@ export const getPublicCourses = async (params?: PublicCourseListParams): Promise
     }
     return response.data;
 };
+
+// ============================================
+// Course Sessions (for Hybrid courses)
+// ============================================
+
+import { CourseSession, CourseSessionCreateRequest } from './types';
+
+export const getCourseSessions = async (courseUuid: string): Promise<CourseSession[]> => {
+    const response = await client.get<any>(`/courses/${courseUuid}/sessions/`);
+    return Array.isArray(response.data) ? response.data : response.data.results || [];
+};
+
+export const getCourseSession = async (courseUuid: string, sessionUuid: string): Promise<CourseSession> => {
+    const response = await client.get<CourseSession>(`/courses/${courseUuid}/sessions/${sessionUuid}/`);
+    return response.data;
+};
+
+export const createCourseSession = async (
+    courseUuid: string,
+    data: CourseSessionCreateRequest
+): Promise<CourseSession> => {
+    const response = await client.post<CourseSession>(`/courses/${courseUuid}/sessions/`, data);
+    return response.data;
+};
+
+export const updateCourseSession = async (
+    courseUuid: string,
+    sessionUuid: string,
+    data: Partial<CourseSessionCreateRequest>
+): Promise<CourseSession> => {
+    const response = await client.patch<CourseSession>(
+        `/courses/${courseUuid}/sessions/${sessionUuid}/`,
+        data
+    );
+    return response.data;
+};
+
+export const deleteCourseSession = async (courseUuid: string, sessionUuid: string): Promise<void> => {
+    await client.delete(`/courses/${courseUuid}/sessions/${sessionUuid}/`);
+};
+
+export const publishCourseSession = async (courseUuid: string, sessionUuid: string): Promise<CourseSession> => {
+    const response = await client.post<CourseSession>(
+        `/courses/${courseUuid}/sessions/${sessionUuid}/publish/`
+    );
+    return response.data;
+};
+
+export const unpublishCourseSession = async (courseUuid: string, sessionUuid: string): Promise<CourseSession> => {
+    const response = await client.post<CourseSession>(
+        `/courses/${courseUuid}/sessions/${sessionUuid}/unpublish/`
+    );
+    return response.data;
+};
+
+// -- Enrollments --
+
+export const getCourseEnrollments = async (courseUuid: string): Promise<any[]> => {
+    const response = await client.get<any>(`/courses/${courseUuid}/enrollments/`);
+    return Array.isArray(response.data) ? response.data : response.data.results || [];
+};
+
+// -- Session Attendance Reconciliation --
+
+export interface UnmatchedParticipant {
+    user_id: string;
+    user_name: string;
+    user_email: string;
+    join_time: string;
+    leave_time?: string;
+    duration_minutes: number;
+}
+
+export interface MatchParticipantData {
+    enrollment_uuid: string;
+    zoom_user_email?: string;
+    zoom_user_name?: string;
+    zoom_join_time?: string;
+    attendance_minutes?: number;
+}
+
+export const syncSessionAttendance = async (courseUuid: string, sessionUuid: string): Promise<{ task_id: string, status: string }> => {
+    const response = await client.post<{ task_id: string, status: string }>(`/courses/${courseUuid}/sessions/${sessionUuid}/sync_attendance/`);
+    return response.data;
+};
+
+export const getUnmatchedParticipants = async (courseUuid: string, sessionUuid: string): Promise<UnmatchedParticipant[]> => {
+    const response = await client.get<UnmatchedParticipant[]>(`/courses/${courseUuid}/sessions/${sessionUuid}/unmatched_participants/`);
+    // Ensure array is returned
+    return Array.isArray(response.data) ? response.data : [];
+};
+
+export const matchParticipant = async (courseUuid: string, sessionUuid: string, data: MatchParticipantData): Promise<void> => {
+    await client.post(`/courses/${courseUuid}/sessions/${sessionUuid}/match_participant/`, data);
+};
+
+// -- Reporting --
+
+export interface AttendanceStats {
+    average_attendance_rate: number;
+    total_sessions: number;
+    sessions: {
+        uuid: string;
+        title: string;
+        start_time: string;
+        attended_count: number;
+        enrollment_count: number;
+        attendance_rate: number;
+    }[];
+}
+
+export const getAttendanceStats = async (courseUuid: string): Promise<AttendanceStats> => {
+    const response = await client.get<AttendanceStats>(`/courses/${courseUuid}/attendance_stats/`);
+    return response.data;
+};

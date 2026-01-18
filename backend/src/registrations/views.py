@@ -384,6 +384,96 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @swagger_auto_schema(
+        operation_summary="List unmatched attendance",
+        operation_description="Get Zoom attendance records not matched to any registration.",
+        responses={200: serializers.UnmatchedAttendanceRecordSerializer(many=True)},
+    )
+    @action(detail=False, methods=['get'], url_path='unmatched-attendance')
+    def unmatched_attendance(self, request, event_uuid=None):
+        """Get unmatched Zoom attendance records for reconciliation."""
+        from events.models import Event
+
+        from .models import AttendanceRecord
+
+        try:
+            event = Event.objects.get(uuid=event_uuid, owner=request.user)
+        except Event.DoesNotExist:
+            return error_response('Event not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+
+        unmatched = AttendanceRecord.objects.filter(
+            event=event,
+            is_matched=False,
+        ).order_by('-join_time')
+
+        # Paginate results
+        page = self.paginate_queryset(unmatched)
+        if page is not None:
+            serializer = serializers.UnmatchedAttendanceRecordSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = serializers.UnmatchedAttendanceRecordSerializer(unmatched, many=True)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        operation_summary="Match attendance to registration",
+        operation_description="Manually match an unmatched Zoom attendance record to a registration.",
+        request_body=serializers.AttendanceMatchSerializer,
+        responses={
+            200: serializers.AttendanceRecordSerializer,
+            400: '{"error": {}}',
+            404: '{"error": {"code": "NOT_FOUND"}}',
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='match-attendance/(?P<record_uuid>[^/.]+)')
+    def match_attendance(self, request, event_uuid=None, record_uuid=None):
+        """Match unmatched Zoom attendance record to a registration."""
+        from events.models import Event
+
+        from .models import AttendanceRecord
+
+        try:
+            event = Event.objects.get(uuid=event_uuid, owner=request.user)
+        except Event.DoesNotExist:
+            return error_response('Event not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+
+        try:
+            record = AttendanceRecord.objects.get(uuid=record_uuid, event=event)
+        except AttendanceRecord.DoesNotExist:
+            return error_response('Attendance record not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+
+        if record.is_matched:
+            return error_response('Record already matched.', code='ALREADY_MATCHED')
+
+        serializer = serializers.AttendanceMatchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            registration = Registration.objects.get(
+                uuid=serializer.validated_data['registration_uuid'],
+                event=event,
+                deleted_at__isnull=True,
+            )
+        except Registration.DoesNotExist:
+            return error_response('Registration not found.', code='REGISTRATION_NOT_FOUND')
+
+        # Perform the match
+        record.registration = registration
+        record.is_matched = True
+        record.matched_at = timezone.now()
+        record.matched_manually = True
+        record.matched_by = request.user
+        record.save(update_fields=[
+            'registration', 'is_matched', 'matched_at', 'matched_manually', 'matched_by', 'updated_at'
+        ])
+
+        # Update registration attendance summary
+        registration.update_attendance_summary()
+
+        logger.info(f"Manual match: Record {record_uuid} -> Registration {registration.uuid} by {request.user.email}")
+
+        return Response(serializers.AttendanceRecordSerializer(record).data)
+
 
 # =============================================================================
 # Public Registration

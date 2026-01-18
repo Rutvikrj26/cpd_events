@@ -359,6 +359,8 @@ export default function App() {
                         </ProtectedRoute>
                       } />
                       <Route path="/org/:slug/courses/:courseSlug" element={<CourseManagementPage />} />
+                      <Route path="/org/:slug/badges" element={<OrganizerBadgesPage />} />
+                      <Route path="/org/:slug/certificates" element={<CourseCertificatesPage />} />
                     </Route>
                   </Route>
 

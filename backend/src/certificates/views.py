@@ -17,7 +17,7 @@ from rest_framework.response import Response
 logger = logging.getLogger(__name__)
 
 from common.pagination import SmallPagination
-from common.permissions import IsOrganizer
+from common.permissions import IsOrganizer, IsOrganizerOrCourseManager
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import ReadOnlyModelViewSet, SoftDeleteModelViewSet
@@ -30,7 +30,7 @@ from .models import Certificate, CertificateTemplate
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='certificate_templates')
+@roles('organizer', 'course_manager', 'admin', route_name='certificate_templates')
 class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     """
     Manage certificate templates.
@@ -42,7 +42,7 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     DELETE /api/v1/certificate-templates/{uuid}/
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsOrganizerOrCourseManager]
     lookup_field = 'uuid'
 
     def get_queryset(self):

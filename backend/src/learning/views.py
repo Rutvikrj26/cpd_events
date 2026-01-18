@@ -5,7 +5,7 @@ Learning API views.
 from django.db import models
 from django.shortcuts import get_object_or_404
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import parsers, permissions, status, views, viewsets, serializers
+from rest_framework import parsers, permissions, serializers, status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -682,6 +682,54 @@ class CourseViewSet(viewsets.ModelViewSet):
         )
 
 
+    @action(detail=True, methods=['get'])
+    def attendance_stats(self, request, uuid=None):
+        """Aggregate session attendance stats for hybrid courses."""
+        from django.db.models import Count, Q
+
+        from .models import CourseEnrollment, CourseSession
+
+        course = self.get_object()
+
+        # Determine if user can view stats (staff only)
+        if not (course.can_manage(request.user) or course.can_instruct(request.user)):
+             from rest_framework.exceptions import PermissionDenied
+             raise PermissionDenied('Permission denied')
+
+        sessions = CourseSession.objects.filter(course=course).annotate(
+             attended_count=Count('attendance_records', filter=Q(attendance_records__is_eligible=True))
+        ).order_by('starts_at')
+
+        total_enrollments = CourseEnrollment.objects.filter(
+             course=course,
+             status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED]
+        ).count()
+
+        stats = []
+        total_attendance_rate = 0
+
+        for session in sessions:
+             rate = round((session.attended_count / total_enrollments * 100), 1) if total_enrollments > 0 else 0
+             total_attendance_rate += rate
+
+             stats.append({
+                  'uuid': session.uuid,
+                  'title': session.title,
+                  'start_time': session.starts_at,
+                  'attended_count': session.attended_count,
+                  'enrollment_count': total_enrollments,
+                  'attendance_rate': rate
+             })
+
+        avg_rate = round(total_attendance_rate / len(sessions), 1) if sessions.exists() else 0
+
+        return Response({
+             'average_attendance_rate': avg_rate,
+             'total_sessions': sessions.count(),
+             'sessions': stats
+        })
+
+
 @roles('attendee', 'organizer', 'course_manager', 'admin', route_name='course_enrollments')
 class CourseEnrollmentViewSet(viewsets.ModelViewSet):
     """
@@ -844,7 +892,7 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
     @swagger_auto_schema(
         operation_summary="Confirm course enrollment",
         operation_description="Confirm enrollment after Stripe Checkout. Synchrnously creates/activates enrollment.",
-        request_body=serializers.Serializer(), 
+        request_body=serializers.Serializer(),
         responses={200: CourseEnrollmentSerializer, 400: '{"error": "..."}'},
     )
     @action(detail=False, methods=['post'], url_path='confirm-checkout')
@@ -859,9 +907,9 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
 
         from .services import CourseService
         service = CourseService()
-        
+
         result = service.confirm_enrollment(request.user, session_id)
-        
+
         if result['success']:
             serializer = self.get_serializer(result['enrollment'])
             return Response(serializer.data)
@@ -1383,3 +1431,222 @@ class CourseAnnouncementViewSet(viewsets.ModelViewSet):
         if not self._is_course_staff(course):
             raise PermissionDenied("You do not have access to this course.")
         instance.delete()
+
+
+@roles('organizer', 'course_manager', 'instructor', 'admin', route_name='course_sessions')
+class CourseSessionViewSet(viewsets.ModelViewSet):
+    """
+    Live session management for hybrid courses.
+
+    GET /courses/{course_uuid}/sessions/ - List sessions
+    POST /courses/{course_uuid}/sessions/ - Create session
+    GET /courses/{course_uuid}/sessions/{uuid}/ - Session detail
+    PUT/PATCH /courses/{course_uuid}/sessions/{uuid}/ - Update session
+    DELETE /courses/{course_uuid}/sessions/{uuid}/ - Delete session
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
+
+    def get_course(self):
+        course_uuid = self.kwargs.get('course_uuid')
+        return get_object_or_404(Course, uuid=course_uuid)
+
+    def _is_course_staff(self, course):
+        return course.can_manage(self.request.user) or course.can_instruct(self.request.user)
+
+    def get_queryset(self):
+        from .models import CourseSession
+        course = self.get_course()
+        queryset = CourseSession.objects.filter(course=course)
+
+        # Staff see all, learners see only published
+        if self._is_course_staff(course):
+            return queryset
+
+        # Enrolled learners can see published sessions
+        enrolled = CourseEnrollment.objects.filter(
+            user=self.request.user,
+            course=course,
+            status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
+        ).exists()
+
+        if not enrolled:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have access to this course.")
+
+        return queryset.filter(is_published=True)
+
+    def get_serializer_class(self):
+        from .serializers import (
+            CourseSessionCreateSerializer,
+            CourseSessionListSerializer,
+            CourseSessionSerializer,
+        )
+
+        if self.action == 'list':
+            return CourseSessionListSerializer
+        if self.action in ['create', 'update', 'partial_update']:
+            return CourseSessionCreateSerializer
+        return CourseSessionSerializer
+
+    @action(detail=True, methods=['post'])
+    def sync_attendance(self, request, course_uuid=None, uuid=None):
+        """Trigger background sync of attendance."""
+        from .tasks import sync_session_attendance
+
+        session = self.get_object()
+        if not session.zoom_meeting_id:
+             return error_response('Session has no Zoom meeting linked.', code='NO_ZOOM', status_code=400)
+
+        task = sync_session_attendance.delay(session.id)
+        return Response({'task_id': task.id, 'status': 'queued'})
+
+    @action(detail=True, methods=['get'])
+    def unmatched_participants(self, request, course_uuid=None, uuid=None):
+        """Get Zoom participants not matched to enrollment."""
+        from accounts.services import zoom_service
+
+        from .models import CourseSessionAttendance
+        from .serializers import UnmatchedParticipantSerializer
+
+        session = self.get_object()
+        course = session.course
+        if not self._is_course_staff(course):
+             from rest_framework.exceptions import PermissionDenied
+             raise PermissionDenied("You do not have permission to perform this action.")
+
+        owner = course.created_by
+
+        if not session.zoom_meeting_id:
+             return error_response('Session has no Zoom meeting linked.', code='NO_ZOOM', status_code=400)
+
+        # 1. Fetch from Zoom
+        response = zoom_service.get_past_meeting_participants(user=owner, meeting_id=session.zoom_meeting_id)
+        if not response['success']:
+             return error_response(response.get('error', 'Zoom API error'), code='ZOOM_ERROR')
+
+        zoom_participants = response['data'].get('participants', [])
+
+        # 2. Get matched emails
+        matched_records = CourseSessionAttendance.objects.filter(session=session)
+        matched_emails = set(r.zoom_user_email.lower() for r in matched_records if r.zoom_user_email)
+
+        # 3. Filter
+        unmatched = []
+        for p in zoom_participants:
+             email = p.get('user_email', '').lower()
+             if email and email not in matched_emails:
+                  unmatched.append({
+                      'user_id': p.get('id'),
+                      'user_name': p.get('name'),
+                      'user_email': p.get('user_email'),
+                      'join_time': p.get('join_time'),
+                      'leave_time': p.get('leave_time'),
+                      'duration_minutes': int(p.get('duration', 0) / 60) if p.get('duration') else 0
+                  })
+
+        serializer = UnmatchedParticipantSerializer(unmatched, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def match_participant(self, request, course_uuid=None, uuid=None):
+        """Manually match a participant to an enrollment."""
+        from integrations.services import attendance_matcher
+
+        from .models import CourseEnrollment, CourseSessionAttendance
+        from .serializers import MatchParticipantSerializer
+
+        session = self.get_object()
+        serializer = MatchParticipantSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        enrollment_uuid = data['enrollment_uuid']
+        enrollment = get_object_or_404(CourseEnrollment, uuid=enrollment_uuid, course=session.course)
+
+        # Create or update attendance record
+        record, created = CourseSessionAttendance.objects.update_or_create(
+             session=session,
+             enrollment=enrollment,
+             defaults={
+                 'zoom_user_email': data.get('zoom_user_email'),
+                 'zoom_user_name': data.get('zoom_user_name'),
+                 'zoom_join_time': data.get('zoom_join_time'),
+                 'attendance_minutes': data.get('attendance_minutes', 0),
+                 'is_manual_override': True,
+                 'override_reason': 'Manual reconciliation',
+                 'override_by': request.user,
+             }
+        )
+
+        # Re-run match logic to update eligibility
+        attendance_matcher.match_session_attendance(session)
+
+        return Response({'status': 'matched'})
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        course = self.get_course()
+        if not self._is_course_staff(course):
+            raise PermissionDenied("You do not have permission to add sessions to this course.")
+        serializer.save(course=course)
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        course = self.get_course()
+        if not self._is_course_staff(course):
+            raise PermissionDenied("You do not have permission to update this session.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+
+        course = self.get_course()
+        if not self._is_course_staff(course):
+            raise PermissionDenied("You do not have permission to delete this session.")
+        instance.delete()
+
+    @swagger_auto_schema(
+        operation_summary="Publish session",
+        operation_description="Make this session visible to enrolled learners.",
+    )
+    @action(detail=True, methods=['post'])
+    def publish(self, request, course_uuid=None, uuid=None):
+        """Publish a session."""
+        from rest_framework.exceptions import PermissionDenied
+
+        from .serializers import CourseSessionSerializer
+
+        session = self.get_object()
+        course = self.get_course()
+
+        if not self._is_course_staff(course):
+            raise PermissionDenied("You do not have permission to publish this session.")
+
+        session.is_published = True
+        session.save()
+        return Response(CourseSessionSerializer(session).data)
+
+    @swagger_auto_schema(
+        operation_summary="Unpublish session",
+        operation_description="Hide this session from enrolled learners.",
+    )
+    @action(detail=True, methods=['post'])
+    def unpublish(self, request, course_uuid=None, uuid=None):
+        """Unpublish a session."""
+        from rest_framework.exceptions import PermissionDenied
+
+        from .serializers import CourseSessionSerializer
+
+        session = self.get_object()
+        course = self.get_course()
+
+        if not self._is_course_staff(course):
+            raise PermissionDenied("You do not have permission to unpublish this session.")
+
+        session.is_published = False
+        session.save()
+        return Response(CourseSessionSerializer(session).data)

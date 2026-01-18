@@ -12,6 +12,8 @@ from .models import (
     CourseAnnouncement,
     CourseEnrollment,
     CourseModule,
+    CourseSession,
+    CourseSessionAttendance,
     EventModule,
     ModuleContent,
     ModuleProgress,
@@ -429,10 +431,15 @@ class CourseSerializer(serializers.ModelSerializer):
             # Format & Virtual settings
             'format',
             'zoom_meeting_id',
+            'zoom_meeting_uuid',
             'zoom_meeting_url',
+            'zoom_start_url',
             'zoom_meeting_password',
             'zoom_webinar_id',
             'zoom_registrant_id',
+            'zoom_settings',
+            'zoom_error',
+            'zoom_error_at',
             'live_session_start',
             'live_session_end',
             'live_session_timezone',
@@ -442,6 +449,8 @@ class CourseSerializer(serializers.ModelSerializer):
             'enrollment_requires_approval',
             'estimated_hours',
             'passing_score',
+            'hybrid_completion_criteria',
+            'min_sessions_required',
             'certificates_enabled',
             'certificate_template',
             'auto_issue_certificates',
@@ -545,6 +554,7 @@ class CourseCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = [
+            'uuid',
             'title',
             'slug',
             'description',
@@ -559,19 +569,18 @@ class CourseCreateSerializer(serializers.ModelSerializer):
             'currency',
             # Format & Virtual settings
             'format',
-            'zoom_meeting_id',
-            'zoom_meeting_url',
-            'zoom_meeting_password',
-            'zoom_webinar_id',
-            'zoom_registrant_id',
+            'zoom_settings',
             'live_session_start',
             'live_session_end',
             'live_session_timezone',
+
             # Other settings
             'enrollment_open',
             'max_enrollments',
             'estimated_hours',
             'passing_score',
+            'hybrid_completion_criteria',
+            'min_sessions_required',
             'certificates_enabled',
             'certificate_template',
             'auto_issue_certificates',
@@ -656,3 +665,171 @@ class CourseAnnouncementSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = ['uuid', 'created_by', 'created_at', 'updated_at']
+
+
+# =============================================================================
+# Course Session Serializers
+# =============================================================================
+
+
+class CourseSessionSerializer(serializers.ModelSerializer):
+    """Full session details."""
+
+    session_type_display = serializers.CharField(source='get_session_type_display', read_only=True)
+    ends_at = serializers.DateTimeField(read_only=True)
+    is_upcoming = serializers.BooleanField(read_only=True)
+    is_live = serializers.BooleanField(read_only=True)
+    is_past = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = CourseSession
+        fields = [
+            'uuid',
+            'title',
+            'description',
+            'order',
+            'session_type',
+            'session_type_display',
+            'starts_at',
+            'ends_at',
+            'duration_minutes',
+            'timezone',
+            'zoom_meeting_id',
+            'zoom_join_url',
+            'zoom_start_url',
+            'zoom_password',
+            'zoom_settings',
+            'zoom_error',
+            'cpd_credits',
+            'is_mandatory',
+            'minimum_attendance_percent',
+            'is_published',
+            'is_upcoming',
+            'is_live',
+            'is_past',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'uuid',
+            'zoom_meeting_id',
+            'zoom_join_url',
+            'zoom_start_url',
+            'zoom_password',
+            'zoom_error',
+            'created_at',
+            'updated_at',
+        ]
+
+
+class CourseSessionListSerializer(serializers.ModelSerializer):
+    """Brief session info for lists."""
+
+    session_type_display = serializers.CharField(source='get_session_type_display', read_only=True)
+    ends_at = serializers.DateTimeField(read_only=True)
+    is_upcoming = serializers.BooleanField(read_only=True)
+    is_live = serializers.BooleanField(read_only=True)
+    is_past = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = CourseSession
+        fields = [
+            'uuid',
+            'title',
+            'order',
+            'session_type',
+            'session_type_display',
+            'starts_at',
+            'ends_at',
+            'duration_minutes',
+            'zoom_join_url',
+            'cpd_credits',
+            'is_mandatory',
+            'is_published',
+            'is_upcoming',
+            'is_live',
+            'is_past',
+        ]
+
+
+class CourseSessionCreateSerializer(serializers.ModelSerializer):
+    """Create/update session."""
+
+    class Meta:
+        model = CourseSession
+        fields = [
+            'title',
+            'description',
+            'order',
+            'session_type',
+            'starts_at',
+            'duration_minutes',
+            'timezone',
+            'zoom_settings',
+            'zoom_meeting_id',
+            'zoom_password',
+            'cpd_credits',
+            'is_mandatory',
+            'minimum_attendance_percent',
+            'is_published',
+        ]
+
+
+class CourseSessionAttendanceSerializer(serializers.ModelSerializer):
+    """Session attendance record."""
+
+    user_email = serializers.EmailField(source='enrollment.user.email', read_only=True)
+    user_name = serializers.CharField(source='enrollment.user.full_name', read_only=True)
+    session_title = serializers.CharField(source='session.title', read_only=True)
+    attendance_percent = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = CourseSessionAttendance
+        fields = [
+            'uuid',
+            'session',
+            'session_title',
+            'enrollment',
+            'user_email',
+            'user_name',
+            'attendance_minutes',
+            'attendance_percent',
+            'is_eligible',
+            'zoom_user_email',
+            'zoom_join_time',
+            'zoom_leave_time',
+            'is_manual_override',
+            'override_reason',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'uuid',
+            'session',
+            'enrollment',
+            'zoom_user_email',
+            'zoom_join_time',
+            'zoom_leave_time',
+            'created_at',
+            'updated_at',
+        ]
+class UnmatchedParticipantSerializer(serializers.Serializer):
+    """Zoom participant not matched to any enrollment."""
+    user_id = serializers.CharField(required=False, allow_null=True)
+    user_name = serializers.CharField()
+    user_email = serializers.EmailField(required=False, allow_null=True)
+    join_time = serializers.DateTimeField()
+    leave_time = serializers.DateTimeField(required=False, allow_null=True)
+    duration_minutes = serializers.IntegerField()
+
+
+class MatchParticipantSerializer(serializers.Serializer):
+    """Manual matching of participant to enrollment."""
+    enrollment_uuid = serializers.UUIDField()
+    participants = UnmatchedParticipantSerializer(many=True, required=False)
+    # Alternatively accept just one
+    zoom_user_email = serializers.EmailField(required=False)
+    zoom_user_name = serializers.CharField(required=False)
+    zoom_join_time = serializers.DateTimeField(required=False)
+    zoom_leave_time = serializers.DateTimeField(required=False)
+    attendance_minutes = serializers.IntegerField(required=False)

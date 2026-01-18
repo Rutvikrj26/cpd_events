@@ -186,6 +186,7 @@ class Event(SoftDeleteModel):
         default=dict, validators=[validate_zoom_settings_schema], blank=True, help_text="Zoom meeting settings"
     )
     zoom_error = models.TextField(blank=True, help_text="Last Zoom integration error message")
+    zoom_error_at = models.DateTimeField(null=True, blank=True, help_text="When last Zoom error occurred")
 
     # =========================================
     # CPD Settings

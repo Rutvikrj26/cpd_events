@@ -8,10 +8,12 @@ import {
     updateSubmission,
     submitSubmission,
     getCourseAnnouncements,
+    getCourseSessions,
 } from '@/api/courses';
 import { getCourseModules, getModuleContents } from '@/api/courses/modules';
 import { updateContentProgress } from '@/api/learning';
-import { Course, CourseModule, Assignment, AssignmentSubmission, CourseAnnouncement } from '@/api/courses/types';
+import { Course, CourseModule, Assignment, AssignmentSubmission, CourseAnnouncement, CourseSession } from '@/api/courses/types';
+import { SessionsPanel } from '@/components/courses/SessionsPanel';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -86,6 +88,7 @@ export function CoursePlayerPage() {
     });
     const [announcements, setAnnouncements] = useState<CourseAnnouncement[]>([]);
     const [showAnnouncements, setShowAnnouncements] = useState(false);
+    const [sessions, setSessions] = useState<CourseSession[]>([]);
 
     // Fetch course and modules on mount
     useEffect(() => {
@@ -132,6 +135,16 @@ export function CoursePlayerPage() {
                     setAnnouncements(courseAnnouncements);
                 } catch (error) {
                     console.error('Failed to load announcements:', error);
+                }
+
+                // Load sessions for hybrid courses
+                if (courseData.format === 'hybrid') {
+                    try {
+                        const courseSessions = await getCourseSessions(courseUuid);
+                        setSessions(courseSessions.filter((s: CourseSession) => s.is_published));
+                    } catch (error) {
+                        console.error('Failed to load sessions:', error);
+                    }
                 }
 
                 // Pull progress to restore completed items
@@ -755,11 +768,24 @@ export function CoursePlayerPage() {
                         </div>
                     </>
                 ) : (
-                    <div className="flex-1 flex items-center justify-center">
-                        <div className="text-center">
-                            <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                            <h3 className="text-lg font-medium mb-2">No content selected</h3>
-                            <p className="text-muted-foreground">Select a lesson from the sidebar to begin.</p>
+                    <div className="flex-1 overflow-y-auto p-6">
+                        <div className="max-w-4xl mx-auto">
+                            {/* Show sessions for hybrid courses */}
+                            {course.format === 'hybrid' && sessions.length > 0 && (
+                                <SessionsPanel sessions={sessions} courseTitle={course.title} />
+                            )}
+
+                            <div className="text-center py-12">
+                                <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
+                                <h3 className="text-lg font-medium mb-2">
+                                    {sessions.length > 0 ? 'Continue Learning' : 'No content selected'}
+                                </h3>
+                                <p className="text-muted-foreground">
+                                    {sessions.length > 0
+                                        ? 'Join a live session above or select a lesson from the sidebar.'
+                                        : 'Select a lesson from the sidebar to begin.'}
+                                </p>
+                            </div>
                         </div>
                     </div>
                 )}

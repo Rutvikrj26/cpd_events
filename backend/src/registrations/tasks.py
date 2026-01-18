@@ -75,7 +75,7 @@ def send_registration_confirmations(registration_ids: list):
 
 
 @task()
-def add_zoom_registrant(registration_id: int):
+def add_zoom_registrant(registration_id: int, retry_count: int = 0):
     """
     Add registration to Zoom meeting as registrant.
 
@@ -84,12 +84,17 @@ def add_zoom_registrant(registration_id: int):
 
     Args:
         registration_id: Registration ID to add to Zoom
+        retry_count: Current retry attempt (for app-level retry logic)
 
     Returns:
         bool: True if successful, False otherwise
     """
     from accounts.services import zoom_service
     from registrations.models import Registration
+
+    # Retry configuration
+    MAX_RETRIES = 5
+    BACKOFF_BASE_SECONDS = 60  # 1 minute base, doubles each retry
 
     try:
         registration = Registration.objects.select_related('event').get(id=registration_id)
@@ -126,18 +131,56 @@ def add_zoom_registrant(registration_id: int):
             # Update registration
             registration.zoom_registrant_join_url = result['join_url']
             registration.zoom_registrant_id = result['registrant_id']
-            registration.save(update_fields=['zoom_registrant_join_url', 'zoom_registrant_id', 'updated_at'])
+            registration.zoom_add_attempt_count = retry_count + 1
+            registration.save(update_fields=[
+                'zoom_registrant_join_url',
+                'zoom_registrant_id',
+                'zoom_add_attempt_count',
+                'updated_at'
+            ])
 
             logger.info(f"Added {registration.uuid} to Zoom: {result['registrant_id']}")
             return True
         else:
-            # Raise to trigger retry
-            logger.error(f"Zoom registration failed for {registration.uuid}: {result['error']}")
-            raise Exception(f"Zoom API error: {result['error']}")
+            error_msg = result.get('error', 'Unknown error')
+            logger.error(f"Zoom registration failed for {registration.uuid}: {error_msg}")
+
+            # App-level retry with exponential backoff
+            if retry_count < MAX_RETRIES:
+                next_retry = retry_count + 1
+                backoff_seconds = BACKOFF_BASE_SECONDS * (2 ** retry_count)  # 60, 120, 240, 480, 960
+                logger.info(
+                    f"Scheduling retry {next_retry}/{MAX_RETRIES} for {registration.uuid} "
+                    f"in {backoff_seconds}s"
+                )
+                # Update attempt count
+                registration.zoom_add_attempt_count = next_retry
+                registration.zoom_add_error = error_msg
+                registration.save(update_fields=['zoom_add_attempt_count', 'zoom_add_error', 'updated_at'])
+
+                # Schedule retry (uses Cloud Tasks scheduling if available)
+                add_zoom_registrant.delay(registration_id, retry_count=next_retry)
+                return False
+            else:
+                # Max retries exceeded - log and give up
+                logger.error(
+                    f"Max retries ({MAX_RETRIES}) exceeded for {registration.uuid}. "
+                    f"Final error: {error_msg}"
+                )
+                registration.zoom_add_attempt_count = retry_count + 1
+                registration.zoom_add_error = f"Max retries exceeded: {error_msg}"
+                registration.save(update_fields=['zoom_add_attempt_count', 'zoom_add_error', 'updated_at'])
+                return False
 
     except Registration.DoesNotExist:
         logger.error(f"Registration {registration_id} not found")
         return False
     except Exception as e:
         logger.error(f"Error adding to Zoom: {e}")
-        raise  # Trigger retry
+        # For unexpected exceptions, still use app-level retry
+        if retry_count < MAX_RETRIES:
+            logger.info(f"Scheduling retry after exception for registration {registration_id}")
+            add_zoom_registrant.delay(registration_id, retry_count=retry_count + 1)
+            return False
+        raise  # Only raise after max retries to avoid Cloud Tasks retry loop
+

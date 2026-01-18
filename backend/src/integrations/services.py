@@ -267,39 +267,79 @@ class WebhookProcessor:
             logger.warning("Missing meeting_id or join_time in payload")
             return False
 
-        # Find Event
+        # Try to find Event first
         try:
             event = Event.objects.get(zoom_meeting_id=meeting_id)
+            
+            # Find Registration (if any)
+            registration = None
+            if user_email:
+                registration = Registration.objects.filter(event=event, email__iexact=user_email, deleted_at__isnull=True).first()
+
+            # Create Attendance Record
+            AttendanceRecord.objects.get_or_create(
+                event=event,
+                zoom_participant_id=participant_uuid,
+                join_time=join_time,
+                defaults={
+                    'registration': registration,
+                    'zoom_user_id': zoom_user_id,
+                    'zoom_user_email': user_email,
+                    'zoom_user_name': user_name,
+                    'is_matched': registration is not None,
+                    'matched_at': timezone.now() if registration else None,
+                },
+            )
+
+            if registration:
+                registration.update_attendance_summary()
+
+            return True
         except Event.DoesNotExist:
-            logger.warning(f"Event not found for Zoom meeting ID: {meeting_id}")
-            return True  # Return True to acknowledge webhook receipt
+            pass  # Try CourseSession next
 
-        # Find Registration (if any)
-        registration = None
-        if user_email:
-            registration = Registration.objects.filter(event=event, email__iexact=user_email, deleted_at__isnull=True).first()
+        # Try to find CourseSession
+        try:
+            from learning.models import CourseEnrollment, CourseSession, CourseSessionAttendance
 
-        # Create Attendance Record
-        # We use get_or_create to handle potential duplicate webhooks
-        AttendanceRecord.objects.get_or_create(
-            event=event,
-            zoom_participant_id=participant_uuid,
-            join_time=join_time,
-            defaults={
-                'registration': registration,
-                'zoom_user_id': zoom_user_id,
-                'zoom_user_email': user_email,
-                'zoom_user_name': user_name,
-                'is_matched': registration is not None,
-                'matched_at': timezone.now() if registration else None,
-            },
-        )
+            session = CourseSession.objects.get(zoom_meeting_id=meeting_id)
+            
+            # Find Enrollment (if any)
+            enrollment = None
+            if user_email:
+                enrollment = CourseEnrollment.objects.filter(
+                    course=session.course,
+                    user__email__iexact=user_email,
+                    status='active'
+                ).first()
 
-        # Update registration summary immediately if matched
-        if registration:
-            registration.update_attendance_summary()
+            if enrollment:
+                # Create or update attendance record
+                attendance, created = CourseSessionAttendance.objects.get_or_create(
+                    session=session,
+                    enrollment=enrollment,
+                    defaults={
+                        'zoom_participant_id': participant_uuid,
+                        'zoom_user_email': user_email,
+                        'zoom_join_time': join_time,
+                        'attendance_minutes': 0,
+                    },
+                )
+                if not created:
+                    # Update join time if new session (rejoin)
+                    attendance.zoom_join_time = join_time
+                    # Update participant UUID so 'left' event can find record
+                    attendance.zoom_participant_id = participant_uuid
+                    attendance.save(update_fields=['zoom_join_time', 'zoom_participant_id', 'updated_at'])
 
-        return True
+            logger.info(f"Session participant joined: {user_email} for session {session.uuid}")
+            return True
+        except Exception:
+            pass
+
+        logger.warning(f"Event/Session not found for Zoom meeting ID: {meeting_id}")
+        return True  # Return True to acknowledge webhook receipt
+
 
     def _handle_participant_left(self, payload: dict) -> bool:
         """Handle participant leave event."""
@@ -321,25 +361,59 @@ class WebhookProcessor:
         if not meeting_id or not participant_uuid or not leave_time:
             return False
 
+        # Try Event first
         try:
             event = Event.objects.get(zoom_meeting_id=meeting_id)
-        except Event.DoesNotExist:
+            
+            record = (
+                AttendanceRecord.objects.filter(event=event, zoom_participant_id=participant_uuid, leave_time__isnull=True)
+                .order_by('-join_time')
+                .first()
+            )
+
+            if record:
+                record.participant_left(leave_time=leave_time)
+                logger.info(f"Closed attendance record for {record}")
             return True
+        except Event.DoesNotExist:
+            pass
 
-        # Find the specific open record
-        record = (
-            AttendanceRecord.objects.filter(event=event, zoom_participant_id=participant_uuid, leave_time__isnull=True)
-            .order_by('-join_time')
-            .first()
-        )
+        # Try CourseSession
+        try:
+            from learning.models import CourseSession, CourseSessionAttendance
 
-        if record:
-            record.participant_left(leave_time=leave_time)
-            logger.info(f"Closed attendance record for {record}")
-        else:
-            logger.warning(f"No open attendance record found for participant {participant_uuid} in meeting {meeting_id}")
+            session = CourseSession.objects.get(zoom_meeting_id=meeting_id)
+            
+            # Find the attendance record and update leave time + duration
+            attendance = CourseSessionAttendance.objects.filter(
+                session=session,
+                zoom_participant_id=participant_uuid
+            ).first()
+
+            if attendance and attendance.zoom_join_time:
+                attendance.zoom_leave_time = leave_time
+                # Calculate duration of THIS segment
+                segment_duration = (leave_time - attendance.zoom_join_time).total_seconds() / 60
+                
+                # Accumulate minutes (don't overwrite)
+                if segment_duration > 0:
+                     attendance.attendance_minutes += int(segment_duration)
+                
+                # Calculate eligibility based on new total
+                min_required = session.minimum_attendance_percent or 80
+                attendance_percent = (attendance.attendance_minutes / session.duration_minutes * 100) if session.duration_minutes else 0
+                attendance.is_eligible = attendance_percent >= min_required
+                
+                attendance.save(update_fields=[
+                    'zoom_leave_time', 'attendance_minutes', 'is_eligible', 'updated_at'
+                ])
+                logger.info(f"Closed session attendance for session {session.uuid}")
+            return True
+        except Exception:
+            pass
 
         return True
+
 
     def _handle_meeting_ended(self, payload: dict) -> bool:
         """Handle meeting end event."""
@@ -423,6 +497,46 @@ class AttendanceMatcher:
             reg.update_attendance_summary()
 
             if reg.attendance_eligible:
+                results['eligible'] += 1
+            else:
+                results['ineligible'] += 1
+
+        return results
+
+    def match_session_attendance(self, session) -> dict[str, Any]:
+        """
+        Match Zoom participant data to course session enrollments.
+
+        Args:
+            session: CourseSession to match attendance for
+
+        Returns:
+            Dict with match results
+        """
+        from learning.models import CourseSessionAttendance
+
+        results = {'matched': 0, 'unmatched': 0, 'eligible': 0, 'ineligible': 0}
+
+        # Get all attendance records for this session
+        attendance_records = CourseSessionAttendance.objects.filter(
+            session=session
+        ).select_related('enrollment')
+
+        for record in attendance_records:
+            # Calculate eligibility based on attendance
+            min_required = session.minimum_attendance_percent or 80
+            attendance_percent = (record.attendance_minutes / session.duration_minutes * 100) if session.duration_minutes else 0
+
+            is_eligible = attendance_percent >= min_required or record.is_manual_override
+            record.is_eligible = is_eligible
+            record.save(update_fields=['is_eligible', 'updated_at'])
+
+            if record.zoom_user_email:
+                results['matched'] += 1
+            else:
+                results['unmatched'] += 1
+
+            if is_eligible:
                 results['eligible'] += 1
             else:
                 results['ineligible'] += 1

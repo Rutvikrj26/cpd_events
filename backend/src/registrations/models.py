@@ -175,6 +175,10 @@ class Registration(SoftDeleteModel):
         blank=True, max_length=2000, help_text="Unique Zoom join URL for this registrant"
     )
     zoom_registrant_id = models.CharField(max_length=100, blank=True, help_text="Zoom registrant ID from Zoom API")
+    zoom_add_attempt_count = models.PositiveSmallIntegerField(
+        default=0, help_text="Number of attempts to add registrant to Zoom"
+    )
+    zoom_add_error = models.TextField(blank=True, help_text="Last error when adding to Zoom")
 
     class Meta:
         db_table = 'registrations'

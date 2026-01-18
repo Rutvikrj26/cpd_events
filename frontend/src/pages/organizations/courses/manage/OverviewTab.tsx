@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Course } from '@/api/courses/types';
 import { Users, BookOpen, Award, DollarSign, TrendingUp, Calendar } from 'lucide-react';
+import { AttendanceStats } from '@/components/courses/AttendanceStats';
 
 interface OverviewTabProps {
     course: Course;
@@ -143,6 +144,8 @@ export function OverviewTab({ course }: OverviewTabProps) {
                         </div>
                     </CardContent>
                 </Card>
+
+                {course.format === 'hybrid' && <AttendanceStats courseUuid={course.uuid} />}
             </div>
         </div>
     );

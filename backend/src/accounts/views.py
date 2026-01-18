@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from common.permissions import IsOrganizer
+from common.permissions import IsOrganizer, IsOrganizerOrCourseManager
 from common.rbac import roles
 from common.utils import error_response
 
@@ -1003,7 +1003,7 @@ class PayoutsConnectView(generics.GenericAPIView):
     Returns the Stripe hosted onboarding URL.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsOrganizerOrCourseManager]
 
     def post(self, request):
         from django.conf import settings
@@ -1050,7 +1050,7 @@ class PayoutsStatusView(generics.GenericAPIView):
     Checks and syncs the Stripe Connect status for the individual organizer.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsOrganizerOrCourseManager]
 
     def get(self, request):
         from billing.services import stripe_connect_service
@@ -1104,7 +1104,7 @@ class PayoutsDashboardView(generics.GenericAPIView):
     Returns a Stripe Express dashboard login link.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsOrganizerOrCourseManager]
 
     def post(self, request):
         from billing.services import stripe_connect_service

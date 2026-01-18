@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { Award, Eye, Calendar, Search, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,9 @@ import { getEventCertificates } from '@/api/certificates';
 import { Certificate } from '@/api/certificates/types';
 import { Event } from '@/api/events/types';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { Subscription } from '@/api/billing/types';
+import { getRoleFlags } from '@/lib/role-utils';
 import {
     Table,
     TableBody,
@@ -31,6 +34,10 @@ interface CertificateWithEvent extends Certificate {
     eventTitle?: string;
 }
 
+type DashboardOutletContext = {
+    subscription: Subscription | null;
+};
+
 export const OrganizerCertificatesPage = () => {
     const [certificates, setCertificates] = useState<CertificateWithEvent[]>([]);
     const [events, setEvents] = useState<Event[]>([]);
@@ -38,29 +45,40 @@ export const OrganizerCertificatesPage = () => {
     const [selectedEvent, setSelectedEvent] = useState<string>('all');
     const [searchTerm, setSearchTerm] = useState('');
 
+    const { user } = useAuth();
+    const outletContext = useOutletContext<DashboardOutletContext | undefined>();
+    const subscription = outletContext?.subscription ?? null;
+    const { isOrganizer, isCourseManager } = getRoleFlags(user, subscription);
+
+    // Course managers (LMS plan) don't have event access - they only manage templates
+    const hasEventAccess = isOrganizer && !isCourseManager;
+
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Get all organizer's events
-                const eventsData = await getEvents();
-                setEvents(eventsData.results);
+                // Only fetch events for organizers who have event access
+                if (hasEventAccess) {
+                    const eventsData = await getEvents();
+                    setEvents(eventsData.results);
 
-                // Fetch certificates from all events
-                const allCerts: CertificateWithEvent[] = [];
-                for (const event of eventsData.results) {
-                    try {
-                        const certs = await getEventCertificates(event.uuid);
-                        certs.forEach(cert => {
-                            allCerts.push({
-                                ...cert,
-                                eventTitle: event.title,
+                    // Fetch certificates from all events
+                    const allCerts: CertificateWithEvent[] = [];
+                    for (const event of eventsData.results) {
+                        try {
+                            const certs = await getEventCertificates(event.uuid);
+                            certs.forEach(cert => {
+                                allCerts.push({
+                                    ...cert,
+                                    eventTitle: event.title,
+                                });
                             });
-                        });
-                    } catch {
-                        // Skip events with no certificates or errors
+                        } catch {
+                            // Skip events with no certificates or errors
+                        }
                     }
+                    setCertificates(allCerts);
                 }
-                setCertificates(allCerts);
+                // For course managers, we just show templates (no event-based certificates)
             } catch (error) {
                 console.error("Failed to load data", error);
                 toast.error("Failed to load certificates");
@@ -69,7 +87,7 @@ export const OrganizerCertificatesPage = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [hasEventAccess]);
 
     // Filter certificates
     const filteredCertificates = certificates.filter(cert => {

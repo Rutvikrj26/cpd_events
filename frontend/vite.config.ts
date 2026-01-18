@@ -11,7 +11,7 @@ export default defineConfig({
             registerType: "autoUpdate",
             includeAssets: ["favicon.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png"],
             manifest: {
-                name: "CPD Events Platform",
+                name: "Accredit",
                 short_name: "Accredit",
                 description: "Professional development event management and certification platform",
                 theme_color: "#63945f",

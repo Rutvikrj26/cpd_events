@@ -1,5 +1,5 @@
 {
-  "name": "CPD Events Platform",
+  "name": "Accredit",
   "short_name": "Accredit",
   "description": "Professional development event management and certification platform",
   "start_url": "/",
@@ -8,16 +8,14 @@
   "orientation": "portrait-primary",
   "theme_color": "#63945f",
   "background_color": "#ffffff",
-  "categories": ["education", "business", "productivity"],
+  "categories": [
+    "education",
+    "business",
+    "productivity"
+  ],
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-512.png",
+      "src": "/letter-a.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -43,14 +41,24 @@
       "short_name": "Events",
       "description": "Browse upcoming professional development events",
       "url": "/events/browse",
-      "icons": [{ "src": "/icon-events.png", "sizes": "96x96" }]
+      "icons": [
+        {
+          "src": "/icon-events.png",
+          "sizes": "96x96"
+        }
+      ]
     },
     {
       "name": "My Dashboard",
       "short_name": "Dashboard",
       "description": "View your dashboard",
       "url": "/dashboard",
-      "icons": [{ "src": "/icon-dashboard.png", "sizes": "96x96" }]
+      "icons": [
+        {
+          "src": "/icon-dashboard.png",
+          "sizes": "96x96"
+        }
+      ]
     }
   ]
 }

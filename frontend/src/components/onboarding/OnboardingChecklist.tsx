@@ -85,8 +85,8 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
                 action: 'Complete Profile'
             });
 
-            // 2. Connect Zoom (organizer-only)
-            if (isOrganizer && !isCourseManager) {
+            // 2. Connect Zoom (organizer or course manager)
+            if (isOrganizer || isCourseManager) {
                 try {
                     const zoomStatus = await getZoomStatus();
                     checklistItems.push({

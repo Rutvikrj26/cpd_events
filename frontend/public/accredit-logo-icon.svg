@@ -1,0 +1,20 @@
+<svg width="144" height="144" viewBox="0 0 144 144" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gradient Background -->
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:hsl(155, 25%, 38%);stop-opacity:1" />
+      <stop offset="100%" style="stop-color:hsl(160, 18%, 48%);stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Rounded Rectangle Background -->
+  <rect width="144" height="144" rx="28.8" fill="url(#gradient)"/>
+  
+  <!-- Layout Icon (scaled up from 5x5 to 80x80) -->
+  <!-- This is the Lucide Layout icon path -->
+  <g transform="translate(32, 32)">
+    <rect x="0" y="0" width="80" height="80" rx="4" ry="4" stroke="white" stroke-width="6" fill="none"/>
+    <line x1="0" y1="28" x2="80" y2="28" stroke="white" stroke-width="6"/>
+    <line x1="28" y1="28" x2="28" y2="80" stroke="white" stroke-width="6"/>
+  </g>
+</svg>

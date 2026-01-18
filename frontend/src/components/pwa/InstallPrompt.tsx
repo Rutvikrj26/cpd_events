@@ -77,7 +77,8 @@ export function InstallPrompt() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-sm mb-1">Install CPD Events</h3>
+                        <h3 className="font-semibold text-foreground">Install Accredit</h3>
+                        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider hidden sm:block">Professional Development</span>
                         <p className="text-sm text-muted-foreground mb-3">
                             Install our app for quick access and offline functionality
                         </p>

@@ -46,6 +46,8 @@ export interface Course {
     // Completion
     estimated_hours: string | number;
     passing_score: number;
+    hybrid_completion_criteria?: 'modules_only' | 'sessions_only' | 'both' | 'either' | 'min_sessions';
+    min_sessions_required?: number;
 
     // Certificates
     certificates_enabled: boolean;
@@ -86,6 +88,8 @@ export interface CourseCreateRequest {
     max_enrollments?: number;
     estimated_hours?: number;
     passing_score?: number;
+    hybrid_completion_criteria?: 'modules_only' | 'sessions_only' | 'both' | 'either' | 'min_sessions';
+    min_sessions_required?: number;
     certificates_enabled?: boolean;
     certificate_template?: string | null;
     auto_issue_certificates?: boolean;
@@ -187,4 +191,71 @@ export interface CourseEnrollment {
     modules_completed: number;
     certificate_issued: boolean;
     certificate_issued_at?: string;
+}
+
+// Course Sessions (for hybrid courses with multiple live sessions)
+export type SessionType = 'live' | 'recorded' | 'hybrid';
+
+export interface CourseSession {
+    uuid: string;
+    title: string;
+    description?: string;
+    order: number;
+    session_type: SessionType;
+    session_type_display?: string;
+    starts_at: string;
+    ends_at?: string;
+    duration_minutes: number;
+    timezone: string;
+    zoom_meeting_id?: string;
+    zoom_join_url?: string;
+    zoom_start_url?: string;
+    zoom_password?: string;
+    zoom_settings?: Record<string, any>;
+    zoom_error?: string;
+    cpd_credits: number | string;
+    is_mandatory: boolean;
+    minimum_attendance_percent: number;
+    is_published: boolean;
+    is_upcoming?: boolean;
+    is_live?: boolean;
+    is_past?: boolean;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface CourseSessionCreateRequest {
+    title: string;
+    description?: string;
+    order?: number;
+    session_type?: SessionType;
+    starts_at: string;
+    duration_minutes?: number;
+    timezone?: string;
+    zoom_settings?: { enabled?: boolean };
+    zoom_meeting_id?: string;
+    zoom_password?: string;
+    cpd_credits?: number;
+    is_mandatory?: boolean;
+    minimum_attendance_percent?: number;
+    is_published?: boolean;
+}
+
+export interface CourseSessionAttendance {
+    uuid: string;
+    session: string;
+    session_title?: string;
+    enrollment: string;
+    user_email?: string;
+    user_name?: string;
+    attendance_minutes: number;
+    attendance_percent?: number;
+    is_eligible: boolean;
+    zoom_user_email?: string;
+    zoom_join_time?: string;
+    zoom_leave_time?: string;
+    is_manual_override: boolean;
+    override_reason?: string;
+    created_at?: string;
+    updated_at?: string;
 }

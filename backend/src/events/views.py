@@ -13,7 +13,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from common.pagination import SmallPagination
-from common.permissions import IsOrganizerOrOrgAdmin
+from common.permissions import IsOrganizerOrCourseManager, IsOrganizerOrOrgAdmin
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import SoftDeleteModelViewSet
@@ -94,7 +94,7 @@ class PublicEventFilter(filters.FilterSet):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='events')
+@roles('organizer', 'course_manager', 'admin', route_name='events')
 class EventViewSet(SoftDeleteModelViewSet):
     """
     Organizer-level CRUD for events.
@@ -107,7 +107,7 @@ class EventViewSet(SoftDeleteModelViewSet):
     """
 
     parser_classes = (MultiPartParser, FormParser, JSONParser)
-    permission_classes = [IsAuthenticated, IsOrganizerOrOrgAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrOrgAdmin | IsOrganizerOrCourseManager]
     filterset_class = EventFilter
     search_fields = ['title', 'description']
     ordering_fields = ['starts_at', 'created_at', 'title', 'registration_count']

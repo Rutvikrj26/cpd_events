@@ -19,6 +19,7 @@ from django.utils import timezone
 
 from common.config import AssignmentDefaults, ModuleDefaults
 from common.models import BaseModel
+from common.validators import validate_zoom_settings_schema
 
 
 class EventModule(BaseModel):
@@ -613,15 +614,26 @@ class Course(BaseModel):
     # Virtual/Live Session Settings (for Hybrid courses)
     # =========================================
     zoom_meeting_id = models.CharField(max_length=100, blank=True, help_text="Zoom Meeting ID")
+    zoom_meeting_uuid = models.CharField(max_length=100, blank=True, help_text="Zoom Meeting UUID")
     zoom_meeting_url = models.URLField(blank=True, help_text="Zoom Join URL")
+    zoom_start_url = models.URLField(max_length=2000, blank=True, help_text="Zoom Start URL for host")
     zoom_meeting_password = models.CharField(max_length=50, blank=True, help_text="Zoom Meeting Password")
     zoom_webinar_id = models.CharField(max_length=100, blank=True, help_text="Zoom Webinar ID (if webinar)")
     zoom_registrant_id = models.CharField(max_length=255, blank=True, help_text="Zoom Registrant tracking")
+    zoom_settings = models.JSONField(
+        default=dict,
+        validators=[validate_zoom_settings_schema],
+        blank=True,
+        help_text="Zoom meeting settings (enabled, waiting_room, etc.)",
+    )
+    zoom_error = models.TextField(blank=True, help_text="Last Zoom integration error message")
+    zoom_error_at = models.DateTimeField(null=True, blank=True, help_text="When last Zoom error occurred")
 
     # Live session scheduling (for Hybrid format)
     live_session_start = models.DateTimeField(null=True, blank=True, help_text="Start time for live session")
     live_session_end = models.DateTimeField(null=True, blank=True, help_text="End time for live session")
     live_session_timezone = models.CharField(max_length=64, default='UTC', help_text="Timezone for live sessions")
+
 
     # =========================================
     # CPD Settings
@@ -664,8 +676,30 @@ class Course(BaseModel):
     )
 
     # =========================================
+    # Hybrid Completion Criteria
+    # =========================================
+    class HybridCompletionCriteria(models.TextChoices):
+        MODULES_ONLY = 'modules_only', 'Complete All Required Modules'
+        SESSIONS_ONLY = 'sessions_only', 'Attend All Required Sessions'
+        BOTH = 'both', 'Complete Modules AND Attend Sessions'
+        EITHER = 'either', 'Complete Modules OR Attend Sessions'
+        MIN_SESSIONS = 'min_sessions', 'Complete Modules + Minimum Sessions'
+
+    hybrid_completion_criteria = models.CharField(
+        max_length=20,
+        choices=HybridCompletionCriteria.choices,
+        default=HybridCompletionCriteria.BOTH,
+        help_text="How to determine completion for hybrid courses"
+    )
+    min_sessions_required = models.PositiveIntegerField(
+        default=1,
+        help_text="Minimum sessions to attend (when using MIN_SESSIONS criteria)"
+    )
+
+    # =========================================
     # Certificate Settings
     # =========================================
+
     certificates_enabled = models.BooleanField(default=True, help_text="Issue certificates on completion")
     certificate_template = models.ForeignKey(
         'certificates.CertificateTemplate',
@@ -885,11 +919,11 @@ class CourseEnrollment(BaseModel):
 
     # Billing
     stripe_checkout_session_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe Checkout Session ID")
-    
+
     # Zoom (for hybrid courses)
     zoom_join_url = models.URLField(max_length=500, blank=True, help_text="Unique Zoom join URL")
     zoom_registrant_id = models.CharField(max_length=255, blank=True, help_text="Zoom Registrant ID")
-    
+
     # Timestamps
     enrolled_at = models.DateTimeField(auto_now_add=True, help_text="When user enrolled")
     started_at = models.DateTimeField(null=True, blank=True, help_text="When user started learning")
@@ -1071,10 +1105,42 @@ class CourseEnrollment(BaseModel):
         """
         Check if all required quizzes/assignments are passed.
 
+        For hybrid courses, also checks session attendance based on
+        hybrid_completion_criteria.
+
         Returns True if:
         - All required assignments have at least one submission with passing score
         - OR there are no required assignments (pure content course)
+        - For hybrid courses: session attendance requirements are met
         """
+        course = self.course
+
+        # Check module/assignment requirements
+        modules_passed = self._check_module_requirements()
+
+        # For self-paced courses, just check modules
+        if course.format != Course.CourseFormat.HYBRID:
+            return modules_passed
+
+        # For hybrid courses, check based on completion criteria
+        sessions_passed = self._check_session_requirements()
+
+        criteria = course.hybrid_completion_criteria
+        if criteria == Course.HybridCompletionCriteria.MODULES_ONLY:
+            return modules_passed
+        elif criteria == Course.HybridCompletionCriteria.SESSIONS_ONLY:
+            return sessions_passed
+        elif criteria == Course.HybridCompletionCriteria.BOTH:
+            return modules_passed and sessions_passed
+        elif criteria == Course.HybridCompletionCriteria.EITHER:
+            return modules_passed or sessions_passed
+        elif criteria == Course.HybridCompletionCriteria.MIN_SESSIONS:
+            return modules_passed and sessions_passed
+        else:
+            return modules_passed
+
+    def _check_module_requirements(self) -> bool:
+        """Check if module/assignment requirements are passed."""
         # Get all required modules for this course
         required_modules = self.course.modules.filter(is_required=True).values_list('module_id', flat=True)
 
@@ -1109,6 +1175,38 @@ class CourseEnrollment(BaseModel):
 
         return True
 
+    def _check_session_requirements(self) -> bool:
+        """Check if session attendance requirements are met for hybrid courses."""
+        course = self.course
+        criteria = course.hybrid_completion_criteria
+
+        # If strict session count is required, use that logic regardless of "mandatory" flags
+        if criteria == Course.HybridCompletionCriteria.MIN_SESSIONS:
+             eligible_count = CourseSessionAttendance.objects.filter(
+                 enrollment=self,
+                 is_eligible=True,
+                 session__course=course
+             ).count()
+             return eligible_count >= course.min_sessions_required
+
+        # Otherwise (SESSIONS_ONLY, BOTH, EITHER), use Mandatory flags
+        # Get all mandatory sessions
+        mandatory_sessions = course.sessions.filter(is_mandatory=True, is_published=True)
+
+        if not mandatory_sessions.exists():
+             return True
+
+        # Check attendance for each mandatory session
+        # Optimization: count passed mandatory sessions
+        count_passed = CourseSessionAttendance.objects.filter(
+            session__in=mandatory_sessions,
+            enrollment=self,
+            is_eligible=True
+        ).count()
+
+        return count_passed >= mandatory_sessions.count()
+
+
     def mark_complete_manually(self, completed_by):
         """
         Manually mark course as complete (instructor/manager override).
@@ -1120,3 +1218,172 @@ class CourseEnrollment(BaseModel):
         self.manually_completed_by = completed_by
         self.save(update_fields=['manually_completed', 'manually_completed_by', 'updated_at'])
         self.complete()
+
+
+# =============================================================================
+# Course Live Sessions (for Hybrid courses)
+# =============================================================================
+
+
+class CourseSession(BaseModel):
+    """
+    Individual live session within a hybrid course.
+
+    Hybrid courses consist of self-paced content plus scheduled live sessions.
+    Each session can have its own Zoom meeting and tracks attendance independently.
+    """
+
+    class SessionType(models.TextChoices):
+        LIVE = 'live', 'Live Session'
+        RECORDED = 'recorded', 'Recorded/On-demand'
+        HYBRID = 'hybrid', 'Hybrid'
+
+    # Relationships
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='sessions')
+
+    # Basic info
+    title = models.CharField(max_length=255, help_text="Session title")
+    description = models.TextField(blank=True, help_text="Session description")
+    order = models.PositiveIntegerField(default=0, help_text="Display order")
+    session_type = models.CharField(
+        max_length=20, choices=SessionType.choices, default=SessionType.LIVE
+    )
+
+    # Schedule
+    starts_at = models.DateTimeField(help_text="Session start time")
+    duration_minutes = models.PositiveIntegerField(default=60, help_text="Duration in minutes")
+    timezone = models.CharField(max_length=50, default='UTC', help_text="Session timezone")
+
+    # Zoom integration (per-session)
+    zoom_meeting_id = models.CharField(max_length=100, blank=True, db_index=True)
+    zoom_meeting_uuid = models.CharField(max_length=100, blank=True)
+    zoom_join_url = models.URLField(max_length=500, blank=True)
+    zoom_start_url = models.URLField(max_length=2000, blank=True)
+    zoom_password = models.CharField(max_length=50, blank=True)
+    zoom_settings = models.JSONField(
+        default=dict,
+        validators=[validate_zoom_settings_schema],
+        blank=True,
+        help_text="Zoom meeting settings",
+    )
+    zoom_error = models.TextField(blank=True, help_text="Last Zoom error message")
+    zoom_error_at = models.DateTimeField(null=True, blank=True)
+
+    # CPD credits for this session
+    cpd_credits = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0, help_text="CPD credits for attending"
+    )
+
+    # Attendance requirements
+    is_mandatory = models.BooleanField(default=True, help_text="Required for course completion")
+    minimum_attendance_percent = models.PositiveIntegerField(
+        default=80, help_text="Minimum attendance percentage for eligibility"
+    )
+
+    # Status
+    is_published = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'course_sessions'
+        ordering = ['course', 'order', 'starts_at']
+        verbose_name = 'Course Session'
+        verbose_name_plural = 'Course Sessions'
+        indexes = [
+            models.Index(fields=['course', 'starts_at']),
+            models.Index(fields=['zoom_meeting_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.course.title} - {self.title}"
+
+    @property
+    def ends_at(self):
+        """Calculate scheduled end time."""
+        return self.starts_at + timezone.timedelta(minutes=self.duration_minutes)
+
+    @property
+    def is_upcoming(self):
+        """Check if session is in the future."""
+        return timezone.now() < self.starts_at
+
+    @property
+    def is_live(self):
+        """Check if session is currently happening."""
+        now = timezone.now()
+        return self.starts_at <= now <= self.ends_at
+
+    @property
+    def is_past(self):
+        """Check if session has ended."""
+        return timezone.now() > self.ends_at
+
+
+class CourseSessionAttendance(BaseModel):
+    """
+    Attendance record for a course session.
+
+    Tracks whether an enrolled student attended a live session
+    and whether they met the minimum attendance threshold.
+    """
+
+    session = models.ForeignKey(
+        CourseSession, on_delete=models.CASCADE, related_name='attendance_records'
+    )
+    enrollment = models.ForeignKey(
+        CourseEnrollment, on_delete=models.CASCADE, related_name='session_attendance'
+    )
+
+    # Attendance tracking
+    attendance_minutes = models.PositiveIntegerField(default=0, help_text="Minutes attended")
+    is_eligible = models.BooleanField(default=False, help_text="Met minimum attendance %")
+
+    # Zoom participant data (for syncing)
+    zoom_participant_id = models.CharField(max_length=255, blank=True)
+    zoom_user_email = models.EmailField(blank=True)
+    zoom_join_time = models.DateTimeField(null=True, blank=True)
+    zoom_leave_time = models.DateTimeField(null=True, blank=True)
+
+    # Manual override
+    is_manual_override = models.BooleanField(default=False)
+    override_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='course_attendance_overrides',
+    )
+    override_reason = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'course_session_attendance'
+        unique_together = ['session', 'enrollment']
+        ordering = ['-created_at']
+        verbose_name = 'Course Session Attendance'
+        verbose_name_plural = 'Course Session Attendance'
+        indexes = [
+            models.Index(fields=['session', 'enrollment']),
+            models.Index(fields=['zoom_user_email']),
+        ]
+
+    def __str__(self):
+        return f"{self.enrollment.user.email} - {self.session.title}"
+
+    @property
+    def attendance_percent(self):
+        """Calculate attendance percentage."""
+        if self.session.duration_minutes == 0:
+            return 0
+        return int((self.attendance_minutes / self.session.duration_minutes) * 100)
+
+    def calculate_eligibility(self):
+        """Check if attendance meets minimum threshold."""
+        self.is_eligible = self.attendance_percent >= self.session.minimum_attendance_percent
+        return self.is_eligible
+
+    def set_override(self, eligible: bool, user, reason: str = ''):
+        """Set manual override for attendance eligibility."""
+        self.is_eligible = eligible
+        self.is_manual_override = True
+        self.override_by = user
+        self.override_reason = reason
+        self.save()

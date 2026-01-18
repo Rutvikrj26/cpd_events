@@ -183,8 +183,8 @@ export const CertificateVerify = () => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         {/* You can replace this with your actual logo */}
-                        <div className="h-8 w-8 bg-primary rounded-md flex items-center justify-center text-primary-foreground font-bold">
-                            CPD
+                        <div className="h-8 w-8 bg-primary rounded-md flex items-center justify-center text-primary-foreground font-bold font-outfit">
+                            A
                         </div>
                         <span className="font-semibold text-slate-900">Certificate Verification</span>
                     </div>
@@ -351,7 +351,7 @@ export const CertificateVerify = () => {
 
                             <div className="flex items-center gap-2 text-slate-400 text-xs">
                                 <ShieldCheck className="h-4 w-4" />
-                                <span>Secured by CPD Events</span>
+                                <span>Secured by Accredit</span>
                             </div>
                         </div>
 

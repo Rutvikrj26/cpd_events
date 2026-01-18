@@ -14,7 +14,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from common.permissions import IsOrganizer
+from common.permissions import IsOrganizer, IsOrganizerOrCourseManager
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import ReadOnlyModelViewSet
@@ -38,7 +38,7 @@ class EventRecordingFilter(filters.FilterSet):
         fields = ['status', 'access_level']
 
 
-@roles('organizer', 'admin', route_name='event_recordings')
+@roles('organizer', 'course_manager', 'admin', route_name='event_recordings')
 class EventRecordingViewSet(viewsets.ModelViewSet):
     """
     Manage recordings for an event (C3).
@@ -46,7 +46,7 @@ class EventRecordingViewSet(viewsets.ModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/recordings/
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsOrganizerOrCourseManager]
     filterset_class = EventRecordingFilter
     ordering = ['-created_at']
     lookup_field = 'uuid'
@@ -308,7 +308,7 @@ class ZoomWebhookView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='email_logs')
+@roles('organizer', 'course_manager', 'admin', route_name='email_logs')
 class EmailLogViewSet(ReadOnlyModelViewSet):
     """
     View email logs for an event.
@@ -317,7 +317,7 @@ class EmailLogViewSet(ReadOnlyModelViewSet):
     """
 
     serializer_class = serializers.EmailLogSerializer
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsOrganizerOrCourseManager]
 
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
@@ -329,7 +329,7 @@ class EmailLogViewSet(ReadOnlyModelViewSet):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='zoom_initiate')
+@roles('organizer', 'course_manager', 'admin', route_name='zoom_initiate')
 class ZoomInitiateView(generics.GenericAPIView):
     """
     GET /api/v1/integrations/zoom/initiate/
@@ -350,7 +350,7 @@ class ZoomInitiateView(generics.GenericAPIView):
         return error_response(result.get('error', 'Configuration error'), code='CONFIG_ERROR')
 
 
-@roles('organizer', 'admin', route_name='zoom_callback')
+@roles('organizer', 'course_manager', 'admin', route_name='zoom_callback')
 class ZoomCallbackView(generics.GenericAPIView):
     """
     GET /api/v1/integrations/zoom/callback/
@@ -380,7 +380,7 @@ class ZoomCallbackView(generics.GenericAPIView):
         return error_response(result.get('error', 'Unknown error'), code='CONNECTION_FAILED')
 
 
-@roles('organizer', 'admin', route_name='zoom_status')
+@roles('organizer', 'course_manager', 'admin', route_name='zoom_status')
 class ZoomStatusView(generics.RetrieveAPIView):
     """
     GET /api/v1/integrations/zoom/status/
@@ -399,7 +399,7 @@ class ZoomStatusView(generics.RetrieveAPIView):
         )
 
 
-@roles('organizer', 'admin', route_name='zoom_disconnect')
+@roles('organizer', 'course_manager', 'admin', route_name='zoom_disconnect')
 class ZoomDisconnectView(generics.GenericAPIView):
     """
     POST /api/v1/integrations/zoom/disconnect/
@@ -418,7 +418,7 @@ class ZoomDisconnectView(generics.GenericAPIView):
         return error_response('Failed to disconnect Zoom', code='DISCONNECT_FAILED')
 
 
-@roles('organizer', 'admin', route_name='zoom_meetings')
+@roles('organizer', 'course_manager', 'admin', route_name='zoom_meetings')
 class ZoomMeetingsListView(generics.ListAPIView):
     """
     GET /api/v1/integrations/zoom/meetings/
@@ -426,7 +426,7 @@ class ZoomMeetingsListView(generics.ListAPIView):
     List all events with Zoom meetings for the current user.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsOrganizerOrCourseManager]
     serializer_class = serializers.ZoomMeetingListSerializer
 
     def get_queryset(self):

@@ -46,6 +46,73 @@ class AttendanceRecordSerializer(BaseModelSerializer):
         read_only_fields = fields
 
 
+class UnmatchedAttendanceRecordSerializer(BaseModelSerializer):
+    """Unmatched Zoom attendance record with fuzzy match suggestions."""
+
+    match_suggestions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AttendanceRecord
+        fields = [
+            'uuid',
+            'zoom_user_name',
+            'zoom_user_email',
+            'join_time',
+            'leave_time',
+            'duration_minutes',
+            'join_method',
+            'device_type',
+            'created_at',
+            'match_suggestions',
+        ]
+        read_only_fields = fields
+
+    def get_match_suggestions(self, obj):
+        """Return potential registration matches based on email/name similarity."""
+        from difflib import SequenceMatcher
+
+        event = obj.event
+        registrations = event.registrations.filter(
+            status__in=['confirmed', 'waitlisted'],
+            deleted_at__isnull=True
+        ).only('uuid', 'full_name', 'email')
+
+        suggestions = []
+        zoom_email = (obj.zoom_user_email or '').lower()
+        zoom_name = (obj.zoom_user_name or '').lower()
+
+        for reg in registrations:
+            reg_email = (reg.email or '').lower()
+            reg_name = (reg.full_name or '').lower()
+
+            # Calculate similarity scores
+            email_score = SequenceMatcher(None, zoom_email, reg_email).ratio() if zoom_email and reg_email else 0
+            name_score = SequenceMatcher(None, zoom_name, reg_name).ratio() if zoom_name and reg_name else 0
+
+            # Use best score
+            best_score = max(email_score, name_score)
+
+            # Only include if similarity > 40%
+            if best_score >= 0.4:
+                suggestions.append({
+                    'uuid': str(reg.uuid),
+                    'full_name': reg.full_name,
+                    'email': reg.email,
+                    'confidence': round(best_score * 100),
+                    'match_type': 'email' if email_score >= name_score else 'name',
+                })
+
+        # Sort by confidence descending, limit to top 5
+        suggestions.sort(key=lambda x: x['confidence'], reverse=True)
+        return suggestions[:5]
+
+
+class AttendanceMatchSerializer(serializers.Serializer):
+    """Request to match an attendance record to a registration."""
+
+    registration_uuid = serializers.UUIDField()
+
+
 class AttendanceUpdateSerializer(serializers.Serializer):
     """Manual attendance update by organizer."""
 

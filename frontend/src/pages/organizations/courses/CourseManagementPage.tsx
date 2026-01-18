@@ -8,6 +8,7 @@ import { OverviewTab } from "./manage/OverviewTab";
 import { EnrollmentsTab } from "./manage/EnrollmentsTab";
 import { AnnouncementsTab } from "./manage/AnnouncementsTab";
 import { SubmissionsTab } from "./manage/SubmissionsTab";
+import { SessionsTab } from "./manage/SessionsTab";
 import { SettingsTab } from "./manage/SettingsTab";
 import { getCourseBySlug } from '@/api/courses';
 import { Course } from '@/api/courses/types';
@@ -21,12 +22,17 @@ export function CourseManagementPage() {
     const [course, setCourse] = useState<Course | null>(null);
     const [loading, setLoading] = useState(true);
     const isInstructor = Boolean(slug && currentOrg?.user_role === 'instructor');
+
+    // Determine if sessions tab should be shown
+    const showSessions = course?.format === 'hybrid';
+
     const requestedTab = searchParams.get('tab') || 'overview';
     const availableTabs = [
         'overview',
         'enrollments',
         'announcements',
         'submissions',
+        ...(showSessions ? ['sessions'] : []),
         ...(isInstructor ? [] : ['curriculum', 'settings']),
     ];
     const defaultTab = availableTabs.includes(requestedTab) ? requestedTab : 'overview';
@@ -88,16 +94,29 @@ export function CourseManagementPage() {
             <Tabs defaultValue={defaultTab} className="w-full">
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
+                    {showSessions && <TabsTrigger value="sessions">Sessions</TabsTrigger>}
+                    {!isInstructor && <TabsTrigger value="curriculum">Curriculum</TabsTrigger>}
                     <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
                     <TabsTrigger value="announcements">Announcements</TabsTrigger>
                     <TabsTrigger value="submissions">Submissions</TabsTrigger>
-                    {!isInstructor && <TabsTrigger value="curriculum">Curriculum</TabsTrigger>}
                     {!isInstructor && <TabsTrigger value="settings">Settings</TabsTrigger>}
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-4 mt-6">
                     <OverviewTab course={course} />
                 </TabsContent>
+
+                {showSessions && (
+                    <TabsContent value="sessions" className="mt-6">
+                        <SessionsTab courseUuid={course.uuid} />
+                    </TabsContent>
+                )}
+
+                {!isInstructor && (
+                    <TabsContent value="curriculum" className="mt-6">
+                        <CurriculumTab courseUuid={course.uuid} />
+                    </TabsContent>
+                )}
 
                 <TabsContent value="enrollments" className="mt-6">
                     <EnrollmentsTab courseUuid={course.uuid} />
@@ -110,12 +129,6 @@ export function CourseManagementPage() {
                 <TabsContent value="submissions" className="mt-6">
                     <SubmissionsTab courseUuid={course.uuid} />
                 </TabsContent>
-
-                {!isInstructor && (
-                    <TabsContent value="curriculum" className="mt-6">
-                        <CurriculumTab courseUuid={course.uuid} />
-                    </TabsContent>
-                )}
 
                 {!isInstructor && (
                     <TabsContent value="settings" className="mt-6">

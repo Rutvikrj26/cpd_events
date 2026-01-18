@@ -1,25 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Award, BookOpen, CheckCircle, Users, ArrowRight, Plus } from 'lucide-react';
+import { Award, BookOpen, CheckCircle, Users, ArrowRight, Plus, Video, RefreshCw, Link2 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DashboardStat } from '@/components/dashboard/DashboardStats';
 import { PendingInvitationsBanner } from '@/components/PendingInvitationsBanner';
 import { OnboardingChecklist } from '@/components/onboarding';
 import { getOwnedCourses } from '@/api/courses';
 import { Course } from '@/api/courses/types';
+import { getZoomStatus, initiateZoomOAuth, disconnectZoom } from "@/api/integrations";
+import { ZoomStatus } from "@/api/integrations/types";
+import { toast } from "sonner";
 
 export function CourseManagerDashboard() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [zoomStatus, setZoomStatus] = useState<ZoomStatus | null>(null);
 
   useEffect(() => {
     async function fetchCourses() {
       try {
-        const data = await getOwnedCourses();
-        setCourses(data);
+        const [coursesData, zoomData] = await Promise.all([
+          getOwnedCourses(),
+          getZoomStatus().catch(() => null)
+        ]);
+        setCourses(coursesData);
+        setZoomStatus(zoomData);
       } catch (error) {
         console.error('Failed to fetch course dashboard data', error);
       } finally {
@@ -28,6 +36,25 @@ export function CourseManagerDashboard() {
     }
     fetchCourses();
   }, []);
+
+  const handleConnectZoom = async () => {
+    try {
+      const url = await initiateZoomOAuth();
+      window.location.href = url;
+    } catch (error) {
+      toast.error("Connection Failed: Could not initiate Zoom connection.");
+    }
+  };
+
+  const handleDisconnectZoom = async () => {
+    try {
+      await disconnectZoom();
+      setZoomStatus({ is_connected: false });
+      toast.success("Zoom account has been disconnected.");
+    } catch (error) {
+      toast.error("Disconnect Failed: Could not disconnect Zoom account.");
+    }
+  };
 
   const stats = {
     totalCourses: courses.length,
@@ -104,68 +131,125 @@ export function CourseManagerDashboard() {
         />
       </div>
 
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">Recent Courses</h2>
-          <Button variant="ghost" size="sm" asChild className="text-primary">
-            <Link to="/courses/manage">
-              View All <ArrowRight className="ml-1 h-4 w-4" />
-            </Link>
-          </Button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold tracking-tight text-foreground">Recent Courses</h2>
+            <Button variant="ghost" size="sm" asChild className="text-primary">
+              <Link to="/courses/manage">
+                View All <ArrowRight className="ml-1 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+
+          <Card className="border-border/60 shadow-sm overflow-hidden">
+            <CardContent className="p-0">
+              {recentCourses.length === 0 ? (
+                <div className="p-12 text-center bg-muted/50">
+                  <div className="w-12 h-12 bg-card border border-border rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                    <BookOpen className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg font-medium text-foreground">No courses yet</h3>
+                  <p className="text-muted-foreground mt-1 max-w-sm mx-auto mb-6">
+                    Create your first course to start enrolling learners.
+                  </p>
+                  <Button asChild variant="outline">
+                    <Link to="/courses/manage/new">Create Course</Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-muted/80 border-b border-border text-muted-foreground font-medium">
+                      <tr>
+                        <th className="px-6 py-4">Course</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4 text-right">Enrollments</th>
+                        <th className="px-6 py-4 text-right">Completions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {recentCourses.map((course) => (
+                        <tr key={course.uuid} className="group hover:bg-muted/50 transition-colors">
+                          <td className="px-6 py-4 font-medium text-foreground">
+                            <Link
+                              to={`/courses/manage/${course.slug}`}
+                              className="hover:text-primary transition-colors block truncate max-w-[280px]"
+                            >
+                              {course.title}
+                            </Link>
+                          </td>
+                          <td className="px-6 py-4">
+                            <Badge variant="secondary" className={`capitalize ${getStatusColor(course.status)}`}>
+                              {course.status}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4 text-right">{course.enrollment_count}</td>
+                          <td className="px-6 py-4 text-right">{course.completion_count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        <Card className="border-border/60 shadow-sm overflow-hidden">
-          <CardContent className="p-0">
-            {recentCourses.length === 0 ? (
-              <div className="p-12 text-center bg-muted/50">
-                <div className="w-12 h-12 bg-card border border-border rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-                  <BookOpen className="h-6 w-6 text-muted-foreground" />
+        {/* Sidebar Actions */}
+        <div className="space-y-6">
+          <Card className={`border shadow-sm transition-all ${zoomStatus?.is_connected ? 'bg-card border-primary/20' : 'bg-card border-border'}`}>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center justify-between">
+                <span>Zoom Integration</span>
+                <span className={`relative flex h-2.5 w-2.5`}>
+                  {zoomStatus?.is_connected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/50 opacity-75"></span>}
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${zoomStatus?.is_connected ? 'bg-primary' : 'bg-muted-foreground'}`}></span>
+                </span>
+              </CardTitle>
+              <CardDescription className={zoomStatus?.is_connected ? "text-primary/80" : "text-muted-foreground"}>
+                {zoomStatus?.is_connected ? 'Automated meeting creation active' : 'Connect for auto-meetings'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {zoomStatus?.is_connected ? (
+                <>
+                  <div className="flex items-center gap-3 mb-6 p-3 rounded-lg bg-secondary/50 border border-border">
+                    <Video className="h-8 w-8 text-primary" />
+                    <div className="overflow-hidden">
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Connected Account</p>
+                      <p className="text-sm font-semibold truncate hover:text-clip" title={zoomStatus.zoom_email}>{zoomStatus.zoom_email}</p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="w-full bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20"
+                    onClick={handleDisconnectZoom}
+                  >
+                    Disconnect Integration
+                  </Button>
+                </>
+              ) : (
+                <div className="text-center">
+                  <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Video className="h-6 w-6 text-primary" />
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Enable one-click Zoom meetings for your webinars and workshops.
+                  </p>
+                  <Button
+                    size="sm"
+                    className="w-full bg-primary hover:bg-primary/90"
+                    onClick={handleConnectZoom}
+                  >
+                    Connect Zoom Account
+                  </Button>
                 </div>
-                <h3 className="text-lg font-medium text-foreground">No courses yet</h3>
-                <p className="text-muted-foreground mt-1 max-w-sm mx-auto mb-6">
-                  Create your first course to start enrolling learners.
-                </p>
-                <Button asChild variant="outline">
-                  <Link to="/courses/manage/new">Create Course</Link>
-                </Button>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-muted/80 border-b border-border text-muted-foreground font-medium">
-                    <tr>
-                      <th className="px-6 py-4">Course</th>
-                      <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4 text-right">Enrollments</th>
-                      <th className="px-6 py-4 text-right">Completions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {recentCourses.map((course) => (
-                      <tr key={course.uuid} className="group hover:bg-muted/50 transition-colors">
-                        <td className="px-6 py-4 font-medium text-foreground">
-                          <Link
-                            to={`/courses/manage/${course.slug}`}
-                            className="hover:text-primary transition-colors block truncate max-w-[280px]"
-                          >
-                            {course.title}
-                          </Link>
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge variant="secondary" className={`capitalize ${getStatusColor(course.status)}`}>
-                            {course.status}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 text-right">{course.enrollment_count}</td>
-                        <td className="px-6 py-4 text-right">{course.completion_count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

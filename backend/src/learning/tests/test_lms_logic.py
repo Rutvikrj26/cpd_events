@@ -76,7 +76,7 @@ class TestModuleAvailability:
             module=module1,
             status=ModuleProgress.Status.COMPLETED
         )
-        
+
         # Now available
         assert module2.is_available_for(user, registration=registration) is True
 
@@ -86,7 +86,7 @@ class TestProgressRollup:
     def test_progress_rollup_registration(self, event, user, registration):
         """Test content progress rolling up to module status for Registrations."""
         module = EventModule.objects.create(event=event, title="Module 1")
-        
+
         # 2 Contents
         c1 = ModuleContent.objects.create(module=module, title="C1", content_type='text', is_required=True, order=1)
         c2 = ModuleContent.objects.create(module=module, title="C2", content_type='text', is_required=True, order=2)
@@ -98,7 +98,7 @@ class TestProgressRollup:
             registration=registration,
             module=module
         )
-        
+
         # Initial State
         mod_prog.update_from_content()  # Recalculate based on total
         assert mod_prog.contents_total == 2
@@ -114,7 +114,7 @@ class TestProgressRollup:
         )
         mod_prog.refresh_from_db()
         mod_prog.update_from_content()
-        
+
         assert mod_prog.contents_completed == 1
         assert mod_prog.progress_percent == 50
         assert mod_prog.status == ModuleProgress.Status.IN_PROGRESS
@@ -128,7 +128,7 @@ class TestProgressRollup:
         )
         mod_prog.refresh_from_db()
         mod_prog.update_from_content()
-        
+
         assert mod_prog.contents_completed == 2
         assert mod_prog.progress_percent == 100
         assert mod_prog.status == ModuleProgress.Status.COMPLETED

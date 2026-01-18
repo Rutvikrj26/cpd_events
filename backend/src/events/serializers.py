@@ -420,6 +420,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'zoom_passcode',
             'zoom_settings',
             'zoom_error',
+            'zoom_error_at',
             # CPD
             'cpd_credits',
             'cpd_type',

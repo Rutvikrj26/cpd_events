@@ -76,6 +76,7 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
 
         // Organizer Specific (Personal Context)
         { routeKey: 'event_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', organizerOnly: true, hideInOrg: true, eventOnly: true },
+        { routeKey: 'creator_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', creatorOnly: true, hideInOrg: true },
         { routeKey: 'event_badges', to: '/organizer/badges', icon: Award, label: 'Badges', creatorOnly: true, hideInOrg: true },
         { routeKey: 'zoom_meetings', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', organizerOnly: true, hideInOrg: true, eventOnly: true },
         { routeKey: 'contacts', to: '/organizer/contacts', icon: Users, label: 'Contacts', organizerOnly: true, hideInOrg: true, eventOnly: true },
@@ -116,6 +117,22 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
             to: currentOrg ? `/org/${currentOrg.slug}/courses` : '#',
             icon: BookOpen,
             label: 'Courses',
+            requiresOrg: true,
+            orgRoles: ['admin', 'course_manager'],
+        },
+        {
+            routeKey: 'org_badges',
+            to: currentOrg ? `/org/${currentOrg.slug}/badges` : '#',
+            icon: Award,
+            label: 'Badges',
+            requiresOrg: true,
+            orgRoles: ['admin', 'course_manager'],
+        },
+        {
+            routeKey: 'org_certificates',
+            to: currentOrg ? `/org/${currentOrg.slug}/certificates` : '#',
+            icon: Award,
+            label: 'Certificates',
             requiresOrg: true,
             orgRoles: ['admin', 'course_manager'],
         },
@@ -166,7 +183,7 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
         if (manifest && manifest.routes.length > 0) {
             // Always allow basic shared routes and new org routes (assuming they are allowed if we are in the org)
             // TODO: Ideally check robust permissions for org routes, but checking 'requiresOrg' existence is a proxy for now
-            if (['dashboard', 'profile', 'my_events', 'browse_events', 'browse_courses', 'course_certificates', 'contacts', 'cpd_tracking', 'event_badges', 'badges'].includes(item.routeKey)) return true;
+            if (['dashboard', 'profile', 'my_events', 'browse_events', 'browse_courses', 'course_certificates', 'creator_certificates', 'contacts', 'cpd_tracking', 'event_badges', 'badges'].includes(item.routeKey)) return true;
             if (item.requiresOrg) return true; // Assume if they are in the org, they can see the links (page will protect)
 
             if (item.routeKey === 'certificates') return hasFeature('view_own_certificates');
@@ -220,15 +237,20 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
             <div className={cn("p-6 border-b border-border flex flex-col gap-3", isCollapsed ? "p-4 items-center" : "")}>
                 <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
                     <NavLink to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <div className={cn(
+                            "flex items-center justify-center rounded-lg bg-white border border-border/50 overflow-hidden shadow-sm",
+                            isCollapsed ? "h-9 w-9" : "h-8 w-8"
+                        )}>
+                            <img src="/letter-a.png" alt="Logo" className="h-full w-full object-contain p-1" />
+                        </div>
                         {!isCollapsed && (
                             <div className="overflow-hidden">
-                                <h1 className="text-xl font-bold gradient-text whitespace-nowrap">
+                                <h1 className="text-xl font-bold gradient-text whitespace-nowrap font-outfit tracking-wide">
                                     Accredit
                                 </h1>
-                                <p className="text-xs text-muted-foreground mt-1 truncate">{portalLabel}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5 truncate">{portalLabel}</p>
                             </div>
                         )}
-                        {isCollapsed && <span className="font-bold text-primary text-xl">A</span>}
                     </NavLink>
                 </div>
 

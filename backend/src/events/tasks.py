@@ -92,14 +92,16 @@ def create_zoom_meeting(event_id: int):
         if not result.get('success'):
             error_msg = result.get('error', 'Unknown Zoom error')
             event.zoom_error = error_msg
-            event.save(update_fields=['zoom_error', 'updated_at'])
+            event.zoom_error_at = timezone.now()
+            event.save(update_fields=['zoom_error', 'zoom_error_at', 'updated_at'])
             logger.error(f"Failed to create Zoom meeting for event {event_id}: {error_msg}")
             return False
             
         # Clear error on success
         if event.zoom_error:
             event.zoom_error = ''
-            event.save(update_fields=['zoom_error', 'updated_at'])
+            event.zoom_error_at = None
+            event.save(update_fields=['zoom_error', 'zoom_error_at', 'updated_at'])
             
         return True
     except Event.DoesNotExist:

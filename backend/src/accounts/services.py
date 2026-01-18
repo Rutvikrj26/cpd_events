@@ -376,6 +376,228 @@ class ZoomService:
             logger.error(f"Create meeting failed: {e}")
             return {'success': False, 'error': str(e)}
 
+    def create_meeting_for_course(self, course) -> dict[str, Any]:
+        """
+        Create a Zoom meeting for a hybrid course.
+
+        Args:
+            course: Course instance
+
+        Returns:
+            Dict with success status and meeting details
+        """
+        from accounts.models import ZoomConnection
+        from common.utils import generate_verification_code
+
+        try:
+            # Use created_by as the owner for courses
+            owner = course.created_by
+            if not owner:
+                return {'success': False, 'error': 'Course has no creator/owner'}
+
+            # 1. Get Zoom connection for course owner
+            connection = ZoomConnection.objects.get(user=owner, is_active=True)
+
+            # 2. Get valid access token
+            access_token = self.get_access_token(connection)
+            if not access_token:
+                return {'success': False, 'error': 'Could not get valid Zoom access token'}
+
+            # 3. Validate required fields
+            if not course.live_session_start:
+                return {'success': False, 'error': 'Course has no live session start time'}
+
+            # Calculate duration from live_session_start and live_session_end
+            duration = 60  # Default 60 minutes
+            if course.live_session_end:
+                delta = course.live_session_end - course.live_session_start
+                duration = max(30, int(delta.total_seconds() / 60))  # Minimum 30 minutes
+
+            # Password (required for most accounts)
+            password = course.zoom_meeting_password or generate_verification_code(8)
+
+            payload = {
+                'topic': course.title,
+                'type': 2,  # Scheduled meeting
+                'start_time': course.live_session_start.isoformat(),
+                'duration': duration,
+                'timezone': course.live_session_timezone or 'UTC',
+                'password': password,
+                'agenda': course.short_description or course.title,
+                'approval_type': 0,  # Auto-approve registrants
+                'registration_type': 1,  # Register once for all occurrences
+                'settings': {
+                    'host_video': True,
+                    'participant_video': False,
+                    'join_before_host': False,
+                    'mute_upon_entry': True,
+                    'waiting_room': True,
+                    'auto_recording': 'none',
+                },
+            }
+
+            # Apply any custom zoom_settings provided in course model
+            zoom_settings = course.zoom_settings or {}
+            # Remove 'enabled' key as it's not a Zoom API setting
+            settings_to_apply = {k: v for k, v in zoom_settings.items() if k != 'enabled'}
+            if settings_to_apply:
+                payload['settings'].update(settings_to_apply)
+
+            # 4. Make request using helper with retry logic
+            path = "users/me/meetings"
+            result = self._make_zoom_request('POST', path, connection, payload)
+
+            if not result['success']:
+                error_msg = f"Zoom API error: {result.get('status_code')}"
+                try:
+                    error_detail = result.get('data') or {}
+                    if not error_detail and result.get('text'):
+                        import json
+                        error_detail = json.loads(result['text'])
+
+                    if 'message' in error_detail:
+                        error_msg = f"Zoom: {error_detail['message']}"
+                except Exception:
+                    pass
+                return {'success': False, 'error': error_msg}
+
+            data = result['data']
+
+            # 5. Update course
+            course.zoom_meeting_id = str(data.get('id', ''))
+            course.zoom_meeting_uuid = data.get('uuid', '')
+            course.zoom_meeting_url = data.get('join_url', '')
+            course.zoom_start_url = data.get('start_url', '')
+            course.zoom_meeting_password = data.get('password', password)
+
+            course.save(
+                update_fields=[
+                    'zoom_meeting_id',
+                    'zoom_meeting_uuid',
+                    'zoom_meeting_url',
+                    'zoom_start_url',
+                    'zoom_meeting_password',
+                    'updated_at',
+                ]
+            )
+
+            connection.record_usage()
+
+            return {'success': True, 'meeting': data}
+
+        except ZoomConnection.DoesNotExist:
+            return {'success': False, 'error': 'Course creator does not have connected Zoom account'}
+        except Exception as e:
+            logger.error(f"Create meeting for course failed: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def create_meeting_for_session(self, session) -> dict[str, Any]:
+        """
+        Create a Zoom meeting for a specific course session.
+
+        Args:
+            session: CourseSession instance
+
+        Returns:
+            Dict with success status and meeting details
+        """
+        from accounts.models import ZoomConnection
+        from common.utils import generate_verification_code
+
+        try:
+            course = session.course
+            owner = course.created_by
+            if not owner:
+                return {'success': False, 'error': 'Course has no creator/owner'}
+
+            # 1. Get Zoom connection for course owner
+            connection = ZoomConnection.objects.get(user=owner, is_active=True)
+
+            # 2. Get valid access token
+            access_token = self.get_access_token(connection)
+            if not access_token:
+                return {'success': False, 'error': 'Could not get valid Zoom access token'}
+
+            # 3. Validate required fields
+            if not session.starts_at:
+                return {'success': False, 'error': 'Session has no start time'}
+
+            # Password
+            password = session.zoom_password or generate_verification_code(8)
+
+            payload = {
+                'topic': f"{course.title} - {session.title}",
+                'type': 2,  # Scheduled meeting
+                'start_time': session.starts_at.isoformat(),
+                'duration': session.duration_minutes or 60,
+                'timezone': session.timezone or 'UTC',
+                'password': password,
+                'agenda': session.description or session.title,
+                'approval_type': 0,  # Auto-approve registrants
+                'registration_type': 1,
+                'settings': {
+                    'host_video': True,
+                    'participant_video': False,
+                    'join_before_host': False,
+                    'mute_upon_entry': True,
+                    'waiting_room': True,
+                    'auto_recording': 'none',
+                },
+            }
+
+            # Apply any custom zoom_settings from session
+            zoom_settings = session.zoom_settings or {}
+            settings_to_apply = {k: v for k, v in zoom_settings.items() if k != 'enabled'}
+            if settings_to_apply:
+                payload['settings'].update(settings_to_apply)
+
+            # 4. Make request
+            path = "users/me/meetings"
+            result = self._make_zoom_request('POST', path, connection, payload)
+
+            if not result['success']:
+                error_msg = f"Zoom API error: {result.get('status_code')}"
+                try:
+                    error_detail = result.get('data') or {}
+                    if not error_detail and result.get('text'):
+                        import json
+                        error_detail = json.loads(result['text'])
+                    if 'message' in error_detail:
+                        error_msg = f"Zoom: {error_detail['message']}"
+                except Exception:
+                    pass
+                return {'success': False, 'error': error_msg}
+
+            data = result['data']
+
+            # 5. Update session
+            session.zoom_meeting_id = str(data.get('id', ''))
+            session.zoom_meeting_uuid = data.get('uuid', '')
+            session.zoom_join_url = data.get('join_url', '')
+            session.zoom_start_url = data.get('start_url', '')
+            session.zoom_password = data.get('password', password)
+
+            session.save(
+                update_fields=[
+                    'zoom_meeting_id',
+                    'zoom_meeting_uuid',
+                    'zoom_join_url',
+                    'zoom_start_url',
+                    'zoom_password',
+                    'updated_at',
+                ]
+            )
+
+            connection.record_usage()
+            return {'success': True, 'meeting': data}
+
+        except ZoomConnection.DoesNotExist:
+            return {'success': False, 'error': 'Course creator does not have connected Zoom account'}
+        except Exception as e:
+            logger.error(f"Create meeting for session failed: {e}")
+            return {'success': False, 'error': str(e)}
+
+
     def _make_zoom_request(self, method: str, path: str, connection, payload: dict[str, Any] | None = None, retry_on_401: bool = True) -> dict[str, Any]:
         """
         Make an authenticated request to Zoom API with automatic 401 retry.
@@ -479,6 +701,32 @@ class ZoomService:
         except Exception as e:
             logger.error(f"Add meeting registrant failed: {e}")
             return {'success': False, 'error': str(e)}
+
+    def get_past_meeting_participants(self, user, meeting_id: str) -> dict[str, Any]:
+        """
+        Get participants for a past meeting.
+        """
+        from accounts.models import ZoomConnection
+        
+        try:
+            connection = ZoomConnection.objects.get(user=user, is_active=True)
+            
+            # Use past_meetings endpoint
+            path = f"past_meetings/{meeting_id}/participants"
+            
+            # Fetch all pages if necessary (for now just one page of 300)
+            result = self._make_zoom_request('GET', path, connection, {'page_size': 300})
+            
+            if not result['success']:
+                 # Fallback to report endpoint if the meeting is very recent or depending on scopes?
+                 # Or maybe it's not a 'past' meeting yet if it just ended?
+                 pass
+                 
+            return result
+             
+        except Exception as e:
+             logger.error(f"Get meeting participants failed: {e}")
+             return {'success': False, 'error': str(e)}
 
 
 # Singleton instance
