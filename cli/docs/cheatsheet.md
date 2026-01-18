@@ -384,10 +384,10 @@ jobs:
 
 ## 📚 Additional Resources
 
-- [CLI README](cli/README.md) - Detailed usage guide
-- [Deployment Guide](cli/DEPLOYMENT.md) - Complete deployment workflows
-- [Infrastructure Summary](INFRASTRUCTURE_SUMMARY.md) - Infrastructure overview
-- [Docker Guide](cli/DOCKER.md) - Docker setup details
+- [CLI README](../README.md) - Detailed usage guide
+- [Deployment Guide](../DEPLOYMENT.md) - Complete deployment workflows
+- [Infrastructure Summary](../../docs/deployment/infrastructure.md) - Infrastructure overview
+- [Docker Guide](../DOCKER.md) - Docker setup details
 
 ---
 

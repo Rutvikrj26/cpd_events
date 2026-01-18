@@ -379,9 +379,9 @@ accredit cloud frontend deploy --env dev
 
 ### Getting Started
 
-1. Read [CLI_CHEATSHEET.md](CLI_CHEATSHEET.md) for quick reference
-2. Follow [cli/DEPLOYMENT.md](cli/DEPLOYMENT.md) for detailed workflows
-3. Check [INFRASTRUCTURE_SUMMARY.md](INFRASTRUCTURE_SUMMARY.md) for architecture
+1. Read [CLI Cheatsheet](cheatsheet.md) for quick reference
+2. Follow [Deployment Guide](../DEPLOYMENT.md) for detailed workflows
+3. Check [Infrastructure Summary](../../docs/deployment/infrastructure.md) for architecture
 
 ### Help Commands
 
