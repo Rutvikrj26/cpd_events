@@ -203,6 +203,268 @@
   .border-warning {
     border-color: hsl(var(--warning));
   }
+
+  /* ========================================
+     SEMANTIC STATE UTILITIES
+     Consistent colors for success, info, warning, error states
+     ======================================== */
+  
+  /* Success/Green States */
+  .bg-success-subtle {
+    @apply bg-green-50/50 dark:bg-green-950/20;
+  }
+
+  .bg-success-container {
+    @apply bg-green-100 dark:bg-green-900/50;
+  }
+
+  .text-success {
+    @apply text-green-600 dark:text-green-400;
+  }
+
+  .text-success-muted {
+    @apply text-green-700 dark:text-green-300;
+  }
+
+  .border-success {
+    @apply border-green-200 dark:border-green-900;
+  }
+
+  .border-success-muted {
+    @apply border-green-300 dark:border-green-800;
+  }
+
+  /* Info/Blue States */
+  .bg-info-subtle {
+    @apply bg-blue-50/50 dark:bg-blue-950/20;
+  }
+
+  .bg-info-container {
+    @apply bg-blue-100 dark:bg-blue-900/50;
+  }
+
+  .text-info {
+    @apply text-blue-600 dark:text-blue-400;
+  }
+
+  .text-info-muted {
+    @apply text-blue-700 dark:text-blue-300;
+  }
+
+  .border-info {
+    @apply border-blue-200 dark:border-blue-900;
+  }
+
+  .border-info-muted {
+    @apply border-blue-100 dark:border-blue-800;
+  }
+
+  /* Warning/Amber States */
+  .bg-warning-subtle {
+    @apply bg-amber-50/50 dark:bg-amber-950/20;
+  }
+
+  .bg-warning-container {
+    @apply bg-amber-100 dark:bg-amber-900/50;
+  }
+
+  .text-warning {
+    @apply text-amber-700 dark:text-amber-300;
+  }
+
+  .text-warning-muted {
+    @apply text-amber-600 dark:text-amber-400;
+  }
+
+  .border-warning {
+    @apply border-amber-200 dark:border-amber-900;
+  }
+
+  .border-warning-muted {
+    @apply border-amber-300 dark:border-amber-800;
+  }
+
+  /* Error/Red States */
+  .bg-error-subtle {
+    @apply bg-red-50 dark:bg-red-950/30;
+  }
+
+  .bg-error-container {
+    @apply bg-red-100 dark:bg-red-900/50;
+  }
+
+  .text-error {
+    @apply text-red-600 dark:text-red-400;
+  }
+
+  .text-error-muted {
+    @apply text-red-700 dark:text-red-300;
+  }
+
+  .border-error {
+    @apply border-red-200 dark:border-red-900;
+  }
+
+  .border-error-muted {
+    @apply border-red-300 dark:border-red-800;
+  }
+
+  /* Neutral/Gray Backgrounds (for cards in gradient contexts) */
+  .bg-neutral-card {
+    @apply bg-white dark:bg-gray-800;
+  }
+
+  /* Icon Containers - Standardized backgrounds for icons in status contexts */
+  .icon-container-success {
+    @apply bg-success-container p-2 rounded-full;
+  }
+
+  .icon-container-info {
+    @apply bg-info-container p-2 rounded-full;
+  }
+
+  .icon-container-warning {
+    @apply bg-warning-container p-2 rounded-full;
+  }
+
+  .icon-container-error {
+    @apply bg-error-container p-2 rounded-full;
+  }
+
+  /* Icon color variants for state containers */
+  .icon-success {
+    @apply text-success;
+  }
+
+  .icon-info {
+    @apply text-info;
+  }
+
+  .icon-warning {
+    @apply text-warning;
+  }
+
+  .icon-error {
+    @apply text-error;
+  }
+
+  /* ===================================
+   * QUILL EDITOR DARK MODE SUPPORT
+   * =================================== */
+  
+  /* Main editor container */
+  .ql-container {
+    @apply bg-background border-border;
+  }
+
+  .ql-container.ql-snow {
+    @apply border-border;
+  }
+
+  /* Editor content area - CRITICAL: Full contrast text */
+  .ql-editor {
+    @apply bg-background;
+    color: hsl(var(--foreground)) !important;
+    min-height: 120px;
+  }
+
+  /* All content inside editor should be fully visible */
+  .ql-editor * {
+    color: inherit !important;
+  }
+
+  /* Placeholder text only - muted but still visible */
+  .ql-editor.ql-blank::before {
+    @apply text-muted-foreground;
+    font-style: italic;
+    opacity: 0.7;
+  }
+
+  /* Toolbar */
+  .ql-toolbar.ql-snow {
+    @apply bg-muted/30 border-border;
+  }
+
+  /* Toolbar buttons and icons */
+  .ql-stroke {
+    @apply stroke-foreground;
+  }
+
+  .ql-fill {
+    @apply fill-foreground;
+  }
+
+  .ql-picker-label {
+    @apply text-foreground;
+  }
+
+  .ql-picker-label:hover {
+    @apply text-foreground;
+  }
+
+  .ql-picker-options {
+    @apply bg-popover border-border;
+  }
+
+  .ql-picker-item {
+    @apply text-foreground;
+  }
+
+  .ql-picker-item:hover {
+    @apply text-primary bg-accent;
+  }
+
+  /* Active/selected states */
+  .ql-toolbar button:hover .ql-stroke,
+  .ql-toolbar button:focus .ql-stroke,
+  .ql-toolbar button.ql-active .ql-stroke {
+    @apply stroke-primary;
+  }
+
+  .ql-toolbar button:hover .ql-fill,
+  .ql-toolbar button:focus .ql-fill,
+  .ql-toolbar button.ql-active .ql-fill {
+    @apply fill-primary;
+  }
+
+  /* Snow theme specific - override defaults */
+  .ql-snow .ql-stroke {
+    stroke: hsl(var(--foreground)) !important;
+  }
+
+  .ql-snow .ql-fill {
+    fill: hsl(var(--foreground)) !important;
+  }
+
+  .ql-snow.ql-toolbar button:hover .ql-stroke,
+  .ql-snow.ql-toolbar button:focus .ql-stroke,
+  .ql-snow.ql-toolbar button.ql-active .ql-stroke {
+    stroke: hsl(var(--primary)) !important;
+  }
+
+  .ql-snow.ql-toolbar button:hover .ql-fill,
+  .ql-snow.ql-toolbar button:focus .ql-fill,
+  .ql-snow.ql-toolbar button.ql-active .ql-fill {
+    fill: hsl(var(--primary)) !important;
+  }
+
+  /* Ensure strong/bold/italic text is visible */
+  .ql-editor strong,
+  .ql-editor b {
+    font-weight: 600;
+    color: inherit !important;
+  }
+
+  .ql-editor em,
+  .ql-editor i {
+    font-style: italic;
+    color: inherit !important;
+  }
+
+  .ql-editor u {
+    text-decoration: underline;
+    color: inherit !important;
+  }
 }
 
 @layer utilities {

@@ -83,16 +83,16 @@ export function AttendanceReconciliation({
 
     if (unmatchedParticipants.length === 0) {
         return (
-            <Card className="w-full border-green-200 bg-green-50/50 dark:bg-green-950/20 dark:border-green-900">
+            <Card className="w-full border-success bg-success-subtle">
                 <CardContent className="py-6">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/50">
-                                <UserCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
+                            <div className="icon-container-success">
+                                <UserCheck className="h-5 w-5 icon-success" />
                             </div>
                             <div>
-                                <p className="font-medium text-green-700 dark:text-green-300">All Attendance Matched</p>
-                                <p className="text-sm text-green-600 dark:text-green-400">
+                                <p className="font-medium text-success-muted">All Attendance Matched</p>
+                                <p className="text-sm text-success">
                                     No unmatched Zoom participants found.
                                 </p>
                             </div>

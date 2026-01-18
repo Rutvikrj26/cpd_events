@@ -114,8 +114,8 @@ const CreateOrganizationPage: React.FC = () => {
     if (success) {
         return (
             <div className="container mx-auto py-16 px-4 max-w-lg text-center">
-                <div className="bg-green-50 rounded-full p-4 w-16 h-16 mx-auto mb-6 flex items-center justify-center">
-                    <CheckCircle2 className="h-8 w-8 text-green-600" />
+                <div className="bg-success-subtle rounded-full p-4 w-16 h-16 mx-auto mb-6 flex items-center justify-center">
+                    <CheckCircle2 className="h-8 w-8 text-success" />
                 </div>
                 <h1 className="text-2xl font-bold mb-2">Organization Created!</h1>
                 <p className="text-muted-foreground mb-4">
@@ -146,10 +146,10 @@ const CreateOrganizationPage: React.FC = () => {
                 <CardContent>
                     {/* Data Transfer Notice */}
                     {isFromAccount && linkableData && (
-                        <Alert className="mb-6 bg-blue-50 border-blue-200">
+                        <Alert className="mb-6 bg-info-subtle border-info">
                             <AlertDescription>
-                                <strong className="text-blue-800">Your data will be transferred:</strong>
-                                <ul className="mt-2 text-sm text-blue-700 list-disc list-inside">
+                                <strong className="text-info">Your data will be transferred:</strong>
+                                <ul className="mt-2 text-sm text-info list-disc list-inside">
                                     <li>{linkableData.events_count} event{linkableData.events_count !== 1 ? 's' : ''}</li>
                                     <li>{linkableData.templates_count} certificate template{linkableData.templates_count !== 1 ? 's' : ''}</li>
                                 </ul>
@@ -185,7 +185,7 @@ const CreateOrganizationPage: React.FC = () => {
                                         value={formData.description}
                                         onChange={(content) => setFormData(prev => ({ ...prev, description: content }))}
                                         placeholder="Brief description of your organization..."
-                                        className="bg-white mb-4"
+                                        className="mb-4"
                                     />
                                 </div>
 

@@ -330,7 +330,7 @@ const CreateCoursePage = () => {
                                         <FormControl>
                                             <ReactQuill
                                                 theme="snow"
-                                                className="bg-white mb-4"
+                                                className="mb-4"
                                                 {...field}
                                                 onChange={(content) => field.onChange(content)}
                                             />
@@ -505,7 +505,7 @@ const CreateCoursePage = () => {
                                         disabled={isSubmitting}
                                     />
                                     {scheduledSessions.length === 0 && (
-                                        <p className="text-sm text-amber-600">
+                                        <p className="text-sm text-warning">
                                             ⚠️ Add at least one live session for a hybrid course.
                                         </p>
                                     )}

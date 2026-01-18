@@ -132,7 +132,7 @@ export function LocationAutocomplete({
                     className="pl-9"
                 />
                 {error && (
-                    <p className="text-xs text-amber-600 mt-1">
+                    <p className="text-xs text-warning mt-1">
                         Using manual entry (autocomplete unavailable)
                     </p>
                 )}
@@ -160,7 +160,7 @@ export function LocationAutocomplete({
                 className="pl-9"
             />
             {error && (
-                <p className="text-xs text-red-500 mt-1">{error}</p>
+                <p className="text-xs text-error mt-1">{error}</p>
             )}
         </div>
     );

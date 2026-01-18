@@ -110,7 +110,7 @@ export function QuizBuilder({ initialData, onChange }: QuizBuilderProps) {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center gap-4 p-4 border rounded-lg bg-gray-50">
+            <div className="flex items-center gap-4 p-4 border rounded-lg bg-muted/30">
                 <div className="flex-1">
                     <Label htmlFor="passing-score">Passing Score (%)</Label>
                     <div className="flex items-center gap-2 mt-1">
@@ -139,13 +139,13 @@ export function QuizBuilder({ initialData, onChange }: QuizBuilderProps) {
                 {questions.map((question, index) => (
                     <Card key={question.id} className="group relative">
                         <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => removeQuestion(question.id)}>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => removeQuestion(question.id)}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
                         </div>
                         <CardHeader className="pb-2">
                             <div className="flex items-center gap-2">
-                                <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-semibold">Q{index + 1}</span>
+                                <span className="bg-muted text-muted-foreground px-2 py-1 rounded text-xs font-semibold">Q{index + 1}</span>
                                 <Select
                                     value={question.type}
                                     onValueChange={(val: 'single' | 'multiple') => updateQuestion(question.id, { type: val })}
@@ -177,10 +177,10 @@ export function QuizBuilder({ initialData, onChange }: QuizBuilderProps) {
                                         <div className="pt-1">
                                             {question.type === 'single' ? (
                                                 <div
-                                                    className={`h-4 w-4 rounded-full border flex items-center justify-center cursor-pointer ${option.isCorrect ? 'border-green-500 bg-green-50' : 'border-gray-300'}`}
+                                                    className={`h-4 w-4 rounded-full border flex items-center justify-center cursor-pointer ${option.isCorrect ? 'border-success bg-success-subtle' : 'border-border'}`}
                                                     onClick={() => updateOption(question.id, option.id, { isCorrect: true })}
                                                 >
-                                                    {option.isCorrect && <div className="h-2 w-2 rounded-full bg-green-500" />}
+                                                    {option.isCorrect && <div className="h-2 w-2 rounded-full bg-success" />}
                                                 </div>
                                             ) : (
                                                 <Checkbox
@@ -193,14 +193,14 @@ export function QuizBuilder({ initialData, onChange }: QuizBuilderProps) {
                                             value={option.text}
                                             onChange={(e) => updateOption(question.id, option.id, { text: e.target.value })}
                                             placeholder={`Option text`}
-                                            className={`flex-1 ${option.isCorrect ? 'border-green-200 bg-green-50/20' : ''}`}
+                                            className={`flex-1 ${option.isCorrect ? 'border-success bg-success-subtle/20' : ''}`}
                                         />
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-500" onClick={() => removeOption(question.id, option.id)}>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeOption(question.id, option.id)}>
                                             <X className="h-3 w-3" />
                                         </Button>
                                     </div>
                                 ))}
-                                <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-500 hover:text-blue-700 p-0 hover:bg-transparent" onClick={() => addOption(question.id)}>
+                                <Button variant="ghost" size="sm" className="h-7 text-xs text-info hover:text-info p-0 hover:bg-transparent" onClick={() => addOption(question.id)}>
                                     <Plus className="h-3 w-3 mr-1" /> Add Option
                                 </Button>
                             </div>

@@ -300,7 +300,7 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
                                 <div className={cn(
                                     "p-2 rounded-full",
                                     item.completed
-                                        ? "bg-green-100 dark:bg-green-900/30"
+                                        ? "bg-success-container"
                                         : "bg-muted"
                                 )}>
                                     {item.completed ? (

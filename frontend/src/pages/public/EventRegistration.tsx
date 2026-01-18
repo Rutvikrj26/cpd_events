@@ -323,17 +323,17 @@ export function EventRegistration() {
 
     if (loading || resumingPayment) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
 
     if (error && !event) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="min-h-screen flex items-center justify-center bg-background">
                 <div className="text-center">
-                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                    <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
                     <h2 className="text-xl font-semibold text-foreground">{error}</h2>
                     <Link to="/events/browse">
                         <Button className="mt-4">Browse Events</Button>
@@ -346,14 +346,14 @@ export function EventRegistration() {
     // Success state
     if (step === 'success') {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="min-h-screen flex items-center justify-center bg-background">
                 <Card className="max-w-md w-full mx-4">
                     <CardContent className="pt-6 text-center">
-                        <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <CheckCircle className="h-8 w-8 text-green-600" />
+                        <div className="h-16 w-16 bg-success-subtle rounded-full flex items-center justify-center mx-auto mb-4">
+                            <CheckCircle className="h-8 w-8 text-success" />
                         </div>
                         <h2 className="text-2xl font-bold text-foreground mb-2">You're Registered!</h2>
-                        <p className="text-gray-600 mb-6">
+                        <p className="text-muted-foreground mb-6">
                             Check your email for confirmation details and event information.
                         </p>
                         <div className="space-y-3">
@@ -375,14 +375,14 @@ export function EventRegistration() {
         const showPaymentForm = Boolean(registrationData?.client_secret);
 
         return (
-            <div className="min-h-screen bg-gray-50 py-8 px-4">
+            <div className="min-h-screen bg-background py-8 px-4">
                 <div className="max-w-lg mx-auto">
                     {/* Event Summary */}
                     <Card className="mb-6">
                         <CardContent className="py-4">
                             <div className="flex items-start gap-4">
-                                <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                    <Calendar className="h-6 w-6 text-blue-600" />
+                                <div className="h-12 w-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                                    <Calendar className="h-6 w-6 text-primary" />
                                 </div>
                                 <div className="flex-1">
                                     <h1 className="text-xl font-bold text-foreground">{event?.title}</h1>
@@ -407,7 +407,7 @@ export function EventRegistration() {
                         </CardHeader>
                         <CardContent>
                             {error && (
-                                <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                                <div className="mb-4 bg-error-subtle border border-error text-error px-4 py-3 rounded-lg text-sm">
                                     {error}
                                 </div>
                             )}
@@ -526,20 +526,20 @@ export function EventRegistration() {
 
     // Registration form step
     return (
-        <div className="min-h-screen bg-gray-50 py-8 px-4">
+        <div className="min-h-screen bg-background py-8 px-4">
             <div className="max-w-4xl mx-auto">
                 {/* Event Summary */}
                 <Card className="mb-6">
                     <CardContent className="py-4">
                         <div className="flex items-start gap-4">
-                            <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <Calendar className="h-6 w-6 text-blue-600" />
+                            <div className="h-12 w-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                                <Calendar className="h-6 w-6 text-primary" />
                             </div>
                             <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                     <h1 className="text-xl font-bold text-foreground">{event?.title}</h1>
                                     {isPaidEvent && (
-                                        <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+                                        <Badge variant="secondary" className="bg-warning-subtle text-warning">
                                             {formatPrice(event?.price, event?.currency)}
                                         </Badge>
                                     )}
@@ -561,7 +561,7 @@ export function EventRegistration() {
                                     })}
                                 </p>
                                 {event?.cpd_credits && Number(event.cpd_credits) > 0 && (
-                                    <div className="flex items-center gap-1 mt-2 text-amber-600">
+                                    <div className="flex items-center gap-1 mt-2 text-warning">
                                         <Award className="h-4 w-4" />
                                         <span className="text-sm font-medium">{event.cpd_credits} CPD Credits</span>
                                     </div>
@@ -587,7 +587,7 @@ export function EventRegistration() {
                             <CardContent>
                                 <form onSubmit={handleSubmit} className="space-y-6">
                                     {error && (
-                                        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                                        <div className="bg-error-subtle border border-error text-error px-4 py-3 rounded-lg text-sm">
                                             {error}
                                         </div>
                                     )}
@@ -657,12 +657,12 @@ export function EventRegistration() {
                                             </Label>
 
                                             {appliedPromo?.valid ? (
-                                                <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                                                <div className="flex items-center justify-between bg-success-subtle border border-success rounded-lg px-4 py-3">
                                                     <div className="flex items-center gap-2">
-                                                        <Check className="h-5 w-5 text-green-600" />
+                                                        <Check className="h-5 w-5 text-success" />
                                                         <div>
-                                                            <span className="font-medium text-green-800">{appliedPromo.code}</span>
-                                                            <span className="text-green-600 ml-2">
+                                                            <span className="font-medium text-success">{appliedPromo.code}</span>
+                                                            <span className="text-success ml-2">
                                                                 {appliedPromo.discount_display}
                                                             </span>
                                                         </div>
@@ -672,7 +672,7 @@ export function EventRegistration() {
                                                         variant="ghost"
                                                         size="sm"
                                                         onClick={handleRemovePromoCode}
-                                                        className="text-green-700 hover:text-green-800 hover:bg-green-100"
+                                                        className="text-success hover:text-success hover:bg-success-subtle"
                                                     >
                                                         <X className="h-4 w-4" />
                                                     </Button>
@@ -704,7 +704,7 @@ export function EventRegistration() {
                                             )}
 
                                             {promoError && (
-                                                <p className="text-sm text-red-600">{promoError}</p>
+                                                <p className="text-sm text-destructive">{promoError}</p>
                                             )}
                                         </div>
                                     )}
@@ -727,7 +727,7 @@ export function EventRegistration() {
                                         <>
                                             <Separator />
 
-                                            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                                            <div className="bg-info-subtle border border-info rounded-lg p-4">
                                                 <div className="flex items-start space-x-3">
                                                     <Checkbox
                                                         id="createAccount"
@@ -740,7 +740,7 @@ export function EventRegistration() {
                                                         <Label htmlFor="createAccount" className="font-medium cursor-pointer">
                                                             Create an account to track my CPD credits
                                                         </Label>
-                                                        <p className="text-sm text-gray-600 mt-1">
+                                                        <p className="text-sm text-muted-foreground mt-1">
                                                             Get access to your CPD dashboard, certificates, and event history.
                                                         </p>
                                                     </div>
@@ -766,7 +766,7 @@ export function EventRegistration() {
 
                                     <Button
                                         type="submit"
-                                        className="w-full bg-blue-600 hover:bg-blue-700 py-6 text-lg"
+                                        className="w-full py-6 text-lg"
                                         disabled={submitting}
                                     >
                                         {submitting ? (
@@ -792,7 +792,7 @@ export function EventRegistration() {
                     <div className="space-y-6">
                         {/* Price Card (for paid events) */}
                         {isPaidEvent && (
-                            <Card className={`border-primary/20 ${appliedPromo?.valid ? 'bg-green-50 border-green-200' : 'bg-primary/5'}`}>
+                            <Card className={`border-primary/20 ${appliedPromo?.valid ? 'bg-success-subtle border-success' : 'bg-primary/5'}`}>
                                 <CardContent className="py-4 text-center">
                                     <p className="text-sm font-medium text-muted-foreground">
                                         {appliedPromo?.valid ? 'Your Price' : 'Event Price'}
@@ -800,12 +800,12 @@ export function EventRegistration() {
 
                                     {appliedPromo?.valid ? (
                                         <>
-                                            <p className="text-3xl font-bold text-green-700 mt-1">
+                                            <p className="text-3xl font-bold text-success mt-1">
                                                 {displayPrice === 0 ? 'FREE' : formatPrice(displayPrice, event?.currency)}
                                             </p>
                                             <p className="text-sm text-muted-foreground mt-1">
                                                 <span className="line-through">{formatPrice(event?.price, event?.currency)}</span>
-                                                <span className="text-green-600 ml-2">
+                                                <span className="text-success ml-2">
                                                     Save {formatPrice(appliedPromo.discount_amount, event?.currency)}
                                                 </span>
                                             </p>
@@ -825,52 +825,52 @@ export function EventRegistration() {
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="flex items-start gap-3">
-                                    <div className="h-8 w-8 bg-amber-100 rounded-lg flex items-center justify-center shrink-0">
-                                        <Award className="h-4 w-4 text-amber-600" />
+                                    <div className="h-8 w-8 bg-warning-subtle rounded-lg flex items-center justify-center shrink-0">
+                                        <Award className="h-4 w-4 text-warning" />
                                     </div>
                                     <div>
                                         <h4 className="font-medium text-foreground text-sm">Track CPD Credits</h4>
-                                        <p className="text-xs text-gray-600">Automatically log your professional development hours.</p>
+                                        <p className="text-xs text-muted-foreground">Automatically log your professional development hours.</p>
                                     </div>
                                 </div>
 
                                 <div className="flex items-start gap-3">
-                                    <div className="h-8 w-8 bg-green-100 rounded-lg flex items-center justify-center shrink-0">
-                                        <FileText className="h-4 w-4 text-green-600" />
+                                    <div className="h-8 w-8 bg-success-subtle rounded-lg flex items-center justify-center shrink-0">
+                                        <FileText className="h-4 w-4 text-success" />
                                     </div>
                                     <div>
                                         <h4 className="font-medium text-foreground text-sm">Digital Certificates</h4>
-                                        <p className="text-xs text-gray-600">Access and share your certificates anytime.</p>
+                                        <p className="text-xs text-muted-foreground">Access and share your certificates anytime.</p>
                                     </div>
                                 </div>
 
                                 <div className="flex items-start gap-3">
-                                    <div className="h-8 w-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
-                                        <TrendingUp className="h-4 w-4 text-blue-600" />
+                                    <div className="h-8 w-8 bg-info-subtle rounded-lg flex items-center justify-center shrink-0">
+                                        <TrendingUp className="h-4 w-4 text-info" />
                                     </div>
                                     <div>
                                         <h4 className="font-medium text-foreground text-sm">Progress Dashboard</h4>
-                                        <p className="text-xs text-gray-600">See your learning journey at a glance.</p>
+                                        <p className="text-xs text-muted-foreground">See your learning journey at a glance.</p>
                                     </div>
                                 </div>
 
                                 <div className="flex items-start gap-3">
-                                    <div className="h-8 w-8 bg-purple-100 rounded-lg flex items-center justify-center shrink-0">
-                                        <Shield className="h-4 w-4 text-purple-600" />
+                                    <div className="h-8 w-8 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
+                                        <Shield className="h-4 w-4 text-primary" />
                                     </div>
                                     <div>
                                         <h4 className="font-medium text-foreground text-sm">Verified Records</h4>
-                                        <p className="text-xs text-gray-600">Employer-verifiable attendance and completion records.</p>
+                                        <p className="text-xs text-muted-foreground">Employer-verifiable attendance and completion records.</p>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
 
                         {event?.spots_remaining !== undefined && event.spots_remaining !== null && (
-                            <Card className="border-amber-200 bg-amber-50">
+                            <Card className="border-warning bg-warning-subtle">
                                 <CardContent className="py-4 text-center">
-                                    <p className="text-2xl font-bold text-amber-700">{event.spots_remaining}</p>
-                                    <p className="text-sm text-amber-600">spots remaining</p>
+                                    <p className="text-2xl font-bold text-warning">{event.spots_remaining}</p>
+                                    <p className="text-sm text-warning">spots remaining</p>
                                 </CardContent>
                             </Card>
                         )}

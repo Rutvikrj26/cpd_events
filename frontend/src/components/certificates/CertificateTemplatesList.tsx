@@ -189,7 +189,7 @@ export function CertificateTemplatesList() {
     if (loading) {
         return (
             <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
@@ -209,7 +209,7 @@ export function CertificateTemplatesList() {
                 <Card>
                     <CardContent className="py-16 text-center">
                         <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Award className="h-8 w-8 text-gray-400" />
+                            <Award className="h-8 w-8 text-muted-foreground" />
                         </div>
                         <h3 className="text-lg font-medium text-foreground mb-2">No templates yet</h3>
                         <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
@@ -227,8 +227,8 @@ export function CertificateTemplatesList() {
                             <CardHeader className="pb-3">
                                 <div className="flex items-start justify-between">
                                     <div className="flex items-center gap-2">
-                                        <div className="h-10 w-10 bg-amber-100 rounded-lg flex items-center justify-center">
-                                            <FileText className="h-5 w-5 text-amber-600" />
+                                        <div className="h-10 w-10 bg-warning-subtle rounded-lg flex items-center justify-center">
+                                            <FileText className="h-5 w-5 text-warning" />
                                         </div>
                                         <div>
                                             <CardTitle className="text-base flex items-center gap-2">
@@ -285,7 +285,7 @@ export function CertificateTemplatesList() {
                                             </DropdownMenuItem>
                                             <DropdownMenuSeparator />
                                             <DropdownMenuItem
-                                                className="text-red-600"
+                                                className="text-destructive"
                                                 onClick={() => setShowDeleteDialog(template.uuid)}
                                             >
                                                 <Trash2 className="mr-2 h-4 w-4" /> Delete
@@ -298,15 +298,15 @@ export function CertificateTemplatesList() {
                                 <p className="text-sm text-muted-foreground line-clamp-2">
                                     <div dangerouslySetInnerHTML={{ __html: template.description || "No description" }} />
                                 </p>
-                                <div className="mt-4 flex items-center justify-between text-xs text-gray-400">
+                                <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
                                     <div className="flex items-center gap-2">
                                         <span>v{template.version || 1}</span>
                                         {template.file_url ? (
-                                            <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200 text-xs">
+                                            <Badge variant="outline" className="text-success bg-success-subtle border-success text-xs">
                                                 <CheckCircle className="h-3 w-3 mr-1" /> PDF Ready
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-muted-foreground bg-gray-50 border-border text-xs">
+                                            <Badge variant="outline" className="text-muted-foreground bg-muted/30 border-border text-xs">
                                                 No PDF
                                             </Badge>
                                         )}
@@ -364,7 +364,7 @@ export function CertificateTemplatesList() {
                                     value={formData.description}
                                     onChange={(content) => setFormData({ ...formData, description: content })}
                                     placeholder="Describe when this template should be used..."
-                                    className="bg-white mb-4"
+                                    className="mb-4"
                                 />
                             </div>
                         </div>
@@ -374,7 +374,7 @@ export function CertificateTemplatesList() {
                     {createStep === 2 && (
                         <div className="py-6">
                             <div
-                                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${pendingFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400'
+                                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${pendingFile ? 'border-success bg-success-subtle' : 'border-border hover:border-primary'
                                     }`}
                                 onClick={() => {
                                     const input = document.createElement('input');
@@ -389,15 +389,15 @@ export function CertificateTemplatesList() {
                             >
                                 {pendingFile ? (
                                     <div className="space-y-2">
-                                        <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
-                                        <p className="text-green-700 font-medium">{pendingFile.name}</p>
+                                        <CheckCircle className="h-12 w-12 text-success mx-auto" />
+                                        <p className="text-success font-medium">{pendingFile.name}</p>
                                         <p className="text-sm text-muted-foreground">Click to change file</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-2">
-                                        <Upload className="h-12 w-12 text-gray-400 mx-auto" />
-                                        <p className="text-gray-600">Click to upload your PDF certificate template</p>
-                                        <p className="text-sm text-gray-400">Max size: 10MB</p>
+                                        <Upload className="h-12 w-12 text-muted-foreground mx-auto" />
+                                        <p className="text-foreground">Click to upload your PDF certificate template</p>
+                                        <p className="text-sm text-muted-foreground">Max size: 10MB</p>
                                     </div>
                                 )}
                             </div>
@@ -524,7 +524,7 @@ export function CertificateTemplatesList() {
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                            className="bg-red-600 hover:bg-red-700"
+                            className="bg-destructive hover:bg-destructive/90"
                             onClick={() => showDeleteDialog && handleDeleteTemplate(showDeleteDialog)}
                         >
                             Delete

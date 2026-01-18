@@ -99,7 +99,7 @@ export const SessionEditor = ({
                             value={formData.description || ''}
                             onChange={(content: string) => handleChange('description', content)}
                             placeholder="Brief description of this session..."
-                            className="bg-white mb-4"
+                            className="mb-4"
                         />
                     </div>
 

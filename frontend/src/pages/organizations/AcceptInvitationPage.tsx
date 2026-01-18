@@ -112,15 +112,15 @@ const AcceptInvitationPage: React.FC = () => {
   const getRoleIcon = (role?: string) => {
     switch (role) {
       case 'admin':
-        return <Shield className="h-5 w-5 text-purple-600" />;
+        return <Shield className="h-5 w-5 text-primary" />;
       case 'organizer':
-        return <Calendar className="h-5 w-5 text-blue-600" />;
+        return <Calendar className="h-5 w-5 text-info" />;
       case 'course_manager':
-        return <BookOpen className="h-5 w-5 text-emerald-600" />;
+        return <BookOpen className="h-5 w-5 text-success" />;
       case 'instructor':
-        return <UserIcon className="h-5 w-5 text-green-600" />;
+        return <UserIcon className="h-5 w-5 text-success" />;
       default:
-        return <UserIcon className="h-5 w-5 text-gray-600" />;
+        return <UserIcon className="h-5 w-5 text-muted-foreground" />;
     }
   };
 
@@ -157,10 +157,10 @@ const AcceptInvitationPage: React.FC = () => {
   if (state.status === 'success') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-green-200 bg-green-50/50">
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
-              <CheckCircle className="h-8 w-8 text-green-600" />
+        <Card className="w-full max-w-md border-success bg-success-subtle">
+          <CardContent className="flex flex-col items-center text-center py-12">
+            <div className="h-16 w-16 rounded-full bg-success-container flex items-center justify-center mb-4">
+              <CheckCircle className="h-8 w-8 text-success" />
             </div>
             <h2 className="text-2xl font-bold mb-2">Welcome aboard!</h2>
             <p className="text-muted-foreground mb-4">
@@ -309,15 +309,15 @@ const AcceptInvitationPage: React.FC = () => {
             <h3 className="font-semibold">What you'll be able to do:</h3>
             <ul className="space-y-2">
               <li className="flex items-start gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <CheckCircle className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
                 <span className="text-sm">Access organization events and courses</span>
               </li>
               <li className="flex items-start gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <CheckCircle className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
                 <span className="text-sm">Use organization branding and templates</span>
               </li>
               <li className="flex items-start gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <CheckCircle className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
                 <span className="text-sm">Collaborate with other team members</span>
               </li>
             </ul>

@@ -93,6 +93,18 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
                   <NavigationMenuItem>
                     <Link
+                      to="/events"
+                      className={cn(
+                        "group inline-flex h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground focus:outline-none",
+                        isActive('/events') ? 'text-foreground bg-muted' : 'text-muted-foreground'
+                      )}
+                    >
+                      Browse
+                    </Link>
+                  </NavigationMenuItem>
+
+                  <NavigationMenuItem>
+                    <Link
                       to="/pricing"
                       className={cn(
                         "group inline-flex h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground focus:outline-none",

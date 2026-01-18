@@ -277,16 +277,16 @@ export function OrganizationOnboardingWizard() {
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 {org.subscription?.is_trialing && (
-                                    <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900">
-                                        <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
-                                            <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300">
+                                    <div className="p-4 bg-warning-subtle rounded-lg border border-warning">
+                                        <div className="flex items-center gap-2 text-warning">
+                                            <Badge variant="outline" className="border-warning text-warning-muted">
                                                 Trial Active
                                             </Badge>
                                             <span className="text-sm">
                                                 {org.subscription.days_until_trial_ends} days remaining
                                             </span>
                                         </div>
-                                        <p className="text-sm text-amber-700 dark:text-amber-300 mt-2">
+                                        <p className="text-sm text-warning mt-2">
                                             Explore all features during your trial. No credit card required.
                                         </p>
                                     </div>
@@ -427,8 +427,8 @@ export function OrganizationOnboardingWizard() {
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 {org.subscription?.is_trialing && (
-                                    <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900">
-                                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                                    <div className="p-4 bg-info-subtle rounded-lg border border-info">
+                                        <p className="text-sm text-info">
                                             You're on a free trial. You can add payment details now or after your
                                             trial ends.
                                         </p>
@@ -557,8 +557,8 @@ export function OrganizationOnboardingWizard() {
                     {stepId === 'complete' && (
                         <>
                             <CardHeader className="text-center">
-                                <div className="mx-auto mb-4 w-16 h-16 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
-                                    <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+                                <div className="icon-container-success mx-auto mb-4 w-16 h-16 flex items-center justify-center">
+                                    <CheckCircle className="h-8 w-8 icon-success" />
                                 </div>
                                 <CardTitle className="text-2xl">You're All Set!</CardTitle>
                                 <CardDescription className="text-base">

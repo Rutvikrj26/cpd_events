@@ -137,27 +137,27 @@ export function EventManagement() {
       const registrationStatus = (attendee.status || '').toLowerCase();
 
       if (paymentStatus === 'refunded') {
-         return { label: 'Refunded', className: 'text-purple-700 border-purple-200 bg-purple-50' };
+         return { label: 'Refunded', className: 'text-primary border-primary bg-primary/10' };
       }
       if (paymentStatus === 'failed') {
-         return { label: 'Payment Failed', className: 'text-red-600 border-red-200 bg-red-50' };
+         return { label: 'Payment Failed', className: 'text-destructive border-destructive bg-destructive/10' };
       }
       if (paymentStatus === 'pending') {
-         return { label: 'Payment Pending', className: 'text-amber-700 border-amber-200 bg-amber-50' };
+         return { label: 'Payment Pending', className: 'text-warning border-warning bg-warning-subtle' };
       }
       if (paymentStatus === 'paid') {
-         return { label: 'Paid', className: 'text-green-700 border-green-200 bg-green-50' };
+         return { label: 'Paid', className: 'text-success border-success bg-success-subtle' };
       }
       if (registrationStatus === 'cancelled') {
-         return { label: 'Cancelled', className: 'text-red-600 border-red-200 bg-red-50' };
+         return { label: 'Cancelled', className: 'text-destructive border-destructive bg-destructive/10' };
       }
       if (registrationStatus === 'waitlisted') {
-         return { label: 'Waitlisted', className: 'text-amber-700 border-amber-200 bg-amber-50' };
+         return { label: 'Waitlisted', className: 'text-warning border-warning bg-warning-subtle' };
       }
       if (registrationStatus === 'pending') {
-         return { label: 'Pending', className: 'text-amber-700 border-amber-200 bg-amber-50' };
+         return { label: 'Pending', className: 'text-warning border-warning bg-warning-subtle' };
       }
-      return { label: 'Confirmed', className: 'text-green-700 border-green-200 bg-green-50' };
+      return { label: 'Confirmed', className: 'text-success border-success bg-success-subtle' };
    };
 
    const openActionDialog = (attendee: any, type: 'cancel' | 'refund') => {
@@ -382,7 +382,7 @@ export function EventManagement() {
                      <Button
                         onClick={handlePublish}
                         disabled={publishing}
-                        className="bg-green-600 hover:bg-green-700"
+                        className="bg-success hover:bg-success/90 text-white"
                      >
                         {publishing ? 'Publishing...' : 'Publish Event'}
                      </Button>
@@ -392,7 +392,7 @@ export function EventManagement() {
                         onClick={handleUnpublish}
                         disabled={publishing}
                         variant="outline"
-                        className="text-orange-600 border-orange-200 hover:bg-orange-50"
+                        className="text-warning border-warning hover:bg-warning-subtle"
                      >
                         {publishing ? 'Updating...' : 'Convert to Draft'}
                      </Button>
@@ -405,11 +405,11 @@ export function EventManagement() {
                      </Link>
                   )}
                   <Link to={`/events/${event.slug}`}>
-                     <Button className="bg-blue-600 hover:bg-blue-700">View Public Page</Button>
+                     <Button>View Public Page</Button>
                   </Link>
                   <AlertDialog>
                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700">
+                        <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive">
                            <Trash2 className="h-4 w-4 mr-2" />
                            Delete
                         </Button>
@@ -426,7 +426,7 @@ export function EventManagement() {
                            <AlertDialogAction
                               onClick={handleDelete}
                               disabled={deleting}
-                              className="bg-red-600 hover:bg-red-700"
+                              className="bg-destructive hover:bg-destructive/90"
                            >
                               {deleting ? 'Deleting...' : 'Delete Event'}
                            </AlertDialogAction>
@@ -499,12 +499,12 @@ export function EventManagement() {
 
          {/* Zoom Meeting Details Card */}
          {event.zoom_settings?.enabled && (
-            <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-900">
+            <Card className="border-info bg-info-subtle">
                <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                      <div className="flex items-center gap-2">
-                        <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
-                           <Video className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        <div className="icon-container-info">
+                           <Video className="h-5 w-5 icon-info" />
                         </div>
                         <div>
                            <CardTitle className="text-base">Zoom Meeting</CardTitle>
@@ -528,14 +528,14 @@ export function EventManagement() {
                   </div>
                   {/* Zoom Error Display */}
                   {event.zoom_error && !event.zoom_meeting_id && (
-                     <div className="mt-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900">
+                     <div className="mt-3 p-3 rounded-lg bg-error-subtle border border-error">
                         <div className="flex items-start gap-2">
-                           <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                           <AlertCircle className="h-4 w-4 icon-error mt-0.5 shrink-0" />
                            <div className="flex-1">
-                              <p className="text-sm font-medium text-red-700 dark:text-red-300">Meeting Creation Failed</p>
-                              <p className="text-xs text-red-600 dark:text-red-400 mt-1">{event.zoom_error}</p>
+                              <p className="text-sm font-medium text-error-muted">Meeting Creation Failed</p>
+                              <p className="text-xs text-error mt-1">{event.zoom_error}</p>
                               {event.zoom_error_at && (
-                                 <p className="text-xs text-red-500 dark:text-red-500 mt-1">
+                                 <p className="text-xs text-error mt-1">
                                     Failed at {new Date(event.zoom_error_at).toLocaleString()}
                                  </p>
                               )}
@@ -627,18 +627,18 @@ export function EventManagement() {
 
          <Tabs defaultValue="registrations" className="w-full">
             <TabsList className="w-full justify-start border-b border-border bg-transparent p-0 h-auto rounded-none mb-6">
-               <TabsTrigger value="registrations" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
+               <TabsTrigger value="registrations" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
                   Registrations
                </TabsTrigger>
-               <TabsTrigger value="attendance" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
+               <TabsTrigger value="attendance" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
                   Attendance
                </TabsTrigger>
                {event.certificates_enabled && (
-                  <TabsTrigger value="certificates" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
+                  <TabsTrigger value="certificates" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
                      Certificates
                   </TabsTrigger>
                )}
-               <TabsTrigger value="feedback" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent shadow-none">
+               <TabsTrigger value="feedback" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
                   <MessageSquare className="h-4 w-4 mr-2" />
                   Feedback
                   {stats.feedbackCount > 0 && (
@@ -732,7 +732,7 @@ export function EventManagement() {
                                              {canRefund ? (
                                                 <DropdownMenuItem
                                                    onClick={() => openActionDialog(attendee, 'refund')}
-                                                   className="text-amber-700"
+                                                   className="text-warning"
                                                 >
                                                    Refund Registration
                                                 </DropdownMenuItem>
@@ -740,7 +740,7 @@ export function EventManagement() {
                                                 <DropdownMenuItem
                                                    onClick={() => openActionDialog(attendee, 'cancel')}
                                                    disabled={!canCancel}
-                                                   className="text-red-600"
+                                                   className="text-destructive"
                                                 >
                                                    {isRefunded ? 'Already Refunded' : isCancelled ? 'Already Cancelled' : 'Cancel Registration'}
                                                 </DropdownMenuItem>
@@ -804,8 +804,8 @@ export function EventManagement() {
                         }}
                         disabled={actionLoading}
                         className={actionType === 'refund'
-                           ? 'bg-amber-600 hover:bg-amber-700'
-                           : 'bg-red-600 hover:bg-red-700'
+                           ? 'bg-warning hover:bg-warning/90 text-white'
+                           : 'bg-destructive hover:bg-destructive/90'
                         }
                      >
                         {actionLoading
@@ -917,19 +917,19 @@ export function EventManagement() {
             {/* CERTIFICATES TAB */}
             {event.certificates_enabled && (
                <TabsContent value="certificates" className="mt-0">
-                  <div className="mb-4 flex justify-between items-center bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg">
+                  <div className="mb-4 flex justify-between items-center bg-info-subtle border border-info p-4 rounded-lg">
                      <div className="flex gap-3">
-                        <div className="bg-blue-500/20 p-2 rounded-full h-10 w-10 flex items-center justify-center text-blue-600">
+                        <div className="bg-info/20 p-2 rounded-full h-10 w-10 flex items-center justify-center text-info">
                            <Award className="h-5 w-5" />
                         </div>
                         <div>
-                           <h3 className="text-sm font-bold text-blue-600 dark:text-blue-400">Ready to issue?</h3>
-                           <p className="text-sm text-blue-600/80 dark:text-blue-400/80">
+                           <h3 className="text-sm font-bold text-info">Ready to issue?</h3>
+                           <p className="text-sm text-muted-foreground">
                               You have {stats.checkedIn} verified attendees eligible for certificates.
                            </p>
                         </div>
                      </div>
-                     <Button onClick={handleIssueAllCertificates} className="bg-blue-600 hover:bg-blue-700 text-white">
+                     <Button onClick={handleIssueAllCertificates}>
                         Issue All Certificates
                      </Button>
                   </div>
@@ -953,7 +953,7 @@ export function EventManagement() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                        {attendee.attendance_eligible ? (
-                                          <Badge variant="outline" className="text-green-600 bg-green-500/10 border-green-200">Eligible</Badge>
+                                          <Badge variant="outline" className="text-success bg-success-subtle border-success">Eligible</Badge>
                                        ) : (
                                           <Badge variant="outline" className="text-muted-foreground bg-muted border-border">Not Eligible</Badge>
                                        )}

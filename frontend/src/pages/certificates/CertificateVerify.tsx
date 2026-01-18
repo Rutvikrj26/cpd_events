@@ -97,7 +97,7 @@ export const CertificateVerify = () => {
     // Loading State
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+            <div className="min-h-screen bg-background flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
                     <p className="text-muted-foreground">Verifying certificate...</p>
@@ -109,14 +109,14 @@ export const CertificateVerify = () => {
     // Default View (No Code)
     if (!code) {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 max-w-md w-full">
+            <div className="min-h-screen bg-background flex items-center justify-center p-4">
+                <div className="bg-card rounded-xl shadow-sm border border-border p-8 max-w-md w-full">
                     <div className="text-center mb-8">
-                        <div className="h-16 w-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <div className="h-16 w-16 bg-info-subtle text-info rounded-full flex items-center justify-center mx-auto mb-4">
                             <ShieldCheck className="h-8 w-8" />
                         </div>
-                        <h1 className="text-2xl font-bold text-slate-900 mb-2">Verify Certificate</h1>
-                        <p className="text-slate-500">Enter the verification code to check certificate authenticity</p>
+                        <h1 className="text-2xl font-bold text-foreground mb-2">Verify Certificate</h1>
+                        <p className="text-muted-foreground">Enter the verification code to check certificate authenticity</p>
                     </div>
 
                     <form onSubmit={handleVerify} className="space-y-4">
@@ -134,7 +134,7 @@ export const CertificateVerify = () => {
                         </div>
 
                         {error && (
-                            <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+                            <div className="bg-error-subtle border border-error text-error px-4 py-3 rounded-lg text-sm flex items-center gap-2">
                                 <ShieldX className="h-4 w-4 shrink-0" />
                                 {error}
                             </div>
@@ -152,13 +152,13 @@ export const CertificateVerify = () => {
     // Error View
     if (error || !certificate) {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 max-w-md w-full text-center">
-                    <div className="h-16 w-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="min-h-screen bg-background flex items-center justify-center p-4">
+                <div className="bg-card rounded-xl shadow-sm border border-border p-8 max-w-md w-full text-center">
+                    <div className="h-16 w-16 bg-error-subtle text-error rounded-full flex items-center justify-center mx-auto mb-4">
                         <ShieldX className="h-8 w-8" />
                     </div>
-                    <h1 className="text-2xl font-bold text-slate-900 mb-2">Verification Failed</h1>
-                    <p className="text-slate-500 mb-6">{error || 'Certificate not found'}</p>
+                    <h1 className="text-2xl font-bold text-foreground mb-2">Verification Failed</h1>
+                    <p className="text-muted-foreground mb-6">{error || 'Certificate not found'}</p>
                     <div className="flex gap-3 justify-center">
                         <Link to="/">
                             <Button variant="outline">Back to Home</Button>
@@ -177,20 +177,20 @@ export const CertificateVerify = () => {
     const isCourse = certificate.event.type === 'course';
 
     return (
-        <div className="min-h-screen bg-slate-50 pb-12 font-sans">
+        <div className="min-h-screen bg-background pb-12 font-sans">
             {/* Header */}
-            <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+            <header className="bg-card border-b border-border sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         {/* You can replace this with your actual logo */}
                         <div className="h-8 w-8 bg-primary rounded-md flex items-center justify-center text-primary-foreground font-bold font-outfit">
                             A
                         </div>
-                        <span className="font-semibold text-slate-900">Certificate Verification</span>
+                        <span className="font-semibold text-foreground">Certificate Verification</span>
                     </div>
 
                     {isValid && (
-                        <div className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm font-medium border border-green-100">
+                        <div className="flex items-center gap-1.5 bg-success-subtle text-success px-3 py-1 rounded-full text-sm font-medium border border-success">
                             <CheckCircle className="h-4 w-4" />
                             <span>Verified Authentic</span>
                         </div>
@@ -225,20 +225,20 @@ export const CertificateVerify = () => {
                         </div>
 
                         {/* Certificate Details Card */}
-                        <div className="bg-white rounded-b-xl shadow-sm border border-slate-200 border-t-0 p-8 -mt-6">
+                        <div className="bg-card rounded-b-xl shadow-sm border border-border border-t-0 p-8 -mt-6">
 
                             <div className="flex flex-col md:flex-row gap-8 items-start mb-10">
                                 {/* Digital Badge Icon (Placeholder) */}
                                 <div className="shrink-0 mx-auto md:mx-0">
-                                    <div className="w-32 h-32 bg-slate-100 rounded-full flex items-center justify-center border-4 border-slate-50 shadow-inner">
-                                        <Award className="h-16 w-16 text-slate-400" />
+                                    <div className="w-32 h-32 bg-muted/50 rounded-full flex items-center justify-center border-4 border-muted/20 shadow-inner">
+                                        <Award className="h-16 w-16 text-muted-foreground" />
                                     </div>
                                 </div>
 
                                 <div className="flex-1 text-center md:text-left">
-                                    <p className="text-slate-500 mb-2">This certifies that</p>
-                                    <h2 className="text-3xl font-bold text-slate-900 mb-2">{certificate.registrant.full_name}</h2>
-                                    <p className="text-slate-500 mb-2">has successfully completed the requirements for the {isCourse ? 'course' : 'program'}</p>
+                                    <p className="text-muted-foreground mb-2">This certifies that</p>
+                                    <h2 className="text-3xl font-bold text-foreground mb-2">{certificate.registrant.full_name}</h2>
+                                    <p className="text-muted-foreground mb-2">has successfully completed the requirements for the {isCourse ? 'course' : 'program'}</p>
                                     <h3 className="text-xl font-semibold text-primary">{certificate.event.title}</h3>
                                 </div>
                             </div>
@@ -247,8 +247,8 @@ export const CertificateVerify = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-12">
                                 <div>
-                                    <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Issue Date</h4>
-                                    <p className="text-slate-900 font-medium">
+                                    <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Issue Date</h4>
+                                    <p className="text-foreground font-medium">
                                         {new Date(certificate.created_at).toLocaleDateString(undefined, {
                                             year: 'numeric',
                                             month: 'long',
@@ -259,32 +259,32 @@ export const CertificateVerify = () => {
 
                                 {certificate.event.date && (
                                     <div>
-                                        <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">
+                                        <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">
                                             {isCourse ? 'Completion Date' : 'Event Date'}
                                         </h4>
-                                        <p className="text-slate-900 font-medium">{certificate.event.date}</p>
+                                        <p className="text-foreground font-medium">{certificate.event.date}</p>
                                     </div>
                                 )}
 
                                 <div>
-                                    <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Issued By</h4>
+                                    <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Issued By</h4>
                                     <div className="flex items-center gap-2">
-                                        <Building className="h-4 w-4 text-slate-400" />
-                                        <p className="text-slate-900 font-medium">{certificate.organizer.display_name}</p>
+                                        <Building className="h-4 w-4 text-muted-foreground" />
+                                        <p className="text-foreground font-medium">{certificate.organizer.display_name}</p>
                                     </div>
                                 </div>
 
                                 <div>
-                                    <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Certificate ID</h4>
-                                    <p className="font-mono text-slate-600 bg-slate-100 inline-block px-2 py-0.5 rounded text-sm">
+                                    <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Certificate ID</h4>
+                                    <p className="font-mono text-muted-foreground bg-muted/50 inline-block px-2 py-0.5 rounded text-sm">
                                         {certificate.verification_code || code}
                                     </p>
                                 </div>
 
                                 {certificate.event.cpd_credits && (
                                     <div>
-                                        <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Credits Awarded</h4>
-                                        <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Credits Awarded</h4>
+                                        <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-info-subtle text-info">
                                             {certificate.event.cpd_credits} {certificate.event.cpd_type}
                                         </div>
                                     </div>
@@ -297,8 +297,8 @@ export const CertificateVerify = () => {
                     <div className="lg:col-span-4 space-y-6">
 
                         {/* Actions Card */}
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                            <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                        <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+                            <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                                 <ExternalLink className="h-4 w-4" />
                                 Certificate Actions
                             </h3>
@@ -343,13 +343,13 @@ export const CertificateVerify = () => {
                         </div>
 
                         {/* Verification Info Card */}
-                        <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 text-sm">
-                            <h3 className="font-semibold text-slate-900 mb-2">About Verification</h3>
-                            <p className="text-slate-500 mb-4">
+                        <div className="bg-muted/30 rounded-xl border border-border p-6 text-sm">
+                            <h3 className="font-semibold text-foreground mb-2">About Verification</h3>
+                            <p className="text-muted-foreground mb-4">
                                 This page verifies that the {isCourse ? 'course' : 'program'} certificate was issued by {certificate.organizer.display_name} to the named recipient.
                             </p>
 
-                            <div className="flex items-center gap-2 text-slate-400 text-xs">
+                            <div className="flex items-center gap-2 text-muted-foreground text-xs">
                                 <ShieldCheck className="h-4 w-4" />
                                 <span>Secured by Accredit</span>
                             </div>
@@ -358,7 +358,7 @@ export const CertificateVerify = () => {
                     </div>
                 </div>
             </main>
-            <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-slate-500 text-sm">
+            <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-muted-foreground text-sm">
                 <p>&copy; {new Date().getFullYear()} {certificate.organizer.display_name}. All rights reserved.</p>
             </footer>
         </div>

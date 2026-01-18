@@ -43,42 +43,55 @@ export function TermsPage() {
                 </section>
 
                 <section className="mb-8">
-                    <h2 className="text-2xl font-semibold mb-4">5. Intellectual Property</h2>
+                    <h2 className="text-2xl font-semibold mb-4">5. Payments and Subscriptions</h2>
+                    <ul className="list-disc pl-6 space-y-2">
+                        <li><strong>Billing:</strong> Some parts of the Service are billed on a subscription basis ("Subscription(s)"). You will be billed in advance on a recurring and periodic basis ("Billing Cycle").</li>
+                        <li><strong>Payment Methods:</strong> You must provide a valid payment method. By providing such information, you authorize us to charge all Subscription fees to that payment method.</li>
+                        <li><strong>Cancellations:</strong> You may cancel your Subscription at any time. Your cancellation will take effect at the end of the current Billing Cycle. There are no refunds for partial Subscription periods.</li>
+                        <li><strong>Fee Changes:</strong> Accredit, in its sole discretion and at any time, may modify the Subscription fees. Any Subscription fee change will become effective at the end of the then-current Billing Cycle.</li>
+                    </ul>
+                </section>
+
+                <section className="mb-8">
+                    <h2 className="text-2xl font-semibold mb-4">6. Intellectual Property</h2>
                     <p>
                         The Service and its original content (excluding Content provided by users), features and functionality are and will remain the exclusive property of Accredit and its licensors. The Service is protected by copyright, trademark, and other laws of both Canada and foreign countries.
                     </p>
                 </section>
 
                 <section className="mb-8">
-                    <h2 className="text-2xl font-semibold mb-4">6. Termination</h2>
+                    <h2 className="text-2xl font-semibold mb-4">7. Termination</h2>
                     <p>
                         We may terminate or suspend your account immediately, without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms. Upon termination, your right to use the Service will immediately cease.
                     </p>
                 </section>
 
                 <section className="mb-8">
-                    <h2 className="text-2xl font-semibold mb-4">7. Limitation of Liability</h2>
+                    <h2 className="text-2xl font-semibold mb-4">8. Limitation of Liability</h2>
                     <p>
                         In no event shall Accredit, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from (i) your access to or use of or inability to access or use the Service; (ii) any conduct or content of any third party on the Service; (iii) any content obtained from the Service; and (iv) unauthorized access, use or alteration of your transmissions or content.
+                    </p>
+                    <p className="mt-4">
+                        Accredit operates solely as a marketplace and technology platform. We do not issue, validate, or endorse the content of any certificates generated through our Service. These certificates are issued directly by event organizers, content creators, and organizations using our platform. Consequently, Accredit assumes no liability for the legitimacy, accuracy, or acceptance of such certificates.
                     </p>
                 </section>
 
                 <section className="mb-8">
-                    <h2 className="text-2xl font-semibold mb-4">8. Governing Law</h2>
+                    <h2 className="text-2xl font-semibold mb-4">9. Governing Law</h2>
                     <p>
                         These Terms shall be governed and construed in accordance with the laws of Ontario, Canada, without regard to its conflict of law provisions.
                     </p>
                 </section>
 
                 <section className="mb-8">
-                    <h2 className="text-2xl font-semibold mb-4">9. Changes</h2>
+                    <h2 className="text-2xl font-semibold mb-4">10. Changes</h2>
                     <p>
                         We reserve the right, at our sole discretion, to modify or replace these Terms at any time. If a revision is material we will try to provide at least 30 days notice prior to any new terms taking effect. What constitutes a material change will be determined at our sole discretion.
                     </p>
                 </section>
 
                 <section className="mb-8">
-                    <h2 className="text-2xl font-semibold mb-4">10. Contact Us</h2>
+                    <h2 className="text-2xl font-semibold mb-4">11. Contact Us</h2>
                     <p>
                         If you have any questions about these Terms, please contact us at support@accredit.com.
                     </p>

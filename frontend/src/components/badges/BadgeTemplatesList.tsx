@@ -172,7 +172,7 @@ export function BadgeTemplatesList() {
     if (loading) {
         return (
             <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
@@ -190,7 +190,7 @@ export function BadgeTemplatesList() {
                 <Card>
                     <CardContent className="py-16 text-center">
                         <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Award className="h-8 w-8 text-gray-400" />
+                            <Award className="h-8 w-8 text-muted-foreground" />
                         </div>
                         <h3 className="text-lg font-medium text-foreground mb-2">No badges yet</h3>
                         <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
@@ -208,11 +208,11 @@ export function BadgeTemplatesList() {
                             <CardHeader className="pb-3">
                                 <div className="flex items-start justify-between">
                                     <div className="flex items-center gap-2">
-                                        <div className="h-10 w-10 bg-purple-100 rounded-lg flex items-center justify-center overflow-hidden">
+                                        <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center overflow-hidden">
                                             {template.start_image ? (
                                                 <img src={template.start_image} alt="" className="w-full h-full object-cover" />
                                             ) : (
-                                                <ImageIcon className="h-5 w-5 text-purple-600" />
+                                                <ImageIcon className="h-5 w-5 text-primary" />
                                             )}
                                         </div>
                                         <div>
@@ -252,7 +252,7 @@ export function BadgeTemplatesList() {
                                             </DropdownMenuItem>
                                             <DropdownMenuSeparator />
                                             <DropdownMenuItem
-                                                className="text-red-600"
+                                                className="text-destructive"
                                                 onClick={() => setShowDeleteDialog(template.uuid)}
                                             >
                                                 <Trash2 className="mr-2 h-4 w-4" /> Delete
@@ -263,7 +263,7 @@ export function BadgeTemplatesList() {
                             </CardHeader>
                             <CardContent>
                                 <div className="text-sm text-muted-foreground line-clamp-2" dangerouslySetInnerHTML={{ __html: template.description || "" }} />
-                                <div className="mt-4 flex items-center justify-between text-xs text-gray-400">
+                                <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
                                     <span>{template.start_image ? 'Ready to issue' : 'Draft'}</span>
                                     <span>{new Date(template.created_at).toLocaleDateString()}</span>
                                 </div>
@@ -315,7 +315,7 @@ export function BadgeTemplatesList() {
                                     theme="snow"
                                     value={formData.description}
                                     onChange={(content) => setFormData({ ...formData, description: content })}
-                                    className="bg-white mb-4"
+                                    className="mb-4"
                                 />
                             </div>
                         </div>
@@ -324,7 +324,7 @@ export function BadgeTemplatesList() {
                     {createStep === 2 && (
                         <div className="py-6">
                             <div
-                                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${pendingFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400'
+                                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${pendingFile ? 'border-success bg-success-subtle' : 'border-border hover:border-primary'
                                     }`}
                                 onClick={() => {
                                     const input = document.createElement('input');
@@ -339,13 +339,13 @@ export function BadgeTemplatesList() {
                             >
                                 {pendingFile ? (
                                     <div className="space-y-2">
-                                        <p className="text-green-700 font-medium">{pendingFile.name}</p>
+                                        <p className="text-success font-medium">{pendingFile.name}</p>
                                         <p className="text-sm text-muted-foreground">Click to change file</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-2">
-                                        <Upload className="h-12 w-12 text-gray-400 mx-auto" />
-                                        <p className="text-gray-600">Click to upload badge image (PNG/JPG)</p>
+                                        <Upload className="h-12 w-12 text-muted-foreground mx-auto" />
+                                        <p className="text-foreground">Click to upload badge image (PNG/JPG)</p>
                                     </div>
                                 )}
                             </div>
@@ -412,7 +412,7 @@ export function BadgeTemplatesList() {
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                            className="bg-red-600 hover:bg-red-700"
+                            className="bg-destructive hover:bg-destructive/90"
                             onClick={() => showDeleteDialog && handleDeleteTemplate(showDeleteDialog)}
                         >
                             Delete

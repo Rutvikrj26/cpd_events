@@ -378,30 +378,30 @@ const TeamManagementPage: React.FC = () => {
     const getRoleIcon = (role: OrganizationRole) => {
         switch (role) {
             case 'admin':
-                return <Shield className="h-4 w-4 text-purple-600" />;
+                return <Shield className="h-4 w-4 text-primary" />;
             case 'organizer':
-                return <Calendar className="h-4 w-4 text-blue-600" />;
+                return <Calendar className="h-4 w-4 text-info" />;
             case 'course_manager':
-                return <BookOpen className="h-4 w-4 text-emerald-600" />;
+                return <BookOpen className="h-4 w-4 text-success" />;
             case 'instructor':
-                return <UserIcon className="h-4 w-4 text-green-600" />;
+                return <UserIcon className="h-4 w-4 text-success" />;
             default:
-                return <UserIcon className="h-4 w-4 text-gray-600" />;
+                return <UserIcon className="h-4 w-4 text-muted-foreground" />;
         }
     };
 
     const getRoleBadgeColor = (role: OrganizationRole) => {
         switch (role) {
             case 'admin':
-                return 'bg-purple-100 text-purple-800 border-purple-200';
+                return 'bg-primary/10 text-primary border-primary';
             case 'course_manager':
-                return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                return 'bg-success-subtle text-success border-success';
             case 'instructor':
-                return 'bg-green-100 text-green-800 border-green-200';
+                return 'bg-success-subtle text-success border-success';
             case 'organizer':
-                return 'bg-blue-100 text-blue-800 border-blue-200';
+                return 'bg-info-subtle text-info border-info';
             default:
-                return 'bg-gray-100 text-gray-800 border-gray-200';
+                return 'bg-muted text-muted-foreground border-border';
         }
     };
 
@@ -831,12 +831,12 @@ const TeamManagementPage: React.FC = () => {
                             {lookupResult && (
                                 <div className="p-2 bg-muted/30 rounded border text-sm mt-1 animate-in fade-in slide-in-from-top-1">
                                     {lookupResult.found ? (
-                                        <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                                        <div className="flex items-center gap-2 text-success">
                                             <Check className="h-4 w-4" />
                                             <span>Found existing user: <strong>{lookupResult.user?.full_name}</strong></span>
                                         </div>
                                     ) : (
-                                        <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                                        <div className="flex items-center gap-2 text-info">
                                             <Mail className="h-4 w-4" />
                                             <span>User not found. They will be invited to join the platform.</span>
                                         </div>
@@ -1038,7 +1038,7 @@ const TeamManagementPage: React.FC = () => {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <CheckCircle className="h-5 w-5 text-green-600" />
+                            <CheckCircle className="h-5 w-5 text-success" />
                             Invitation Sent!
                         </DialogTitle>
                         <DialogDescription>

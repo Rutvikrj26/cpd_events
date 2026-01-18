@@ -309,14 +309,14 @@ export function CoursePlayerPage() {
 
     // Get content icon
     const getContentIcon = (type: string, completed: boolean) => {
-        if (completed) return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+        if (completed) return <CheckCircle2 className="h-4 w-4 text-success" />;
 
         switch (type) {
-            case 'video': return <Video className="h-4 w-4 text-blue-500" />;
-            case 'text': return <FileText className="h-4 w-4 text-orange-500" />;
-            case 'document': return <File className="h-4 w-4 text-purple-500" />;
-            case 'lesson': return <FileText className="h-4 w-4 text-emerald-500" />;
-            case 'external': return <ExternalLink className="h-4 w-4 text-sky-500" />;
+            case 'video': return <Video className="h-4 w-4 text-info" />;
+            case 'text': return <FileText className="h-4 w-4 text-warning" />;
+            case 'document': return <File className="h-4 w-4 text-primary" />;
+            case 'lesson': return <FileText className="h-4 w-4 text-success" />;
+            case 'external': return <ExternalLink className="h-4 w-4 text-info" />;
             default: return <Circle className="h-4 w-4 text-muted-foreground" />;
         }
     };
@@ -346,15 +346,15 @@ export function CoursePlayerPage() {
     const getSubmissionBadge = (status?: AssignmentSubmission['status']) => {
         switch (status) {
             case 'submitted':
-                return <Badge className="bg-blue-500">Submitted</Badge>;
+                return <Badge className="bg-info">Submitted</Badge>;
             case 'in_review':
-                return <Badge className="bg-amber-500">In Review</Badge>;
+                return <Badge className="bg-warning">In Review</Badge>;
             case 'needs_revision':
                 return <Badge variant="destructive">Needs Revision</Badge>;
             case 'graded':
-                return <Badge className="bg-green-500">Graded</Badge>;
+                return <Badge className="bg-success">Graded</Badge>;
             case 'approved':
-                return <Badge className="bg-emerald-600">Approved</Badge>;
+                return <Badge className="bg-success">Approved</Badge>;
             case 'draft':
                 return <Badge variant="secondary">Draft</Badge>;
             default:
@@ -517,7 +517,7 @@ export function CoursePlayerPage() {
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
                                                 {moduleCompleted ? (
-                                                    <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                                                    <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
                                                 ) : (
                                                     <span className="w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-medium shrink-0">
                                                         {modIdx + 1}
@@ -566,7 +566,7 @@ export function CoursePlayerPage() {
                                                             : 'hover:bg-muted'
                                                             }`}
                                                     >
-                                                        <ClipboardCheck className="h-4 w-4 text-amber-500" />
+                                                        <ClipboardCheck className="h-4 w-4 text-warning" />
                                                         <span className="truncate flex-1">{assignment.title}</span>
                                                         <span className="text-xs text-muted-foreground">
                                                             {latestSubmission?.status_display || latestSubmission?.status || 'Not started'}
@@ -915,7 +915,7 @@ const QuizContent = ({
                 <div className="flex items-center justify-between">
                     <Button onClick={handleSubmit}>Submit Quiz</Button>
                     {result && (
-                        <Badge className={result.passed ? 'bg-green-500' : 'bg-amber-500'}>
+                        <Badge className={result.passed ? 'bg-success' : 'bg-warning'}>
                             {result.scorePercent}% {result.passed ? 'Passed' : 'Try again'}
                         </Badge>
                     )}
@@ -966,10 +966,10 @@ const AssignmentContent = ({
                 )}
 
                 {submission?.feedback && (
-                    <Card className="border-amber-200 bg-amber-50/50">
+                    <Card className="border-warning bg-warning-subtle">
                         <CardContent className="pt-4 text-sm">
-                            <p className="font-medium text-amber-700 mb-1">Instructor Feedback</p>
-                            <p className="text-amber-700">{submission.feedback}</p>
+                            <p className="font-medium text-warning mb-1">Instructor Feedback</p>
+                            <p className="text-warning">{submission.feedback}</p>
                         </CardContent>
                     </Card>
                 )}

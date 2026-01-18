@@ -15,7 +15,7 @@ export function FormFieldSuccess({ show, message, className }: FormFieldSuccessP
     if (!show) return null;
 
     return (
-        <div className={cn("flex items-center gap-1.5 text-sm text-green-600 dark:text-green-500 mt-1", className)}>
+        <div className={cn("flex items-center gap-1.5 text-sm text-success mt-1", className)}>
             <CheckCircle2 className="h-4 w-4" />
             {message && <span>{message}</span>}
         </div>

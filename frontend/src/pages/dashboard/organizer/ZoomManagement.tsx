@@ -84,19 +84,19 @@ export function ZoomManagement() {
 
             {/* Connection Status Card */}
             <Card className={zoomStatus?.is_connected
-                ? "border-green-200 bg-green-50/50 dark:bg-green-950/20 dark:border-green-900"
-                : "border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900"
+                ? "border-success bg-success-subtle"
+                : "border-warning bg-warning-subtle"
             }>
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className={`p-3 rounded-lg ${zoomStatus?.is_connected
-                                ? "bg-green-100 dark:bg-green-900/50"
-                                : "bg-amber-100 dark:bg-amber-900/50"
+                                ? "bg-success-container"
+                                : "bg-warning-container"
                                 }`}>
                                 <Video className={`h-6 w-6 ${zoomStatus?.is_connected
-                                    ? "text-green-600 dark:text-green-400"
-                                    : "text-amber-600 dark:text-amber-400"
+                                    ? "icon-success"
+                                    : "icon-warning"
                                     }`} />
                             </div>
                             <div>

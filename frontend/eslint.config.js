@@ -4,6 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
+import localRules from './eslint-local-rules.cjs';
 
 export default [
     {
@@ -21,6 +22,9 @@ export default [
             '@typescript-eslint': tsPlugin,
             'react-hooks': reactHooks,
             'react-refresh': reactRefresh,
+            'local': {
+                rules: localRules,
+            },
         },
         rules: {
             ...tsPlugin.configs.recommended.rules,
@@ -38,6 +42,8 @@ export default [
                     caughtErrorsIgnorePattern: '^_',
                 },
             ],
+            // Custom rule to prevent hardcoded colors
+            'local/no-hardcoded-colors': 'warn',
         },
     },
     {

@@ -468,7 +468,7 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
 
                                     <div className="space-y-2">
                                         <Label>Lesson Content</Label>
-                                        <div className="bg-white rounded-md">
+                                        <div className="bg-background rounded-md">
                                             <ReactQuill
                                                 theme="snow"
                                                 value={newTextBody}
@@ -485,7 +485,7 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                         {existingFile && !removeFile ? (
                                             <div className="flex items-center justify-between p-2 border rounded-md bg-muted/20">
                                                 <div className="flex items-center gap-2 overflow-hidden">
-                                                    <File className="h-4 w-4 flex-shrink-0 text-blue-500" />
+                                                    <File className="h-4 w-4 flex-shrink-0 text-primary" />
                                                     <span className="text-sm truncate max-w-[200px]">
                                                         {typeof existingFile === 'string' ? existingFile.split('/').pop() : 'Attached File'}
                                                     </span>
@@ -493,7 +493,7 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    className="h-6 text-xs text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                    className="h-6 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                                                     onClick={() => setRemoveFile(true)}
                                                 >
                                                     <Trash2 className="h-3 w-3 mr-1" /> Remove
@@ -511,7 +511,7 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                                 />
                                                 <p className="text-xs text-muted-foreground">
                                                     {editingContentUuid ? "Upload new file to replace existing" : "Upload a PDF, document, or supplementary file."}
-                                                    {removeFile && <span className="text-red-500 ml-2">(Existing file will be removed)</span>}
+                                                    {removeFile && <span className="text-destructive ml-2">(Existing file will be removed)</span>}
                                                 </p>
                                             </>
                                         )}
@@ -702,7 +702,7 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                 if (previewContent.content_type === 'quiz') {
                                     return (
                                         <div className="space-y-4">
-                                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                                            <div className="flex justify-between items-center p-3 bg-muted/30 rounded-md">
                                                 <span className="font-medium">Passing Score: {data.passing_score}%</span>
                                                 <span className="text-muted-foreground">{data.questions?.length || 0} Questions</span>
                                             </div>
@@ -710,14 +710,14 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                                 {data.questions?.map((q: any, idx: number) => (
                                                     <div key={idx} className="border p-4 rounded-md">
                                                         <div className="flex gap-2">
-                                                            <span className="font-bold text-gray-500">{idx + 1}.</span>
+                                                            <span className="font-bold text-muted-foreground">{idx + 1}.</span>
                                                             <div className="flex-1">
                                                                 <p className="font-medium mb-2">{q.text}</p>
                                                                 <div className="space-y-1 pl-2">
                                                                     {q.options?.map((opt: any, oIdx: number) => (
                                                                         <div key={oIdx} className="flex items-center gap-2 text-sm">
-                                                                            <div className={`h-2 w-2 rounded-full ${opt.isCorrect ? 'bg-green-50' : 'bg-gray-300'}`} />
-                                                                            <span className={opt.isCorrect ? 'font-medium text-green-700' : ''}>{opt.text}</span>
+                                                                            <div className={`h-2 w-2 rounded-full ${opt.isCorrect ? 'bg-success' : 'bg-muted'}`} />
+                                                                            <span className={opt.isCorrect ? 'font-medium text-success' : ''}>{opt.text}</span>
                                                                         </div>
                                                                     ))}
                                                                 </div>
@@ -748,14 +748,14 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
 
                                         {data.text?.body && (
                                             <div
-                                                className="prose prose-sm max-w-none p-4 bg-gray-50 rounded-lg"
+                                                className="prose prose-sm max-w-none p-4 bg-muted/30 rounded-lg"
                                                 dangerouslySetInnerHTML={{ __html: data.text.body }}
                                             />
                                         )}
 
                                         {previewContent.file && (
-                                            <div className="flex items-center gap-2 p-3 border rounded-md bg-gray-50">
-                                                <File className="h-4 w-4 text-blue-500" />
+                                            <div className="flex items-center gap-2 p-3 border rounded-md bg-muted/30">
+                                                <File className="h-4 w-4 text-primary" />
                                                 <span className="text-sm font-medium">Attached File (Available for download)</span>
                                             </div>
                                         )}
@@ -798,7 +798,7 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                     handleDeleteAssignment(itemToDelete.moduleUuid, itemToDelete.uuid);
                                 }
                             }}
-                            className="bg-red-600 hover:bg-red-700"
+                            className="bg-destructive hover:bg-destructive/90"
                         >
                             Delete
                         </AlertDialogAction>
@@ -810,7 +810,7 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                 {modules.length === 0 ? (
                     <Card className="border-dashed">
                         <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                            <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4 text-gray-400">
+                            <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4 text-muted-foreground">
                                 <FileText className="h-6 w-6" />
                             </div>
                             <h3 className="font-medium text-lg mb-1">No modules yet</h3>
@@ -872,8 +872,8 @@ function ModuleItem({
 
     return (
         <Card className="overflow-hidden">
-            <div className="flex items-center p-4 bg-gray-50/50 border-b border-gray-100">
-                <Button variant="ghost" size="icon" className="mr-2 cursor-grab text-gray-400 hover:text-gray-600">
+            <div className="flex items-center p-4 bg-muted/30 border-b border-border">
+                <Button variant="ghost" size="icon" className="mr-2 cursor-grab text-muted-foreground hover:text-foreground">
                     <GripVertical className="h-4 w-4" />
                 </Button>
                 <div className="flex-1">
@@ -889,17 +889,17 @@ function ModuleItem({
                     <Button variant="ghost" size="sm" onClick={() => setIsExpanded(!isExpanded)}>
                         {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-red-500" onClick={(e) => { e.stopPropagation(); onDelete(); }}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(); }}>
                         <Trash2 className="h-4 w-4" />
                     </Button>
                 </div>
             </div>
 
             {isExpanded && (
-                <CardContent className="p-0 bg-white">
-                    <div className="divide-y divide-gray-100">
+                <CardContent className="p-0 bg-card">
+                    <div className="divide-y divide-border">
                         {contents.length === 0 ? (
-                            <div className="p-8 text-center text-sm text-gray-400 italic">
+                            <div className="p-8 text-center text-sm text-muted-foreground italic">
                                 No content in this module yet.
                                 <div className="mt-2">
                                     <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onAddContent(module.module.uuid)}>
@@ -909,9 +909,9 @@ function ModuleItem({
                             </div>
                         ) : (
                             contents.map((content: any) => (
-                                <div key={content.uuid} className="flex items-center p-3 pl-12 hover:bg-gray-50 group cursor-pointer" onClick={() => onPreviewContent(content)}>
-                                    <div className="mr-3 text-gray-400">
-                                        {content.content_type === 'quiz' ? <HelpCircle className="h-4 w-4 text-purple-500" /> : <FileText className="h-4 w-4" />}
+                                <div key={content.uuid} className="flex items-center p-3 pl-12 hover:bg-muted/30 group cursor-pointer" onClick={() => onPreviewContent(content)}>
+                                    <div className="mr-3 text-muted-foreground">
+                                        {content.content_type === 'quiz' ? <HelpCircle className="h-4 w-4 text-primary" /> : <FileText className="h-4 w-4" />}
                                     </div>
                                     <span className="text-sm flex-1">{content.title} <span className="text-xs text-muted-foreground ml-2">({content.content_type})</span></span>
                                     <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
@@ -921,21 +921,21 @@ function ModuleItem({
                                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onEditContent(module.module.uuid, content); }}>
                                             <Edit2 className="h-3 w-3" />
                                         </Button>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-500 hover:text-red-500" onClick={(e) => { e.stopPropagation(); onDeleteContent(content.uuid); }}>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDeleteContent(content.uuid); }}>
                                             <Trash2 className="h-3 w-3" />
                                         </Button>
                                     </div>
                                 </div>
                             ))
                         )}
-                        <div className="p-2 pl-12 bg-gray-50/30">
+                        <div className="p-2 pl-12 bg-muted/20">
                             <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-primary" onClick={() => onAddContent(module.module.uuid)}>
                                 <Plus className="mr-1 h-3 w-3" /> Add Content
                             </Button>
                         </div>
-                        <div className="border-t border-gray-100" />
+                        <div className="border-t border-border" />
                         {assignments.length === 0 ? (
-                            <div className="p-8 text-center text-sm text-gray-400 italic">
+                            <div className="p-8 text-center text-sm text-muted-foreground italic">
                                 No assignments in this module yet.
                                 <div className="mt-2">
                                     <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onAddAssignment(module.module.uuid)}>
@@ -945,9 +945,9 @@ function ModuleItem({
                             </div>
                         ) : (
                             assignments.map((assignment: Assignment) => (
-                                <div key={assignment.uuid} className="flex items-center p-3 pl-12 hover:bg-gray-50 group">
-                                    <div className="mr-3 text-gray-400">
-                                        <ClipboardCheck className="h-4 w-4 text-amber-500" />
+                                <div key={assignment.uuid} className="flex items-center p-3 pl-12 hover:bg-muted/30 group">
+                                    <div className="mr-3 text-muted-foreground">
+                                        <ClipboardCheck className="h-4 w-4 text-warning" />
                                     </div>
                                     <span className="text-sm flex-1">
                                         {assignment.title}
@@ -967,7 +967,7 @@ function ModuleItem({
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            className="h-6 w-6 text-gray-500 hover:text-red-500"
+                                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
                                             onClick={() => onDeleteAssignment(module.module.uuid, assignment.uuid)}
                                         >
                                             <Trash2 className="h-3 w-3" />
@@ -976,7 +976,7 @@ function ModuleItem({
                                 </div>
                             ))
                         )}
-                        <div className="p-2 pl-12 bg-gray-50/30">
+                        <div className="p-2 pl-12 bg-muted/20">
                             <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-primary" onClick={() => onAddAssignment(module.module.uuid)}>
                                 <Plus className="mr-1 h-3 w-3" /> Add Assignment
                             </Button>

@@ -142,8 +142,8 @@ export const StepSchedule = () => {
                 </div>
 
                 {/* Calculated End Time & Summary */}
-                <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-lg border border-blue-100 dark:border-blue-900">
-                    <div className="h-12 w-12 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center text-blue-600">
+                <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-lg border border-info">
+                    <div className="h-12 w-12 rounded-full bg-neutral-card shadow-sm flex items-center justify-center text-blue-600">
                         <Clock className="h-6 w-6" />
                     </div>
                     <div className="flex-1">

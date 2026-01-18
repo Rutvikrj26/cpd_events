@@ -249,14 +249,14 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
     return (
         <div className="space-y-6">
             {!loading && zoomConnected === false && (
-                <Alert variant="destructive" className="bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-200">
-                    <AlertTriangle className="h-4 w-4 stroke-amber-600 dark:stroke-amber-400" />
+                <Alert variant="destructive" className="bg-warning-subtle border-warning text-warning">
+                    <AlertTriangle className="h-4 w-4 icon-warning" />
                     <AlertTitle>Zoom Not Connected</AlertTitle>
                     <AlertDescription className="mt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <span>
                             To automatically create meetings and track attendance, you must connect your Zoom account.
                         </span>
-                        <Button size="sm" variant="outline" className="border-amber-300 hover:bg-amber-100 dark:border-amber-800 dark:hover:bg-amber-900" onClick={handleConnectZoom}>
+                        <Button size="sm" variant="outline" className="border-warning-muted hover:bg-warning-subtle" onClick={handleConnectZoom}>
                             <Link2 className="h-4 w-4 mr-2" />
                             Connect Zoom
                         </Button>
