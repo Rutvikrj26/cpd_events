@@ -10,6 +10,16 @@ import {
   Shield,
   Zap,
   Clock,
+  MousePointerClick,
+  Wallet,
+  Award,
+  GraduationCap,
+  Presentation,
+  Search,
+  Users,
+  DollarSign,
+  Video,
+  Banknote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,38 +41,81 @@ export function LandingPage() {
           </h1>
 
           <p className="text-lg md:text-xl text-muted-foreground mb-12 leading-relaxed max-w-2xl mx-auto">
-            One platform to host live events, build self-paced courses, and manage your organization's entire training delivery.
+            Find world-class training or deliver your own—all on one platform.
           </p>
 
-          <div className="flex flex-col items-center gap-6">
-            <Link to="/signup?role=organizer&plan=organizer">
-              <Button size="lg" className="h-14 px-10 text-lg shadow-xl shadow-primary/20 glow-primary">
-                Get Started Free
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </Link>
+          {/* Split Persona Cards */}
+          <div className="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto">
+            {/* For Learners Card */}
+            <div className="bg-card border-2 border-border rounded-2xl p-8 text-left hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-elevated">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <GraduationCap className="h-5 w-5 text-primary" />
+                </div>
+                <h2 className="text-2xl font-bold text-foreground">For Learners</h2>
+              </div>
+              <p className="text-muted-foreground mb-6">
+                Discover events and courses from trusted providers
+              </p>
+              <ul className="space-y-3 mb-8">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <span className="text-sm text-foreground">Browse live events and self-paced courses</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <span className="text-sm text-foreground">Track your CPD credits in one place</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <span className="text-sm text-foreground">Earn verified, shareable certificates</span>
+                </li>
+              </ul>
+              <Link to="/events/browse">
+                <Button variant="outline" size="lg" className="w-full h-12 text-base">
+                  Browse Training
+                  <Search className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+              <div className="mt-4 text-center">
+                <Badge variant="secondary" className="text-xs font-normal">Free forever</Badge>
+              </div>
+            </div>
 
-            <p className="text-sm text-muted-foreground">Or explore our products</p>
-
-            <div className="flex flex-wrap justify-center gap-4">
-              <Link to="/products/events">
-                <Button variant="outline" size="lg" className="h-12 px-6 text-base hover:border-primary/50 hover:bg-primary/5">
-                  <Calendar className="mr-2 h-4 w-4 text-primary" />
-                  Events
+            {/* For Providers Card */}
+            <div className="bg-card border-2 border-primary/20 rounded-2xl p-8 text-left hover:border-primary transition-all duration-300 shadow-sm hover:shadow-elevated">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Presentation className="h-5 w-5 text-primary" />
+                </div>
+                <h2 className="text-2xl font-bold text-foreground">For Providers</h2>
+              </div>
+              <p className="text-muted-foreground mb-6">
+                Deliver professional development at scale
+              </p>
+              <ul className="space-y-3 mb-8">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <span className="text-sm text-foreground">Host webinars, workshops, and conferences</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <span className="text-sm text-foreground">Build self-paced courses and quizzes</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <span className="text-sm text-foreground">Issue automated CPD certificates</span>
+                </li>
+              </ul>
+              <Link to="/pricing">
+                <Button size="lg" className="w-full h-12 text-base shadow-xl shadow-primary/20 glow-primary">
+                  Start Creating
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <Link to="/products/lms">
-                <Button variant="outline" size="lg" className="h-12 px-6 text-base hover:border-accent/50 hover:bg-accent/5">
-                  <BookOpen className="mr-2 h-4 w-4 text-accent" />
-                  LMS
-                </Button>
-              </Link>
-              <Link to="/products/organizations">
-                <Button variant="outline" size="lg" className="h-12 px-6 text-base hover:border-foreground/50 hover:bg-foreground/5">
-                  <Building2 className="mr-2 h-4 w-4 text-foreground" />
-                  Organizations
-                </Button>
-              </Link>
+              <div className="mt-4 text-center">
+                <Badge variant="secondary" className="text-xs font-normal">Free trial included</Badge>
+              </div>
             </div>
           </div>
         </div>
@@ -71,100 +124,123 @@ export function LandingPage() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -z-10 h-[600px] w-[600px] bg-primary/5 blur-[120px] rounded-full"></div>
       </section>
 
-      {/* Product Selection Section */}
+      {/* Why Learners Choose Accredit */}
       <section className="py-24 bg-secondary/30 border-y border-border/50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">Choose your path</h2>
-            <p className="text-muted-foreground mt-4 text-lg">Select the product that fits your needs</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {/* Events Card */}
-            <Link to="/products/events" className="group">
-              <div className="bg-card h-full rounded-2xl border border-border p-8 shadow-sm hover:shadow-elevated hover:border-primary/50 transition-all duration-300 relative overflow-hidden">
-                <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-6">
-                  <Calendar className="h-6 w-6" />
-                </div>
-                <h3 className="text-2xl font-bold text-foreground mb-4">Event Management</h3>
-                <p className="text-muted-foreground mb-8 min-h-[80px]">
-                  Host webinars, workshops, and conferences with automated CPD certificates and Zoom integration.
+          <div className="grid lg:grid-cols-2 gap-12 items-center max-w-6xl mx-auto">
+            {/* Left: Text Content */}
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-3xl font-bold tracking-tight text-foreground mb-4">Why learners choose Accredit</h2>
+                <p className="text-lg text-muted-foreground leading-relaxed">
+                  Your professional development journey, simplified and secure.
                 </p>
-                <div className="flex items-center text-primary font-medium group-hover:translate-x-1 transition-transform">
-                  Learn more <ArrowRight className="ml-2 h-4 w-4" />
-                </div>
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-            </Link>
 
-            {/* LMS Card */}
-            <Link to="/products/lms" className="group">
-              <div className="bg-card h-full rounded-2xl border border-border p-8 shadow-sm hover:shadow-elevated hover:border-accent/50 transition-all duration-300 relative overflow-hidden">
-                <div className="h-12 w-12 rounded-xl bg-accent/10 text-accent flex items-center justify-center mb-6">
-                  <BookOpen className="h-6 w-6" />
-                </div>
-                <h3 className="text-2xl font-bold text-foreground mb-4">LMS & Courses</h3>
-                <p className="text-muted-foreground mb-8 min-h-[80px]">
-                  Build self-paced courses, quizzes, and digital products. Track progress and issue certificates.
-                </p>
-                <div className="flex items-center text-accent font-medium group-hover:translate-x-1 transition-transform">
-                  Learn more <ArrowRight className="ml-2 h-4 w-4" />
-                </div>
-                <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </Link>
+              <p className="text-muted-foreground leading-relaxed">
+                Browse thousands of CPD events and courses, filter by topic or date, and register in seconds with no complicated forms. All your certificates and credits are tracked automatically in one secure dashboard, giving you instantly shareable credentials that employers and regulators can verify online. Never lose track of your professional development again.
+              </p>
 
-            {/* Org Card */}
-            <Link to="/products/organizations" className="group">
-              <div className="bg-card h-full rounded-2xl border border-border p-8 shadow-sm hover:shadow-elevated hover:border-foreground/20 transition-all duration-300 relative overflow-hidden">
-                <div className="h-12 w-12 rounded-xl bg-secondary text-foreground flex items-center justify-center mb-6">
-                  <Building2 className="h-6 w-6" />
-                </div>
-                <h3 className="text-2xl font-bold text-foreground mb-4">Organizations</h3>
-                <p className="text-muted-foreground mb-8 min-h-[80px]">
-                  Manage your team, sync contacts, monetize content, and consolidate billing in one dashboard.
-                </p>
-                <div className="flex items-center text-foreground font-medium group-hover:translate-x-1 transition-transform">
-                  Learn more <ArrowRight className="ml-2 h-4 w-4" />
-                </div>
-                <div className="absolute inset-0 bg-gradient-to-br from-secondary to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="pt-4">
+                <Link to="/events/browse">
+                  <Button size="lg" variant="outline" className="h-12 px-8">
+                    Browse Training
+                    <Search className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
               </div>
-            </Link>
+            </div>
+
+            {/* Right: Icon Grid */}
+            <div className="grid grid-cols-2 gap-6">
+              <div className="bg-card rounded-2xl p-6 border border-border shadow-sm flex flex-col items-center justify-center text-center min-h-[160px]">
+                <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-3">
+                  <Search className="h-6 w-6" />
+                </div>
+                <p className="font-semibold text-foreground text-sm">Easy Discovery</p>
+              </div>
+
+              <div className="bg-card rounded-2xl p-6 border border-border shadow-sm flex flex-col items-center justify-center text-center min-h-[160px]">
+                <div className="h-12 w-12 rounded-xl bg-green-500/10 text-green-500 flex items-center justify-center mb-3">
+                  <MousePointerClick className="h-6 w-6" />
+                </div>
+                <p className="font-semibold text-foreground text-sm">Quick Registration</p>
+              </div>
+
+              <div className="bg-card rounded-2xl p-6 border border-border shadow-sm flex flex-col items-center justify-center text-center min-h-[160px]">
+                <div className="h-12 w-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center mb-3">
+                  <Wallet className="h-6 w-6" />
+                </div>
+                <p className="font-semibold text-foreground text-sm">CPD Wallet</p>
+              </div>
+
+              <div className="bg-card rounded-2xl p-6 border border-border shadow-sm flex flex-col items-center justify-center text-center min-h-[160px]">
+                <div className="h-12 w-12 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center mb-3">
+                  <Award className="h-6 w-6" />
+                </div>
+                <p className="font-semibold text-foreground text-sm">Verified Credentials</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Why Choose Section */}
+      {/* Why Providers Choose Accredit */}
       <section className="py-24 bg-background">
         <div className="container mx-auto px-4">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground mb-4">Why professionals choose Accredit</h2>
-            <p className="text-lg text-muted-foreground">Built for reliability, compliance, and speed.</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 text-center px-4">
-            <div className="space-y-4">
-              <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                <Shield className="h-6 w-6" />
+          <div className="grid lg:grid-cols-2 gap-12 items-center max-w-6xl mx-auto">
+            {/* Left: Icon Grid */}
+            <div className="grid grid-cols-2 gap-6 order-2 lg:order-1">
+              <div className="bg-card rounded-2xl p-6 border border-border shadow-sm flex flex-col items-center justify-center text-center min-h-[160px]">
+                <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-3">
+                  <Shield className="h-6 w-6" />
+                </div>
+                <p className="font-semibold text-foreground text-sm">Enterprise Reliability</p>
               </div>
-              <h3 className="text-xl font-semibold text-foreground">Fail-safe Reliability</h3>
-              <p className="text-muted-foreground">99.9% uptime guarantee. Our platform scales automatically to handle events of any size.</p>
+
+              <div className="bg-card rounded-2xl p-6 border border-border shadow-sm flex flex-col items-center justify-center text-center min-h-[160px]">
+                <div className="h-12 w-12 rounded-xl bg-accent/10 text-accent flex items-center justify-center mb-3">
+                  <Zap className="h-6 w-6" />
+                </div>
+                <p className="font-semibold text-foreground text-sm">Automated Workflows</p>
+              </div>
+
+              <div className="bg-card rounded-2xl p-6 border border-border shadow-sm flex flex-col items-center justify-center text-center min-h-[160px]">
+                <div className="h-12 w-12 rounded-xl bg-secondary text-foreground flex items-center justify-center mb-3">
+                  <Clock className="h-6 w-6" />
+                </div>
+                <p className="font-semibold text-foreground text-sm">Global Standards</p>
+              </div>
+
+              <div className="bg-card rounded-2xl p-6 border border-border shadow-sm flex flex-col items-center justify-center text-center min-h-[160px]">
+                <div className="h-12 w-12 rounded-xl bg-green-500/10 text-green-500 flex items-center justify-center mb-3">
+                  <Banknote className="h-6 w-6" />
+                </div>
+                <p className="font-semibold text-foreground text-sm">Direct Payments</p>
+              </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="mx-auto h-12 w-12 rounded-xl bg-accent/10 text-accent flex items-center justify-center">
-                <Zap className="h-6 w-6" />
+            {/* Right: Text Content */}
+            <div className="space-y-6 order-1 lg:order-2">
+              <div>
+                <h2 className="text-3xl font-bold tracking-tight text-foreground mb-4">Why providers choose Accredit</h2>
+                <p className="text-lg text-muted-foreground leading-relaxed">
+                  Built for reliability, compliance, and efficiency.
+                </p>
               </div>
-              <h3 className="text-xl font-semibold text-foreground">Automated Efficiency</h3>
-              <p className="text-muted-foreground">Save 10+ hours per week. We handle the busywork of attendance tracking and certification.</p>
-            </div>
 
-            <div className="space-y-4">
-              <div className="mx-auto h-12 w-12 rounded-xl bg-secondary text-foreground flex items-center justify-center">
-                <Clock className="h-6 w-6" />
+              <p className="text-muted-foreground leading-relaxed">
+                Our platform scales automatically to handle events of any size with zero downtime. Save hours every week with automated attendance tracking, certificate generation, and reminder emails. Issue verifiable credentials that meet international CPD/CME requirements and get paid directly via Stripe Connect to your bank account.
+              </p>
+
+              <div className="pt-4">
+                <Link to="/pricing">
+                  <Button size="lg" className="h-12 px-8 shadow-xl shadow-primary/20 glow-primary">
+                    View Pricing
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
               </div>
-              <h3 className="text-xl font-semibold text-foreground">Global Compliance</h3>
-              <p className="text-muted-foreground">Verifiable digital credentials that meet international CPD/CME standards.</p>
             </div>
           </div>
         </div>
@@ -174,25 +250,33 @@ export function LandingPage() {
       <section className="py-24 bg-card border-t border-border">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-6">
-            Start your free trial today
+            Ready to get started?
           </h2>
           <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Join thousands of professionals issuing verified certificates.
+            Join the professionals already using Accredit
           </p>
-          <Link to="/signup">
-            <Button size="lg" className="h-14 px-10 text-lg shadow-xl shadow-primary/20 glow-primary">
-              Get Started Free
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-          <div className="mt-6 flex items-center justify-center gap-6 text-sm text-muted-foreground">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link to="/events/browse">
+              <Button size="lg" variant="outline" className="h-14 px-10 text-lg w-full sm:w-auto">
+                Browse Training
+                <Search className="ml-2 h-5 w-5" />
+              </Button>
+            </Link>
+            <Link to="/pricing">
+              <Button size="lg" className="h-14 px-10 text-lg shadow-xl shadow-primary/20 glow-primary w-full sm:w-auto">
+                Start Creating
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            </Link>
+          </div>
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span>free trial</span>
+              <span>Free for learners</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span>Cancel anytime</span>
+              <span>Free trial for providers</span>
             </div>
           </div>
         </div>

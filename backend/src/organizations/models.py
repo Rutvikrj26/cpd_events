@@ -44,11 +44,11 @@ class Organization(SoftDeleteModel):
     description = models.TextField(blank=True, max_length=2000, help_text="About this organization")
 
     # Branding
-    logo = models.ImageField(upload_to='organizations/logos/', null=True, blank=True, help_text="Organization logo")
+    logo = models.ImageField(upload_to="organizations/logos/", null=True, blank=True, help_text="Organization logo")
     logo_url = models.URLField(blank=True, help_text="External logo URL (if not uploaded)")
     website = models.URLField(blank=True, help_text="Organization website")
-    primary_color = models.CharField(max_length=7, default='#0066CC', help_text="Primary brand color (hex)")
-    secondary_color = models.CharField(max_length=7, default='#004499', help_text="Secondary brand color (hex)")
+    primary_color = models.CharField(max_length=7, default="#0066CC", help_text="Primary brand color (hex)")
+    secondary_color = models.CharField(max_length=7, default="#004499", help_text="Secondary brand color (hex)")
 
     # Contact
     contact_email = models.EmailField(blank=True, help_text="Public contact email")
@@ -69,7 +69,7 @@ class Organization(SoftDeleteModel):
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='created_organizations',
+        related_name="created_organizations",
         help_text="User who created this organization",
     )
 
@@ -77,7 +77,7 @@ class Organization(SoftDeleteModel):
     # Stripe Connect
     # =========================================
     stripe_connect_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe Connect Account ID")
-    stripe_account_status = models.CharField(max_length=50, default='pending', help_text="Connect account status")
+    stripe_account_status = models.CharField(max_length=50, default="pending", help_text="Connect account status")
     stripe_charges_enabled = models.BooleanField(default=False, help_text="Whether account can accept payments")
 
     # Denormalized counts (updated via signals/methods)
@@ -88,24 +88,18 @@ class Organization(SoftDeleteModel):
     # =========================================
     # Onboarding
     # =========================================
-    onboarding_completed = models.BooleanField(
-        default=False,
-        help_text="Whether organization completed initial onboarding"
-    )
-    onboarding_completed_at = models.DateTimeField(
-        null=True, blank=True,
-        help_text="When onboarding was completed"
-    )
+    onboarding_completed = models.BooleanField(default=False, help_text="Whether organization completed initial onboarding")
+    onboarding_completed_at = models.DateTimeField(null=True, blank=True, help_text="When onboarding was completed")
 
     class Meta:
-        db_table = 'organizations'
-        verbose_name = 'Organization'
-        verbose_name_plural = 'Organizations'
-        ordering = ['name']
+        db_table = "organizations"
+        verbose_name = "Organization"
+        verbose_name_plural = "Organizations"
+        ordering = ["name"]
         indexes = [
-            models.Index(fields=['slug']),
-            models.Index(fields=['is_active']),
-            models.Index(fields=['created_by']),
+            models.Index(fields=["slug"]),
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["created_by"]),
         ]
 
     def __str__(self):
@@ -128,17 +122,17 @@ class Organization(SoftDeleteModel):
         """Get logo URL, preferring uploaded file over external URL."""
         if self.logo:
             return self.logo.url
-        return self.logo_url or ''
+        return self.logo_url or ""
 
     def update_counts(self):
         """Update denormalized counts from related objects."""
         self.members_count = self.memberships.filter(is_active=True).count()
         # Events and courses counts will be updated once those FKs are added
-        self.save(update_fields=['members_count', 'events_count', 'courses_count', 'updated_at'])
+        self.save(update_fields=["members_count", "events_count", "courses_count", "updated_at"])
 
     def get_admins(self):
         """Get all admins of this organization."""
-        return [m.user for m in self.memberships.filter(role='admin', is_active=True)]
+        return [m.user for m in self.memberships.filter(role="admin", is_active=True)]
 
 
 class OrganizationMembership(BaseModel):
@@ -159,21 +153,21 @@ class OrganizationMembership(BaseModel):
     """
 
     class Role(models.TextChoices):
-        ADMIN = 'admin', 'Admin'
-        ORGANIZER = 'organizer', 'Organizer'
-        COURSE_MANAGER = 'course_manager', 'Course Manager'
-        INSTRUCTOR = 'instructor', 'Instructor'
+        ADMIN = "admin", "Admin"
+        ORGANIZER = "organizer", "Organizer"
+        COURSE_MANAGER = "course_manager", "Course Manager"
+        INSTRUCTOR = "instructor", "Instructor"
 
     # Billable roles (count toward seat usage)
     BILLABLE_ROLES = [Role.ORGANIZER, Role.COURSE_MANAGER]
     FREE_ROLES = [Role.ADMIN, Role.INSTRUCTOR]
 
     # Relationships
-    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='memberships')
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="memberships")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='organization_memberships',
+        related_name="organization_memberships",
         null=True,
         blank=True,
     )
@@ -191,7 +185,7 @@ class OrganizationMembership(BaseModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='sent_org_invites',
+        related_name="sent_org_invites",
     )
     invited_at = models.DateTimeField(null=True, blank=True, help_text="When invitation was sent")
     accepted_at = models.DateTimeField(null=True, blank=True, help_text="When invitation was accepted")
@@ -208,19 +202,19 @@ class OrganizationMembership(BaseModel):
     organizer_billing_payer = models.CharField(
         max_length=20,
         choices=[
-            ('organization', 'Organization Pays'),
-            ('organizer', 'Organizer Pays'),
+            ("organization", "Organization Pays"),
+            ("organizer", "Organizer Pays"),
         ],
         null=True,
         blank=True,
         help_text="Who pays for organizer subscription (only for organizer role)",
     )
     linked_subscription = models.ForeignKey(
-        'billing.Subscription',
+        "billing.Subscription",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='organization_memberships',
+        related_name="organization_memberships",
         help_text="Link to organizer's individual subscription if organizer pays",
     )
     stripe_subscription_item_id = models.CharField(
@@ -230,23 +224,23 @@ class OrganizationMembership(BaseModel):
     )
 
     assigned_course = models.ForeignKey(
-        'learning.Course',
+        "learning.Course",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='assigned_instructors',
+        related_name="assigned_instructors",
         help_text="Course the instructor is assigned to (instructors can only access their assigned course)",
     )
 
     class Meta:
-        db_table = 'organization_memberships'
-        verbose_name = 'Organization Membership'
-        verbose_name_plural = 'Organization Memberships'
-        unique_together = ['organization', 'user']
+        db_table = "organization_memberships"
+        verbose_name = "Organization Membership"
+        verbose_name_plural = "Organization Memberships"
+        unique_together = ["organization", "user"]
         indexes = [
-            models.Index(fields=['organization', 'role']),
-            models.Index(fields=['user', 'is_active']),
-            models.Index(fields=['invitation_token']),
+            models.Index(fields=["organization", "role"]),
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["invitation_token"]),
         ]
 
     def __str__(self):
@@ -296,27 +290,27 @@ class OrganizationMembership(BaseModel):
         """Generate a new invitation token."""
         self.invitation_token = generate_invitation_token()
         self.invited_at = timezone.now()
-        self.save(update_fields=['invitation_token', 'invited_at', 'updated_at'])
+        self.save(update_fields=["invitation_token", "invited_at", "updated_at"])
         return self.invitation_token
 
     def accept_invitation(self):
         """Accept the invitation and activate membership."""
         if self.invitation_token:
             self.accepted_at = timezone.now()
-            self.invitation_token = ''
+            self.invitation_token = ""
             self.is_active = True
-            self.save(update_fields=['accepted_at', 'invitation_token', 'is_active', 'updated_at'])
+            self.save(update_fields=["accepted_at", "invitation_token", "is_active", "updated_at"])
 
     def deactivate(self):
         """Deactivate this membership."""
         self.is_active = False
-        self.invitation_token = ''
-        self.save(update_fields=['is_active', 'invitation_token', 'updated_at'])
+        self.invitation_token = ""
+        self.save(update_fields=["is_active", "invitation_token", "updated_at"])
 
     def reactivate(self):
         """Reactivate this membership."""
         self.is_active = True
-        self.save(update_fields=['is_active', 'updated_at'])
+        self.save(update_fields=["is_active", "updated_at"])
 
 
 class OrganizationSubscription(BaseModel):
@@ -334,17 +328,17 @@ class OrganizationSubscription(BaseModel):
     """
 
     class Plan(models.TextChoices):
-        ORGANIZATION = 'organization', 'Organization'
+        ORGANIZATION = "organization", "Organization"
 
     class Status(models.TextChoices):
-        ACTIVE = 'active', 'Active'
-        TRIALING = 'trialing', 'Trialing'
-        PAST_DUE = 'past_due', 'Past Due'
-        CANCELED = 'canceled', 'Canceled'
-        UNPAID = 'unpaid', 'Unpaid'
+        ACTIVE = "active", "Active"
+        TRIALING = "trialing", "Trialing"
+        PAST_DUE = "past_due", "Past Due"
+        CANCELED = "canceled", "Canceled"
+        UNPAID = "unpaid", "Unpaid"
 
     # Relationship
-    organization = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name='subscription')
+    organization = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name="subscription")
 
     # Plan
     plan = models.CharField(max_length=20, choices=Plan.choices, default=Plan.ORGANIZATION)
@@ -384,13 +378,13 @@ class OrganizationSubscription(BaseModel):
     }
 
     class Meta:
-        db_table = 'organization_subscriptions'
-        verbose_name = 'Organization Subscription'
-        verbose_name_plural = 'Organization Subscriptions'
+        db_table = "organization_subscriptions"
+        verbose_name = "Organization Subscription"
+        verbose_name_plural = "Organization Subscriptions"
         indexes = [
-            models.Index(fields=['plan']),
-            models.Index(fields=['status']),
-            models.Index(fields=['current_period_end']),
+            models.Index(fields=["plan"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["current_period_end"]),
         ]
 
     def __str__(self):
@@ -417,19 +411,16 @@ class OrganizationSubscription(BaseModel):
                 if value is not None:  # Only override if value is set
                     config[key] = value
 
-            # Update seat configuration
-            if product.included_seats is not None:
-                config['included_seats'] = product.included_seats
+            # Update seat configuration (Prioritize instance-specific fields)
+            config["included_seats"] = self.included_seats
+            config["seat_price_cents"] = self.seat_price_cents
 
-            if product.seat_price_cents is not None:
-                config['seat_price_cents'] = product.seat_price_cents
-
-            monthly_price = product.prices.filter(billing_interval='month', is_active=True).first()
+            monthly_price = product.prices.filter(billing_interval="month", is_active=True).first()
             if monthly_price:
-                config['price_cents'] = monthly_price.amount_cents
-            annual_price = product.prices.filter(billing_interval='year', is_active=True).first()
+                config["price_cents"] = monthly_price.amount_cents
+            annual_price = product.prices.filter(billing_interval="year", is_active=True).first()
             if annual_price:
-                config['annual_price_cents'] = annual_price.amount_cents
+                config["annual_price_cents"] = annual_price.amount_cents
 
             return config
 
@@ -550,7 +541,7 @@ class OrganizationSubscription(BaseModel):
 
         return (
             self.organization.memberships.filter(role__in=OrganizationMembership.BILLABLE_ROLES)
-            .filter(Q(is_active=True) | (Q(invitation_token__isnull=False) & ~Q(invitation_token='')))
+            .filter(Q(is_active=True) | (Q(invitation_token__isnull=False) & ~Q(invitation_token="")))
             .count()
         )
 
@@ -590,7 +581,7 @@ class OrganizationSubscription(BaseModel):
         if needed_additional != self.additional_seats:
             old_seats = self.additional_seats
             self.additional_seats = needed_additional
-            self.save(update_fields=['active_organizer_seats', 'additional_seats', 'updated_at'])
+            self.save(update_fields=["active_organizer_seats", "additional_seats", "updated_at"])
 
             # Sync with Stripe if active
             if self.stripe_subscription_id:
@@ -608,18 +599,18 @@ class OrganizationSubscription(BaseModel):
                     logger = logging.getLogger(__name__)
                     logger.error(f"Failed to auto-update Stripe quantity for org {self.organization.uuid}: {e}")
         else:
-            self.save(update_fields=['active_organizer_seats', 'updated_at'])
+            self.save(update_fields=["active_organizer_seats", "updated_at"])
 
     def check_event_limit(self):
         """Check if organization can create more events this period."""
-        limit = self.config['events_per_month']
+        limit = self.config["events_per_month"]
         if limit is None:
             return True
         return self.events_created_this_period < limit
 
     def check_course_limit(self):
         """Check if organization can create more courses this period."""
-        limit = self.config['courses_per_month']
+        limit = self.config["courses_per_month"]
         if limit is None:
             return True
         return self.courses_created_this_period < limit
@@ -627,18 +618,18 @@ class OrganizationSubscription(BaseModel):
     def increment_events(self, count=1):
         """Increment event counter."""
         self.events_created_this_period += count
-        self.save(update_fields=['events_created_this_period', 'updated_at'])
+        self.save(update_fields=["events_created_this_period", "updated_at"])
 
     def increment_courses(self, count=1):
         """Increment course counter."""
         self.courses_created_this_period += count
-        self.save(update_fields=['courses_created_this_period', 'updated_at'])
+        self.save(update_fields=["courses_created_this_period", "updated_at"])
 
     def reset_usage(self):
         """Reset usage counters for new period."""
         self.events_created_this_period = 0
         self.courses_created_this_period = 0
-        self.save(update_fields=['events_created_this_period', 'courses_created_this_period', 'updated_at'])
+        self.save(update_fields=["events_created_this_period", "courses_created_this_period", "updated_at"])
 
     @classmethod
     def create_for_organization(cls, organization, plan=None):
@@ -648,8 +639,8 @@ class OrganizationSubscription(BaseModel):
 
         config = cls.PLAN_CONFIG.get(plan, cls.PLAN_CONFIG[cls.Plan.ORGANIZATION])
         trial_days = 14
-        included_seats = config.get('included_seats', 1)
-        seat_price_cents = config.get('seat_price_cents', 0)
+        included_seats = config.get("included_seats", 1)
+        seat_price_cents = config.get("seat_price_cents", 0)
 
         try:
             from billing.models import StripeProduct
@@ -667,12 +658,12 @@ class OrganizationSubscription(BaseModel):
         subscription, created = cls.objects.get_or_create(
             organization=organization,
             defaults={
-                'plan': plan,
-                'status': cls.Status.TRIALING,
-                'included_seats': included_seats,  # Legacy field
-                'seat_price_cents': seat_price_cents,  # Legacy field
-                'current_period_start': timezone.now(),
-                'trial_ends_at': timezone.now() + timezone.timedelta(days=trial_days),
+                "plan": plan,
+                "status": cls.Status.TRIALING,
+                "included_seats": included_seats,  # Legacy field
+                "seat_price_cents": seat_price_cents,  # Legacy field
+                "current_period_start": timezone.now(),
+                "trial_ends_at": timezone.now() + timezone.timedelta(days=trial_days),
             },
         )
         return subscription

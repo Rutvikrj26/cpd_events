@@ -17,6 +17,7 @@ import ScrollToTop from './components/layout/ScrollToTop';
 // Public Pages
 import { LandingPage } from './pages/public/LandingPage';
 import { EventDiscovery } from './pages/public/EventDiscovery';
+import { CourseDiscoveryPage } from './pages/public/CourseDiscoveryPage';
 import { EventDetail } from './pages/public/EventDetail';
 import { EventRegistration } from './pages/public/EventRegistration';
 import { PricingPage } from './pages/public/PricingPage';
@@ -132,6 +133,12 @@ export default function App() {
                 <Route path="/events/browse" element={
                   <PublicLayout>
                     <EventDiscovery />
+                  </PublicLayout>
+                } />
+
+                <Route path="/courses/browse" element={
+                  <PublicLayout>
+                    <CourseDiscoveryPage />
                   </PublicLayout>
                 } />
 

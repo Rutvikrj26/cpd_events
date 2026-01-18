@@ -92,15 +92,17 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   </NavigationMenuItem>
 
                   <NavigationMenuItem>
-                    <Link
-                      to="/events"
-                      className={cn(
-                        "group inline-flex h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground focus:outline-none",
-                        isActive('/events') ? 'text-foreground bg-muted' : 'text-muted-foreground'
-                      )}
-                    >
-                      Browse
-                    </Link>
+                    <NavigationMenuTrigger>Browse</NavigationMenuTrigger>
+                    <NavigationMenuContent>
+                      <ul className="grid gap-3 p-4 w-[300px]">
+                        <ListItem href="/events/browse" title="Events">
+                          Webinars, workshops, and conferences
+                        </ListItem>
+                        <ListItem href="/courses/browse" title="Courses">
+                          Self-paced professional development
+                        </ListItem>
+                      </ul>
+                    </NavigationMenuContent>
                   </NavigationMenuItem>
 
                   <NavigationMenuItem>
@@ -249,6 +251,27 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Organizations
+                </Link>
+              </div>
+
+              {/* Browse Group */}
+              <div className="flex flex-col gap-1">
+                <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Browse
+                </div>
+                <Link
+                  to="/events/browse"
+                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Events
+                </Link>
+                <Link
+                  to="/courses/browse"
+                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Courses
                 </Link>
               </div>
 

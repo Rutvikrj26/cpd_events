@@ -304,6 +304,24 @@ export function PricingPage() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="text-center">
+                                {(() => {
+                                    const orgPlan = allPlans.find(p => p.plan === 'organization');
+                                    const orgBasePrice = orgPlan ? getMonthlyPrice(products.find(p => p.plan === 'organization')!) : null;
+                                    return (
+                                        <>
+                                            {orgBasePrice && (
+                                                <div className="mb-6">
+                                                    <p className="text-lg mb-2">
+                                                        Starting at <span className="font-bold text-2xl text-primary">${orgBasePrice}/mo</span>
+                                                    </p>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Final pricing based on team size, event volume, and features
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
                                 <div className="grid sm:grid-cols-3 gap-6 mb-8">
                                     <div className="p-4 bg-secondary/30 rounded-lg">
                                         <p className="font-semibold text-foreground">Multi-user Access</p>
@@ -318,9 +336,6 @@ export function PricingPage() {
                                         <p className="text-sm text-muted-foreground">Based on your usage</p>
                                     </div>
                                 </div>
-                                <p className="text-muted-foreground mb-6">
-                                    Pricing is finalized based on your proposed team size, expected event/course volume, and specific feature requirements.
-                                </p>
                                 <Button asChild size="lg">
                                     <Link to="/contact">
                                         Contact Sales

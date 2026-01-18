@@ -49,7 +49,7 @@ class PlatformFees:
     - FEE_PERCENT: Percentage of transaction sent to platform via Stripe Connect
     """
 
-    FEE_PERCENT: float = _validate_percentage(float(os.environ.get('PLATFORM_FEE_PERCENT', 2.0)), 'PLATFORM_FEE_PERCENT')
+    FEE_PERCENT: float = _validate_percentage(float(os.environ.get("PLATFORM_FEE_PERCENT", 2.0)), "PLATFORM_FEE_PERCENT")
 
 
 # =============================================================================
@@ -72,16 +72,16 @@ class TicketingFees:
     """
 
     DEFAULT_SERVICE_FEE_PERCENT: float = _validate_percentage(
-        float(os.environ.get('TICKETING_SERVICE_FEE_PERCENT', 0.0)), 'TICKETING_SERVICE_FEE_PERCENT'
+        float(os.environ.get("TICKETING_SERVICE_FEE_PERCENT", 0.0)), "TICKETING_SERVICE_FEE_PERCENT"
     )
     DEFAULT_SERVICE_FEE_FIXED: float = _validate_non_negative(
-        float(os.environ.get('TICKETING_SERVICE_FEE_FIXED', 0.0)), 'TICKETING_SERVICE_FEE_FIXED'
+        float(os.environ.get("TICKETING_SERVICE_FEE_FIXED", 0.0)), "TICKETING_SERVICE_FEE_FIXED"
     )
     DEFAULT_PROCESSING_FEE_PERCENT: float = _validate_percentage(
-        float(os.environ.get('TICKETING_PROCESSING_FEE_PERCENT', 0.0)), 'TICKETING_PROCESSING_FEE_PERCENT'
+        float(os.environ.get("TICKETING_PROCESSING_FEE_PERCENT", 0.0)), "TICKETING_PROCESSING_FEE_PERCENT"
     )
     DEFAULT_PROCESSING_FEE_FIXED: float = _validate_non_negative(
-        float(os.environ.get('TICKETING_PROCESSING_FEE_FIXED', 0.0)), 'TICKETING_PROCESSING_FEE_FIXED'
+        float(os.environ.get("TICKETING_PROCESSING_FEE_FIXED", 0.0)), "TICKETING_PROCESSING_FEE_FIXED"
     )
 
     @classmethod
@@ -100,33 +100,33 @@ class TicketingFees:
 
     @classmethod
     def get_service_fee_percent(cls, currency: str) -> float:
-        currency = (currency or '').upper()
+        currency = (currency or "").upper()
         return cls._get_percent(
-            f'TICKETING_SERVICE_FEE_PERCENT_{currency}',
+            f"TICKETING_SERVICE_FEE_PERCENT_{currency}",
             cls.DEFAULT_SERVICE_FEE_PERCENT,
         )
 
     @classmethod
     def get_service_fee_fixed(cls, currency: str) -> float:
-        currency = (currency or '').upper()
+        currency = (currency or "").upper()
         return cls._get_fixed(
-            f'TICKETING_SERVICE_FEE_FIXED_{currency}',
+            f"TICKETING_SERVICE_FEE_FIXED_{currency}",
             cls.DEFAULT_SERVICE_FEE_FIXED,
         )
 
     @classmethod
     def get_processing_fee_percent(cls, currency: str) -> float:
-        currency = (currency or '').upper()
+        currency = (currency or "").upper()
         return cls._get_percent(
-            f'TICKETING_PROCESSING_FEE_PERCENT_{currency}',
+            f"TICKETING_PROCESSING_FEE_PERCENT_{currency}",
             cls.DEFAULT_PROCESSING_FEE_PERCENT,
         )
 
     @classmethod
     def get_processing_fee_fixed(cls, currency: str) -> float:
-        currency = (currency or '').upper()
+        currency = (currency or "").upper()
         return cls._get_fixed(
-            f'TICKETING_PROCESSING_FEE_FIXED_{currency}',
+            f"TICKETING_PROCESSING_FEE_FIXED_{currency}",
             cls.DEFAULT_PROCESSING_FEE_FIXED,
         )
 
@@ -139,10 +139,10 @@ class TicketingFees:
 class TicketingTaxCodes:
     """Stripe Tax codes for ticketing line items."""
 
-    TICKET_IN_PERSON: str = os.environ.get('TICKETING_TAX_CODE_IN_PERSON', 'txcd_20060044')
-    TICKET_ONLINE: str = os.environ.get('TICKETING_TAX_CODE_ONLINE', 'txcd_20060045')
-    SERVICE_FEE: str = os.environ.get('TICKETING_TAX_CODE_SERVICE_FEE', 'txcd_20030000')
-    NON_TAXABLE: str = os.environ.get('TICKETING_TAX_CODE_NON_TAXABLE', 'txcd_00000000')
+    TICKET_IN_PERSON: str = os.environ.get("TICKETING_TAX_CODE_IN_PERSON", "txcd_20060044")
+    TICKET_ONLINE: str = os.environ.get("TICKETING_TAX_CODE_ONLINE", "txcd_20060045")
+    SERVICE_FEE: str = os.environ.get("TICKETING_TAX_CODE_SERVICE_FEE", "txcd_20030000")
+    NON_TAXABLE: str = os.environ.get("TICKETING_TAX_CODE_NON_TAXABLE", "txcd_00000000")
 
 
 # =============================================================================
@@ -163,41 +163,41 @@ class IndividualPlanLimits:
     """
 
     ATTENDEE: dict = {
-        'events_per_month': 0,
-        'courses_per_month': 0,
-        'certificates_per_month': 0,
-        'max_attendees_per_event': 0,
+        "events_per_month": 0,
+        "courses_per_month": 0,
+        "certificates_per_month": 0,
+        "max_attendees_per_event": 0,
     }
 
     ORGANIZER: dict = {
-        'events_per_month': 30,
-        'courses_per_month': 0,
-        'certificates_per_month': 500,
-        'max_attendees_per_event': 500,
+        "events_per_month": 30,
+        "courses_per_month": 0,
+        "certificates_per_month": 500,
+        "max_attendees_per_event": 500,
     }
 
     LMS: dict = {
-        'events_per_month': 0,
-        'courses_per_month': 30,
-        'certificates_per_month': 500,
-        'max_attendees_per_event': 0,
+        "events_per_month": 0,
+        "courses_per_month": 30,
+        "certificates_per_month": 500,
+        "max_attendees_per_event": 0,
     }
 
     ORGANIZATION: dict = {
-        'events_per_month': None,  # Unlimited
-        'courses_per_month': None,  # Unlimited
-        'certificates_per_month': None,  # Unlimited
-        'max_attendees_per_event': 2000,
+        "events_per_month": None,  # Unlimited
+        "courses_per_month": None,  # Unlimited
+        "certificates_per_month": None,  # Unlimited
+        "max_attendees_per_event": 2000,
     }
 
     @classmethod
     def get_limits(cls, plan: str) -> dict:
         """Get limits for a plan by name."""
         limits_map = {
-            'attendee': cls.ATTENDEE,
-            'organizer': cls.ORGANIZER,
-            'lms': cls.LMS,
-            'organization': cls.ORGANIZATION,
+            "attendee": cls.ATTENDEE,
+            "organizer": cls.ORGANIZER,
+            "lms": cls.LMS,
+            "organization": cls.ORGANIZATION,
         }
         return limits_map.get(plan, cls.ATTENDEE)
 
@@ -220,23 +220,20 @@ class OrganizationPlanLimits:
 
     # Organization Plan - $199/month
     ORGANIZATION: dict = {
-        'name': 'Organization',
-        'price_cents': 19900,  # $199/month base
-        'events_per_month': None,  # Unlimited (admin has organizer capabilities)
-        'courses_per_month': None,  # Unlimited
-        'max_attendees_per_event': None,  # Unlimited
-        'course_instructors_limit': None,  # Unlimited free instructors
-        'admin_has_organizer_capabilities': True,  # Admin can create events
-        # Seat Configuration
-        'included_seats': 1,  # 1 admin included
-        'seat_price_cents': 12900,  # $129/seat/month
+        "name": "Organization",
+        "price_cents": 19900,  # $199/month base
+        "events_per_month": None,  # Unlimited (admin has organizer capabilities)
+        "courses_per_month": None,  # Unlimited
+        "max_attendees_per_event": None,  # Unlimited
+        "course_instructors_limit": None,  # Unlimited free instructors
+        "admin_has_organizer_capabilities": True,  # Admin can create events
     }
 
     @classmethod
     def get_limits(cls, plan: str) -> dict:
         """Get limits for a plan by name."""
         limits_map = {
-            'organization': cls.ORGANIZATION,
+            "organization": cls.ORGANIZATION,
         }
         return limits_map.get(plan, cls.ORGANIZATION)
 
@@ -249,7 +246,7 @@ class OrganizationPlanLimits:
 class DefaultPlan:
     """Default plan for new users."""
 
-    NAME: str = os.environ.get('BILLING_DEFAULT_PLAN', 'attendee')
+    NAME: str = os.environ.get("BILLING_DEFAULT_PLAN", "attendee")
 
 
 # =============================================================================
@@ -257,10 +254,10 @@ class DefaultPlan:
 # =============================================================================
 
 __all__ = [
-    'PlatformFees',
-    'TicketingFees',
-    'TicketingTaxCodes',
-    'IndividualPlanLimits',
-    'OrganizationPlanLimits',
-    'DefaultPlan',
+    "PlatformFees",
+    "TicketingFees",
+    "TicketingTaxCodes",
+    "IndividualPlanLimits",
+    "OrganizationPlanLimits",
+    "DefaultPlan",
 ]
