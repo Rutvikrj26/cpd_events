@@ -18,7 +18,7 @@ export function MyBadgesPage() {
     async function fetchBadges() {
         try {
             const data = await getMyBadges();
-            setBadges(data);
+            setBadges(data.results);
         } catch (error) {
             toast.error("Failed to load badges");
         } finally {

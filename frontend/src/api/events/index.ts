@@ -148,40 +148,36 @@ export const deleteEventImage = async (eventUuid: string): Promise<Event> => {
     return response.data;
 };
 
+
 // -- Attendance Reconciliation --
 
-export interface UnmatchedAttendanceRecord {
-    uuid: string;
-    zoom_user_name: string;
-    zoom_user_email: string;
+export interface UnmatchedParticipant {
+    user_id: string;
+    user_name: string;
+    user_email: string;
     join_time: string;
     leave_time?: string;
     duration_minutes: number;
-    join_method: string;
-    device_type: string;
-    created_at: string;
-    match_suggestions: MatchSuggestion[];
 }
 
-export interface MatchSuggestion {
-    uuid: string;
-    full_name: string;
-    email: string;
-    confidence: number;
-    match_type: 'email' | 'name';
-}
-
-export const getUnmatchedAttendance = async (eventUuid: string): Promise<UnmatchedAttendanceRecord[]> => {
-    const response = await client.get<any>(`/events/${eventUuid}/registrations/unmatched-attendance/`);
-    return Array.isArray(response.data) ? response.data : response.data.results || [];
+export const getUnmatchedParticipants = async (eventUuid: string): Promise<UnmatchedParticipant[]> => {
+    const response = await client.get<UnmatchedParticipant[]>(`/events/${eventUuid}/unmatched_participants/`);
+    return Array.isArray(response.data) ? response.data : [];
 };
 
-export const matchAttendance = async (eventUuid: string, recordUuid: string, registrationUuid: string): Promise<any> => {
-    const response = await client.post<any>(
-        `/events/${eventUuid}/registrations/match-attendance/${recordUuid}/`,
-        { registration_uuid: registrationUuid }
-    );
+export const syncEventAttendance = async (eventUuid: string): Promise<{ task_id: string, status: string }> => {
+    const response = await client.post<{ task_id: string, status: string }>(`/events/${eventUuid}/sync_attendance/`);
     return response.data;
+};
+
+export const matchParticipant = async (eventUuid: string, data: {
+    registration_uuid: string;
+    zoom_user_email?: string;
+    zoom_user_name?: string;
+    zoom_join_time?: string;
+    attendance_minutes?: number;
+}): Promise<void> => {
+    await client.post(`/events/${eventUuid}/match_participant/`, data);
 };
 
 // Event actions

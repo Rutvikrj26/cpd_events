@@ -21,38 +21,38 @@ class EmailService:
 
     # Email template mapping
     TEMPLATES = {
-        'registration_confirmation': 'emails/registration_confirmation.html',
-        'event_reminder': 'emails/event_reminder.html',
-        'certificate_issued': 'emails/certificate_issued.html',
-        'badge_issued': 'emails/badge_issued.html',
-        'event_cancelled': 'emails/event_cancelled.html',
-        'password_reset': 'emails/password_reset.html',
-        'email_verification': 'emails/email_verification.html',
-        'invitation': 'emails/invitation.html',
-        'organization_invitation': 'emails/organization_invitation.html',
-        'payment_failed': 'emails/payment_failed.html',
-        'waitlist_promotion': 'emails/waitlist_promotion.html',
-        'refund_processed': 'emails/refund_processed.html',
-        'payment_method_expired': 'emails/payment_method_expired.html',
-        'trial_ending': 'emails/trial_ending.html',
+        "registration_confirmation": "emails/registration_confirmation.html",
+        "event_reminder": "emails/event_reminder.html",
+        "certificate_issued": "emails/certificate_issued.html",
+        "badge_issued": "emails/badge_issued.html",
+        "event_cancelled": "emails/event_cancelled.html",
+        "password_reset": "emails/password_reset.html",
+        "email_verification": "emails/email_verification.html",
+        "invitation": "emails/invitation.html",
+        "organization_invitation": "emails/organization_invitation.html",
+        "payment_failed": "emails/payment_failed.html",
+        "waitlist_promotion": "emails/waitlist_promotion.html",
+        "refund_processed": "emails/refund_processed.html",
+        "payment_method_expired": "emails/payment_method_expired.html",
+        "trial_ending": "emails/trial_ending.html",
     }
 
     # Subject lines
     SUBJECTS = {
-        'registration_confirmation': 'Registration Confirmed: {event_title}',
-        'event_reminder': 'Reminder: {event_title} starts soon',
-        'certificate_issued': 'Your Certificate: {event_title}',
-        'badge_issued': 'You earned a badge: {badge_name}',
-        'event_cancelled': 'Event Cancelled: {event_title}',
-        'password_reset': 'Password Reset Request',
-        'email_verification': 'Verify Your Email',
-        'invitation': "You're invited: {event_title}",
-        'organization_invitation': "You're invited to join {organization_name}",
-        'payment_failed': "Payment Failed: Invoice #{invoice_number}",
-        'waitlist_promotion': "Spot Available: {event_title}",
-        'refund_processed': "Refund Processed: {event_title}",
-        'payment_method_expired': "Payment Method Expired",
-        'trial_ending': "Your Trial Is Ending Soon",
+        "registration_confirmation": "Registration Confirmed: {event_title}",
+        "event_reminder": "Reminder: {event_title} starts soon",
+        "certificate_issued": "Your Certificate: {event_title}",
+        "badge_issued": "You earned a badge: {badge_name}",
+        "event_cancelled": "Event Cancelled: {event_title}",
+        "password_reset": "Password Reset Request",
+        "email_verification": "Verify Your Email",
+        "invitation": "You're invited: {event_title}",
+        "organization_invitation": "You're invited to join {organization_name}",
+        "payment_failed": "Payment Failed: Invoice #{invoice_number}",
+        "waitlist_promotion": "Spot Available: {event_title}",
+        "refund_processed": "Refund Processed: {event_title}",
+        "payment_method_expired": "Payment Method Expired",
+        "trial_ending": "Your Trial Is Ending Soon",
     }
 
     def send_email(self, template: str, recipient: str, context: dict[str, Any], subject: str | None = None) -> bool:
@@ -73,7 +73,7 @@ class EmailService:
         try:
             # Render subject
             if subject is None:
-                subject_template = self.SUBJECTS.get(template, 'Notification')
+                subject_template = self.SUBJECTS.get(template, "Notification")
                 subject = subject_template.format(**context)
 
             # Render body
@@ -94,7 +94,7 @@ class EmailService:
                 recipient_email=recipient,
                 email_type=template,
                 subject=subject,
-                status='sent' if success else 'failed',
+                status="sent" if success else "failed",
                 sent_at=timezone.now() if success else None,
             )
 
@@ -118,16 +118,16 @@ class EmailService:
         Returns:
             Dict with success/failure counts
         """
-        results = {'total': len(recipients), 'sent': 0, 'failed': 0}
+        results = {"total": len(recipients), "sent": 0, "failed": 0}
 
         for recipient in recipients:
-            email = recipient.get('email')
-            ctx = {**(common_context or {}), **(recipient.get('context', {}))}
+            email = recipient.get("email")
+            ctx = {**(common_context or {}), **(recipient.get("context", {}))}
 
             if self.send_email(template, email, ctx):
-                results['sent'] += 1
+                results["sent"] += 1
             else:
-                results['failed'] += 1
+                results["failed"] += 1
 
         return results
 
@@ -136,11 +136,11 @@ class EmailService:
         try:
             from django.core.mail import send_mail
 
-            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@example.com')
+            from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@example.com")
 
             send_mail(
                 subject=subject,
-                message='',  # Plain text fallback
+                message="",  # Plain text fallback
                 from_email=from_email,
                 recipient_list=[recipient],
                 html_message=html_body,
@@ -159,28 +159,30 @@ class EmailService:
             f"<p>Hello {context.get('user_name', 'there')},</p>",
         ]
 
-        if template == 'certificate_issued':
+        if template == "certificate_issued":
             lines.append(f"<p>Your certificate for <strong>{context.get('event_title', 'the event')}</strong> is ready.</p>")
-            if context.get('certificate_url'):
+            if context.get("certificate_url"):
                 lines.append(f"<p><a href='{context['certificate_url']}'>Download Certificate</a></p>")
 
-        elif template == 'badge_issued':
-            lines.append(f"<p>Congratulations! You have earned the <strong>{context.get('badge_name', 'Badge')}</strong> for <strong>{context.get('event_title', 'the event')}</strong>.</p>")
-            if context.get('badge_url'):
+        elif template == "badge_issued":
+            lines.append(
+                f"<p>Congratulations! You have earned the <strong>{context.get('badge_name', 'Badge')}</strong> for <strong>{context.get('event_title', 'the event')}</strong>.</p>"
+            )
+            if context.get("badge_url"):
                 lines.append(f"<p><img src='{context['badge_url']}' alt='Badge' width='200' /></p>")
                 lines.append(f"<p><a href='{context.get('verification_url', '#')}'>View & Verify Badge</a></p>")
 
-        elif template == 'registration_confirmation':
+        elif template == "registration_confirmation":
             lines.append(f"<p>You are registered for <strong>{context.get('event_title', 'the event')}</strong>.</p>")
 
-        elif template == 'event_reminder':
+        elif template == "event_reminder":
             lines.append(f"<p><strong>{context.get('event_title', 'Your event')}</strong> starts soon.</p>")
 
-        elif template == 'organization_invitation':
+        elif template == "organization_invitation":
             lines.append(
                 f"<p>{context.get('inviter_name', 'Someone')} has invited you to join <strong>{context.get('organization_name', 'their organization')}</strong> as a <strong>{context.get('role', 'member')}</strong>.</p>"
             )
-            if context.get('invitation_url'):
+            if context.get("invitation_url"):
                 lines.append(
                     f"<p><a href='{context['invitation_url']}' style='background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Accept Invitation</a></p>"
                 )
@@ -188,12 +190,12 @@ class EmailService:
 
         else:
             for key, value in context.items():
-                if isinstance(value, str) and key not in ['user_name']:
+                if isinstance(value, str) and key not in ["user_name"]:
                     lines.append(f"<p>{key}: {value}</p>")
 
         lines.append("<p>Best regards,<br>The Team</p>")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
 
 class WebhookProcessor:
@@ -217,7 +219,7 @@ class WebhookProcessor:
             # log.payload is the full request data
             # The actual event data is inside the 'payload' key
             # { "event": "...", "payload": { "object": { ... } } }
-            payload = log.payload.get('payload', {})
+            payload = log.payload.get("payload", {})
 
             handler = self._get_zoom_handler(event_type)
             if handler:
@@ -229,18 +231,61 @@ class WebhookProcessor:
         except Exception as e:
             logger.error(f"Zoom webhook processing failed: {e}")
             log.error_message = str(e)
-            log.save(update_fields=['error_message', 'updated_at'])
+            log.save(update_fields=["error_message", "updated_at"])
             return False
 
     def _get_zoom_handler(self, event_type: str):
         """Get handler for Zoom event type."""
         handlers = {
-            'meeting.participant_joined': self._handle_participant_joined,
-            'meeting.participant_left': self._handle_participant_left,
-            'meeting.ended': self._handle_meeting_ended,
-            'recording.completed': self._handle_recording_completed,
+            "meeting.started": self._handle_meeting_started,
+            "meeting.participant_joined": self._handle_participant_joined,
+            "meeting.participant_left": self._handle_participant_left,
+            "meeting.ended": self._handle_meeting_ended,
+            "webinar.started": self._handle_meeting_started,  # Same logic as meeting
+            "webinar.participant_joined": self._handle_participant_joined,  # Same logic as meeting
+            "webinar.participant_left": self._handle_participant_left,  # Same logic as meeting
+            "webinar.ended": self._handle_meeting_ended,  # Same logic as meeting
+            "recording.completed": self._handle_recording_completed,
         }
         return handlers.get(event_type)
+
+    def _handle_meeting_started(self, payload: dict) -> bool:
+        """Handle meeting/webinar start event."""
+        from events.models import Event
+
+        meeting_id = str(payload.get("object", {}).get("id", ""))
+
+        if not meeting_id:
+            logger.warning("Missing meeting_id in meeting.started payload")
+            return False
+
+        logger.info(f"Meeting/Webinar started: {meeting_id}")
+
+        # Try to find Event
+        try:
+            event = Event.objects.get(zoom_meeting_id=meeting_id)
+            # Mark event as live if it's scheduled
+            if event.status == "scheduled":
+                event.status = "live"
+                event.save(update_fields=["status", "updated_at"])
+                logger.info(f"Marked event {event.uuid} as live")
+            return True
+        except Event.DoesNotExist:
+            pass
+
+        # Try CourseSession
+        try:
+            from learning.models import CourseSession
+
+            session = CourseSession.objects.get(zoom_meeting_id=meeting_id)
+            # Could add session status updates here if needed
+            logger.info(f"Session started: {session.uuid}")
+            return True
+        except Exception:
+            pass
+
+        logger.warning(f"Event/Session not found for Zoom meeting ID: {meeting_id}")
+        return True  # Return True to acknowledge webhook receipt
 
     def _handle_participant_joined(self, payload: dict) -> bool:
         """Handle participant join event."""
@@ -250,14 +295,14 @@ class WebhookProcessor:
         from registrations.models import AttendanceRecord, Registration
 
         # Extract data
-        meeting_id = str(payload.get('object', {}).get('id', ''))
-        participant = payload.get('object', {}).get('participant', {})
+        meeting_id = str(payload.get("object", {}).get("id", ""))
+        participant = payload.get("object", {}).get("participant", {})
 
-        zoom_user_id = participant.get('user_id', '')
-        user_name = participant.get('user_name', '')
-        user_email = participant.get('email', '')
-        participant_uuid = participant.get('id', '')  # Unique for this session
-        join_time_str = participant.get('join_time')
+        zoom_user_id = participant.get("user_id", "")
+        user_name = participant.get("user_name", "")
+        user_email = participant.get("email", "")
+        participant_uuid = participant.get("id", "")  # Unique for this session
+        join_time_str = participant.get("join_time")
 
         join_time = parse_datetime(join_time_str) if join_time_str else None
 
@@ -270,11 +315,13 @@ class WebhookProcessor:
         # Try to find Event first
         try:
             event = Event.objects.get(zoom_meeting_id=meeting_id)
-            
+
             # Find Registration (if any)
             registration = None
             if user_email:
-                registration = Registration.objects.filter(event=event, email__iexact=user_email, deleted_at__isnull=True).first()
+                registration = Registration.objects.filter(
+                    event=event, email__iexact=user_email, deleted_at__isnull=True
+                ).first()
 
             # Create Attendance Record
             AttendanceRecord.objects.get_or_create(
@@ -282,12 +329,12 @@ class WebhookProcessor:
                 zoom_participant_id=participant_uuid,
                 join_time=join_time,
                 defaults={
-                    'registration': registration,
-                    'zoom_user_id': zoom_user_id,
-                    'zoom_user_email': user_email,
-                    'zoom_user_name': user_name,
-                    'is_matched': registration is not None,
-                    'matched_at': timezone.now() if registration else None,
+                    "registration": registration,
+                    "zoom_user_id": zoom_user_id,
+                    "zoom_user_email": user_email,
+                    "zoom_user_name": user_name,
+                    "is_matched": registration is not None,
+                    "matched_at": timezone.now() if registration else None,
                 },
             )
 
@@ -303,14 +350,12 @@ class WebhookProcessor:
             from learning.models import CourseEnrollment, CourseSession, CourseSessionAttendance
 
             session = CourseSession.objects.get(zoom_meeting_id=meeting_id)
-            
+
             # Find Enrollment (if any)
             enrollment = None
             if user_email:
                 enrollment = CourseEnrollment.objects.filter(
-                    course=session.course,
-                    user__email__iexact=user_email,
-                    status='active'
+                    course=session.course, user__email__iexact=user_email, status="active"
                 ).first()
 
             if enrollment:
@@ -319,10 +364,10 @@ class WebhookProcessor:
                     session=session,
                     enrollment=enrollment,
                     defaults={
-                        'zoom_participant_id': participant_uuid,
-                        'zoom_user_email': user_email,
-                        'zoom_join_time': join_time,
-                        'attendance_minutes': 0,
+                        "zoom_participant_id": participant_uuid,
+                        "zoom_user_email": user_email,
+                        "zoom_join_time": join_time,
+                        "attendance_minutes": 0,
                     },
                 )
                 if not created:
@@ -330,7 +375,7 @@ class WebhookProcessor:
                     attendance.zoom_join_time = join_time
                     # Update participant UUID so 'left' event can find record
                     attendance.zoom_participant_id = participant_uuid
-                    attendance.save(update_fields=['zoom_join_time', 'zoom_participant_id', 'updated_at'])
+                    attendance.save(update_fields=["zoom_join_time", "zoom_participant_id", "updated_at"])
 
             logger.info(f"Session participant joined: {user_email} for session {session.uuid}")
             return True
@@ -340,7 +385,6 @@ class WebhookProcessor:
         logger.warning(f"Event/Session not found for Zoom meeting ID: {meeting_id}")
         return True  # Return True to acknowledge webhook receipt
 
-
     def _handle_participant_left(self, payload: dict) -> bool:
         """Handle participant leave event."""
         from django.utils.dateparse import parse_datetime
@@ -348,11 +392,11 @@ class WebhookProcessor:
         from events.models import Event
         from registrations.models import AttendanceRecord
 
-        meeting_id = str(payload.get('object', {}).get('id', ''))
-        participant = payload.get('object', {}).get('participant', {})
+        meeting_id = str(payload.get("object", {}).get("id", ""))
+        participant = payload.get("object", {}).get("participant", {})
 
-        participant_uuid = participant.get('id', '')
-        leave_time_str = participant.get('leave_time')
+        participant_uuid = participant.get("id", "")
+        leave_time_str = participant.get("leave_time")
 
         leave_time = parse_datetime(leave_time_str) if leave_time_str else None
 
@@ -364,10 +408,10 @@ class WebhookProcessor:
         # Try Event first
         try:
             event = Event.objects.get(zoom_meeting_id=meeting_id)
-            
+
             record = (
                 AttendanceRecord.objects.filter(event=event, zoom_participant_id=participant_uuid, leave_time__isnull=True)
-                .order_by('-join_time')
+                .order_by("-join_time")
                 .first()
             )
 
@@ -383,30 +427,27 @@ class WebhookProcessor:
             from learning.models import CourseSession, CourseSessionAttendance
 
             session = CourseSession.objects.get(zoom_meeting_id=meeting_id)
-            
+
             # Find the attendance record and update leave time + duration
-            attendance = CourseSessionAttendance.objects.filter(
-                session=session,
-                zoom_participant_id=participant_uuid
-            ).first()
+            attendance = CourseSessionAttendance.objects.filter(session=session, zoom_participant_id=participant_uuid).first()
 
             if attendance and attendance.zoom_join_time:
                 attendance.zoom_leave_time = leave_time
                 # Calculate duration of THIS segment
                 segment_duration = (leave_time - attendance.zoom_join_time).total_seconds() / 60
-                
+
                 # Accumulate minutes (don't overwrite)
                 if segment_duration > 0:
-                     attendance.attendance_minutes += int(segment_duration)
-                
+                    attendance.attendance_minutes += int(segment_duration)
+
                 # Calculate eligibility based on new total
                 min_required = session.minimum_attendance_percent or 80
-                attendance_percent = (attendance.attendance_minutes / session.duration_minutes * 100) if session.duration_minutes else 0
+                attendance_percent = (
+                    (attendance.attendance_minutes / session.duration_minutes * 100) if session.duration_minutes else 0
+                )
                 attendance.is_eligible = attendance_percent >= min_required
-                
-                attendance.save(update_fields=[
-                    'zoom_leave_time', 'attendance_minutes', 'is_eligible', 'updated_at'
-                ])
+
+                attendance.save(update_fields=["zoom_leave_time", "attendance_minutes", "is_eligible", "updated_at"])
                 logger.info(f"Closed session attendance for session {session.uuid}")
             return True
         except Exception:
@@ -414,17 +455,16 @@ class WebhookProcessor:
 
         return True
 
-
     def _handle_meeting_ended(self, payload: dict) -> bool:
         """Handle meeting end event."""
         from events.models import Event
 
-        meeting_id = str(payload.get('object', {}).get('id', ''))
+        meeting_id = str(payload.get("object", {}).get("id", ""))
 
         try:
             event = Event.objects.get(zoom_meeting_id=meeting_id)
             # Auto-complete if still live
-            if event.status == 'live':
+            if event.status == "live":
                 event.complete()
             return True
         except Event.DoesNotExist:
@@ -434,8 +474,8 @@ class WebhookProcessor:
         """Handle recording completed event."""
         from integrations.models import ZoomRecording
 
-        recording_data = payload.get('object', {})
-        meeting_id = str(recording_data.get('id', ''))
+        recording_data = payload.get("object", {})
+        meeting_id = str(recording_data.get("id", ""))
 
         # Find associated event
         from events.models import Event
@@ -449,13 +489,13 @@ class WebhookProcessor:
         ZoomRecording.objects.create(
             event=event,
             zoom_meeting_id=meeting_id,
-            recording_id=recording_data.get('uuid', ''),
-            topic=recording_data.get('topic', ''),
-            recording_type=recording_data.get('recording_type', 'cloud'),
-            status='completed',
-            total_size_bytes=recording_data.get('total_size', 0),
-            share_url=recording_data.get('share_url', ''),
-            password=recording_data.get('password', ''),
+            recording_id=recording_data.get("uuid", ""),
+            topic=recording_data.get("topic", ""),
+            recording_type=recording_data.get("recording_type", "cloud"),
+            status="completed",
+            total_size_bytes=recording_data.get("total_size", 0),
+            share_url=recording_data.get("share_url", ""),
+            password=recording_data.get("password", ""),
         )
 
         return True
@@ -464,24 +504,30 @@ class WebhookProcessor:
 class AttendanceMatcher:
     """
     Service for matching Zoom attendance to registrations.
+
+    Attendance data is populated via Zoom webhooks (participant_joined/left events).
+    This service aggregates that data and updates registration attendance summaries.
     """
 
     def match_attendance(self, event) -> dict[str, Any]:
         """
-        Match Zoom participant data to event registrations.
+        Aggregate attendance data and update registration summaries.
+
+        Attendance records are created by Zoom webhooks - this method just
+        recalculates statistics and updates registration eligibility.
 
         Args:
             event: Event to match attendance for
 
         Returns:
-            Dict with match results
+            Dict with match results: {matched, unmatched, eligible, ineligible}
         """
         from registrations.models import AttendanceRecord, Registration
 
-        results = {'matched': 0, 'unmatched': 0, 'eligible': 0, 'ineligible': 0}
+        results = {"matched": 0, "unmatched": 0, "eligible": 0, "ineligible": 0}
 
         # Get all registrations for event
-        registrations = Registration.objects.filter(event=event, status='confirmed').select_related('user')
+        registrations = Registration.objects.filter(event=event, status="confirmed").select_related("user")
 
         # Get attendance records
         attendance_records = AttendanceRecord.objects.filter(registration__event=event)
@@ -490,16 +536,16 @@ class AttendanceMatcher:
             records = attendance_records.filter(registration=reg)
 
             if records.exists():
-                results['matched'] += 1
+                results["matched"] += 1
             else:
-                results['unmatched'] += 1
+                results["unmatched"] += 1
 
             reg.update_attendance_summary()
 
             if reg.attendance_eligible:
-                results['eligible'] += 1
+                results["eligible"] += 1
             else:
-                results['ineligible'] += 1
+                results["ineligible"] += 1
 
         return results
 
@@ -515,12 +561,10 @@ class AttendanceMatcher:
         """
         from learning.models import CourseSessionAttendance
 
-        results = {'matched': 0, 'unmatched': 0, 'eligible': 0, 'ineligible': 0}
+        results = {"matched": 0, "unmatched": 0, "eligible": 0, "ineligible": 0}
 
         # Get all attendance records for this session
-        attendance_records = CourseSessionAttendance.objects.filter(
-            session=session
-        ).select_related('enrollment')
+        attendance_records = CourseSessionAttendance.objects.filter(session=session).select_related("enrollment")
 
         for record in attendance_records:
             # Calculate eligibility based on attendance
@@ -529,17 +573,17 @@ class AttendanceMatcher:
 
             is_eligible = attendance_percent >= min_required or record.is_manual_override
             record.is_eligible = is_eligible
-            record.save(update_fields=['is_eligible', 'updated_at'])
+            record.save(update_fields=["is_eligible", "updated_at"])
 
             if record.zoom_user_email:
-                results['matched'] += 1
+                results["matched"] += 1
             else:
-                results['unmatched'] += 1
+                results["unmatched"] += 1
 
             if is_eligible:
-                results['eligible'] += 1
+                results["eligible"] += 1
             else:
-                results['ineligible'] += 1
+                results["ineligible"] += 1
 
         return results
 

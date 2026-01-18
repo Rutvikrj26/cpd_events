@@ -842,4 +842,25 @@ class EventStatusHistorySerializer(BaseModelSerializer):
             'changed_by_name',
             'created_at',
         ]
-        read_only_fields = fields
+
+class UnmatchedParticipantSerializer(serializers.Serializer):
+    """Zoom participant not matched to any registration."""
+
+    user_id = serializers.CharField(required=False, allow_null=True)
+    user_name = serializers.CharField()
+    user_email = serializers.EmailField(required=False, allow_null=True)
+    join_time = serializers.DateTimeField()
+    leave_time = serializers.DateTimeField(required=False, allow_null=True)
+    duration_minutes = serializers.IntegerField()
+
+
+class MatchParticipantSerializer(serializers.Serializer):
+    """Manual matching of participant to registration."""
+
+    registration_uuid = serializers.UUIDField()
+    # Alternatively accept just one
+    zoom_user_email = serializers.EmailField(required=False)
+    zoom_user_name = serializers.CharField(required=False)
+    zoom_join_time = serializers.DateTimeField(required=False)
+    zoom_leave_time = serializers.DateTimeField(required=False)
+    attendance_minutes = serializers.IntegerField(required=False)

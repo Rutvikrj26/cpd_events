@@ -1492,20 +1492,29 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def sync_attendance(self, request, course_uuid=None, uuid=None):
-        """Trigger background sync of attendance."""
+        """Recalculate attendance statistics from webhook data."""
         from .tasks import sync_session_attendance
 
         session = self.get_object()
         if not session.zoom_meeting_id:
-             return error_response('Session has no Zoom meeting linked.', code='NO_ZOOM', status_code=400)
+            return error_response('Session has no Zoom meeting linked.', code='NO_ZOOM', status_code=400)
 
         task = sync_session_attendance.delay(session.id)
-        return Response({'task_id': task.id, 'status': 'queued'})
+        # task might be a dict if CLOUD_TASKS_SYNC=True or in emulator mode
+        task_id = getattr(task, 'id', None) or (task.get('id') if isinstance(task, dict) else None)
+        # fallback to name if it's a CloudTasks response from create_task
+        if not task_id and hasattr(task, 'name'):
+            task_id = task.name
+
+        return Response({'task_id': task_id, 'status': 'queued'})
 
     @action(detail=True, methods=['get'])
     def unmatched_participants(self, request, course_uuid=None, uuid=None):
-        """Get Zoom participants not matched to enrollment."""
-        from accounts.services import zoom_service
+        """Get Zoom participants not matched to enrollment.
+
+        Uses webhook logs data populated via Zoom webhooks.
+        """
+        from integrations.models import ZoomWebhookLog
 
         from .models import CourseSessionAttendance
         from .serializers import UnmatchedParticipantSerializer
@@ -1513,38 +1522,43 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
         session = self.get_object()
         course = session.course
         if not self._is_course_staff(course):
-             from rest_framework.exceptions import PermissionDenied
-             raise PermissionDenied("You do not have permission to perform this action.")
-
-        owner = course.created_by
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to perform this action.")
 
         if not session.zoom_meeting_id:
-             return error_response('Session has no Zoom meeting linked.', code='NO_ZOOM', status_code=400)
+            return error_response('Session has no Zoom meeting linked.', code='NO_ZOOM', status_code=400)
 
-        # 1. Fetch from Zoom
-        response = zoom_service.get_past_meeting_participants(user=owner, meeting_id=session.zoom_meeting_id)
-        if not response['success']:
-             return error_response(response.get('error', 'Zoom API error'), code='ZOOM_ERROR')
-
-        zoom_participants = response['data'].get('participants', [])
-
-        # 2. Get matched emails
+        # 1. Get matched emails from attendance records
         matched_records = CourseSessionAttendance.objects.filter(session=session)
         matched_emails = set(r.zoom_user_email.lower() for r in matched_records if r.zoom_user_email)
 
-        # 3. Filter
+        # 2. Get participant join events from webhook logs
+        join_logs = ZoomWebhookLog.objects.filter(
+            zoom_meeting_id=session.zoom_meeting_id,
+            event_type='meeting.participant_joined',
+            processing_status='completed'
+        ).order_by('-event_timestamp')
+
+        # 3. Extract unmatched participants from webhook payloads
         unmatched = []
-        for p in zoom_participants:
-             email = p.get('user_email', '').lower()
-             if email and email not in matched_emails:
-                  unmatched.append({
-                      'user_id': p.get('id'),
-                      'user_name': p.get('name'),
-                      'user_email': p.get('user_email'),
-                      'join_time': p.get('join_time'),
-                      'leave_time': p.get('leave_time'),
-                      'duration_minutes': int(p.get('duration', 0) / 60) if p.get('duration') else 0
-                  })
+        seen_emails = set()
+
+        for log in join_logs:
+            participant = log.payload.get('object', {}).get('participant', {})
+            email = participant.get('email', '').lower().strip()
+
+            if not email or email in matched_emails or email in seen_emails:
+                continue
+
+            seen_emails.add(email)
+            unmatched.append({
+                'user_id': participant.get('id'),
+                'user_name': participant.get('user_name', 'Unknown'),
+                'user_email': email,
+                'join_time': participant.get('join_time'),
+                'leave_time': None,  # Would need to look up leave event
+                'duration_minutes': 0
+            })
 
         serializer = UnmatchedParticipantSerializer(unmatched, many=True)
         return Response(serializer.data)

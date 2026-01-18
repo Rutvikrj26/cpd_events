@@ -24,10 +24,19 @@ def get_zoom_auth_url():
     """
     client_id, _, redirect_uri = get_zoom_credentials()
 
+    # Scopes for meeting management (attendance tracking uses webhooks, not API)
+    # These must ALSO be enabled in Zoom App Marketplace console
+    scopes = [
+        "meeting:read",   # View meetings
+        "meeting:write",  # Create/update meetings
+        "user:read",      # View user info
+    ]
+
     params = {
         "response_type": "code",
         "client_id": client_id,
         "redirect_uri": redirect_uri,
+        "scope": " ".join(scopes),
     }
 
     # Base URL for Zoom OAuth

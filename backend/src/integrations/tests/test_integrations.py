@@ -23,7 +23,7 @@ class TestEventRecordingViewSet:
     """Tests for organizer recording management."""
 
     def get_endpoint(self, event):
-        return f'/api/v1/events/{event.uuid}/recordings/'
+        return f"/api/v1/events/{event.uuid}/recordings/"
 
     def test_list_recordings(self, organizer_client, completed_event):
         """Organizer can list recordings for their event."""
@@ -39,14 +39,14 @@ class TestEventRecordingViewSet:
         # Create a recording
         recording = ZoomRecording.objects.create(
             event=completed_event,
-            title='Test Recording',
-            zoom_recording_id='rec_123',  # Adding required fields if any
-            zoom_meeting_id='123456789',
+            title="Test Recording",
+            zoom_recording_id="rec_123",  # Adding required fields if any
+            zoom_meeting_id="123456789",
             recording_start=completed_event.starts_at,
             recording_end=completed_event.ends_at,
         )
 
-        response = organizer_client.patch(f'{self.get_endpoint(completed_event)}{recording.uuid}/', {'is_public': True})
+        response = organizer_client.patch(f"{self.get_endpoint(completed_event)}{recording.uuid}/", {"is_public": True})
         assert response.status_code == status.HTTP_200_OK
 
 
@@ -59,7 +59,7 @@ class TestEventRecordingViewSet:
 class TestMyRecordingsViewSet:
     """Tests for attendee recording access."""
 
-    endpoint = '/api/v1/users/me/recordings/'
+    endpoint = "/api/v1/users/me/recordings/"
 
     def test_list_my_recordings(self, auth_client, registration):
         """User can list recordings they have access to."""
@@ -78,33 +78,33 @@ class TestZoomOAuth:
 
     def test_initiate_zoom_oauth(self, organizer_client):
         """Organizer can initiate Zoom OAuth."""
-        response = organizer_client.get('/api/v1/integrations/zoom/initiate/')
+        response = organizer_client.get("/api/v1/integrations/zoom/initiate/")
         assert response.status_code == status.HTTP_200_OK
         # Should return auth URL
-        assert 'url' in response.data or 'auth_url' in response.data
+        assert "url" in response.data or "auth_url" in response.data
 
-    @patch('accounts.services.zoom_service.complete_oauth')
+    @patch("accounts.services.zoom_service.complete_oauth")
     def test_zoom_callback(self, mock_complete_oauth, organizer_client, organizer, db):
         """Zoom OAuth callback is handled."""
-        mock_complete_oauth.return_value = {'success': True}
+        mock_complete_oauth.return_value = {"success": True}
 
         # Callback with authorization code
         response = organizer_client.get(
-            '/api/v1/integrations/zoom/callback/',
+            "/api/v1/integrations/zoom/callback/",
             {
-                'code': 'test_auth_code',
-                'state': 'test_state',
+                "code": "test_auth_code",
+                "state": "test_state",
             },
         )
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['status'] == 'connected'
+        assert response.data["status"] == "connected"
 
     def test_get_zoom_status(self, organizer_client, organizer):
         """Organizer can check Zoom connection status."""
-        response = organizer_client.get('/api/v1/integrations/zoom/status/')
+        response = organizer_client.get("/api/v1/integrations/zoom/status/")
         assert response.status_code == status.HTTP_200_OK
-        assert 'is_connected' in response.data
+        assert "is_connected" in response.data
 
     def test_disconnect_zoom(self, organizer_client, mock_zoom, organizer, db):
         """Organizer can disconnect Zoom."""
@@ -115,13 +115,13 @@ class TestZoomOAuth:
 
         ZoomConnection.objects.create(
             user=organizer,
-            access_token='test_token',
-            refresh_token='test_refresh',
+            access_token="test_token",
+            refresh_token="test_refresh",
             token_expires_at=timezone.now() + timezone.timedelta(hours=1),
-            zoom_user_id='test_user_id',
+            zoom_user_id="test_user_id",
         )
 
-        response = organizer_client.post('/api/v1/integrations/zoom/disconnect/')
+        response = organizer_client.post("/api/v1/integrations/zoom/disconnect/")
         assert response.status_code == status.HTTP_200_OK
 
 
@@ -134,7 +134,7 @@ class TestZoomOAuth:
 class TestZoomMeetingsList:
     """Tests for Zoom meetings list."""
 
-    endpoint = '/api/v1/integrations/zoom/meetings/'
+    endpoint = "/api/v1/integrations/zoom/meetings/"
 
     def test_list_zoom_meetings(self, organizer_client, organizer, db):
         """Organizer can list their Zoom meetings."""
@@ -144,10 +144,10 @@ class TestZoomMeetingsList:
 
         ZoomConnection.objects.create(
             user=organizer,
-            access_token='test_token',
-            refresh_token='test_refresh',
+            access_token="test_token",
+            refresh_token="test_refresh",
             token_expires_at=timezone.now() + timezone.timedelta(hours=1),
-            zoom_user_id='test_user_id',
+            zoom_user_id="test_user_id",
         )
 
         response = organizer_client.get(self.endpoint)
@@ -168,42 +168,42 @@ class TestZoomMeetingsList:
 class TestZoomWebhook:
     """Tests for Zoom webhook handling."""
 
-    endpoint = '/api/v1/integrations/webhooks/zoom/'
+    endpoint = "/api/v1/integrations/webhooks/zoom/"
 
     def test_url_validation(self, api_client):
         """Zoom URL validation challenge is handled."""
         data = {
-            'event': 'endpoint.url_validation',
-            'payload': {
-                'plainToken': 'test_token',
+            "event": "endpoint.url_validation",
+            "payload": {
+                "plainToken": "test_token",
             },
         }
         response = api_client.post(
             self.endpoint,
             data,
-            format='json',
+            format="json",
         )
         # URL validation should return the token hash
         assert response.status_code == status.HTTP_200_OK
 
     @pytest.mark.django_db
-    @patch('integrations.views.ZoomWebhookView._verify_signature')
+    @patch("integrations.views.ZoomWebhookView._verify_signature")
     def test_recording_completed_event(self, mock_verify, api_client, completed_event, organizer, db):
         """Handle recording.completed event."""
         mock_verify.return_value = True
-        completed_event.zoom_meeting_id = '123456789'
+        completed_event.zoom_meeting_id = "123456789"
         completed_event.save()
 
         data = {
-            'event': 'recording.completed',
-            'payload': {
-                'object': {
-                    'id': 123456789,
-                    'recording_files': [
+            "event": "recording.completed",
+            "payload": {
+                "object": {
+                    "id": 123456789,
+                    "recording_files": [
                         {
-                            'id': 'rec_123',
-                            'recording_type': 'shared_screen_with_speaker_view',
-                            'download_url': 'https://zoom.us/rec/download/123',
+                            "id": "rec_123",
+                            "recording_type": "shared_screen_with_speaker_view",
+                            "download_url": "https://zoom.us/rec/download/123",
                         }
                     ],
                 }
@@ -212,7 +212,7 @@ class TestZoomWebhook:
         response = api_client.post(
             self.endpoint,
             data,
-            format='json',
+            format="json",
         )
         assert response.status_code == status.HTTP_200_OK
 
@@ -224,38 +224,38 @@ class TestZoomWebhook:
 
         event = EventFactory(
             owner=organizer,
-            status='published',
-            zoom_meeting_id='999999',
+            status="published",
+            zoom_meeting_id="999999",
             minimum_attendance_minutes=30,
             duration_minutes=60,
         )
         registration = RegistrationFactory(
             event=event,
-            status='confirmed',
+            status="confirmed",
             user=None,
-            email='attendee@example.com',
-            full_name='Attendee Example',
+            email="attendee@example.com",
+            full_name="Attendee Example",
         )
 
         join_time = timezone.now()
         leave_time = join_time + timezone.timedelta(minutes=45)
 
         join_log = ZoomWebhookLog.objects.create(
-            webhook_id='join_1',
-            event_type='meeting.participant_joined',
+            webhook_id="join_1",
+            event_type="meeting.participant_joined",
             event_timestamp=join_time,
-            zoom_meeting_id='999999',
-            zoom_meeting_uuid='uuid-1',
+            zoom_meeting_id="999999",
+            zoom_meeting_uuid="uuid-1",
             payload={
-                'payload': {
-                    'object': {
-                        'id': 999999,
-                        'participant': {
-                            'id': 'participant-1',
-                            'user_id': 'zoom-user-1',
-                            'user_name': 'Attendee Example',
-                            'email': registration.email,
-                            'join_time': join_time.isoformat(),
+                "payload": {
+                    "object": {
+                        "id": 999999,
+                        "participant": {
+                            "id": "participant-1",
+                            "user_id": "zoom-user-1",
+                            "user_name": "Attendee Example",
+                            "email": registration.email,
+                            "join_time": join_time.isoformat(),
                         },
                     }
                 }
@@ -264,18 +264,18 @@ class TestZoomWebhook:
         process_zoom_webhook(join_log.id)
 
         leave_log = ZoomWebhookLog.objects.create(
-            webhook_id='leave_1',
-            event_type='meeting.participant_left',
+            webhook_id="leave_1",
+            event_type="meeting.participant_left",
             event_timestamp=leave_time,
-            zoom_meeting_id='999999',
-            zoom_meeting_uuid='uuid-1',
+            zoom_meeting_id="999999",
+            zoom_meeting_uuid="uuid-1",
             payload={
-                'payload': {
-                    'object': {
-                        'id': 999999,
-                        'participant': {
-                            'id': 'participant-1',
-                            'leave_time': leave_time.isoformat(),
+                "payload": {
+                    "object": {
+                        "id": 999999,
+                        "participant": {
+                            "id": "participant-1",
+                            "leave_time": leave_time.isoformat(),
                         },
                     }
                 }
@@ -299,7 +299,7 @@ class TestEmailLogViewSet:
     """Tests for email log viewing."""
 
     def get_endpoint(self, event):
-        return f'/api/v1/events/{event.uuid}/emails/'
+        return f"/api/v1/events/{event.uuid}/emails/"
 
     def test_list_email_logs(self, organizer_client, completed_event):
         """Organizer can view email logs for their event."""
@@ -312,3 +312,232 @@ class TestEmailLogViewSet:
         endpoint = self.get_endpoint(completed_event)
         response = auth_client.get(endpoint)
         assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+# =============================================================================
+# New Zoom Webhook Event Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestNewZoomWebhookEvents:
+    """Tests for newly added Zoom webhook events."""
+
+    endpoint = "/api/v1/integrations/webhooks/zoom/"
+
+    @patch("integrations.views.ZoomWebhookView._verify_signature")
+    def test_meeting_started_event(self, mock_verify, api_client, organizer, db):
+        """Handle meeting.started event - marks event as live."""
+        from factories import EventFactory
+
+        mock_verify.return_value = True
+
+        event = EventFactory(
+            owner=organizer,
+            status="scheduled",
+            zoom_meeting_id="987654321",
+        )
+
+        data = {
+            "event": "meeting.started",
+            "payload": {
+                "object": {
+                    "id": 987654321,
+                    "topic": "Test Meeting",
+                    "start_time": timezone.now().isoformat(),
+                }
+            },
+        }
+
+        response = api_client.post(self.endpoint, data, format="json")
+        assert response.status_code == status.HTTP_200_OK
+
+        # Check that event was marked as live
+        event.refresh_from_db()
+        assert event.status == "live"
+
+    @patch("integrations.views.ZoomWebhookView._verify_signature")
+    def test_webinar_started_event(self, mock_verify, api_client, organizer, db):
+        """Handle webinar.started event - marks event as live."""
+        from factories import EventFactory
+
+        mock_verify.return_value = True
+
+        event = EventFactory(
+            owner=organizer,
+            status="scheduled",
+            zoom_meeting_id="111222333",
+        )
+
+        data = {
+            "event": "webinar.started",
+            "payload": {
+                "object": {
+                    "id": 111222333,
+                    "topic": "Test Webinar",
+                    "start_time": timezone.now().isoformat(),
+                }
+            },
+        }
+
+        response = api_client.post(self.endpoint, data, format="json")
+        assert response.status_code == status.HTTP_200_OK
+
+        # Check that event was marked as live
+        event.refresh_from_db()
+        assert event.status == "live"
+
+    @patch("integrations.views.ZoomWebhookView._verify_signature")
+    def test_webinar_ended_event(self, mock_verify, api_client, organizer, db):
+        """Handle webinar.ended event - marks event as completed."""
+        from factories import EventFactory
+
+        mock_verify.return_value = True
+
+        event = EventFactory(
+            owner=organizer,
+            status="live",
+            zoom_meeting_id="444555666",
+        )
+
+        data = {
+            "event": "webinar.ended",
+            "payload": {
+                "object": {
+                    "id": 444555666,
+                    "topic": "Test Webinar",
+                    "end_time": timezone.now().isoformat(),
+                }
+            },
+        }
+
+        response = api_client.post(self.endpoint, data, format="json")
+        assert response.status_code == status.HTTP_200_OK
+
+        # Check that event was marked as completed
+        event.refresh_from_db()
+        assert event.status == "completed"
+
+    @patch("integrations.views.ZoomWebhookView._verify_signature")
+    def test_webinar_participant_joined(self, mock_verify, api_client, organizer, db):
+        """Handle webinar.participant_joined event - creates attendance record."""
+        from factories import EventFactory, RegistrationFactory
+        from registrations.models import AttendanceRecord
+
+        mock_verify.return_value = True
+
+        event = EventFactory(
+            owner=organizer,
+            status="live",
+            zoom_meeting_id="777888999",
+        )
+
+        registration = RegistrationFactory(
+            event=event,
+            status="confirmed",
+            email="webinar@example.com",
+            full_name="Webinar Attendee",
+        )
+
+        join_time = timezone.now()
+
+        data = {
+            "event": "webinar.participant_joined",
+            "payload": {
+                "object": {
+                    "id": 777888999,
+                    "participant": {
+                        "id": "participant-webinar-1",
+                        "user_id": "zoom-webinar-user-1",
+                        "user_name": "Webinar Attendee",
+                        "email": "webinar@example.com",
+                        "join_time": join_time.isoformat(),
+                    },
+                }
+            },
+        }
+
+        response = api_client.post(self.endpoint, data, format="json")
+        assert response.status_code == status.HTTP_200_OK
+
+        # Check attendance record was created
+        attendance = AttendanceRecord.objects.filter(event=event, zoom_user_email="webinar@example.com").first()
+        assert attendance is not None
+        assert attendance.registration == registration
+
+    @patch("integrations.views.ZoomWebhookView._verify_signature")
+    def test_webinar_participant_left(self, mock_verify, api_client, organizer, db):
+        """Handle webinar.participant_left event - updates attendance duration."""
+        from factories import EventFactory, RegistrationFactory
+        from integrations.models import ZoomWebhookLog
+        from integrations.tasks import process_zoom_webhook
+
+        mock_verify.return_value = True
+
+        event = EventFactory(
+            owner=organizer,
+            status="live",
+            zoom_meeting_id="222333444",
+            minimum_attendance_minutes=20,
+            duration_minutes=45,
+        )
+
+        registration = RegistrationFactory(
+            event=event,
+            status="confirmed",
+            email="webinartest@example.com",
+            full_name="Webinar Test User",
+        )
+
+        join_time = timezone.now()
+        leave_time = join_time + timezone.timedelta(minutes=30)
+
+        # Create join webhook log
+        join_log = ZoomWebhookLog.objects.create(
+            webhook_id="webinar_join_1",
+            event_type="webinar.participant_joined",
+            event_timestamp=join_time,
+            zoom_meeting_id="222333444",
+            zoom_meeting_uuid="webinar-uuid-1",
+            payload={
+                "payload": {
+                    "object": {
+                        "id": 222333444,
+                        "participant": {
+                            "id": "webinar-participant-1",
+                            "user_id": "zoom-webinar-user-1",
+                            "user_name": "Webinar Test User",
+                            "email": "webinartest@example.com",
+                            "join_time": join_time.isoformat(),
+                        },
+                    }
+                }
+            },
+        )
+        process_zoom_webhook(join_log.id)
+
+        # Create leave webhook log
+        leave_log = ZoomWebhookLog.objects.create(
+            webhook_id="webinar_leave_1",
+            event_type="webinar.participant_left",
+            event_timestamp=leave_time,
+            zoom_meeting_id="222333444",
+            zoom_meeting_uuid="webinar-uuid-1",
+            payload={
+                "payload": {
+                    "object": {
+                        "id": 222333444,
+                        "participant": {
+                            "id": "webinar-participant-1",
+                            "leave_time": leave_time.isoformat(),
+                        },
+                    }
+                }
+            },
+        )
+        process_zoom_webhook(leave_log.id)
+
+        # Verify attendance was tracked
+        registration.refresh_from_db()
+        assert registration.total_attendance_minutes >= 30
+        assert registration.attendance_eligible is True

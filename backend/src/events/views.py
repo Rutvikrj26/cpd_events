@@ -18,6 +18,9 @@ from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import SoftDeleteModelViewSet
 
+import logging
+logger = logging.getLogger(__name__)
+
 from . import serializers
 from .models import Event, EventCustomField, Speaker
 
@@ -134,7 +137,7 @@ class EventViewSet(SoftDeleteModelViewSet):
 
         from .services import event_service
 
-        organization_uuid = self.request.data.get('organization')
+        organization_uuid = getattr(self.request, 'data', {}).get('organization')
 
         try:
             event = event_service.create_event(
@@ -200,8 +203,9 @@ class EventViewSet(SoftDeleteModelViewSet):
         serializer = serializers.EventStatusChangeSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
+        data = serializer.validated_data or {}
         try:
-            event.cancel(reason=serializer.validated_data.get('reason', ''), user=request.user)
+            event.cancel(reason=data.get('reason', ''), user=request.user)
         except ValueError as e:
             return error_response(str(e), code='INVALID_STATE')
 
@@ -307,6 +311,113 @@ class EventViewSet(SoftDeleteModelViewSet):
         event.save(update_fields=['featured_image', 'updated_at'])
 
         return Response(serializers.EventDetailSerializer(event, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'])
+    def sync_attendance(self, request, uuid=None):
+        """Trigger background sync of attendance."""
+        from .tasks import sync_zoom_attendance
+
+        event = self.get_object()
+        if not event.zoom_meeting_id:
+            return error_response('Event has no Zoom meeting linked.', code='NO_ZOOM', status_code=400)
+
+        task = sync_zoom_attendance.delay(event.id)
+        # task might be a dict if CLOUD_TASKS_SYNC=True or in emulator mode
+        task_id = getattr(task, 'id', None) or (task.get('id') if isinstance(task, dict) else None)
+        # fallback to name if it's a CloudTasks response from create_task
+        if not task_id and hasattr(task, 'name'):
+            task_id = task.name
+
+        return Response({'task_id': task_id, 'status': 'queued'})
+
+    @action(detail=True, methods=['get'])
+    def unmatched_participants(self, request, uuid=None):
+        """
+        Get Zoom participants that are not yet matched to any registration.
+        Uses local AttendanceRecord data populated via Zoom webhooks.
+        """
+        event = self.get_object()
+        if not event.zoom_meeting_id:
+            return error_response('Event has no Zoom meeting linked.', code='NO_ZOOM', status_code=400)
+
+        from django.db.models import Max, Sum
+        from django.db.models.functions import Coalesce
+        from registrations.models import AttendanceRecord
+
+        try:
+            # Get unmatched attendance records from webhook data
+            # Group by email to consolidate multiple join/leave sessions
+            unmatched_records = (
+                AttendanceRecord.objects
+                .filter(event=event, is_matched=False)
+                .exclude(zoom_user_email='')
+                .values('zoom_user_email', 'zoom_user_name')
+                .annotate(
+                    first_join=Max('join_time'),
+                    total_duration=Coalesce(Sum('duration_minutes'), 0)
+                )
+                .order_by('-first_join')
+            )
+
+            unmatched = [
+                {
+                    'user_email': record['zoom_user_email'],
+                    'user_name': record['zoom_user_name'] or 'Unknown',
+                    'join_time': record['first_join'].isoformat() if record['first_join'] else None,
+                    'duration': record['total_duration'] or 0,
+                }
+                for record in unmatched_records
+            ]
+
+            return Response(unmatched)
+
+        except Exception as e:
+            logger.error(f"Error in unmatched_participants: {e}")
+            return error_response(str(e), code='INTERNAL_ERROR', status_code=500)
+
+    @action(detail=True, methods=['post'])
+    def match_participant(self, request, uuid=None):
+        """Manually match a participant to a registration."""
+        from django.shortcuts import get_object_or_404
+        from integrations.services import attendance_matcher
+        from registrations.models import AttendanceRecord, Registration
+        from .serializers import MatchParticipantSerializer
+
+        event = self.get_object()
+        serializer = MatchParticipantSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        if not data:
+             return error_response('Invalid data provided.', code='INVALID_DATA')
+             
+        registration_uuid = data.get('registration_uuid')
+        registration = get_object_or_404(Registration, uuid=registration_uuid, event=event)
+
+        # Create or update attendance record
+        # For events, we track AttendanceRecord which sums up to Registration
+        record, created = AttendanceRecord.objects.update_or_create(
+            event=event,
+            registration=registration,
+            zoom_user_email=data.get('zoom_user_email'),
+            defaults={
+                'zoom_user_name': data.get('zoom_user_name'),
+                'join_time': data.get('zoom_join_time') or timezone.now(),
+                'duration_minutes': data.get('attendance_minutes', 0),
+                'is_matched': True,
+                'matched_at': timezone.now(),
+                'matched_manually': True,
+                'matched_by': request.user,
+            }
+        )
+
+        # Trigger registration summary update
+        registration.update_attendance_summary()
+        
+        # update denormalized counts on event
+        event.update_counts()
+
+        return Response({'status': 'matched'})
 
     @swagger_auto_schema(
         operation_summary="Event history",
@@ -671,7 +782,8 @@ class EventSessionViewSet(viewsets.ModelViewSet):
         reorder_serializer = serializers.SessionReorderSerializer(data=request.data)
         reorder_serializer.is_valid(raise_exception=True)
 
-        order_list = reorder_serializer.validated_data['order']
+        data = reorder_serializer.validated_data or {}
+        order_list = data.get('order', [])
         for order, session_uuid in enumerate(order_list):
             self.get_queryset().filter(uuid=session_uuid).update(order=order)
 
@@ -735,8 +847,9 @@ class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         override_serializer = serializers.SessionAttendanceOverrideSerializer(data=request.data)
         override_serializer.is_valid(raise_exception=True)
 
-        session_attendance.override_eligible = override_serializer.validated_data['eligible']
-        session_attendance.override_reason = override_serializer.validated_data['reason']
+        data = override_serializer.validated_data or {}
+        session_attendance.override_eligible = data.get('eligible')
+        session_attendance.override_reason = data.get('reason')
         session_attendance.override_by = request.user
         session_attendance.save()
 

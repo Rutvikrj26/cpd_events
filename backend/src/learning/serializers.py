@@ -749,6 +749,8 @@ class CourseSessionListSerializer(serializers.ModelSerializer):
             'is_upcoming',
             'is_live',
             'is_past',
+            'zoom_meeting_id',
+            'zoom_password',
         ]
 
 

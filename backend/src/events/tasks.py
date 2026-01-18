@@ -111,7 +111,10 @@ def create_zoom_meeting(event_id: int):
 @task()
 def sync_zoom_attendance(event_id: int):
     """
-    Sync Zoom attendance data for an event.
+    Recalculate attendance statistics for an event.
+
+    Attendance data is collected via Zoom webhooks (participant_joined/left).
+    This task aggregates that data and updates registration attendance summaries.
     """
     from events.models import Event
     from integrations.services import attendance_matcher

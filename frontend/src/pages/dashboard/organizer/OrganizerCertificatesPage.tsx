@@ -50,8 +50,9 @@ export const OrganizerCertificatesPage = () => {
     const subscription = outletContext?.subscription ?? null;
     const { isOrganizer, isCourseManager } = getRoleFlags(user, subscription);
 
+    const isLmsPlan = subscription?.plan === 'lms';
     // Course managers (LMS plan) don't have event access - they only manage templates
-    const hasEventAccess = isOrganizer && !isCourseManager;
+    const hasEventAccess = isOrganizer && !isLmsPlan;
 
     useEffect(() => {
         const fetchData = async () => {

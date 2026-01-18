@@ -254,7 +254,7 @@ resource "google_storage_bucket" "certificates" {
 
 # Cloud Tasks Queue
 resource "google_cloud_tasks_queue" "default" {
-  name     = "${local.app_name}-queue"
+  name     = "${local.app_name}-tasks"
   location = var.region
 
   rate_limits {

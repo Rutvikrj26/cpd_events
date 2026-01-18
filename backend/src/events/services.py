@@ -19,7 +19,7 @@ class EventService:
     """
 
     @staticmethod
-    def create_event(user, data: dict[str, Any], organization_uuid: str = None) -> Event:
+    def create_event(user, data: dict[str, Any], organization_uuid: str | None = None) -> Event:
         """
         Create a new event, enforcing subscription limits.
 

@@ -598,7 +598,7 @@ class ZoomService:
             return {'success': False, 'error': str(e)}
 
 
-    def _make_zoom_request(self, method: str, path: str, connection, payload: dict[str, Any] | None = None, retry_on_401: bool = True) -> dict[str, Any]:
+    def _make_zoom_request(self, method: str, path: str, connection, payload: dict[str, Any] | None = None, params: dict[str, Any] | None = None, retry_on_401: bool = True) -> dict[str, Any]:
         """
         Make an authenticated request to Zoom API with automatic 401 retry.
         """
@@ -614,23 +614,38 @@ class ZoomService:
 
         try:
             if method.upper() == 'POST':
-                response = requests.post(url, headers=headers, json=payload, timeout=30)
+                response = requests.post(url, headers=headers, json=payload, params=params, timeout=30)
             elif method.upper() == 'GET':
-                response = requests.get(url, headers=headers, timeout=30)
+                response = requests.get(url, headers=headers, params=params, timeout=30)
             else:
                 return {'success': False, 'error': f'Unsupported method: {method}'}
 
             if response.status_code == 401 and retry_on_401:
                 logger.warning(f"Zoom API returned 401. Forcing token refresh and retrying.")
                 if self.refresh_tokens(connection):
-                    return self._make_zoom_request(method, path, connection, payload, retry_on_401=False)
+                    return self._make_zoom_request(method, path, connection, payload, params=params, retry_on_401=False)
 
-            return {
-                'success': response.status_code in [200, 201],
+            is_success = response.status_code in [200, 201]
+            result = {
+                'success': is_success,
                 'status_code': response.status_code,
-                'data': response.json() if response.status_code in [200, 201] else {},
+                'data': {},
                 'text': response.text,
             }
+
+            if is_success:
+                result['data'] = response.json()
+            else:
+                # Extract error message from Zoom API response
+                try:
+                    error_data = response.json()
+                    result['error'] = error_data.get('message', response.text)
+                    logger.warning(f"Zoom API {method} {path} failed: {response.status_code} - {error_data}")
+                except Exception:
+                    result['error'] = response.text or f"Zoom API returned status {response.status_code}"
+                    logger.warning(f"Zoom API {method} {path} failed: {response.status_code} - {response.text}")
+
+            return result
         except Exception as e:
             logger.error(f"Zoom request failed: {e}")
             return {'success': False, 'error': str(e)}
@@ -704,29 +719,27 @@ class ZoomService:
 
     def get_past_meeting_participants(self, user, meeting_id: str) -> dict[str, Any]:
         """
-        Get participants for a past meeting.
+        Get participants for a past meeting using the Reports API.
+
+        Requires scope: report:read:list_meeting_participants:admin
+        (or classic scope: report:read:admin)
         """
         from accounts.models import ZoomConnection
-        
+
         try:
             connection = ZoomConnection.objects.get(user=user, is_active=True)
-            
-            # Use past_meetings endpoint
-            path = f"past_meetings/{meeting_id}/participants"
-            
-            # Fetch all pages if necessary (for now just one page of 300)
-            result = self._make_zoom_request('GET', path, connection, {'page_size': 300})
-            
-            if not result['success']:
-                 # Fallback to report endpoint if the meeting is very recent or depending on scopes?
-                 # Or maybe it's not a 'past' meeting yet if it just ended?
-                 pass
-                 
+
+            # Use report/meetings endpoint - works for all account types with proper scope
+            path = f"report/meetings/{meeting_id}/participants"
+            result = self._make_zoom_request('GET', path, connection, params={'page_size': 300})
+
             return result
-             
+
+        except ZoomConnection.DoesNotExist:
+            return {'success': False, 'error': 'No Zoom connection for user'}
         except Exception as e:
-             logger.error(f"Get meeting participants failed: {e}")
-             return {'success': False, 'error': str(e)}
+            logger.error(f"Get meeting participants failed: {e}")
+            return {'success': False, 'error': str(e)}
 
 
 # Singleton instance
