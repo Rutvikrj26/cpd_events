@@ -100,7 +100,7 @@ resource "google_sql_database_instance" "main" {
     }
   }
 
-  deletion_protection = var.environment == "prod"
+  deletion_protection = false
 
   depends_on = [
     google_service_networking_connection.private_vpc_connection,
@@ -223,7 +223,7 @@ resource "google_vpc_access_connector" "connector" {
 resource "google_storage_bucket" "media" {
   name          = "${var.project_id}-${local.app_name}-media"
   location      = var.region
-  force_destroy = var.environment != "prod"
+  force_destroy = true
 
   uniform_bucket_level_access = true
 
@@ -247,7 +247,7 @@ resource "google_storage_bucket" "media" {
 resource "google_storage_bucket" "certificates" {
   name          = "${var.project_id}-${local.app_name}-certificates"
   location      = var.region
-  force_destroy = var.environment != "prod"
+  force_destroy = true
 
   uniform_bucket_level_access = true
 }
@@ -637,7 +637,7 @@ resource "google_artifact_registry_repository" "backend" {
 resource "google_storage_bucket" "terraform_state" {
   name          = "${var.project_id}-terraform-state"
   location      = var.region
-  force_destroy = false
+  force_destroy = true
 
   versioning {
     enabled = true
@@ -659,7 +659,7 @@ resource "google_storage_bucket" "terraform_state" {
 resource "google_storage_bucket" "deployment_state" {
   name          = "${var.project_id}-deployment-state"
   location      = var.region
-  force_destroy = var.environment != "prod"
+  force_destroy = true
 
   versioning {
     enabled = true

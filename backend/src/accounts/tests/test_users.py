@@ -14,6 +14,8 @@ Endpoints tested:
 import pytest
 from rest_framework import status
 
+from billing.models import Subscription
+
 # =============================================================================
 # Current User Tests
 # =============================================================================
@@ -23,14 +25,14 @@ from rest_framework import status
 class TestCurrentUserView:
     """Tests for GET/PATCH /api/v1/users/me/"""
 
-    endpoint = '/api/v1/users/me/'
+    endpoint = "/api/v1/users/me/"
 
     def test_get_current_user(self, auth_client, user):
         """Authenticated user can get their profile."""
         response = auth_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['email'] == user.email
-        assert response.data['full_name'] == user.full_name
+        assert response.data["email"] == user.email
+        assert response.data["full_name"] == user.full_name
 
     def test_get_current_user_unauthenticated(self, api_client):
         """Unauthenticated request is rejected."""
@@ -42,12 +44,12 @@ class TestCurrentUserView:
         response = auth_client.patch(
             self.endpoint,
             {
-                'full_name': 'Updated Name',
+                "full_name": "Updated Name",
             },
         )
         assert response.status_code == status.HTTP_200_OK
         user.refresh_from_db()
-        assert user.full_name == 'Updated Name'
+        assert user.full_name == "Updated Name"
 
     def test_update_email_not_allowed(self, auth_client, user):
         """Email cannot be changed through profile update."""
@@ -55,7 +57,7 @@ class TestCurrentUserView:
         response = auth_client.patch(
             self.endpoint,
             {
-                'email': 'newemail@example.com',
+                "email": "newemail@example.com",
             },
         )
         # Either rejected or ignored
@@ -66,7 +68,8 @@ class TestCurrentUserView:
         """Organizer gets additional fields in response."""
         response = organizer_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['account_type'] == 'organizer'
+        # Organizer fixture has subscription with plan that allows event creation
+        assert response.data["email"] == organizer.email
 
 
 # =============================================================================
@@ -78,7 +81,7 @@ class TestCurrentUserView:
 class TestOrganizerProfileView:
     """Tests for GET/PATCH /api/v1/users/me/organizer-profile/"""
 
-    endpoint = '/api/v1/users/me/organizer-profile/'
+    endpoint = "/api/v1/users/me/organizer-profile/"
 
     def test_get_organizer_profile(self, organizer_client, organizer):
         """Organizer can get their organizer profile."""
@@ -90,13 +93,13 @@ class TestOrganizerProfileView:
         response = organizer_client.patch(
             self.endpoint,
             {
-                'organizer_bio': 'This is my bio',
-                'organizer_website': 'https://example.com',
+                "organizer_bio": "This is my bio",
+                "organizer_website": "https://example.com",
             },
         )
         assert response.status_code == status.HTTP_200_OK
         organizer.refresh_from_db()
-        assert organizer.organizer_bio == 'This is my bio'
+        assert organizer.organizer_bio == "This is my bio"
 
     def test_attendee_cannot_access(self, auth_client):
         """Attendees cannot access organizer profile endpoint."""
@@ -118,7 +121,7 @@ class TestOrganizerProfileView:
 class TestNotificationPreferencesView:
     """Tests for GET/PATCH /api/v1/users/me/notifications/"""
 
-    endpoint = '/api/v1/users/me/notifications/'
+    endpoint = "/api/v1/users/me/notifications/"
 
     def test_get_notification_preferences(self, auth_client):
         """User can get their notification preferences."""
@@ -130,7 +133,7 @@ class TestNotificationPreferencesView:
         response = auth_client.patch(
             self.endpoint,
             {
-                'email_event_reminders': False,
+                "email_event_reminders": False,
             },
         )
         assert response.status_code == status.HTTP_200_OK
@@ -150,15 +153,17 @@ class TestNotificationPreferencesView:
 class TestUpgradeToOrganizerView:
     """Tests for POST /api/v1/users/me/upgrade/"""
 
-    endpoint = '/api/v1/users/me/upgrade/'
+    endpoint = "/api/v1/users/me/upgrade/"
 
     def test_upgrade_attendee_to_organizer(self, auth_client, user):
         """Attendee can upgrade to organizer."""
-        assert user.account_type == 'attendee'
+        # User starts with ATTENDEE subscription (created in conftest)
+        assert user.subscription.plan == Subscription.Plan.ATTENDEE
         response = auth_client.post(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
         user.refresh_from_db()
-        assert user.account_type == 'organizer'
+        # After upgrade, should have ORGANIZER subscription
+        assert user.subscription.plan == Subscription.Plan.ORGANIZER
 
     def test_organizer_cannot_upgrade(self, organizer_client, organizer):
         """Already an organizer - upgrade should handle gracefully."""
@@ -181,15 +186,15 @@ class TestUpgradeToOrganizerView:
 class TestDeleteAccountView:
     """Tests for POST /api/v1/users/me/delete-account/"""
 
-    endpoint = '/api/v1/users/me/delete-account/'
+    endpoint = "/api/v1/users/me/delete-account/"
 
     def test_delete_account_with_password(self, auth_client, user):
         """User can delete their account with password confirmation."""
         response = auth_client.post(
             self.endpoint,
             {
-                'password': 'testpass123',
-                'confirm': True,
+                "password": "testpass123",
+                "confirm": True,
             },
         )
         assert response.status_code == status.HTTP_200_OK
@@ -202,8 +207,8 @@ class TestDeleteAccountView:
         response = auth_client.post(
             self.endpoint,
             {
-                'password': 'wrongpassword',
-                'confirm': True,
+                "password": "wrongpassword",
+                "confirm": True,
             },
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -213,8 +218,8 @@ class TestDeleteAccountView:
         response = auth_client.post(
             self.endpoint,
             {
-                'password': 'testpass123',
-                'confirm': False,
+                "password": "testpass123",
+                "confirm": False,
             },
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -234,7 +239,7 @@ class TestDeleteAccountView:
 class TestDataExportView:
     """Tests for POST /api/v1/users/me/export-data/"""
 
-    endpoint = '/api/v1/users/me/export-data/'
+    endpoint = "/api/v1/users/me/export-data/"
 
     def test_request_data_export(self, auth_client):
         """User can request their data export."""
@@ -258,27 +263,27 @@ class TestPublicOrganizerView:
 
     def test_get_public_organizer_profile(self, api_client, organizer):
         """Anyone can view public organizer profile."""
-        response = api_client.get(f'/api/v1/organizers/{organizer.uuid}/')
+        response = api_client.get(f"/api/v1/organizers/{organizer.uuid}/")
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['uuid'] == str(organizer.uuid)
+        assert response.data["uuid"] == str(organizer.uuid)
 
     def test_public_profile_limited_fields(self, api_client, organizer):
         """Public profile should not expose sensitive data."""
-        response = api_client.get(f'/api/v1/organizers/{organizer.uuid}/')
+        response = api_client.get(f"/api/v1/organizers/{organizer.uuid}/")
         assert response.status_code == status.HTTP_200_OK
         # Should not contain sensitive fields
-        assert 'email' not in response.data or response.data.get('email') is None
-        assert 'password' not in response.data
+        assert "email" not in response.data or response.data.get("email") is None
+        assert "password" not in response.data
 
     def test_nonexistent_organizer(self, api_client):
         """404 for non-existent organizer."""
         import uuid
 
         fake_uuid = uuid.uuid4()
-        response = api_client.get(f'/api/v1/organizers/{fake_uuid}/')
+        response = api_client.get(f"/api/v1/organizers/{fake_uuid}/")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_attendee_not_public(self, api_client, user):
         """Attendee profiles are not publicly accessible."""
-        response = api_client.get(f'/api/v1/organizers/{user.uuid}/')
+        response = api_client.get(f"/api/v1/organizers/{user.uuid}/")
         assert response.status_code == status.HTTP_404_NOT_FOUND

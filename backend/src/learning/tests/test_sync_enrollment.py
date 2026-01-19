@@ -25,7 +25,7 @@ def course(db, user):
         title="Test Course",
         price_cents=1000,
         status=Course.Status.PUBLISHED,
-        created_by=user
+        owner=user
     )
 
 @pytest.mark.django_db

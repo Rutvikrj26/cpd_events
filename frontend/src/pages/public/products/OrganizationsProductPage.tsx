@@ -118,25 +118,25 @@ export default function OrganizationsProductPage() {
                     <div className="grid lg:grid-cols-2 gap-12 items-center">
                         <div className="text-left animate-fade-in-up">
                             <Badge className="mb-4 bg-secondary text-foreground hover:bg-secondary/80 transition-colors border-0">
-                                For Training Agencies & Teams
+                                Standalone Branded Deployment
                             </Badge>
                             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-6">
-                                Scale Your Training <span className="gradient-text">Operations</span>
+                                Your Own Branded <span className="gradient-text">Platform</span>
                             </h1>
                             <p className="text-xl text-muted-foreground mb-8 text-balance">
-                                Manage your team, brand, and billing in one central hub.
-                                Perfect for training organizations, associations, and enterprise L&D.
+                                Get a dedicated, fully-branded instance of Accredit for your training organization.
+                                Complete control over your domain, brand, and data—powered by our proven infrastructure.
                             </p>
                             <div className="flex flex-col sm:flex-row gap-4">
                                 <Link to="/contact">
                                     <Button size="lg" className="h-12 px-8 text-base shadow-lg shadow-primary/20 glow-primary w-full sm:w-auto">
-                                        Contact Sales
+                                        Request Custom Quote
                                         <ArrowRight className="ml-2 h-4 w-4" />
                                     </Button>
                                 </Link>
-                                <Link to="/pricing">
+                                <Link to="/contact?subject=Demo%20Request">
                                     <Button variant="outline" size="lg" className="h-12 px-8 text-base w-full sm:w-auto">
-                                        View Pricing
+                                        Request a Demo
                                     </Button>
                                 </Link>
                             </div>
@@ -153,40 +153,40 @@ export default function OrganizationsProductPage() {
             <section className="py-20 bg-secondary/20">
                 <div className="container px-4 mx-auto">
                     <div className="text-center max-w-3xl mx-auto mb-16">
-                        <h2 className="text-3xl font-bold tracking-tight text-foreground mb-4">Enterprise-grade management tools</h2>
-                        <p className="text-lg text-muted-foreground">Give your team the tools they need to collaborate without stepping on each other's toes.</p>
+                        <h2 className="text-3xl font-bold tracking-tight text-foreground mb-4">Dedicated Infrastructure & Management</h2>
+                        <p className="text-lg text-muted-foreground">Every organization deployment is a standalone instance, giving you enterprise-grade control and total brand alignment.</p>
                     </div>
 
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
                         <FeatureCard
-                            icon={Users}
-                            title="Team Management"
-                            description="Invite admins, organizers, and instructors. Assign specific roles and permissions to control access."
-                        />
-                        <FeatureCard
-                            icon={CreditCard}
-                            title="Consolidated Billing"
-                            description="One invoice for your entire team. Manage subscription seats centrally and scale up or down as needed."
-                        />
-                        <FeatureCard
-                            icon={Wallet}
-                            title="Stripe Connect"
-                            description="Receive direct payouts to your organization's bank account. Split revenue automatically."
-                        />
-                        <FeatureCard
                             icon={Palette}
-                            title="White-label Branding"
-                            description="Make the platform your own. Customize logos, colors, and domains to match your brand identity."
-                        />
-                        <FeatureCard
-                            icon={LayoutDashboard}
-                            title="Unified Dashboard"
-                            description="See all your organization's events and courses in one place. Track aggregate revenue and engagement."
+                            title="Full White-labeling"
+                            description="Total brand ownership. Customize every aspect of the UI including logos, colors, and email templates to match your identity."
                         />
                         <FeatureCard
                             icon={ShieldCheck}
-                            title="Contact Sync"
-                            description="Sync your organization's contacts across all activities. Build a unified CRM of all your attendees and learners."
+                            title="Custom Domain"
+                            description="Host your platform on your own subdomain or primary domain. Provide a seamless experience for your learners."
+                        />
+                        <FeatureCard
+                            icon={Users}
+                            title="Enterprise Team Management"
+                            description="Invite unlimited admins, organizers, and instructors. Fine-grained RBAC permissions for every team member."
+                        />
+                        <FeatureCard
+                            icon={CreditCard}
+                            title="Isolated Data & Billing"
+                            description="Dedicated database resources and custom billing structures. Perfect for complex organizational accounting."
+                        />
+                        <FeatureCard
+                            icon={LayoutDashboard}
+                            title="Centralized Oversight"
+                            description="Monitor every event and course across your organization. Unified reporting and learner engagement analytics."
+                        />
+                        <FeatureCard
+                            icon={Wallet}
+                            title="Stripe Connect Integration"
+                            description="Automate payouts to multiple sub-accounts. Manage revenue sharing and financial reporting centrally."
                         />
                     </div>
                 </div>
@@ -195,13 +195,13 @@ export default function OrganizationsProductPage() {
             {/* CTA Section */}
             <section className="py-24 bg-card border-y border-border">
                 <div className="container px-4 mx-auto text-center">
-                    <h2 className="text-3xl font-bold tracking-tight text-foreground mb-6">Ready to scale?</h2>
+                    <h2 className="text-3xl font-bold tracking-tight text-foreground mb-6">Launch Your Branded Platform</h2>
                     <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-                        Let our team help you set up the perfect solution for your training organization.
+                        Ready to take your training organization to the next level? Contact us to discuss your standalone deployment.
                     </p>
                     <Link to="/contact">
                         <Button size="lg" className="h-14 px-10 text-lg shadow-xl shadow-primary/20 glow-primary">
-                            Contact Sales
+                            Get a Custom Quote
                         </Button>
                     </Link>
                 </div>

@@ -24,18 +24,17 @@ class UserFactory(DjangoModelFactory):
     """Factory for creating User instances."""
 
     class Meta:
-        model = 'accounts.User'
+        model = "accounts.User"
         skip_postgeneration_save = True
 
-    email = factory.Sequence(lambda n: f'user{n}@example.com')
-    full_name = factory.Faker('name')
-    account_type = 'attendee'
+    email = factory.Sequence(lambda n: f"user{n}@example.com")
+    full_name = factory.Faker("name")
     email_verified = True
     is_active = True
 
     @factory.post_generation
     def password(self, create, extracted, **kwargs):
-        password = extracted or 'testpass123'
+        password = extracted or "testpass123"
         self.set_password(password)
         if create:
             self.save()
@@ -45,8 +44,7 @@ class UserFactory(DjangoModelFactory):
 
     class Params:
         organizer = factory.Trait(
-            account_type='organizer',
-            organizer_slug=factory.Sequence(lambda n: f'organizer-{n}'),
+            organizer_slug=factory.Sequence(lambda n: f"organizer-{n}"),
             is_organizer_profile_public=True,
         )
         unverified = factory.Trait(
@@ -57,51 +55,8 @@ class UserFactory(DjangoModelFactory):
 class OrganizerFactory(UserFactory):
     """Factory for creating Organizer users."""
 
-    account_type = 'organizer'
     is_organizer_profile_public = True
-    organizer_slug = factory.Sequence(lambda n: f'organizer-{n}')
-
-
-# =============================================================================
-# Organization Factories
-# =============================================================================
-
-
-class OrganizationFactory(DjangoModelFactory):
-    """Factory for creating Organization instances."""
-
-    class Meta:
-        model = 'organizations.Organization'
-
-    name = factory.Sequence(lambda n: f'Organization {n}')
-    slug = factory.Sequence(lambda n: f'org-{n}')
-    description = factory.Faker('paragraph')
-    created_by = factory.SubFactory(OrganizerFactory)
-    is_active = True
-
-
-class OrganizationMembershipFactory(DjangoModelFactory):
-    """Factory for creating OrganizationMembership instances."""
-
-    class Meta:
-        model = 'organizations.OrganizationMembership'
-
-    organization = factory.SubFactory(OrganizationFactory)
-    user = factory.SubFactory(OrganizerFactory)
-    role = 'instructor'
-    is_active = True
-    invited_at = factory.LazyFunction(timezone.now)
-    accepted_at = factory.LazyFunction(timezone.now)
-
-    class Params:
-        admin = factory.Trait(role='admin')
-        organizer = factory.Trait(role='organizer')
-        course_manager = factory.Trait(role='course_manager')
-        instructor = factory.Trait(role='instructor')
-        pending = factory.Trait(
-            accepted_at=None,
-            invitation_token=factory.Faker('uuid4'),
-        )
+    organizer_slug = factory.Sequence(lambda n: f"organizer-{n}")
 
 
 # =============================================================================
@@ -113,35 +68,35 @@ class EventFactory(DjangoModelFactory):
     """Factory for creating Event instances."""
 
     class Meta:
-        model = 'events.Event'
+        model = "events.Event"
 
-    title = factory.Sequence(lambda n: f'Test Event {n}')
-    slug = factory.Sequence(lambda n: f'test-event-{n}')
-    description = factory.Faker('paragraph')
+    title = factory.Sequence(lambda n: f"Test Event {n}")
+    slug = factory.Sequence(lambda n: f"test-event-{n}")
+    description = factory.Faker("paragraph")
     owner = factory.SubFactory(OrganizerFactory)
-    status = 'draft'
-    event_type = 'webinar'
-    format = 'online'
+    status = "draft"
+    event_type = "webinar"
+    format = "online"
     starts_at = factory.LazyFunction(lambda: timezone.now() + timedelta(days=7))
     duration_minutes = 120
-    timezone = 'UTC'
+    timezone = "UTC"
     max_attendees = 100
     registration_enabled = True
     cpd_enabled = True
-    cpd_credit_value = factory.Faker('pydecimal', left_digits=1, right_digits=1, positive=True)
+    cpd_credit_value = factory.Faker("pydecimal", left_digits=1, right_digits=1, positive=True)
 
     class Params:
-        published = factory.Trait(status='published')
-        live = factory.Trait(status='live')
-        completed = factory.Trait(status='completed')
-        cancelled = factory.Trait(status='cancelled')
+        published = factory.Trait(status="published")
+        live = factory.Trait(status="live")
+        completed = factory.Trait(status="completed")
+        cancelled = factory.Trait(status="cancelled")
         past = factory.Trait(
             starts_at=factory.LazyFunction(lambda: timezone.now() - timedelta(days=7)),
-            status='completed',
+            status="completed",
         )
         in_person = factory.Trait(
-            format='in-person',
-            location='Test Venue, 123 Test Street',
+            format="in-person",
+            location="Test Venue, 123 Test Street",
         )
 
 
@@ -149,11 +104,11 @@ class EventSessionFactory(DjangoModelFactory):
     """Factory for creating EventSession instances."""
 
     class Meta:
-        model = 'events.EventSession'
+        model = "events.EventSession"
 
     event = factory.SubFactory(EventFactory)
-    title = factory.Sequence(lambda n: f'Session {n}')
-    description = factory.Faker('sentence')
+    title = factory.Sequence(lambda n: f"Session {n}")
+    description = factory.Faker("sentence")
     starts_at = factory.LazyAttribute(lambda o: o.event.starts_at)
     duration_minutes = 60
     order = factory.Sequence(lambda n: n)
@@ -163,11 +118,11 @@ class EventCustomFieldFactory(DjangoModelFactory):
     """Factory for creating EventCustomField instances."""
 
     class Meta:
-        model = 'events.EventCustomField'
+        model = "events.EventCustomField"
 
     event = factory.SubFactory(EventFactory)
-    label = factory.Sequence(lambda n: f'Custom Field {n}')
-    field_type = 'text'
+    label = factory.Sequence(lambda n: f"Custom Field {n}")
+    field_type = "text"
     required = False
     order = factory.Sequence(lambda n: n)
 
@@ -181,22 +136,22 @@ class RegistrationFactory(DjangoModelFactory):
     """Factory for creating Registration instances."""
 
     class Meta:
-        model = 'registrations.Registration'
+        model = "registrations.Registration"
 
     event = factory.SubFactory(EventFactory, published=True)
     user = factory.SubFactory(UserFactory)
-    email = factory.LazyAttribute(lambda o: o.user.email if o.user else factory.Faker('email').generate())
-    full_name = factory.LazyAttribute(lambda o: o.user.full_name if o.user else factory.Faker('name').generate())
-    status = 'confirmed'
-    source = 'self'
+    email = factory.LazyAttribute(lambda o: o.user.email if o.user else factory.Faker("email").generate())
+    full_name = factory.LazyAttribute(lambda o: o.user.full_name if o.user else factory.Faker("name").generate())
+    status = "confirmed"
+    source = "self"
 
     class Params:
-        waitlisted = factory.Trait(status='waitlisted')
-        cancelled = factory.Trait(status='cancelled')
+        waitlisted = factory.Trait(status="waitlisted")
+        cancelled = factory.Trait(status="cancelled")
         guest = factory.Trait(
             user=None,
-            email=factory.Faker('email'),
-            full_name=factory.Faker('name'),
+            email=factory.Faker("email"),
+            full_name=factory.Faker("name"),
         )
         with_attendance = factory.Trait(
             attended=True,
@@ -214,9 +169,9 @@ class CertificateTemplateFactory(DjangoModelFactory):
     """Factory for creating CertificateTemplate instances."""
 
     class Meta:
-        model = 'certificates.CertificateTemplate'
+        model = "certificates.CertificateTemplate"
 
-    name = factory.Sequence(lambda n: f'Certificate Template {n}')
+    name = factory.Sequence(lambda n: f"Certificate Template {n}")
     owner = factory.SubFactory(OrganizerFactory)
     is_active = True
     is_default = False
@@ -226,16 +181,16 @@ class CertificateFactory(DjangoModelFactory):
     """Factory for creating Certificate instances."""
 
     class Meta:
-        model = 'certificates.Certificate'
+        model = "certificates.Certificate"
 
     registration = factory.SubFactory(RegistrationFactory, with_attendance=True)
     template = factory.SubFactory(CertificateTemplateFactory)
     issued_by = factory.LazyAttribute(lambda o: o.registration.event.owner)
-    status = 'active'
+    status = "active"
     certificate_data = factory.LazyAttribute(
         lambda o: {
-            'recipient_name': o.registration.full_name,
-            'event_title': o.registration.event.title,
+            "recipient_name": o.registration.full_name,
+            "event_title": o.registration.event.title,
         }
     )
 
@@ -249,33 +204,33 @@ class ContactListFactory(DjangoModelFactory):
     """Factory for creating ContactList instances."""
 
     class Meta:
-        model = 'contacts.ContactList'
+        model = "contacts.ContactList"
 
-    name = factory.Sequence(lambda n: f'Contact List {n}')
+    name = factory.Sequence(lambda n: f"Contact List {n}")
     owner = factory.SubFactory(OrganizerFactory)
-    description = factory.Faker('sentence')
+    description = factory.Faker("sentence")
 
 
 class ContactFactory(DjangoModelFactory):
     """Factory for creating Contact instances."""
 
     class Meta:
-        model = 'contacts.Contact'
+        model = "contacts.Contact"
 
     contact_list = factory.SubFactory(ContactListFactory)
-    email = factory.Faker('email')
-    full_name = factory.Faker('name')
+    email = factory.Faker("email")
+    full_name = factory.Faker("name")
 
 
 class TagFactory(DjangoModelFactory):
     """Factory for creating Tag instances."""
 
     class Meta:
-        model = 'contacts.Tag'
+        model = "contacts.Tag"
 
-    name = factory.Sequence(lambda n: f'Tag {n}')
+    name = factory.Sequence(lambda n: f"Tag {n}")
     owner = factory.SubFactory(OrganizerFactory)
-    color = '#3B82F6'
+    color = "#3B82F6"
 
 
 # =============================================================================
@@ -287,36 +242,36 @@ class SubscriptionFactory(DjangoModelFactory):
     """Factory for creating Subscription instances."""
 
     class Meta:
-        model = 'billing.Subscription'
+        model = "billing.Subscription"
 
     user = factory.SubFactory(OrganizerFactory)
-    plan = 'free'
-    status = 'active'
+    plan = "free"
+    status = "active"
 
 
 class InvoiceFactory(DjangoModelFactory):
     """Factory for creating Invoice instances."""
 
     class Meta:
-        model = 'billing.Invoice'
+        model = "billing.Invoice"
 
     user = factory.SubFactory(OrganizerFactory)
-    stripe_invoice_id = factory.Sequence(lambda n: f'in_{n:024d}')
+    stripe_invoice_id = factory.Sequence(lambda n: f"in_{n:024d}")
     amount_cents = 0
-    currency = 'usd'
-    status = 'paid'
+    currency = "usd"
+    status = "paid"
 
 
 class PaymentMethodFactory(DjangoModelFactory):
     """Factory for creating PaymentMethod instances."""
 
     class Meta:
-        model = 'billing.PaymentMethod'
+        model = "billing.PaymentMethod"
 
     user = factory.SubFactory(OrganizerFactory)
-    stripe_payment_method_id = factory.Sequence(lambda n: f'pm_{n:024d}')
-    card_brand = 'visa'
-    card_last4 = '4242'
+    stripe_payment_method_id = factory.Sequence(lambda n: f"pm_{n:024d}")
+    card_brand = "visa"
+    card_last4 = "4242"
     is_default = True
 
 
@@ -329,11 +284,11 @@ class EventModuleFactory(DjangoModelFactory):
     """Factory for creating EventModule instances."""
 
     class Meta:
-        model = 'learning.EventModule'
+        model = "learning.EventModule"
 
     event = factory.SubFactory(EventFactory)
-    title = factory.Sequence(lambda n: f'Module {n}')
-    description = factory.Faker('paragraph')
+    title = factory.Sequence(lambda n: f"Module {n}")
+    description = factory.Faker("paragraph")
     order = factory.Sequence(lambda n: n)
     is_published = False
 
@@ -342,11 +297,11 @@ class ModuleContentFactory(DjangoModelFactory):
     """Factory for creating ModuleContent instances."""
 
     class Meta:
-        model = 'learning.ModuleContent'
+        model = "learning.ModuleContent"
 
     module = factory.SubFactory(EventModuleFactory)
-    title = factory.Sequence(lambda n: f'Content {n}')
-    content_type = 'text'
+    title = factory.Sequence(lambda n: f"Content {n}")
+    content_type = "text"
     order = factory.Sequence(lambda n: n)
 
 
@@ -354,11 +309,11 @@ class AssignmentFactory(DjangoModelFactory):
     """Factory for creating Assignment instances."""
 
     class Meta:
-        model = 'learning.Assignment'
+        model = "learning.Assignment"
 
     module = factory.SubFactory(EventModuleFactory)
-    title = factory.Sequence(lambda n: f'Assignment {n}')
-    description = factory.Faker('paragraph')
+    title = factory.Sequence(lambda n: f"Assignment {n}")
+    description = factory.Faker("paragraph")
     max_score = 100
 
 
@@ -366,21 +321,21 @@ class CourseFactory(DjangoModelFactory):
     """Factory for creating Course instances."""
 
     class Meta:
-        model = 'learning.Course'
+        model = "learning.Course"
 
-    title = factory.Sequence(lambda n: f'Course {n}')
-    slug = factory.Sequence(lambda n: f'course-{n}')
-    description = factory.Faker('paragraph')
-    organization = factory.SubFactory(OrganizationFactory)
-    status = 'draft'
+    title = factory.Sequence(lambda n: f"Course {n}")
+    slug = factory.Sequence(lambda n: f"course-{n}")
+    description = factory.Faker("paragraph")
+    owner = factory.SubFactory(OrganizerFactory)
+    status = "draft"
 
 
 class CourseEnrollmentFactory(DjangoModelFactory):
     """Factory for creating CourseEnrollment instances."""
 
     class Meta:
-        model = 'learning.CourseEnrollment'
+        model = "learning.CourseEnrollment"
 
     course = factory.SubFactory(CourseFactory)
     user = factory.SubFactory(UserFactory)
-    status = 'active'
+    status = "active"

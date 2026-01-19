@@ -16,69 +16,55 @@ from .models import Certificate, CertificateStatusHistory, CertificateTemplate
 class CertificateTemplateListSerializer(SoftDeleteModelSerializer):
     """Lightweight template for list views."""
 
-    organization_name = serializers.CharField(source='organization.name', read_only=True, allow_null=True)
-    is_org_template = serializers.SerializerMethodField()
-
     class Meta:
         model = CertificateTemplate
         fields = [
-            'uuid',
-            'name',
-            'description',
-            'file_url',
-            'file_type',
-            'field_positions',
-            'version',
-            'is_default',
-            'is_shared',
-            'is_latest_version',
-            'usage_count',
-            'organization_name',
-            'is_org_template',
-            'created_at',
+            "uuid",
+            "name",
+            "description",
+            "file_url",
+            "file_type",
+            "field_positions",
+            "version",
+            "is_default",
+            "is_latest_version",
+            "usage_count",
+            "created_at",
         ]
         read_only_fields = fields
-
-    def get_is_org_template(self, obj):
-        return obj.organization_id is not None
 
 
 class CertificateTemplateDetailSerializer(SoftDeleteModelSerializer):
     """Full template detail."""
 
-    organization_name = serializers.CharField(source='organization.name', read_only=True, allow_null=True)
-
     class Meta:
         model = CertificateTemplate
         fields = [
-            'uuid',
-            'name',
-            'description',
-            'version',
-            'file_url',
-            'file_type',
-            'field_positions',
-            'width_px',
-            'height_px',
-            'orientation',
-            'is_default',
-            'is_shared',
-            'is_latest_version',
-            'usage_count',
-            'organization_name',
-            'original_template',
-            'created_at',
-            'updated_at',
+            "uuid",
+            "name",
+            "description",
+            "version",
+            "file_url",
+            "file_type",
+            "field_positions",
+            "width_px",
+            "height_px",
+            "orientation",
+            "is_default",
+            "is_latest_version",
+            "usage_count",
+            "original_template",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = [
-            'uuid',
-            'version',
-            'is_latest_version',
-            'usage_count',
-            'organization_name',
-            'original_template',
-            'created_at',
-            'updated_at',
+            "uuid",
+            "version",
+            "is_latest_version",
+            "usage_count",
+            "original_template",
+            "created_at",
+            "updated_at",
         ]
 
 
@@ -88,23 +74,23 @@ class CertificateTemplateCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CertificateTemplate
         fields = [
-            'uuid',
-            'name',
-            'description',
-            'file_url',
-            'file_type',
-            'field_positions',
-            'width_px',
-            'height_px',
-            'orientation',
-            'is_default',
-            'version',
-            'usage_count',
-            'created_at',
+            "uuid",
+            "name",
+            "description",
+            "file_url",
+            "file_type",
+            "field_positions",
+            "width_px",
+            "height_px",
+            "orientation",
+            "is_default",
+            "version",
+            "usage_count",
+            "created_at",
         ]
-        read_only_fields = ['uuid', 'version', 'usage_count', 'created_at']
+        read_only_fields = ["uuid", "version", "usage_count", "created_at"]
         extra_kwargs = {
-            'file_url': {'required': False, 'default': ''},
+            "file_url": {"required": False, "default": ""},
         }
 
 
@@ -118,15 +104,15 @@ class CertificateTemplateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CertificateTemplate
         fields = [
-            'name',
-            'description',
-            'file_url',
-            'file_type',
-            'field_positions',
-            'width_px',
-            'height_px',
-            'orientation',
-            'is_default',
+            "name",
+            "description",
+            "file_url",
+            "file_type",
+            "field_positions",
+            "width_px",
+            "height_px",
+            "orientation",
+            "is_default",
         ]
 
     def update(self, instance, validated_data):
@@ -153,19 +139,19 @@ class CertificateTemplateUpdateSerializer(serializers.ModelSerializer):
 class CertificateListSerializer(SoftDeleteModelSerializer):
     """Lightweight certificate for list views."""
 
-    event_title = serializers.CharField(source='event.title', read_only=True)
-    registrant_name = serializers.CharField(source='registration.full_name', read_only=True)
+    event_title = serializers.CharField(source="event.title", read_only=True)
+    registrant_name = serializers.CharField(source="registration.full_name", read_only=True)
 
     class Meta:
         model = Certificate
         fields = [
-            'uuid',
-            'event_title',
-            'registrant_name',
-            'status',
-            'short_code',
-            'short_code',
-            'created_at',
+            "uuid",
+            "event_title",
+            "registrant_name",
+            "status",
+            "short_code",
+            "short_code",
+            "created_at",
         ]
         read_only_fields = fields
 
@@ -182,41 +168,41 @@ class CertificateDetailSerializer(SoftDeleteModelSerializer):
     class Meta:
         model = Certificate
         fields = [
-            'uuid',
-            'event',
-            'registration',
-            'template',
-            'status',
-            'verification_code',
-            'short_code',
-            'certificate_data',
-            'file_url',
-            'public_url',
-            'created_at',
-            'revocation_reason',
-            'revoked_at',
-            'revoked_by',
-            'view_count',
-            'download_count',
-            'last_viewed_at',
-            'verification_url',
-            'created_at',
-            'updated_at',
+            "uuid",
+            "event",
+            "registration",
+            "template",
+            "status",
+            "verification_code",
+            "short_code",
+            "certificate_data",
+            "file_url",
+            "public_url",
+            "created_at",
+            "revocation_reason",
+            "revoked_at",
+            "revoked_by",
+            "view_count",
+            "download_count",
+            "last_viewed_at",
+            "verification_url",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = fields
 
     def get_event(self, obj):
         return {
-            'uuid': str(obj.event.uuid),
-            'title': obj.event.title,
-            'date': obj.event.starts_at.isoformat() if obj.event.starts_at else None,
+            "uuid": str(obj.event.uuid),
+            "title": obj.event.title,
+            "date": obj.event.starts_at.isoformat() if obj.event.starts_at else None,
         }
 
     def get_registration(self, obj):
         return {
-            'uuid': str(obj.registration.uuid),
-            'full_name': obj.registration.full_name,
-            'email': obj.registration.email,
+            "uuid": str(obj.registration.uuid),
+            "full_name": obj.registration.full_name,
+            "email": obj.registration.email,
         }
 
     def get_verification_url(self, obj):
@@ -230,7 +216,7 @@ class CertificateDetailSerializer(SoftDeleteModelSerializer):
         return f"{settings.SITE_URL}/verify/{obj.short_code}"
 
     def get_last_viewed_at(self, obj):
-        return obj.last_viewed_at if hasattr(obj, 'last_viewed_at') else None
+        return obj.last_viewed_at if hasattr(obj, "last_viewed_at") else None
 
 
 class CertificateIssueSerializer(serializers.Serializer):
@@ -241,8 +227,8 @@ class CertificateIssueSerializer(serializers.Serializer):
     send_email = serializers.BooleanField(default=True)
 
     def validate(self, attrs):
-        if not attrs.get('registration_uuids') and not attrs.get('issue_all_eligible'):
-            raise serializers.ValidationError('Either registration_uuids or issue_all_eligible is required.')
+        if not attrs.get("registration_uuids") and not attrs.get("issue_all_eligible"):
+            raise serializers.ValidationError("Either registration_uuids or issue_all_eligible is required.")
         return attrs
 
 
@@ -260,7 +246,6 @@ class CertificateRevokeSerializer(serializers.Serializer):
 class PublicCertificateVerificationSerializer(serializers.ModelSerializer):
     """Public certificate verification response."""
 
-
     file_url = serializers.SerializerMethodField()
     is_valid = serializers.SerializerMethodField()
     event = serializers.SerializerMethodField()
@@ -270,34 +255,38 @@ class PublicCertificateVerificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Certificate
         fields = [
-            'uuid',
-            'status',
-            'is_valid',
-            'event',
-            'registrant',
-            'organizer',
-            'certificate_data',
-            'created_at',
-            'file_url',
-            'verification_code',
+            "uuid",
+            "status",
+            "is_valid",
+            "event",
+            "registrant",
+            "organizer",
+            "certificate_data",
+            "created_at",
+            "file_url",
+            "verification_code",
         ]
 
     def get_event(self, obj):
         if obj.registration:
             return {
-                'title': obj.event.title,
-                'date': obj.event.starts_at.strftime('%B %d, %Y') if obj.event.starts_at else None,
-                'cpd_credits': str(obj.event.cpd_credit_value) if obj.event.cpd_credit_value else None,
-                'cpd_type': obj.event.cpd_credit_type,
-                'type': 'event',
+                "title": obj.event.title,
+                "date": obj.event.starts_at.strftime("%B %d, %Y") if obj.event.starts_at else None,
+                "cpd_credits": str(obj.event.cpd_credit_value) if obj.event.cpd_credit_value else None,
+                "cpd_type": obj.event.cpd_credit_type,
+                "type": "event",
             }
         elif obj.course_enrollment:
-             return {
-                'title': obj.course_enrollment.course.title,
-                'date': obj.course_enrollment.completed_at.strftime('%B %d, %Y') if obj.course_enrollment.completed_at else None,
-                'cpd_credits': str(obj.course_enrollment.course.cpd_credits) if obj.course_enrollment.course.cpd_credits else None,
-                'cpd_type': obj.course_enrollment.course.cpd_type,
-                'type': 'course',
+            return {
+                "title": obj.course_enrollment.course.title,
+                "date": obj.course_enrollment.completed_at.strftime("%B %d, %Y")
+                if obj.course_enrollment.completed_at
+                else None,
+                "cpd_credits": str(obj.course_enrollment.course.cpd_credits)
+                if obj.course_enrollment.course.cpd_credits
+                else None,
+                "cpd_type": obj.course_enrollment.course.cpd_type,
+                "type": "course",
             }
         return None
 
@@ -316,33 +305,32 @@ class PublicCertificateVerificationSerializer(serializers.ModelSerializer):
 
         # Check if registration allows public verification
         if not allow_public:
-            return {'full_name': '[Private]'}
+            return {"full_name": "[Private]"}
         return {
-            'full_name': registrant_name,
+            "full_name": registrant_name,
         }
 
     def get_organizer(self, obj):
         if obj.event:
-            return {'display_name': obj.event.owner.display_name}
-        elif obj.course_enrollment and obj.course_enrollment.course.organization:
-             return {'display_name': obj.course_enrollment.course.organization.name}
+            return {"display_name": obj.event.owner.display_name}
         elif obj.course_enrollment:
-             return {'display_name': obj.course_enrollment.course.created_by.display_name}
-        return {'display_name': 'Unknown'}
+            return {"display_name": obj.course_enrollment.course.owner.display_name}
+        return {"display_name": "Unknown"}
 
     def get_is_valid(self, obj):
         # Certificate is valid unless explicitly revoked
-        return obj.status != 'revoked'
+        return obj.status != "revoked"
 
     def get_file_url(self, obj):
-         if obj.file_url:
+        if obj.file_url:
             # For public view, we might want a signed URL if it's private,
             # but usually these are public read if knowing the UUID?
             # Sticking to the service method to be safe.
             from .services import certificate_service
+
             # 1 hour expiration for the download link on this page load
             return certificate_service.get_pdf_url(obj, expiration_minutes=60)
-         return None
+        return None
 
 
 class CertificateStatusHistorySerializer(BaseModelSerializer):
@@ -350,7 +338,7 @@ class CertificateStatusHistorySerializer(BaseModelSerializer):
 
     class Meta:
         model = CertificateStatusHistory
-        fields = ['uuid', 'from_status', 'to_status', 'notes', 'created_at']
+        fields = ["uuid", "from_status", "to_status", "notes", "created_at"]
         read_only_fields = fields
 
 
@@ -367,27 +355,27 @@ class MyCertificateSerializer(SoftDeleteModelSerializer):
     share_url = serializers.SerializerMethodField()
     verification_url = serializers.SerializerMethodField()
     is_valid = serializers.SerializerMethodField()
-    issued_at = serializers.DateTimeField(source='created_at', read_only=True)
+    issued_at = serializers.DateTimeField(source="created_at", read_only=True)
     feedback_required = serializers.SerializerMethodField()
     feedback_submitted = serializers.SerializerMethodField()
 
     class Meta:
         model = Certificate
         fields = [
-            'uuid',
-            'event',
-            'status',
-            'short_code',
-            'issued_at',
-            'created_at',
-            'is_valid',
-            'download_url',
-            'share_url',
-            'verification_url',
-            'view_count',
-            'download_count',
-            'feedback_required',
-            'feedback_submitted',
+            "uuid",
+            "event",
+            "status",
+            "short_code",
+            "issued_at",
+            "created_at",
+            "is_valid",
+            "download_url",
+            "share_url",
+            "verification_url",
+            "view_count",
+            "download_count",
+            "feedback_required",
+            "feedback_submitted",
         ]
         read_only_fields = fields
 
@@ -399,24 +387,24 @@ class MyCertificateSerializer(SoftDeleteModelSerializer):
     def get_event(self, obj):
         if obj.registration:
             return {
-                'uuid': str(obj.event.uuid),
-                'title': obj.event.title,
-                'cpd_credits': str(obj.event.cpd_credit_value) if obj.event.cpd_credit_value else None,
-                'cpd_type': obj.event.cpd_credit_type,
-                'event_type': obj.event.event_type,  # Ensure this exists on event model or helper
+                "uuid": str(obj.event.uuid),
+                "title": obj.event.title,
+                "cpd_credits": str(obj.event.cpd_credit_value) if obj.event.cpd_credit_value else None,
+                "cpd_type": obj.event.cpd_credit_type,
+                "event_type": obj.event.event_type,  # Ensure this exists on event model or helper
             }
         if obj.course_enrollment:
             return {
-                'uuid': str(obj.course_enrollment.course.uuid),
-                'title': obj.course_enrollment.course.title,
-                'cpd_credits': str(obj.course_enrollment.course.cpd_credits),
-                'cpd_type': obj.course_enrollment.course.cpd_type,
-                'event_type': 'course',
+                "uuid": str(obj.course_enrollment.course.uuid),
+                "title": obj.course_enrollment.course.title,
+                "cpd_credits": str(obj.course_enrollment.course.cpd_credits),
+                "cpd_type": obj.course_enrollment.course.cpd_type,
+                "event_type": "course",
             }
         return None
 
     def get_download_url(self, obj):
-        if obj.status == 'active' and obj.file_url:
+        if obj.status == "active" and obj.file_url:
             # M7: Return signed URL instead of direct URL
             from .services import certificate_service
 
@@ -430,7 +418,7 @@ class MyCertificateSerializer(SoftDeleteModelSerializer):
 
     def get_is_valid(self, obj):
         # Certificate is valid unless explicitly revoked
-        return obj.status != 'revoked'
+        return obj.status != "revoked"
 
     def get_feedback_required(self, obj):
         """Check if feedback is required for this certificate."""

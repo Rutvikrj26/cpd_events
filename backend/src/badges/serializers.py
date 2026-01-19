@@ -19,7 +19,6 @@ class BadgeTemplateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # Set owner from context
         validated_data['owner'] = self.context['request'].user
-        # Optional: set organization if user is in one context
         return super().create(validated_data)
 
 

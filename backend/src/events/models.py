@@ -33,19 +33,19 @@ class Event(SoftDeleteModel):
     """
 
     class Status(models.TextChoices):
-        DRAFT = 'draft', 'Draft'
-        PUBLISHED = 'published', 'Published'
-        LIVE = 'live', 'Live'
-        COMPLETED = 'completed', 'Completed'
-        CLOSED = 'closed', 'Closed'
-        CANCELLED = 'cancelled', 'Cancelled'
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Published"
+        LIVE = "live", "Live"
+        COMPLETED = "completed", "Completed"
+        CLOSED = "closed", "Closed"
+        CANCELLED = "cancelled", "Cancelled"
 
     class EventType(models.TextChoices):
-        WEBINAR = 'webinar', 'Webinar'
-        WORKSHOP = 'workshop', 'Workshop'
-        TRAINING = 'training', 'Training Session'
-        LECTURE = 'lecture', 'Lecture'
-        OTHER = 'other', 'Other'
+        WEBINAR = "webinar", "Webinar"
+        WORKSHOP = "workshop", "Workshop"
+        TRAINING = "training", "Training Session"
+        LECTURE = "lecture", "Lecture"
+        OTHER = "other", "Other"
 
     # Valid status transitions
     VALID_TRANSITIONS = {
@@ -61,24 +61,16 @@ class Event(SoftDeleteModel):
     # Ownership
     # =========================================
     owner = models.ForeignKey(
-        'accounts.User', on_delete=models.PROTECT, related_name='events', help_text="Organizer who owns this event"
-    )
-    organization = models.ForeignKey(
-        'organizations.Organization',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='events',
-        help_text="Organization that owns this event (null for individual organizers)",
+        "accounts.User", on_delete=models.PROTECT, related_name="events", help_text="Organizer who owns this event"
     )
 
     # =========================================
     # Basic Info
     # =========================================
     class EventFormat(models.TextChoices):
-        ONLINE = 'online', 'Online'
-        IN_PERSON = 'in-person', 'In Person'
-        HYBRID = 'hybrid', 'Hybrid'
+        ONLINE = "online", "Online"
+        IN_PERSON = "in-person", "In Person"
+        HYBRID = "hybrid", "Hybrid"
 
     title = models.CharField(max_length=200, help_text="Event title")
     slug = models.SlugField(max_length=250, unique=True, help_text="URL-friendly identifier")
@@ -92,16 +84,16 @@ class Event(SoftDeleteModel):
     is_multi_session = models.BooleanField(default=False, help_text="Is this a multi-session event?")
 
     class MultiSessionCompletionCriteria(models.TextChoices):
-        ALL_SESSIONS = 'all_sessions', 'All Sessions'
-        PERCENTAGE_OF_SESSIONS = 'percentage_of_sessions', 'Percentage of Sessions'
-        MIN_SESSIONS_COUNT = 'min_sessions_count', 'Minimum Number of Sessions'
-        TOTAL_MINUTES = 'total_minutes', 'Total Attendance Minutes (across all sessions)'
+        ALL_SESSIONS = "all_sessions", "All Sessions"
+        PERCENTAGE_OF_SESSIONS = "percentage_of_sessions", "Percentage of Sessions"
+        MIN_SESSIONS_COUNT = "min_sessions_count", "Minimum Number of Sessions"
+        TOTAL_MINUTES = "total_minutes", "Total Attendance Minutes (across all sessions)"
 
     # =========================================
     # CPD & Educational Content
     # =========================================
     learning_objectives = models.JSONField(default=list, blank=True, help_text="List of learning objectives (strings)")
-    speakers = models.ManyToManyField('Speaker', blank=True, related_name='events', help_text="Speakers for this event")
+    speakers = models.ManyToManyField("Speaker", blank=True, related_name="events", help_text="Speakers for this event")
 
     multi_session_completion_criteria = models.CharField(
         max_length=50,
@@ -125,7 +117,7 @@ class Event(SoftDeleteModel):
     # =========================================
     # Schedule
     # =========================================
-    timezone = models.CharField(max_length=50, default='UTC', help_text="Event timezone")
+    timezone = models.CharField(max_length=50, default="UTC", help_text="Event timezone")
     starts_at = models.DateTimeField(db_index=True, help_text="Scheduled start time")
     duration_minutes = models.PositiveIntegerField(
         default=EventDuration.DEFAULT,
@@ -143,13 +135,13 @@ class Event(SoftDeleteModel):
     class Currency(models.TextChoices):
         """Stripe-supported currencies (ISO 4217)."""
 
-        USD = 'USD', 'US Dollar ($)'
-        CAD = 'CAD', 'Canadian Dollar (CA$)'
-        EUR = 'EUR', 'Euro (€)'
-        GBP = 'GBP', 'British Pound (£)'
-        AUD = 'AUD', 'Australian Dollar (A$)'
-        JPY = 'JPY', 'Japanese Yen (¥)'
-        INR = 'INR', 'Indian Rupee (₹)'
+        USD = "USD", "US Dollar ($)"
+        CAD = "CAD", "Canadian Dollar (CA$)"
+        EUR = "EUR", "Euro (€)"
+        GBP = "GBP", "British Pound (£)"
+        AUD = "AUD", "Australian Dollar (A$)"
+        JPY = "JPY", "Japanese Yen (¥)"
+        INR = "INR", "Indian Rupee (₹)"
         # Add more Stripe-supported currencies as needed
         # See: https://stripe.com/docs/currencies
 
@@ -213,11 +205,11 @@ class Event(SoftDeleteModel):
     # =========================================
     certificates_enabled = models.BooleanField(default=True, help_text="Issue certificates for this event")
     certificate_template = models.ForeignKey(
-        'certificates.CertificateTemplate',
+        "certificates.CertificateTemplate",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='events',
+        related_name="events",
         help_text="Template for certificates",
     )
     auto_issue_certificates = models.BooleanField(default=False, help_text="Auto-issue when event completes")
@@ -230,11 +222,11 @@ class Event(SoftDeleteModel):
     # =========================================
     badges_enabled = models.BooleanField(default=False, help_text="Issue badges for this event")
     badge_template = models.ForeignKey(
-        'badges.BadgeTemplate',
+        "badges.BadgeTemplate",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='events',
+        related_name="events",
         help_text="Template for badges",
     )
     auto_issue_badges = models.BooleanField(default=False, help_text="Auto-issue badges when event completes")
@@ -244,7 +236,7 @@ class Event(SoftDeleteModel):
     # =========================================
     cover_image_url = models.URLField(blank=True, help_text="Cover image URL")
     featured_image = models.ImageField(
-        upload_to='events/featured_images/', blank=True, null=True, help_text="Featured image upload"
+        upload_to="events/featured_images/", blank=True, null=True, help_text="Featured image upload"
     )
 
     # =========================================
@@ -272,19 +264,18 @@ class Event(SoftDeleteModel):
     certificate_count = models.PositiveIntegerField(default=0, help_text="Certificates issued")
 
     class Meta:
-        db_table = 'events'
-        ordering = ['-starts_at']
+        db_table = "events"
+        ordering = ["-starts_at"]
         indexes = [
-            models.Index(fields=['owner', 'status']),
-            models.Index(fields=['organization', 'status']),
-            models.Index(fields=['status', '-starts_at']),
-            models.Index(fields=['starts_at']),
-            models.Index(fields=['uuid']),
-            models.Index(fields=['slug']),
-            models.Index(fields=['zoom_meeting_id']),
+            models.Index(fields=["owner", "status"]),
+            models.Index(fields=["status", "-starts_at"]),
+            models.Index(fields=["starts_at"]),
+            models.Index(fields=["uuid"]),
+            models.Index(fields=["slug"]),
+            models.Index(fields=["zoom_meeting_id"]),
         ]
-        verbose_name = 'Event'
-        verbose_name_plural = 'Events'
+        verbose_name = "Event"
+        verbose_name_plural = "Events"
 
     def __str__(self):
         return self.title
@@ -306,11 +297,6 @@ class Event(SoftDeleteModel):
     def is_past(self):
         """Check if event end time has passed."""
         return self.ends_at < timezone.now()
-
-    @property
-    def owning_entity(self):
-        """Return the organization or owner of this event."""
-        return self.organization or self.owner
 
     @property
     def is_free(self):
@@ -374,14 +360,14 @@ class Event(SoftDeleteModel):
         """Check if status transition is valid."""
         return new_status in self.VALID_TRANSITIONS.get(self.status, [])
 
-    def _change_status(self, new_status, user=None, reason=''):
+    def _change_status(self, new_status, user=None, reason=""):
         """Internal status change with history."""
         if not self.can_transition_to(new_status):
             raise ValueError(f"Cannot transition from {self.status} to {new_status}")
 
         old_status = self.status
         self.status = new_status
-        self.save(update_fields=['status', 'updated_at'])
+        self.save(update_fields=["status", "updated_at"])
 
         # Create history record
         EventStatusHistory.objects.create(
@@ -396,27 +382,26 @@ class Event(SoftDeleteModel):
         """
         # Block publishing paid events without connected payouts
         if self.price > 0:
-            has_org_payouts = self.organization and self.organization.stripe_charges_enabled
             has_owner_payouts = self.owner.stripe_charges_enabled
-            if not has_org_payouts and not has_owner_payouts:
+            if not has_owner_payouts:
                 raise ValueError(
                     "Cannot publish a paid event without connected payouts. "
-                    "Please link a bank account in your profile settings or organization settings."
+                    "Please link a bank account in your profile settings."
                 )
 
-        self._change_status(self.Status.PUBLISHED, user, 'Event published')
+        self._change_status(self.Status.PUBLISHED, user, "Event published")
 
     def start(self, user=None):
         """Start the event (go live)."""
         self.actual_start_at = timezone.now()
-        self.save(update_fields=['actual_start_at', 'updated_at'])
-        self._change_status(self.Status.LIVE, user, 'Event started')
+        self.save(update_fields=["actual_start_at", "updated_at"])
+        self._change_status(self.Status.LIVE, user, "Event started")
 
     def complete(self, user=None):
         """Complete the event."""
         self.actual_end_at = timezone.now()
-        self.save(update_fields=['actual_end_at', 'updated_at'])
-        self._change_status(self.Status.COMPLETED, user, 'Event completed')
+        self.save(update_fields=["actual_end_at", "updated_at"])
+        self._change_status(self.Status.COMPLETED, user, "Event completed")
 
         # Auto-issue certificates if enabled
         if self.auto_issue_certificates and self.certificates_enabled:
@@ -428,15 +413,15 @@ class Event(SoftDeleteModel):
 
     def close(self, user=None):
         """Close the event (no more changes)."""
-        self._change_status(self.Status.CLOSED, user, 'Event closed')
+        self._change_status(self.Status.CLOSED, user, "Event closed")
 
-    def cancel(self, user=None, reason=''):
+    def cancel(self, user=None, reason=""):
         """Cancel the event."""
-        self._change_status(self.Status.CANCELLED, user, reason or 'Event cancelled')
+        self._change_status(self.Status.CANCELLED, user, reason or "Event cancelled")
 
     def unpublish(self, user=None):
         """Return to draft status."""
-        self._change_status(self.Status.DRAFT, user, 'Event unpublished')
+        self._change_status(self.Status.DRAFT, user, "Event unpublished")
 
     # =========================================
     # Count Methods
@@ -455,7 +440,7 @@ class Event(SoftDeleteModel):
 
         self.certificate_count = registrations.filter(certificate_issued=True).count()
 
-        self.save(update_fields=['registration_count', 'waitlist_count', 'attendance_count', 'certificate_count', 'updated_at'])
+        self.save(update_fields=["registration_count", "waitlist_count", "attendance_count", "certificate_count", "updated_at"])
 
     def _auto_issue_certificates(self):
         """Auto-issue certificates to all eligible attendees."""
@@ -464,7 +449,7 @@ class Event(SoftDeleteModel):
 
         # Get all eligible registrations
         eligible = (
-            Registration.objects.filter(event=self, status='confirmed', deleted_at__isnull=True)
+            Registration.objects.filter(event=self, status="confirmed", deleted_at__isnull=True)
             .filter(models.Q(attendance_eligible=True) | models.Q(attendance_override=True))
             .exclude(certificate_issued=True)
         )
@@ -473,7 +458,7 @@ class Event(SoftDeleteModel):
         for registration in eligible:
             if registration.can_receive_certificate:
                 result = certificate_service.issue_certificate(registration=registration, issued_by=self.owner)
-                if result.get('success'):
+                if result.get("success"):
                     issued_count += 1
 
         return issued_count
@@ -487,9 +472,8 @@ class Event(SoftDeleteModel):
             return 0
 
         # Get all eligible registrations
-        eligible = (
-            Registration.objects.filter(event=self, status='confirmed', deleted_at__isnull=True)
-            .filter(models.Q(attendance_eligible=True) | models.Q(attendance_override=True))
+        eligible = Registration.objects.filter(event=self, status="confirmed", deleted_at__isnull=True).filter(
+            models.Q(attendance_eligible=True) | models.Q(attendance_override=True)
         )
 
         issued_count = 0
@@ -497,11 +481,9 @@ class Event(SoftDeleteModel):
             # Check if badge already issued for this registration
             if not registration.badges.filter(template=self.badge_template).exists():
                 result = badge_service.issue_badge(
-                    template=self.badge_template,
-                    registration=registration,
-                    issued_by=self.owner
+                    template=self.badge_template, registration=registration, issued_by=self.owner
                 )
-                if result.get('success'):
+                if result.get("success"):
                     issued_count += 1
 
         return issued_count
@@ -563,17 +545,17 @@ class EventStatusHistory(BaseModel):
     Audit log for event status changes.
     """
 
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='status_history')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="status_history")
     from_status = models.CharField(max_length=20, blank=True)
     to_status = models.CharField(max_length=20)
-    changed_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True)
+    changed_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True)
     reason = models.TextField(blank=True)
 
     class Meta:
-        db_table = 'event_status_history'
-        ordering = ['-created_at']
-        verbose_name = 'Event Status History'
-        verbose_name_plural = 'Event Status Histories'
+        db_table = "event_status_history"
+        ordering = ["-created_at"]
+        verbose_name = "Event Status History"
+        verbose_name_plural = "Event Status Histories"
 
     def __str__(self):
         return f"{self.event.title}: {self.from_status} → {self.to_status}"
@@ -590,18 +572,18 @@ class EventSession(BaseModel):
     """
 
     class SessionType(models.TextChoices):
-        LIVE = 'live', 'Live Session'
-        RECORDED = 'recorded', 'Recorded/On-demand'
-        HYBRID = 'hybrid', 'Hybrid'
+        LIVE = "live", "Live Session"
+        RECORDED = "recorded", "Recorded/On-demand"
+        HYBRID = "hybrid", "Hybrid"
 
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='sessions')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="sessions")
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     speaker_names = models.CharField(max_length=500, blank=True)
     order = models.PositiveIntegerField(default=0)
     starts_at = models.DateTimeField()
     duration_minutes = models.PositiveIntegerField(default=SessionDefaults.DURATION_MINUTES)
-    timezone = models.CharField(max_length=50, default='UTC')
+    timezone = models.CharField(max_length=50, default="UTC")
     session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.LIVE)
     has_separate_zoom = models.BooleanField(default=False)
     zoom_meeting_id = models.CharField(max_length=100, blank=True)
@@ -615,10 +597,10 @@ class EventSession(BaseModel):
     )
 
     class Meta:
-        db_table = 'event_sessions'
-        ordering = ['event', 'order', 'starts_at']
-        verbose_name = 'Event Session'
-        verbose_name_plural = 'Event Sessions'
+        db_table = "event_sessions"
+        ordering = ["event", "order", "starts_at"]
+        verbose_name = "Event Session"
+        verbose_name_plural = "Event Sessions"
 
     def __str__(self):
         return f"{self.event.title} - {self.title}"
@@ -635,16 +617,16 @@ class EventSession(BaseModel):
 class SessionAttendance(BaseModel):
     """Attendance record for a session."""
 
-    session = models.ForeignKey(EventSession, on_delete=models.CASCADE, related_name='attendance_records')
-    registration = models.ForeignKey('registrations.Registration', on_delete=models.CASCADE, related_name='session_attendance')
+    session = models.ForeignKey(EventSession, on_delete=models.CASCADE, related_name="attendance_records")
+    registration = models.ForeignKey("registrations.Registration", on_delete=models.CASCADE, related_name="session_attendance")
     duration_minutes = models.PositiveIntegerField(default=0)
     is_eligible = models.BooleanField(default=False)
 
     class Meta:
-        db_table = 'session_attendance'
-        unique_together = [['session', 'registration']]
-        verbose_name = 'Session Attendance'
-        verbose_name_plural = 'Session Attendance'
+        db_table = "session_attendance"
+        unique_together = [["session", "registration"]]
+        verbose_name = "Session Attendance"
+        verbose_name_plural = "Session Attendance"
 
 
 class EventCustomField(BaseModel):
@@ -656,16 +638,16 @@ class EventCustomField(BaseModel):
     """
 
     class FieldType(models.TextChoices):
-        TEXT = 'text', 'Single Line Text'
-        TEXTAREA = 'textarea', 'Multi-line Text'
-        SELECT = 'select', 'Dropdown'
-        MULTISELECT = 'multiselect', 'Multi-select'
-        CHECKBOX = 'checkbox', 'Checkbox'
-        RADIO = 'radio', 'Radio Buttons'
-        DATE = 'date', 'Date'
-        NUMBER = 'number', 'Number'
+        TEXT = "text", "Single Line Text"
+        TEXTAREA = "textarea", "Multi-line Text"
+        SELECT = "select", "Dropdown"
+        MULTISELECT = "multiselect", "Multi-select"
+        CHECKBOX = "checkbox", "Checkbox"
+        RADIO = "radio", "Radio Buttons"
+        DATE = "date", "Date"
+        NUMBER = "number", "Number"
 
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='custom_fields')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="custom_fields")
 
     label = models.CharField(max_length=200, help_text="Field label")
     field_type = models.CharField(max_length=20, choices=FieldType.choices)
@@ -684,10 +666,10 @@ class EventCustomField(BaseModel):
     order = models.PositiveIntegerField(default=0, help_text="Display order (0 = first)")
 
     class Meta:
-        db_table = 'event_custom_fields'
-        ordering = ['order', 'id']
-        verbose_name = 'Event Custom Field'
-        verbose_name_plural = 'Event Custom Fields'
+        db_table = "event_custom_fields"
+        ordering = ["order", "id"]
+        verbose_name = "Event Custom Field"
+        verbose_name_plural = "Event Custom Fields"
 
     def __str__(self):
         return f"{self.event.title} - {self.label}"
@@ -701,31 +683,23 @@ class Speaker(BaseModel):
     """
 
     owner = models.ForeignKey(
-        'accounts.User', on_delete=models.PROTECT, related_name='speakers', help_text="User who manages this speaker profile"
-    )
-    organization = models.ForeignKey(
-        'organizations.Organization',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='speakers',
-        help_text="Organization that owns this speaker profile",
+        "accounts.User", on_delete=models.PROTECT, related_name="speakers", help_text="User who manages this speaker profile"
     )
 
     name = models.CharField(max_length=200, help_text="Speaker full name")
     bio = models.TextField(help_text="Speaker biography")
     qualifications = models.TextField(help_text="Professional qualifications/credentials")
-    photo = models.ImageField(upload_to='speakers/photos/', null=True, blank=True)
+    photo = models.ImageField(upload_to="speakers/photos/", null=True, blank=True)
     email = models.EmailField(blank=True, help_text="Contact email (internal use)")
     linkedin_url = models.URLField(blank=True, help_text="LinkedIn profile URL")
 
     is_active = models.BooleanField(default=True, help_text="Whether this speaker profile is active")
 
     class Meta:
-        db_table = 'speakers'
-        ordering = ['name']
-        verbose_name = 'Speaker'
-        verbose_name_plural = 'Speakers'
+        db_table = "speakers"
+        ordering = ["name"]
+        verbose_name = "Speaker"
+        verbose_name_plural = "Speakers"
 
     def __str__(self):
         return self.name

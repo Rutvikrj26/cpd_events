@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -27,6 +27,7 @@ const contactSchema = z.object({
 });
 
 export function ContactPage() {
+    const [searchParams] = useSearchParams();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const form = useForm<z.infer<typeof contactSchema>>({
@@ -34,10 +35,18 @@ export function ContactPage() {
         defaultValues: {
             name: "",
             email: "",
-            subject: "",
+            subject: searchParams.get("subject") || "",
             message: "",
         },
     });
+
+    // Update subject if it changes in URL
+    useEffect(() => {
+        const subject = searchParams.get("subject");
+        if (subject) {
+            form.setValue("subject", subject);
+        }
+    }, [searchParams, form]);
 
     function onSubmit(values: z.infer<typeof contactSchema>) {
         setIsSubmitting(true);
@@ -112,11 +121,11 @@ export function ContactPage() {
                                     Common Topics
                                 </h3>
                                 <div className="space-y-4">
+                                    <TopicLink label="Standalone branded deployment" />
                                     <TopicLink label="Getting started with events" />
                                     <TopicLink label="Zoom integration setup" />
                                     <TopicLink label="Certificate customization" />
                                     <TopicLink label="Pricing and billing" />
-                                    <TopicLink label="Team management" />
                                 </div>
                                 <div className="pt-4 border-t border-border">
                                     <p className="text-sm text-muted-foreground mb-3">

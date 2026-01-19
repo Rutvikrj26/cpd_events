@@ -14,8 +14,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from common.pagination import SmallPagination
-from common.permissions import IsOrganizer
-from common.rbac import roles
+from common.permissions import CanCreateEvents
 from common.utils import error_response
 from common.viewsets import ReadOnlyModelViewSet, SoftDeleteModelViewSet
 
@@ -49,7 +48,6 @@ class RegistrationFilter(filters.FilterSet):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='event_registrations')
 class EventRegistrationViewSet(SoftDeleteModelViewSet):
     """
     Manage registrations for an event (organizer view).
@@ -57,10 +55,10 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/registrations/
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, CanCreateEvents]
     pagination_class = SmallPagination  # M5: Nested resource pagination
     filterset_class = RegistrationFilter
-    search_fields = ['email', 'full_name', 'user__email', 'user__full_name']
+    search_fields = ["email", "full_name", "user__email", "user__first_name", "user__last_name"]
     ordering_fields = ['created_at', 'status', 'attended', 'full_name']
     ordering = ['-created_at']
 
@@ -480,7 +478,6 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 # =============================================================================
 
 
-@roles('public', route_name='public_registration')
 class PublicRegistrationView(generics.CreateAPIView):
     """
     POST /api/v1/public/events/{event_uuid}/register/
@@ -561,7 +558,6 @@ class PublicRegistrationView(generics.CreateAPIView):
             )
 
 
-@roles('public', route_name='payment_intent')
 class RegistrationPaymentIntentView(generics.GenericAPIView):
     """
     POST /api/v1/public/registrations/{uuid}/payment-intent/
@@ -715,7 +711,6 @@ class RegistrationPaymentIntentView(generics.GenericAPIView):
         )
 
 
-@roles('public', route_name='confirm_payment')
 class ConfirmPaymentView(generics.GenericAPIView):
     """
     POST /api/v1/public/registrations/{uuid}/confirm-payment/
@@ -781,7 +776,6 @@ class ConfirmPaymentView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles('attendee', 'organizer', 'admin', route_name='registrations')
 class MyRegistrationViewSet(ReadOnlyModelViewSet):
     """
     Current user's registrations.
@@ -835,7 +829,6 @@ class MyRegistrationViewSet(ReadOnlyModelViewSet):
 # =============================================================================
 
 
-@roles('attendee', 'organizer', 'admin', route_name='link_registrations')
 class LinkRegistrationsView(generics.GenericAPIView):
     """
     POST /api/v1/users/me/link-registrations/

@@ -2,30 +2,33 @@ import pytest
 from django.utils import timezone
 
 from accounts.models import User
+from billing.models import Subscription
 from learning.models import (
     Course,
     CourseEnrollment,
     CourseSession,
     CourseSessionAttendance,
 )
-from organizations.models import Organization
 
 
 @pytest.mark.django_db
 class TestHybridCompletion:
-
     def setup_method(self):
-        self.user = User.objects.create(email='test@example.com', password='password')
-        self.org = Organization.objects.create(name="Test Org", slug="test-org")
+        self.user = User.objects.create(email="test@example.com", password="password")
+        self.course_owner = User.objects.create(email="owner@example.com", password="password")
+        Subscription.objects.update_or_create(
+            user=self.course_owner,
+            defaults={"plan": Subscription.Plan.LMS, "status": Subscription.Status.ACTIVE},
+        )
 
     def test_completion_modules_only(self):
         """Test completion when only modules are required."""
         course = Course.objects.create(
             title="Modules Only Course",
             slug="modules-only",
-            organization=self.org,
-            format='hybrid',
-            hybrid_completion_criteria='modules_only'
+            owner=self.course_owner,
+            format="hybrid",
+            hybrid_completion_criteria="modules_only",
         )
         enrollment = CourseEnrollment.objects.create(course=course, user=self.user, progress_percent=100)
 
@@ -37,16 +40,12 @@ class TestHybridCompletion:
         course = Course.objects.create(
             title="Sessions Only Course",
             slug="sessions-only",
-            organization=self.org,
-            format='hybrid',
-            hybrid_completion_criteria='sessions_only'
+            owner=self.course_owner,
+            format="hybrid",
+            hybrid_completion_criteria="sessions_only",
         )
         session = CourseSession.objects.create(
-            course=course,
-            title="Session 1",
-            starts_at=timezone.now(),
-            is_mandatory=True,
-            is_published=True
+            course=course, title="Session 1", starts_at=timezone.now(), is_mandatory=True, is_published=True
         )
         enrollment = CourseEnrollment.objects.create(course=course, user=self.user, progress_percent=0)
 
@@ -62,18 +61,10 @@ class TestHybridCompletion:
     def test_completion_both(self):
         """Test completion when both modules and sessions are required."""
         course = Course.objects.create(
-            title="Both Course",
-            slug="both-course",
-            organization=self.org,
-            format='hybrid',
-            hybrid_completion_criteria='both'
+            title="Both Course", slug="both-course", owner=self.course_owner, format="hybrid", hybrid_completion_criteria="both"
         )
         session = CourseSession.objects.create(
-            course=course,
-            title="Session 1",
-            starts_at=timezone.now(),
-            is_mandatory=True,
-            is_published=True
+            course=course, title="Session 1", starts_at=timezone.now(), is_mandatory=True, is_published=True
         )
         enrollment = CourseEnrollment.objects.create(course=course, user=self.user, progress_percent=100)
 
@@ -91,16 +82,22 @@ class TestHybridCompletion:
         course = Course.objects.create(
             title="Min Sessions Course",
             slug="min-sessions",
-            organization=self.org,
-            format='hybrid',
-            hybrid_completion_criteria='min_sessions',
-            min_sessions_required=2
+            owner=self.course_owner,
+            format="hybrid",
+            hybrid_completion_criteria="min_sessions",
+            min_sessions_required=2,
         )
 
         # 3 sessions available, none mandatory
-        item1 = CourseSession.objects.create(course=course, title="S1", starts_at=timezone.now(), is_mandatory=False, is_published=True)
-        item2 = CourseSession.objects.create(course=course, title="S2", starts_at=timezone.now(), is_mandatory=False, is_published=True)
-        item3 = CourseSession.objects.create(course=course, title="S3", starts_at=timezone.now(), is_mandatory=False, is_published=True)
+        item1 = CourseSession.objects.create(
+            course=course, title="S1", starts_at=timezone.now(), is_mandatory=False, is_published=True
+        )
+        item2 = CourseSession.objects.create(
+            course=course, title="S2", starts_at=timezone.now(), is_mandatory=False, is_published=True
+        )
+        item3 = CourseSession.objects.create(
+            course=course, title="S3", starts_at=timezone.now(), is_mandatory=False, is_published=True
+        )
         sessions = [item1, item2, item3]
 
         enrollment = CourseEnrollment.objects.create(course=course, user=self.user, progress_percent=100)
@@ -121,15 +118,19 @@ class TestHybridCompletion:
         course = Course.objects.create(
             title="Min Sessions Override",
             slug="min-sessions-override",
-            organization=self.org,
-            format='hybrid',
-            hybrid_completion_criteria='min_sessions',
-            min_sessions_required=1
+            owner=self.course_owner,
+            format="hybrid",
+            hybrid_completion_criteria="min_sessions",
+            min_sessions_required=1,
         )
 
         # 2 sessions, BOTH MANDATORY (default is usually mandatory)
-        s1 = CourseSession.objects.create(course=course, title="S1", starts_at=timezone.now(), is_mandatory=True, is_published=True)
-        s2 = CourseSession.objects.create(course=course, title="S2", starts_at=timezone.now(), is_mandatory=True, is_published=True)
+        s1 = CourseSession.objects.create(
+            course=course, title="S1", starts_at=timezone.now(), is_mandatory=True, is_published=True
+        )
+        s2 = CourseSession.objects.create(
+            course=course, title="S2", starts_at=timezone.now(), is_mandatory=True, is_published=True
+        )
 
         enrollment = CourseEnrollment.objects.create(course=course, user=self.user, progress_percent=100)
 

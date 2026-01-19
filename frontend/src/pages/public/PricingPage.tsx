@@ -82,8 +82,8 @@ export function PricingPage() {
             answer: "Yes! We offer special pricing for verified nonprofits and educational institutions. Contact our sales team to learn more about our discounted plans.",
         },
         {
-            question: "Can I get a custom plan for my organization?",
-            answer: "Absolutely. Our Organization plan is fully customizable. Contact our sales team to discuss your specific requirements and we'll create a tailored solution.",
+            question: "Do you offer standalone branded deployments?",
+            answer: "Yes! For large training agencies and enterprise teams, we offer fully branded, standalone instances of the platform. This includes custom domains, full white-labeling, and dedicated infrastructure. Contact our sales team for a custom quote.",
         },
     ];
 
@@ -297,48 +297,38 @@ export function PricingPage() {
                                         <Building2 className="h-6 w-6 text-primary" />
                                     </div>
                                 </div>
-                                <CardTitle className="text-2xl">Organization Plans</CardTitle>
+                                <CardTitle className="text-2xl">Standalone Branded Deployments</CardTitle>
                                 <CardDescription className="text-base max-w-2xl mx-auto">
-                                    For training agencies, enterprise L&D teams, and professional associations.
-                                    Our organization plans are tailored to your specific needs and usage.
+                                    For training agencies, enterprise L&D teams, and professional associations 
+                                    requiring a dedicated, fully-branded instance of Accredit.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="text-center">
-                                {(() => {
-                                    const orgPlan = allPlans.find(p => p.plan === 'organization');
-                                    const orgBasePrice = orgPlan ? getMonthlyPrice(products.find(p => p.plan === 'organization')!) : null;
-                                    return (
-                                        <>
-                                            {orgBasePrice && (
-                                                <div className="mb-6">
-                                                    <p className="text-lg mb-2">
-                                                        Starting at <span className="font-bold text-2xl text-primary">${orgBasePrice}/mo</span>
-                                                    </p>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        Final pricing based on team size, event volume, and features
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </>
-                                    );
-                                })()}
+                                <div className="mb-8">
+                                    <p className="text-lg mb-2">
+                                        Custom Infrastructure & White-labeling
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Our standalone deployments are quoted based on your specific requirements, team size, and volume.
+                                    </p>
+                                </div>
                                 <div className="grid sm:grid-cols-3 gap-6 mb-8">
                                     <div className="p-4 bg-secondary/30 rounded-lg">
-                                        <p className="font-semibold text-foreground">Multi-user Access</p>
-                                        <p className="text-sm text-muted-foreground">Team collaboration tools</p>
+                                        <p className="font-semibold text-foreground">Custom Domains</p>
+                                        <p className="text-sm text-muted-foreground">Your brand, your URL</p>
                                     </div>
                                     <div className="p-4 bg-secondary/30 rounded-lg">
-                                        <p className="font-semibold text-foreground">Custom Branding</p>
-                                        <p className="text-sm text-muted-foreground">White-label options</p>
+                                        <p className="font-semibold text-foreground">Total White-label</p>
+                                        <p className="text-sm text-muted-foreground">Full UI customization</p>
                                     </div>
                                     <div className="p-4 bg-secondary/30 rounded-lg">
-                                        <p className="font-semibold text-foreground">Volume Pricing</p>
-                                        <p className="text-sm text-muted-foreground">Based on your usage</p>
+                                        <p className="font-semibold text-foreground">Isolated Data</p>
+                                        <p className="text-sm text-muted-foreground">Dedicated infrastructure</p>
                                     </div>
                                 </div>
-                                <Button asChild size="lg">
+                                <Button asChild size="lg" className="glow-primary">
                                     <Link to="/contact">
-                                        Contact Sales
+                                        Request Custom Quote
                                         <ArrowRight className="ml-2 h-4 w-4" />
                                     </Link>
                                 </Button>

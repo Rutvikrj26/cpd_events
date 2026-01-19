@@ -4,7 +4,6 @@ Promo Code validation and application service.
 
 from decimal import Decimal
 
-from django.db.models import Q
 from django.utils import timezone
 
 from .models import PromoCode, PromoCodeUsage
@@ -89,12 +88,8 @@ class PromoCodeService:
         """
         code_upper = code.upper().strip()
 
-        # Find codes owned by the event owner or organization
-        owner_filter = Q(owner=event.owner)
-        if event.organization:
-            owner_filter |= Q(organization=event.organization)
-
-        promo = PromoCode.objects.filter(owner_filter, code__iexact=code_upper).first()
+        # Find codes owned by the event owner
+        promo = PromoCode.objects.filter(owner=event.owner, code__iexact=code_upper).first()
 
         return promo
 
@@ -188,7 +183,7 @@ class PromoCodeService:
                 raise PromoCodeExhaustedError("This promo code has reached its usage limit.")
 
             discount_amount = promo_code.calculate_discount(original_price)
-            final_price = max(Decimal('0.00'), original_price - discount_amount)
+            final_price = max(Decimal("0.00"), original_price - discount_amount)
 
             # Create usage record
             usage = PromoCodeUsage.objects.create(
@@ -234,18 +229,18 @@ class PromoCodeService:
         # Calculate discount
         original_price = event.price
         discount_amount = promo_code.calculate_discount(original_price)
-        final_price = max(Decimal('0.00'), original_price - discount_amount)
+        final_price = max(Decimal("0.00"), original_price - discount_amount)
 
         return {
-            'valid': True,
-            'code': promo_code.code,
-            'discount_type': promo_code.discount_type,
-            'discount_value': str(promo_code.discount_value),
-            'discount_display': promo_code.get_discount_display(),
-            'original_price': str(original_price),
-            'discount_amount': str(discount_amount),
-            'final_price': str(final_price),
-            'promo_code_uuid': str(promo_code.uuid),
+            "valid": True,
+            "code": promo_code.code,
+            "discount_type": promo_code.discount_type,
+            "discount_value": str(promo_code.discount_value),
+            "discount_display": promo_code.get_discount_display(),
+            "original_price": str(original_price),
+            "discount_amount": str(discount_amount),
+            "final_price": str(final_price),
+            "promo_code_uuid": str(promo_code.uuid),
         }
 
 

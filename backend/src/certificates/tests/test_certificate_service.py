@@ -58,22 +58,26 @@ class TestCertificateService:
         self, certificate_template, attended_registration, organizer
     ):
         """Test subscription limit enforcement."""
-        # Mock subscription on owner
-        mock_sub = MagicMock()
-        mock_sub.check_certificate_limit.return_value = False
-        mock_sub.limits = {'certificates_per_month': 10}
+        from billing.models import Subscription
 
-        # We need to attach this mock to the owner
-        # Since owner is a model instance, we can just patch 'subscription' property if it existed
-        # But it's likely a related object. Let's just mock getattr or the attribute.
-        # Assuming the code uses getattr(owner, 'subscription', None)
+        sub = Subscription.objects.get(user=organizer)
+        sub.plan = Subscription.Plan.ORGANIZER
+        sub.status = Subscription.Status.ACTIVE
+        sub.limits_override = {"certificates_per_month": 1}
+        sub.certificates_issued_this_period = 1
+        sub.save(
+            update_fields=[
+                "plan",
+                "status",
+                "limits_override",
+                "certificates_issued_this_period",
+                "updated_at",
+            ]
+        )
 
-        # Depending on how subscription is implemented (OneToOne usually),
-        # let's try to mock the attribute on the user instance provided by the fixture
-        with patch.object(type(organizer), 'subscription', mock_sub, create=True):
-             result = certificate_service.issue_certificate(
-                attended_registration, template=certificate_template, issued_by=organizer
-            )
+        result = certificate_service.issue_certificate(
+            attended_registration, template=certificate_template, issued_by=organizer
+        )
 
         assert result['success'] is False
         assert 'Certificate limit reached' in result['error']

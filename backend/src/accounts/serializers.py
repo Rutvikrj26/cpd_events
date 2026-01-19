@@ -14,6 +14,10 @@ from common.serializers import SoftDeleteModelSerializer
 User = get_user_model()
 
 
+def _split_full_name(value: str) -> tuple[str, str]:
+    return User.split_full_name(value)
+
+
 # =============================================================================
 # Authentication Serializers
 # =============================================================================
@@ -23,44 +27,42 @@ class SignupSerializer(serializers.ModelSerializer):
     """User registration serializer."""
 
     password = serializers.CharField(
-        write_only=True, required=True, validators=[validate_password], style={'input_type': 'password'}
+        write_only=True, required=True, validators=[validate_password], style={"input_type": "password"}
     )
-    password_confirm = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-
-    # Optional fields for organizer signup
-    account_type = serializers.ChoiceField(
-        choices=['attendee', 'organizer', 'course_manager'], default='attendee', required=False
-    )
+    password_confirm = serializers.CharField(write_only=True, required=True, style={"input_type": "password"})
+    full_name = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
         fields = [
-            'email',
-            'password',
-            'password_confirm',
-            'full_name',
-            'professional_title',
-            'organization_name',
-            'account_type',
+            "email",
+            "password",
+            "password_confirm",
+            "full_name",
+            "professional_title",
+            "organization_name",
         ]
         extra_kwargs = {
-            'email': {'required': True},
-            'full_name': {'required': True},
+            "email": {"required": True},
+            "full_name": {"required": True},
         }
 
     def validate(self, attrs):
-        if attrs['password'] != attrs['password_confirm']:
-            raise serializers.ValidationError({'password_confirm': "Passwords don't match."})
+        if attrs["password"] != attrs["password_confirm"]:
+            raise serializers.ValidationError({"password_confirm": "Passwords don't match."})
         return attrs
 
     def create(self, validated_data):
-        validated_data.pop('password_confirm')
-        password = validated_data.pop('password')
-        account_type = validated_data.pop('account_type', 'attendee')
+        full_name = validated_data.pop("full_name", "")
+        validated_data.pop("password_confirm")
+        password = validated_data.pop("password")
+
+        first_name, last_name = _split_full_name(full_name)
+        validated_data.setdefault("first_name", first_name)
+        validated_data.setdefault("last_name", last_name)
 
         user = User(**validated_data)
         user.set_password(password)
-        user.account_type = account_type
         user.save()
 
         # Note: Registration linking is handled in SignupView after user creation
@@ -75,22 +77,21 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         # Block unverified users from logging in
         if not self.user.email_verified:
-            raise serializers.ValidationError({
-                'non_field_errors': ['Please verify your email address before logging in.']
-            })
+            raise serializers.ValidationError({"non_field_errors": ["Please verify your email address before logging in."]})
 
-        data['user'] = {
-            'uuid': str(self.user.uuid),
-            'email': self.user.email,
-            'full_name': self.user.full_name,
-            'account_type': self.user.account_type,
-            'email_verified': self.user.email_verified,
+        data["user"] = {
+            "uuid": str(self.user.uuid),
+            "email": self.user.email,
+            "full_name": self.user.full_name,
+            "can_create_events": self.user.can_create_events,
+            "can_create_courses": self.user.can_create_courses,
+            "email_verified": self.user.email_verified,
         }
 
-        request = self.context.get('request')
+        request = self.context.get("request")
         if request:
             self.user.record_login()
-            self._record_session(request, data.get('refresh'))
+            self._record_session(request, data.get("refresh"))
 
         return data
 
@@ -105,8 +106,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if refresh_token:
             try:
                 token = RefreshToken(refresh_token)
-                session_key = token.get('jti')
-                lifetime = settings.SIMPLE_JWT.get('REFRESH_TOKEN_LIFETIME', timezone.timedelta(days=1))
+                session_key = token.get("jti")
+                lifetime = settings.SIMPLE_JWT.get("REFRESH_TOKEN_LIFETIME", timezone.timedelta(days=1))
                 expires_at = timezone.now() + lifetime
             except Exception:
                 session_key = None
@@ -114,18 +115,18 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if not session_key:
             return
 
-        ip_address = request.META.get('REMOTE_ADDR')
-        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        ip_address = request.META.get("REMOTE_ADDR")
+        user_agent = request.META.get("HTTP_USER_AGENT", "")
 
         UserSession.objects.update_or_create(
             session_key=session_key,
             defaults={
-                'user': self.user,
-                'ip_address': ip_address,
-                'user_agent': user_agent,
-                'device_type': '',
-                'expires_at': expires_at or timezone.now(),
-                'is_active': True,
+                "user": self.user,
+                "ip_address": ip_address,
+                "user_agent": user_agent,
+                "device_type": "",
+                "expires_at": expires_at or timezone.now(),
+                "is_active": True,
             },
         )
 
@@ -138,14 +139,14 @@ class PasswordChangeSerializer(serializers.Serializer):
     new_password_confirm = serializers.CharField(required=True, write_only=True)
 
     def validate_current_password(self, value):
-        user = self.context['request'].user
+        user = self.context["request"].user
         if not user.check_password(value):
             raise serializers.ValidationError("Current password is incorrect.")
         return value
 
     def validate(self, attrs):
-        if attrs['new_password'] != attrs['new_password_confirm']:
-            raise serializers.ValidationError({'new_password_confirm': "Passwords don't match."})
+        if attrs["new_password"] != attrs["new_password_confirm"]:
+            raise serializers.ValidationError({"new_password_confirm": "Passwords don't match."})
         return attrs
 
 
@@ -163,8 +164,8 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     new_password_confirm = serializers.CharField(required=True, write_only=True)
 
     def validate(self, attrs):
-        if attrs['new_password'] != attrs['new_password_confirm']:
-            raise serializers.ValidationError({'new_password_confirm': "Passwords don't match."})
+        if attrs["new_password"] != attrs["new_password_confirm"]:
+            raise serializers.ValidationError({"new_password_confirm": "Passwords don't match."})
         return attrs
 
 
@@ -195,56 +196,68 @@ class EmailVerificationSerializer(serializers.Serializer):
 class UserSerializer(SoftDeleteModelSerializer):
     """Full user serializer for profile management."""
 
+    full_name = serializers.CharField(read_only=True)
+
     class Meta:
         model = User
         fields = [
-            'uuid',
-            'email',
-            'full_name',
-            'professional_title',
-            'organization_name',
-            'profile_photo_url',
-            'account_type',
-            'email_verified',
-            'onboarding_completed',
-            'timezone',
+            "uuid",
+            "email",
+            "full_name",
+            "professional_title",
+            "organization_name",
+            "profile_photo_url",
+            "can_create_events",
+            "can_create_courses",
+            "email_verified",
+            "onboarding_completed",
+            "timezone",
             # Organizer-specific
-            'organizer_logo_url',
-            'organizer_website',
-            'organizer_bio',
-            'gst_hst_number',
+            "organizer_logo_url",
+            "organizer_website",
+            "organizer_bio",
+            "gst_hst_number",
             # Notification preferences
-            'notify_event_reminders',
-            'notify_certificate_issued',
-            'notify_marketing',
+            "notify_event_reminders",
+            "notify_certificate_issued",
+            "notify_marketing",
             # Timestamps
-            'created_at',
-            'updated_at',
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = [
-            'uuid',
-            'email',
-            'account_type',
-            'email_verified',
-            'onboarding_completed',
-            'created_at',
-            'updated_at',
+            "uuid",
+            "email",
+            "can_create_events",
+            "can_create_courses",
+            "email_verified",
+            "onboarding_completed",
+            "created_at",
+            "updated_at",
         ]
 
 
 class UserProfileUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating user profile."""
 
+    full_name = serializers.CharField(required=False, allow_blank=True)
+
     class Meta:
         model = User
         fields = [
-            'full_name',
-            'professional_title',
-            'organization_name',
-            'profile_photo_url',
-            'timezone',
-            'gst_hst_number',
+            "full_name",
+            "professional_title",
+            "organization_name",
+            "profile_photo_url",
+            "timezone",
+            "gst_hst_number",
         ]
+
+    def update(self, instance, validated_data):
+        full_name = validated_data.pop("full_name", None)
+        if full_name is not None:
+            instance.full_name = full_name
+        return super().update(instance, validated_data)
 
 
 class OrganizerProfileUpdateSerializer(serializers.ModelSerializer):
@@ -253,11 +266,11 @@ class OrganizerProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'organizer_logo_url',
-            'organizer_website',
-            'organizer_bio',
-            'is_organizer_profile_public',
-            'gst_hst_number',
+            "organizer_logo_url",
+            "organizer_website",
+            "organizer_bio",
+            "is_organizer_profile_public",
+            "gst_hst_number",
         ]
 
 
@@ -267,9 +280,9 @@ class NotificationPreferencesSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'notify_event_reminders',
-            'notify_certificate_issued',
-            'notify_marketing',
+            "notify_event_reminders",
+            "notify_certificate_issued",
+            "notify_marketing",
         ]
 
 
@@ -281,15 +294,15 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = [
-            'uuid',
-            'notification_type',
-            'title',
-            'message',
-            'action_url',
-            'metadata',
-            'read_at',
-            'is_read',
-            'created_at',
+            "uuid",
+            "notification_type",
+            "title",
+            "message",
+            "action_url",
+            "metadata",
+            "read_at",
+            "is_read",
+            "created_at",
         ]
         read_only_fields = fields
 
@@ -302,11 +315,11 @@ class PublicOrganizerSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'uuid',
-            'display_name',
-            'organizer_logo_url',
-            'organizer_website',
-            'organizer_bio',
+            "uuid",
+            "display_name",
+            "organizer_logo_url",
+            "organizer_website",
+            "organizer_bio",
         ]
 
     def get_display_name(self, obj):
@@ -316,9 +329,11 @@ class PublicOrganizerSerializer(serializers.ModelSerializer):
 class UserMinimalSerializer(serializers.ModelSerializer):
     """Minimal user data for embedding."""
 
+    full_name = serializers.CharField(read_only=True)
+
     class Meta:
         model = User
-        fields = ['uuid', 'full_name', 'email']
+        fields = ["uuid", "full_name", "email"]
 
 
 # =============================================================================
@@ -334,12 +349,12 @@ class DeleteAccountSerializer(serializers.Serializer):
     reason = serializers.CharField(required=False, max_length=500, allow_blank=True)
 
     def validate(self, attrs):
-        if not attrs.get('confirm'):
+        if not attrs.get("confirm"):
             raise serializers.ValidationError({"confirm": "You must confirm account deletion."})
         return attrs
 
     def validate_password(self, value):
-        user = self.context['request'].user
+        user = self.context["request"].user
         if not user.check_password(value):
             raise serializers.ValidationError("Password is incorrect.")
         return value
@@ -356,4 +371,4 @@ class DataExportSerializer(serializers.Serializer):
     include_registrations = serializers.BooleanField(default=True)
     include_certificates = serializers.BooleanField(default=True)
     include_attendance = serializers.BooleanField(default=True)
-    format = serializers.ChoiceField(choices=['json', 'csv'], default='json')
+    format = serializers.ChoiceField(choices=["json", "csv"], default="json")

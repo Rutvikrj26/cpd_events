@@ -13,7 +13,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from common.config import IndividualPlanLimits
+from common.config.billing import PLAN_LIMITS
 from common.models import BaseModel
 
 
@@ -25,26 +25,26 @@ class Subscription(BaseModel):
     """
 
     class Plan(models.TextChoices):
-        ATTENDEE = 'attendee', 'Attendee'
-        ORGANIZER = 'organizer', 'Organizer'
-        LMS = 'lms', 'LMS'
-        ORGANIZATION = 'organization', 'Organization'
+        ATTENDEE = "attendee", "Attendee"
+        ORGANIZER = "organizer", "Organizer"
+        LMS = "lms", "LMS"
+        PRO = "pro", "Pro"
 
     class Status(models.TextChoices):
-        TRIALING = 'trialing', 'Trialing'
-        ACTIVE = 'active', 'Active'
-        PAST_DUE = 'past_due', 'Past Due'
-        CANCELED = 'canceled', 'Canceled'
-        UNPAID = 'unpaid', 'Unpaid'
-        INCOMPLETE = 'incomplete', 'Incomplete'
-        PAUSED = 'paused', 'Paused'
+        TRIALING = "trialing", "Trialing"
+        ACTIVE = "active", "Active"
+        PAST_DUE = "past_due", "Past Due"
+        CANCELED = "canceled", "Canceled"
+        UNPAID = "unpaid", "Unpaid"
+        INCOMPLETE = "incomplete", "Incomplete"
+        PAUSED = "paused", "Paused"
 
     class BillingInterval(models.TextChoices):
-        MONTH = 'month', 'Monthly'
-        YEAR = 'year', 'Annual'
+        MONTH = "month", "Monthly"
+        YEAR = "year", "Annual"
 
     # Relationships
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='subscription')
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="subscription")
 
     # Plan details
     plan = models.CharField(max_length=20, choices=Plan.choices, default=Plan.ATTENDEE)
@@ -97,26 +97,28 @@ class Subscription(BaseModel):
     certificates_issued_this_period = models.PositiveIntegerField(default=0)
     last_usage_reset_at = models.DateTimeField(null=True, blank=True)
 
+    # Custom limits override (optional)
+    limits_override = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Optional JSON dict to override plan limits (e.g., {'events_per_month': 5})",
+    )
+
     class Meta:
-        db_table = 'subscriptions'
-        verbose_name = 'Subscription'
-        verbose_name_plural = 'Subscriptions'
+        db_table = "subscriptions"
+        verbose_name = "Subscription"
+        verbose_name_plural = "Subscriptions"
         indexes = [
-            models.Index(fields=['plan']),
-            models.Index(fields=['status']),
-            models.Index(fields=['current_period_end']),
+            models.Index(fields=["plan"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["current_period_end"]),
         ]
 
     def __str__(self):
         return f"{self.user.email} - {self.plan} ({self.status})"
 
     # Plan limits configuration (imported from common.config.billing)
-    PLAN_LIMITS = {
-        Plan.ATTENDEE: IndividualPlanLimits.ATTENDEE,
-        Plan.ORGANIZER: IndividualPlanLimits.ORGANIZER,
-        Plan.LMS: IndividualPlanLimits.LMS,
-        Plan.ORGANIZATION: IndividualPlanLimits.ORGANIZATION,
-    }
+    PLAN_LIMITS = PLAN_LIMITS
 
     @property
     def is_active(self):
@@ -136,39 +138,44 @@ class Subscription(BaseModel):
     def limits(self):
         """
         Get limits for current plan.
-        Reads from StripeProduct if available (database-driven),
-        otherwise falls back to PLAN_LIMITS (code fallback).
+        Priority: limits_override > StripeProduct > PLAN_LIMITS
         """
-        # Try to get limits from StripeProduct (database - source of truth)
+        # Start with base limits
         try:
             product = StripeProduct.objects.get(plan=self.plan, is_active=True)
-            return {
-                'events_per_month': product.events_per_month,
-                'courses_per_month': getattr(product, 'courses_per_month', None),
-                'certificates_per_month': product.certificates_per_month,
-                'max_attendees_per_event': product.max_attendees_per_event,
+            base_limits = {
+                "events_per_month": product.events_per_month,
+                "courses_per_month": getattr(product, "courses_per_month", None),
+                "certificates_per_month": product.certificates_per_month,
+                "max_attendees_per_event": product.max_attendees_per_event,
             }
         except StripeProduct.DoesNotExist:
             # Fallback to hardcoded limits (backward compatibility)
-            return self.PLAN_LIMITS.get(self.plan, self.PLAN_LIMITS[self.Plan.ATTENDEE])
+            base_limits = self.PLAN_LIMITS.get(self.plan, self.PLAN_LIMITS[self.Plan.ATTENDEE])
+
+        # Apply overrides if they exist (requires limits_override JSONField in model)
+        limits_override = getattr(self, "limits_override", None)
+        if limits_override:
+            return {**base_limits, **limits_override}
+        return base_limits
 
     def check_event_limit(self):
         """Check if user can create more events this period."""
-        limit = self.limits['events_per_month']
+        limit = self.limits["events_per_month"]
         if limit is None:
             return True
         return self.events_created_this_period < limit
 
     def check_certificate_limit(self, count=1):
         """Check if user can issue more certificates this period."""
-        limit = self.limits['certificates_per_month']
+        limit = self.limits["certificates_per_month"]
         if limit is None:
             return True
         return (self.certificates_issued_this_period + count) <= limit
 
     def check_course_limit(self):
         """Check if user can create more courses this period."""
-        limit = self.limits.get('courses_per_month')
+        limit = self.limits.get("courses_per_month")
         if limit is None:
             return True
         return self.courses_created_this_period < limit
@@ -176,17 +183,17 @@ class Subscription(BaseModel):
     def increment_events(self, count=1):
         """Increment event counter."""
         self.events_created_this_period += count
-        self.save(update_fields=['events_created_this_period', 'updated_at'])
+        self.save(update_fields=["events_created_this_period", "updated_at"])
 
     def increment_certificates(self, count=1):
         """Increment certificate counter."""
         self.certificates_issued_this_period += count
-        self.save(update_fields=['certificates_issued_this_period', 'updated_at'])
+        self.save(update_fields=["certificates_issued_this_period", "updated_at"])
 
     def increment_courses(self, count=1):
         """Increment course counter."""
         self.courses_created_this_period += count
-        self.save(update_fields=['courses_created_this_period', 'updated_at'])
+        self.save(update_fields=["courses_created_this_period", "updated_at"])
 
     def reset_usage(self):
         """Reset usage counters for new period."""
@@ -196,25 +203,25 @@ class Subscription(BaseModel):
         self.last_usage_reset_at = timezone.now()
         self.save(
             update_fields=[
-                'events_created_this_period',
-                'courses_created_this_period',
-                'certificates_issued_this_period',
-                'last_usage_reset_at',
-                'updated_at',
+                "events_created_this_period",
+                "courses_created_this_period",
+                "certificates_issued_this_period",
+                "last_usage_reset_at",
+                "updated_at",
             ]
         )
 
     def upgrade_plan(self, new_plan):
         """Upgrade to a higher plan."""
         self.plan = new_plan
-        self.save(update_fields=['plan', 'updated_at'])
+        self.save(update_fields=["plan", "updated_at"])
 
     def downgrade_plan(self, new_plan):
         """Downgrade to a lower plan (at period end)."""
         self.plan = new_plan
-        self.save(update_fields=['plan', 'updated_at'])
+        self.save(update_fields=["plan", "updated_at"])
 
-    def cancel(self, reason='', immediate=False):
+    def cancel(self, reason="", immediate=False):
         """Cancel subscription."""
         self.cancellation_reason = reason
         self.canceled_at = timezone.now()
@@ -230,7 +237,7 @@ class Subscription(BaseModel):
         """Reactivate a canceled subscription."""
         self.cancel_at_period_end = False
         self.canceled_at = None
-        self.cancellation_reason = ''
+        self.cancellation_reason = ""
         self.status = self.Status.ACTIVE
         self.save()
 
@@ -243,10 +250,10 @@ class Subscription(BaseModel):
         subscription, created = cls.objects.get_or_create(
             user=user,
             defaults={
-                'plan': plan,
-                'status': cls.Status.ACTIVE,
-                'billing_interval': cls.BillingInterval.MONTH,
-                'current_period_start': timezone.now(),
+                "plan": plan,
+                "status": cls.Status.ACTIVE,
+                "billing_interval": cls.BillingInterval.MONTH,
+                "current_period_start": timezone.now(),
             },
         )
         return subscription
@@ -366,13 +373,13 @@ class Subscription(BaseModel):
     def subscription_status_display(self):
         """Get user-friendly status for frontend display."""
         if self.is_access_blocked:
-            return 'blocked'
+            return "blocked"
         if self.is_in_grace_period:
-            return 'grace_period'
+            return "grace_period"
         if self.is_trial_expired:
-            return 'trial_expired'
+            return "trial_expired"
         if self.is_trialing:
-            return 'trialing'
+            return "trialing"
         return self.status
 
 
@@ -384,22 +391,22 @@ class Invoice(BaseModel):
     """
 
     class Status(models.TextChoices):
-        DRAFT = 'draft', 'Draft'
-        OPEN = 'open', 'Open'
-        PAID = 'paid', 'Paid'
-        VOID = 'void', 'Void'
-        UNCOLLECTIBLE = 'uncollectible', 'Uncollectible'
+        DRAFT = "draft", "Draft"
+        OPEN = "open", "Open"
+        PAID = "paid", "Paid"
+        VOID = "void", "Void"
+        UNCOLLECTIBLE = "uncollectible", "Uncollectible"
 
     # Relationships
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='invoices')
-    subscription = models.ForeignKey(Subscription, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="invoices")
+    subscription = models.ForeignKey(Subscription, on_delete=models.SET_NULL, null=True, blank=True, related_name="invoices")
 
     # Stripe data
     stripe_invoice_id = models.CharField(max_length=255, unique=True, db_index=True)
 
     # Amount
     amount_cents = models.PositiveIntegerField()
-    currency = models.CharField(max_length=3, default='usd')
+    currency = models.CharField(max_length=3, default="usd")
 
     # Status
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
@@ -415,13 +422,13 @@ class Invoice(BaseModel):
     due_date = models.DateField(null=True, blank=True)
 
     class Meta:
-        db_table = 'invoices'
-        verbose_name = 'Invoice'
-        verbose_name_plural = 'Invoices'
-        ordering = ['-created_at']
+        db_table = "invoices"
+        verbose_name = "Invoice"
+        verbose_name_plural = "Invoices"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['status']),
-            models.Index(fields=['-created_at']),
+            models.Index(fields=["status"]),
+            models.Index(fields=["-created_at"]),
         ]
 
     def __str__(self):
@@ -448,7 +455,7 @@ class PaymentMethod(BaseModel):
     """
 
     # Relationships
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payment_methods')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payment_methods")
 
     # Stripe data
     stripe_payment_method_id = models.CharField(max_length=255, unique=True, db_index=True)
@@ -467,10 +474,10 @@ class PaymentMethod(BaseModel):
     billing_email = models.EmailField(blank=True)
 
     class Meta:
-        db_table = 'payment_methods'
-        verbose_name = 'Payment Method'
-        verbose_name_plural = 'Payment Methods'
-        ordering = ['-is_default', '-created_at']
+        db_table = "payment_methods"
+        verbose_name = "Payment Method"
+        verbose_name_plural = "Payment Methods"
+        ordering = ["-is_default", "-created_at"]
 
     def __str__(self):
         return f"{self.card_brand} ****{self.card_last4}"
@@ -490,7 +497,7 @@ class PaymentMethod(BaseModel):
         PaymentMethod.objects.filter(user=self.user, is_default=True).exclude(id=self.id).update(is_default=False)
 
         self.is_default = True
-        self.save(update_fields=['is_default', 'updated_at'])
+        self.save(update_fields=["is_default", "updated_at"])
 
 
 class StripeProduct(BaseModel):
@@ -518,9 +525,9 @@ class StripeProduct(BaseModel):
 
     # Tax Codes (Hardcoded per plan)
     PLAN_TAX_CODES = {
-        'organizer': 'txcd_10103000',  # SaaS/Digital Service
-        'lms': 'txcd_10103000',  # SaaS/Digital Service
-        'organization': 'txcd_10103001',  # SaaS/Digital Service (Organization)
+        "organizer": "txcd_10103000",  # SaaS/Digital Service
+        "lms": "txcd_10103000",  # SaaS/Digital Service
+        "pro": "txcd_10103001",  # SaaS/Digital Service (Pro)
     }
 
     # Trial period configuration
@@ -545,20 +552,16 @@ class StripeProduct(BaseModel):
         null=True, blank=True, help_text="Max attendees per event (null = unlimited)"
     )
 
-    # Seat configuration (for Organization plans)
-    included_seats = models.PositiveIntegerField(default=0, help_text="Number of included seats (for organization plans)")
-    seat_price_cents = models.PositiveIntegerField(default=0, help_text="Price per additional seat in cents")
-
     class Meta:
-        db_table = 'stripe_products'
-        ordering = ['plan']
-        verbose_name = 'Stripe Product'
-        verbose_name_plural = 'Stripe Products'
+        db_table = "stripe_products"
+        ordering = ["plan"]
+        verbose_name = "Stripe Product"
+        verbose_name_plural = "Stripe Products"
 
     def save(self, *args, **kwargs):
         previous_trial_days = None
         if self.pk:
-            previous_trial_days = StripeProduct.objects.filter(pk=self.pk).values_list('trial_period_days', flat=True).first()
+            previous_trial_days = StripeProduct.objects.filter(pk=self.pk).values_list("trial_period_days", flat=True).first()
 
         super().save(*args, **kwargs)
 
@@ -585,19 +588,19 @@ class StripeProduct(BaseModel):
         from .services import stripe_service
 
         if not stripe_service.is_configured:
-            return {'success': False, 'error': 'Stripe not configured'}
+            return {"success": False, "error": "Stripe not configured"}
 
         try:
             params = {
-                'name': self.name,
-                'description': self.description,
-                'active': self.is_active,
+                "name": self.name,
+                "description": self.description,
+                "active": self.is_active,
             }
 
             # Add tax code from constants
             tax_code = self.PLAN_TAX_CODES.get(self.plan)
             if tax_code:
-                params['tax_code'] = tax_code
+                params["tax_code"] = tax_code
 
             if self.stripe_product_id:
                 # Update existing product
@@ -606,16 +609,16 @@ class StripeProduct(BaseModel):
                 # Create new product
                 product = stripe_service.stripe.Product.create(**params)
                 self.stripe_product_id = product.id
-                self.save(update_fields=['stripe_product_id', 'updated_at'])
+                self.save(update_fields=["stripe_product_id", "updated_at"])
 
-            return {'success': True, 'product': product}
+            return {"success": True, "product": product}
 
         except Exception as e:
             import logging
 
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to sync product to Stripe: {e}")
-            return {'success': False, 'error': str(e)}
+            return {"success": False, "error": str(e)}
 
     def get_trial_days(self):
         """Get trial period days for this product."""
@@ -624,10 +627,10 @@ class StripeProduct(BaseModel):
     def get_feature_limits(self):
         """Get feature limits for this product."""
         return {
-            'events_per_month': self.events_per_month,
-            'certificates_per_month': self.certificates_per_month,
-            'courses_per_month': self.courses_per_month,
-            'max_attendees_per_event': self.max_attendees_per_event,
+            "events_per_month": self.events_per_month,
+            "certificates_per_month": self.certificates_per_month,
+            "courses_per_month": self.courses_per_month,
+            "max_attendees_per_event": self.max_attendees_per_event,
         }
 
     def get_features_list(self):
@@ -662,7 +665,7 @@ class StripeProduct(BaseModel):
             features.append(f"{self.max_attendees_per_event:,} attendees per event")
 
         # Add plan-specific features
-        if self.plan == 'organizer':
+        if self.plan == "organizer":
             features.extend(
                 [
                     "Zoom integration",
@@ -670,7 +673,7 @@ class StripeProduct(BaseModel):
                     "Priority email support",
                 ]
             )
-        elif self.plan == 'lms':
+        elif self.plan == "lms":
             features.extend(
                 [
                     "Self-paced course builder",
@@ -678,7 +681,7 @@ class StripeProduct(BaseModel):
                     "Learner progress tracking",
                 ]
             )
-        elif self.plan == 'organization':
+        elif self.plan == "pro":
             features.extend(
                 [
                     "Multi-user team access",
@@ -703,14 +706,14 @@ class StripePrice(BaseModel):
     """
 
     class BillingInterval(models.TextChoices):
-        MONTH = 'month', 'Monthly'
-        YEAR = 'year', 'Annual'
+        MONTH = "month", "Monthly"
+        YEAR = "year", "Annual"
 
-    product = models.ForeignKey(StripeProduct, on_delete=models.CASCADE, related_name='prices')
+    product = models.ForeignKey(StripeProduct, on_delete=models.CASCADE, related_name="prices")
 
     # Pricing details
     amount_cents = models.PositiveIntegerField(help_text="Price in cents (e.g., 9900 = $99.00)")
-    currency = models.CharField(max_length=3, default='usd')
+    currency = models.CharField(max_length=3, default="usd")
     billing_interval = models.CharField(max_length=10, choices=BillingInterval.choices, default=BillingInterval.MONTH)
 
     # Stripe sync
@@ -720,11 +723,11 @@ class StripePrice(BaseModel):
     is_active = models.BooleanField(default=True, help_text="Whether price is available for new subscriptions")
 
     class Meta:
-        db_table = 'stripe_prices'
-        ordering = ['product', 'billing_interval']
-        unique_together = [['product', 'billing_interval']]
-        verbose_name = 'Stripe Price'
-        verbose_name_plural = 'Stripe Prices'
+        db_table = "stripe_prices"
+        ordering = ["product", "billing_interval"]
+        unique_together = [["product", "billing_interval"]]
+        verbose_name = "Stripe Price"
+        verbose_name_plural = "Stripe Prices"
 
     def __str__(self):
         return f"${self.amount_display}/{self.billing_interval} - {self.product.name}"
@@ -741,16 +744,16 @@ class StripePrice(BaseModel):
             previous = (
                 StripePrice.objects.filter(pk=self.pk)
                 .values(
-                    'amount_cents',
-                    'currency',
-                    'billing_interval',
+                    "amount_cents",
+                    "currency",
+                    "billing_interval",
                 )
                 .first()
             )
             if previous:
-                self._previous_amount_cents = previous['amount_cents']
-                self._previous_currency = previous['currency']
-                self._previous_billing_interval = previous['billing_interval']
+                self._previous_amount_cents = previous["amount_cents"]
+                self._previous_currency = previous["currency"]
+                self._previous_billing_interval = previous["billing_interval"]
         super().save(*args, **kwargs)
 
     def sync_to_stripe(self):
@@ -760,18 +763,18 @@ class StripePrice(BaseModel):
         from .services import stripe_service
 
         if not stripe_service.is_configured:
-            return {'success': False, 'error': 'Stripe not configured'}
+            return {"success": False, "error": "Stripe not configured"}
 
         if not self.product.stripe_product_id:
             # Product must exist in Stripe first
             result = self.product.sync_to_stripe()
-            if not result['success']:
+            if not result["success"]:
                 return result
 
         try:
-            previous_amount = getattr(self, '_previous_amount_cents', None)
-            previous_currency = getattr(self, '_previous_currency', None)
-            previous_interval = getattr(self, '_previous_billing_interval', None)
+            previous_amount = getattr(self, "_previous_amount_cents", None)
+            previous_currency = getattr(self, "_previous_currency", None)
+            previous_interval = getattr(self, "_previous_billing_interval", None)
             price_changed = any(
                 prev is not None and prev != current
                 for prev, current in [
@@ -792,8 +795,8 @@ class StripePrice(BaseModel):
                     product=self.product.stripe_product_id,
                     unit_amount=self.amount_cents,
                     currency=self.currency,
-                    recurring={'interval': self.billing_interval},
-                    tax_behavior='exclusive',
+                    recurring={"interval": self.billing_interval},
+                    tax_behavior="exclusive",
                     active=self.is_active,
                 )
                 StripePrice.objects.filter(pk=self.pk).update(
@@ -813,21 +816,21 @@ class StripePrice(BaseModel):
                     product=self.product.stripe_product_id,
                     unit_amount=self.amount_cents,
                     currency=self.currency,
-                    recurring={'interval': self.billing_interval},
-                    tax_behavior='exclusive',
+                    recurring={"interval": self.billing_interval},
+                    tax_behavior="exclusive",
                     active=self.is_active,
                 )
                 self.stripe_price_id = price.id
-                self.save(update_fields=['stripe_price_id', 'updated_at'])
+                self.save(update_fields=["stripe_price_id", "updated_at"])
 
-            return {'success': True, 'price': price}
+            return {"success": True, "price": price}
 
         except Exception as e:
             import logging
 
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to sync price to Stripe: {e}")
-            return {'success': False, 'error': str(e)}
+            return {"success": False, "error": str(e)}
 
 
 # =============================================================================
@@ -844,24 +847,24 @@ class RefundRecord(BaseModel):
     """
 
     class Status(models.TextChoices):
-        PENDING = 'pending', 'Pending'
-        SUCCEEDED = 'succeeded', 'Succeeded'
-        FAILED = 'failed', 'Failed'
-        CANCELED = 'canceled', 'Canceled'
+        PENDING = "pending", "Pending"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+        CANCELED = "canceled", "Canceled"
 
     class Reason(models.TextChoices):
-        DUPLICATE = 'duplicate', 'Duplicate'
-        FRAUDULENT = 'fraudulent', 'Fraudulent'
-        REQUESTED_BY_CUSTOMER = 'requested_by_customer', 'Requested by Customer'
-        EXPIRED_UNCAPTURED = 'expired_uncaptured', 'Expired Uncaptured Charge'
-        OTHER = 'other', 'Other'
+        DUPLICATE = "duplicate", "Duplicate"
+        FRAUDULENT = "fraudulent", "Fraudulent"
+        REQUESTED_BY_CUSTOMER = "requested_by_customer", "Requested by Customer"
+        EXPIRED_UNCAPTURED = "expired_uncaptured", "Expired Uncaptured Charge"
+        OTHER = "other", "Other"
 
     # Relationships
     registration = models.ForeignKey(
-        'registrations.Registration', on_delete=models.SET_NULL, null=True, blank=True, related_name='refunds'
+        "registrations.Registration", on_delete=models.SET_NULL, null=True, blank=True, related_name="refunds"
     )
     processed_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_refunds'
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="processed_refunds"
     )
 
     # Stripe Reference
@@ -870,7 +873,7 @@ class RefundRecord(BaseModel):
 
     # Financials
     amount_cents = models.PositiveIntegerField(help_text="Amount refunded in cents")
-    currency = models.CharField(max_length=3, default='usd')
+    currency = models.CharField(max_length=3, default="usd")
 
     # Platform Tracking
     platform_fee_reversed_cents = models.IntegerField(default=0, help_text="Amount of platform fee returned (if any)")
@@ -884,10 +887,10 @@ class RefundRecord(BaseModel):
     error_message = models.TextField(blank=True)
 
     class Meta:
-        db_table = 'refund_records'
-        verbose_name = 'Refund Record'
-        verbose_name_plural = 'Refund Records'
-        ordering = ['-created_at']
+        db_table = "refund_records"
+        verbose_name = "Refund Record"
+        verbose_name_plural = "Refund Records"
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"Refund {self.stripe_refund_id} - {self.amount_display}"
@@ -907,14 +910,14 @@ class PayoutRequest(BaseModel):
     """
 
     class Status(models.TextChoices):
-        PENDING = 'pending', 'Pending'
-        IN_TRANSIT = 'in_transit', 'In Transit'
-        PAID = 'paid', 'Paid'
-        FAILED = 'failed', 'Failed'
-        CANCELED = 'canceled', 'Canceled'
+        PENDING = "pending", "Pending"
+        IN_TRANSIT = "in_transit", "In Transit"
+        PAID = "paid", "Paid"
+        FAILED = "failed", "Failed"
+        CANCELED = "canceled", "Canceled"
 
     # The organizer requesting the payout
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payouts')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payouts")
 
     # Stripe Connect
     stripe_connect_account_id = models.CharField(max_length=255, db_index=True)
@@ -922,7 +925,7 @@ class PayoutRequest(BaseModel):
 
     # Financials
     amount_cents = models.PositiveIntegerField(help_text="Amount in cents")
-    currency = models.CharField(max_length=3, default='usd')
+    currency = models.CharField(max_length=3, default="usd")
 
     # Status
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
@@ -935,10 +938,10 @@ class PayoutRequest(BaseModel):
     error_message = models.TextField(blank=True)
 
     class Meta:
-        db_table = 'payout_requests'
-        verbose_name = 'Payout Request'
-        verbose_name_plural = 'Payout Requests'
-        ordering = ['-created_at']
+        db_table = "payout_requests"
+        verbose_name = "Payout Request"
+        verbose_name_plural = "Payout Requests"
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"Payout {self.amount_display} to {self.user.email}"
@@ -956,30 +959,30 @@ class TransferRecord(BaseModel):
     but good to track explicitly for reconciliation.
     """
 
-    event = models.ForeignKey('events.Event', on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers')
+    event = models.ForeignKey("events.Event", on_delete=models.SET_NULL, null=True, blank=True, related_name="transfers")
     registration = models.ForeignKey(
-        'registrations.Registration', on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers'
+        "registrations.Registration", on_delete=models.SET_NULL, null=True, blank=True, related_name="transfers"
     )
-    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_transfers')
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="received_transfers")
 
     stripe_transfer_id = models.CharField(max_length=255, unique=True, blank=True, null=True)
     stripe_payment_intent_id = models.CharField(max_length=255, blank=True)
 
     amount_cents = models.PositiveIntegerField()
-    currency = models.CharField(max_length=3, default='usd')
+    currency = models.CharField(max_length=3, default="usd")
 
     description = models.CharField(max_length=255, blank=True)
     reversed = models.BooleanField(default=False, help_text="If transfer was reversed (e.g. refund)")
     reversed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = 'transfer_records'
-        verbose_name = 'Transfer Record'
-        verbose_name_plural = 'Transfer Records'
-        ordering = ['-created_at']
+        db_table = "transfer_records"
+        verbose_name = "Transfer Record"
+        verbose_name_plural = "Transfer Records"
+        ordering = ["-created_at"]
 
     def __str__(self):
-        return f"Transfer {self.amount_cents/100:.2f} to {self.recipient.email}"
+        return f"Transfer {self.amount_cents / 100:.2f} to {self.recipient.email}"
 
 
 class DisputeRecord(BaseModel):
@@ -988,18 +991,18 @@ class DisputeRecord(BaseModel):
     """
 
     class Status(models.TextChoices):
-        NEEDS_RESPONSE = 'needs_response', 'Needs Response'
-        WARNING_NEEDS_RESPONSE = 'warning_needs_response', 'Warning Needs Response'
-        UNDER_REVIEW = 'under_review', 'Under Review'
-        WON = 'won', 'Won'
-        LOST = 'lost', 'Lost'
+        NEEDS_RESPONSE = "needs_response", "Needs Response"
+        WARNING_NEEDS_RESPONSE = "warning_needs_response", "Warning Needs Response"
+        UNDER_REVIEW = "under_review", "Under Review"
+        WON = "won", "Won"
+        LOST = "lost", "Lost"
 
     registration = models.ForeignKey(
-        'registrations.Registration',
+        "registrations.Registration",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='disputes',
+        related_name="disputes",
     )
 
     stripe_dispute_id = models.CharField(max_length=255, unique=True, db_index=True)
@@ -1007,17 +1010,17 @@ class DisputeRecord(BaseModel):
     stripe_payment_intent_id = models.CharField(max_length=255, blank=True, db_index=True)
 
     amount_cents = models.PositiveIntegerField(default=0)
-    currency = models.CharField(max_length=3, default='usd')
+    currency = models.CharField(max_length=3, default="usd")
     reason = models.CharField(max_length=100, blank=True)
     status = models.CharField(max_length=50, choices=Status.choices, default=Status.NEEDS_RESPONSE)
     evidence_due_by = models.DateTimeField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = 'dispute_records'
-        ordering = ['-created_at']
-        verbose_name = 'Dispute Record'
-        verbose_name_plural = 'Dispute Records'
+        db_table = "dispute_records"
+        ordering = ["-created_at"]
+        verbose_name = "Dispute Record"
+        verbose_name_plural = "Dispute Records"
 
     def __str__(self):
         return f"Dispute {self.stripe_dispute_id} ({self.status})"

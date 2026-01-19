@@ -21,56 +21,28 @@ from .models import Contact, ContactList, Tag
 
 
 class TagSerializer(BaseModelSerializer):
-    """Tag with contact count and org info."""
-
-    organization_uuid = serializers.UUIDField(source='organization.uuid', read_only=True, allow_null=True)
-    is_shared = serializers.BooleanField(read_only=True)
+    """Tag with contact count."""
 
     class Meta:
         model = Tag
         fields = [
-            'uuid',
-            'name',
-            'color',
-            'description',
-            'contact_count',
-            'organization_uuid',
-            'is_shared',
-            'created_at',
-            'updated_at',
+            "uuid",
+            "name",
+            "color",
+            "description",
+            "contact_count",
+            "created_at",
+            "updated_at",
         ]
-        read_only_fields = ['uuid', 'contact_count', 'organization_uuid', 'is_shared', 'created_at', 'updated_at']
+        read_only_fields = ["uuid", "contact_count", "created_at", "updated_at"]
 
 
 class TagCreateSerializer(serializers.ModelSerializer):
     """Create/update a tag."""
 
-    organization_uuid = serializers.UUIDField(required=False, allow_null=True, write_only=True)
-
     class Meta:
         model = Tag
-        fields = ['name', 'color', 'description', 'organization_uuid']
-
-    def validate_organization_uuid(self, value):
-        """Validate user has access to the organization."""
-        if value:
-            from organizations.models import Organization
-
-            user_org_ids = self.context.get('user_org_ids', [])
-            try:
-                org = Organization.objects.get(uuid=value)
-                if org.id not in user_org_ids:
-                    raise serializers.ValidationError("You don't have access to this organization.")
-                return org
-            except Organization.DoesNotExist:
-                raise serializers.ValidationError("Organization not found.")
-        return None
-
-    def create(self, validated_data):
-        org = validated_data.pop('organization_uuid', None)
-        if org:
-            validated_data['organization'] = org
-        return super().create(validated_data)
+        fields = ["name", "color", "description"]
 
 
 # =============================================================================
@@ -79,76 +51,43 @@ class TagCreateSerializer(serializers.ModelSerializer):
 
 
 class ContactListSerializer(BaseModelSerializer):
-    """Contact list with summary and org info."""
-
-    organization_uuid = serializers.UUIDField(source='organization.uuid', read_only=True, allow_null=True)
-    is_shared = serializers.BooleanField(read_only=True)
+    """Contact list with summary."""
 
     class Meta:
         model = ContactList
         fields = [
-            'uuid',
-            'name',
-            'description',
-            'contact_count',
-            'organization_uuid',
-            'is_shared',
-            'created_at',
-            'updated_at',
+            "uuid",
+            "name",
+            "description",
+            "contact_count",
+            "created_at",
+            "updated_at",
         ]
-        read_only_fields = ['uuid', 'contact_count', 'organization_uuid', 'is_shared', 'created_at', 'updated_at']
+        read_only_fields = ["uuid", "contact_count", "created_at", "updated_at"]
 
 
 class ContactListDetailSerializer(BaseModelSerializer):
-    """Full contact list detail with org info."""
-
-    organization_uuid = serializers.UUIDField(source='organization.uuid', read_only=True, allow_null=True)
-    is_shared = serializers.BooleanField(read_only=True)
+    """Full contact list detail."""
 
     class Meta:
         model = ContactList
         fields = [
-            'uuid',
-            'name',
-            'description',
-            'contact_count',
-            'organization_uuid',
-            'is_shared',
-            'created_at',
-            'updated_at',
+            "uuid",
+            "name",
+            "description",
+            "contact_count",
+            "created_at",
+            "updated_at",
         ]
-        read_only_fields = ['uuid', 'contact_count', 'organization_uuid', 'is_shared', 'created_at', 'updated_at']
+        read_only_fields = ["uuid", "contact_count", "created_at", "updated_at"]
 
 
 class ContactListCreateSerializer(serializers.ModelSerializer):
     """Create/update a contact list."""
 
-    organization_uuid = serializers.UUIDField(required=False, allow_null=True, write_only=True)
-
     class Meta:
         model = ContactList
-        fields = ['name', 'description', 'organization_uuid']
-
-    def validate_organization_uuid(self, value):
-        """Validate user has access to the organization."""
-        if value:
-            from organizations.models import Organization
-
-            user_org_ids = self.context.get('user_org_ids', [])
-            try:
-                org = Organization.objects.get(uuid=value)
-                if org.id not in user_org_ids:
-                    raise serializers.ValidationError("You don't have access to this organization.")
-                return org
-            except Organization.DoesNotExist:
-                raise serializers.ValidationError("Organization not found.")
-        return None
-
-    def create(self, validated_data):
-        org = validated_data.pop('organization_uuid', None)
-        if org:
-            validated_data['organization'] = org
-        return super().create(validated_data)
+        fields = ["name", "description"]
 
 
 # =============================================================================
@@ -174,40 +113,40 @@ class ContactSerializer(BaseModelSerializer):
     class Meta:
         model = Contact
         fields = [
-            'uuid',
-            'contact_list',
-            'email',
-            'full_name',
-            'professional_title',
-            'organization_name',
-            'phone',
-            'notes',
-            'tags',
-            'source',
+            "uuid",
+            "contact_list",
+            "email",
+            "full_name",
+            "professional_title",
+            "organization_name",
+            "phone",
+            "notes",
+            "tags",
+            "source",
             # Engagement
-            'events_invited_count',
-            'events_attended_count',
-            'last_invited_at',
-            'last_attended_at',
+            "events_invited_count",
+            "events_attended_count",
+            "last_invited_at",
+            "last_attended_at",
             # Status
-            'email_opted_out',
-            'email_bounced',
-            'is_linked',
-            'display_name',
-            'created_at',
-            'updated_at',
+            "email_opted_out",
+            "email_bounced",
+            "is_linked",
+            "display_name",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = [
-            'uuid',
-            'contact_list',
-            'events_invited_count',
-            'events_attended_count',
-            'last_invited_at',
-            'last_attended_at',
-            'is_linked',
-            'display_name',
-            'created_at',
-            'updated_at',
+            "uuid",
+            "contact_list",
+            "events_invited_count",
+            "events_attended_count",
+            "last_invited_at",
+            "last_attended_at",
+            "is_linked",
+            "display_name",
+            "created_at",
+            "updated_at",
         ]
 
 
@@ -219,17 +158,17 @@ class ContactListItemSerializer(BaseModelSerializer):
     class Meta:
         model = Contact
         fields = [
-            'uuid',
-            'email',
-            'full_name',
-            'professional_title',
-            'organization_name',
-            'events_invited_count',
-            'events_attended_count',
-            'email_opted_out',
-            'email_bounced',
-            'tags',
-            'created_at',
+            "uuid",
+            "email",
+            "full_name",
+            "professional_title",
+            "organization_name",
+            "events_invited_count",
+            "events_attended_count",
+            "email_opted_out",
+            "email_bounced",
+            "tags",
+            "created_at",
         ]
         read_only_fields = fields
 
@@ -242,46 +181,39 @@ class ContactCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
         fields = [
-            'email',
-            'full_name',
-            'professional_title',
-            'organization_name',
-            'phone',
-            'notes',
-            'source',
-            'tag_uuids',
+            "email",
+            "full_name",
+            "professional_title",
+            "organization_name",
+            "phone",
+            "notes",
+            "source",
+            "tag_uuids",
         ]
 
     def validate(self, attrs):
         """Validate that email is unique within the contact list."""
-        email = attrs.get('email')
-        contact_list = self.context.get('contact_list')
+        email = attrs.get("email")
+        contact_list = self.context.get("contact_list")
 
         if email and contact_list:
             # Check for duplicate email in same list
             exists = Contact.objects.filter(contact_list=contact_list, email__iexact=email).exists()
 
             if exists:
-                raise serializers.ValidationError({'email': 'A contact with this email already exists in this list.'})
+                raise serializers.ValidationError({"email": "A contact with this email already exists in this list."})
 
         return attrs
 
     def create(self, validated_data):
-        tag_uuids = validated_data.pop('tag_uuids', [])
+        tag_uuids = validated_data.pop("tag_uuids", [])
         contact = super().create(validated_data)
 
         if tag_uuids:
-            # Allow personal tags OR org-shared tags
-            from django.db.models import Q
-
+            # Get user's own tags only
             user = contact.contact_list.owner
 
-            # Get user's org IDs
-            user_org_ids = user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
-
-            tags = Tag.objects.filter(Q(owner=user, organization__isnull=True) | Q(organization_id__in=user_org_ids)).filter(
-                uuid__in=tag_uuids
-            )
+            tags = Tag.objects.filter(owner=user, uuid__in=tag_uuids)
 
             contact.tags.set(tags)
             contact.contact_list.update_contact_count()
@@ -297,30 +229,24 @@ class ContactUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
         fields = [
-            'full_name',
-            'professional_title',
-            'organization_name',
-            'phone',
-            'notes',
-            'tag_uuids',
-            'email_opted_out',
+            "full_name",
+            "professional_title",
+            "organization_name",
+            "phone",
+            "notes",
+            "tag_uuids",
+            "email_opted_out",
         ]
 
     def update(self, instance, validated_data):
-        tag_uuids = validated_data.pop('tag_uuids', None)
+        tag_uuids = validated_data.pop("tag_uuids", None)
         contact = super().update(instance, validated_data)
 
         if tag_uuids is not None:
-            # Allow personal tags OR org-shared tags
-            from django.db.models import Q
-
+            # Get user's own tags only
             user = contact.contact_list.owner
 
-            user_org_ids = user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
-
-            tags = Tag.objects.filter(Q(owner=user, organization__isnull=True) | Q(organization_id__in=user_org_ids)).filter(
-                uuid__in=tag_uuids
-            )
+            tags = Tag.objects.filter(owner=user, uuid__in=tag_uuids)
 
             contact.tags.set(tags)
 
@@ -339,8 +265,8 @@ class ContactBulkCreateSerializer(serializers.Serializer):
 
     def validate_contacts(self, value):
         for contact in value:
-            if 'email' not in contact:
-                raise serializers.ValidationError('Each contact requires an email.')
-            if 'full_name' not in contact:
-                raise serializers.ValidationError('Each contact requires a full_name.')
+            if "email" not in contact:
+                raise serializers.ValidationError("Each contact requires an email.")
+            if "full_name" not in contact:
+                raise serializers.ValidationError("Each contact requires a full_name.")
         return value

@@ -20,13 +20,12 @@ from learning.models import Course
 class TestCourseZoomSignal:
     """Test signal that triggers Zoom meeting creation for hybrid courses."""
 
-    def test_signal_triggers_on_hybrid_course_with_zoom_enabled(self, organization, db):
+    def test_signal_triggers_on_hybrid_course_with_zoom_enabled(self, organizer, db):
         """Test that creating a hybrid course with Zoom enabled triggers the task."""
         with patch('learning.signals.create_zoom_meeting_for_course') as mock_task:
             course = Course.objects.create(
-                organization=organization,
                 title='Hybrid Course',
-                created_by=organization.created_by,
+                owner=organizer,
                 format=Course.CourseFormat.HYBRID,
                 zoom_settings={'enabled': True},
                 live_session_start=timezone.now() + timedelta(days=7),
@@ -35,26 +34,24 @@ class TestCourseZoomSignal:
 
             mock_task.delay.assert_called_once_with(course.id)
 
-    def test_signal_does_not_trigger_for_online_course(self, organization, db):
+    def test_signal_does_not_trigger_for_online_course(self, organizer, db):
         """Test that online (self-paced) courses don't trigger Zoom creation."""
         with patch('learning.signals.create_zoom_meeting_for_course') as mock_task:
             Course.objects.create(
-                organization=organization,
                 title='Online Course',
-                created_by=organization.created_by,
+                owner=organizer,
                 format=Course.CourseFormat.ONLINE,
                 zoom_settings={'enabled': True},
             )
 
             mock_task.delay.assert_not_called()
 
-    def test_signal_does_not_trigger_if_zoom_disabled(self, organization, db):
+    def test_signal_does_not_trigger_if_zoom_disabled(self, organizer, db):
         """Test that signal ignores courses with Zoom disabled."""
         with patch('learning.signals.create_zoom_meeting_for_course') as mock_task:
             Course.objects.create(
-                organization=organization,
                 title='Hybrid No Zoom',
-                created_by=organization.created_by,
+                owner=organizer,
                 format=Course.CourseFormat.HYBRID,
                 zoom_settings={'enabled': False},
                 live_session_start=timezone.now() + timedelta(days=7),
@@ -62,13 +59,12 @@ class TestCourseZoomSignal:
 
             mock_task.delay.assert_not_called()
 
-    def test_signal_does_not_trigger_if_meeting_already_exists(self, organization, db):
+    def test_signal_does_not_trigger_if_meeting_already_exists(self, organizer, db):
         """Test that signal skips courses that already have a meeting ID."""
         with patch('learning.signals.create_zoom_meeting_for_course') as mock_task:
             Course.objects.create(
-                organization=organization,
                 title='Existing Zoom Course',
-                created_by=organization.created_by,
+                owner=organizer,
                 format=Course.CourseFormat.HYBRID,
                 zoom_settings={'enabled': True},
                 zoom_meeting_id='123456789',
@@ -77,13 +73,12 @@ class TestCourseZoomSignal:
 
             mock_task.delay.assert_not_called()
 
-    def test_signal_does_not_trigger_without_session_start(self, organization, db):
+    def test_signal_does_not_trigger_without_session_start(self, organizer, db):
         """Test that signal skips if no live_session_start is set."""
         with patch('learning.signals.create_zoom_meeting_for_course') as mock_task:
             Course.objects.create(
-                organization=organization,
                 title='No Session Time',
-                created_by=organization.created_by,
+                owner=organizer,
                 format=Course.CourseFormat.HYBRID,
                 zoom_settings={'enabled': True},
                 # No live_session_start
@@ -91,14 +86,13 @@ class TestCourseZoomSignal:
 
             mock_task.delay.assert_not_called()
 
-    def test_signal_triggers_on_update_retry(self, organization, db):
+    def test_signal_triggers_on_update_retry(self, organizer, db):
         """Test that updating a course triggers retry for failed Zoom creation."""
         with patch('learning.signals.create_zoom_meeting_for_course') as mock_task:
             # Create without signal triggering (no zoom_settings)
             course = Course.objects.create(
-                organization=organization,
                 title='Retry Course',
-                created_by=organization.created_by,
+                owner=organizer,
                 format=Course.CourseFormat.HYBRID,
                 live_session_start=timezone.now() + timedelta(days=7),
             )
@@ -111,13 +105,12 @@ class TestCourseZoomSignal:
 
             mock_task.delay.assert_called_once_with(course.id)
 
-    def test_signal_skips_recursive_zoom_field_updates(self, organization, db):
+    def test_signal_skips_recursive_zoom_field_updates(self, organizer, db):
         """Test that signal doesn't trigger infinite recursion on zoom field updates."""
         with patch('learning.signals.create_zoom_meeting_for_course') as mock_task:
             course = Course.objects.create(
-                organization=organization,
                 title='Recursive Test',
-                created_by=organization.created_by,
+                owner=organizer,
                 format=Course.CourseFormat.HYBRID,
                 zoom_settings={'enabled': True},
                 live_session_start=timezone.now() + timedelta(days=7),
@@ -137,14 +130,13 @@ class TestCourseZoomSignal:
 class TestCourseZoomTask:
     """Test the create_zoom_meeting_for_course task."""
 
-    def test_task_creates_meeting_successfully(self, organization, db):
+    def test_task_creates_meeting_successfully(self, organizer, db):
         """Test successful Zoom meeting creation."""
         from learning.tasks import create_zoom_meeting_for_course
 
         course = Course.objects.create(
-            organization=organization,
             title='Task Test Course',
-            created_by=organization.created_by,
+            owner=organizer,
             format=Course.CourseFormat.HYBRID,
             zoom_settings={'enabled': True},
             live_session_start=timezone.now() + timedelta(days=7),
@@ -167,28 +159,26 @@ class TestCourseZoomTask:
             assert result is True
 
 
-    def test_task_handles_non_hybrid_course(self, organization, db):
+    def test_task_handles_non_hybrid_course(self, organizer, db):
         """Test that task returns False for non-hybrid courses."""
         from learning.tasks import create_zoom_meeting_for_course
 
         course = Course.objects.create(
-            organization=organization,
             title='Online Course',
-            created_by=organization.created_by,
+            owner=organizer,
             format=Course.CourseFormat.ONLINE,
         )
 
         result = create_zoom_meeting_for_course(course.id)
         assert result is False
 
-    def test_task_handles_existing_meeting(self, organization, db):
+    def test_task_handles_existing_meeting(self, organizer, db):
         """Test that task returns False if meeting already exists."""
         from learning.tasks import create_zoom_meeting_for_course
 
         course = Course.objects.create(
-            organization=organization,
             title='Existing Meeting Course',
-            created_by=organization.created_by,
+            owner=organizer,
             format=Course.CourseFormat.HYBRID,
             zoom_meeting_id='existing123',
         )
@@ -203,14 +193,13 @@ class TestCourseZoomTask:
         result = create_zoom_meeting_for_course(99999)
         assert result is False
 
-    def test_task_stores_error_on_failure(self, organization, db):
+    def test_task_stores_error_on_failure(self, organizer, db):
         """Test that task stores error when Zoom creation fails."""
         from learning.tasks import create_zoom_meeting_for_course
 
         course = Course.objects.create(
-            organization=organization,
             title='Error Test Course',
-            created_by=organization.created_by,
+            owner=organizer,
             format=Course.CourseFormat.HYBRID,
             zoom_settings={'enabled': True},
             live_session_start=timezone.now() + timedelta(days=7),
@@ -236,15 +225,14 @@ class TestCourseZoomTask:
 class TestZoomServiceCourse:
     """Test ZoomService.create_meeting_for_course method."""
 
-    def test_creates_meeting_with_correct_duration(self, organization, db):
+    def test_creates_meeting_with_correct_duration(self, organizer, db):
         """Test that duration is calculated from session times."""
         from accounts.models import ZoomConnection
         from accounts.services import zoom_service
 
         course = Course.objects.create(
-            organization=organization,
             title='Duration Test',
-            created_by=organization.created_by,
+            owner=organizer,
             format=Course.CourseFormat.HYBRID,
             live_session_start=timezone.now() + timedelta(days=7),
             live_session_end=timezone.now() + timedelta(days=7, hours=3),  # 3 hour session
@@ -277,14 +265,13 @@ class TestZoomServiceCourse:
             payload = call_args[0][3]  # 4th positional arg is payload
             assert payload['duration'] == 180
 
-    def test_returns_error_if_no_owner(self, organization, db):
+    def test_returns_error_if_no_owner(self, organizer, db):
         """Test that method returns error if course has no creator."""
         from accounts.services import zoom_service
 
         course = Course.objects.create(
-            organization=organization,
             title='No Owner Test',
-            created_by=None,
+            owner=None,
             format=Course.CourseFormat.HYBRID,
             live_session_start=timezone.now() + timedelta(days=7),
         )
@@ -294,14 +281,13 @@ class TestZoomServiceCourse:
         assert result['success'] is False
         assert 'no creator' in result['error'].lower()
 
-    def test_returns_error_if_no_zoom_connection(self, organization, db):
+    def test_returns_error_if_no_zoom_connection(self, organizer, db):
         """Test that method returns error if owner has no Zoom connection."""
         from accounts.services import zoom_service
 
         course = Course.objects.create(
-            organization=organization,
             title='No Zoom Connection',
-            created_by=organization.created_by,
+            owner=organizer,
             format=Course.CourseFormat.HYBRID,
             live_session_start=timezone.now() + timedelta(days=7),
         )
@@ -311,15 +297,14 @@ class TestZoomServiceCourse:
         assert result['success'] is False
         assert 'zoom account' in result['error'].lower()
 
-    def test_returns_error_if_no_session_start(self, organization, db):
+    def test_returns_error_if_no_session_start(self, organizer, db):
         """Test that method returns error if no live_session_start."""
         from accounts.models import ZoomConnection
         from accounts.services import zoom_service
 
         course = Course.objects.create(
-            organization=organization,
             title='No Session Start',
-            created_by=organization.created_by,
+            owner=organizer,
             format=Course.CourseFormat.HYBRID,
             # No live_session_start
         )

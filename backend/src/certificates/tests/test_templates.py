@@ -25,28 +25,28 @@ from rest_framework import status
 class TestCertificateTemplateListCreate:
     """Tests for certificate template list and create operations."""
 
-    endpoint = '/api/v1/certificate-templates/'
+    endpoint = "/api/v1/certificate-templates/"
 
     def test_list_templates(self, organizer_client, certificate_template):
         """Organizer can list their templates."""
         response = organizer_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
-        assert 'results' in response.data
+        assert "results" in response.data
 
     def test_create_template(self, organizer_client):
         """Organizer can create a template."""
         data = {
-            'name': 'New Template',
-            'description': 'A certificate template',
+            "name": "New Template",
+            "description": "A certificate template",
         }
         response = organizer_client.post(self.endpoint, data)
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['name'] == 'New Template'
+        assert response.data["name"] == "New Template"
 
     def test_attendee_cannot_create_template(self, auth_client):
         """Attendees cannot create templates."""
         data = {
-            'name': 'Unauthorized Template',
+            "name": "Unauthorized Template",
         }
         response = auth_client.post(self.endpoint, data)
         assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -68,22 +68,22 @@ class TestCertificateTemplateDetail:
 
     def test_retrieve_template(self, organizer_client, certificate_template):
         """Organizer can retrieve their template."""
-        response = organizer_client.get(f'/api/v1/certificate-templates/{certificate_template.uuid}/')
+        response = organizer_client.get(f"/api/v1/certificate-templates/{certificate_template.uuid}/")
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['uuid'] == str(certificate_template.uuid)
+        assert response.data["uuid"] == str(certificate_template.uuid)
 
     def test_update_template(self, organizer_client, certificate_template):
         """Organizer can update their template."""
         response = organizer_client.patch(
-            f'/api/v1/certificate-templates/{certificate_template.uuid}/', {'name': 'Updated Template Name'}
+            f"/api/v1/certificate-templates/{certificate_template.uuid}/", {"name": "Updated Template Name"}
         )
         assert response.status_code == status.HTTP_200_OK
         certificate_template.refresh_from_db()
-        assert certificate_template.name == 'Updated Template Name'
+        assert certificate_template.name == "Updated Template Name"
 
     def test_delete_template_without_certificates(self, organizer_client, certificate_template):
         """Organizer can delete a template with no issued certificates."""
-        response = organizer_client.delete(f'/api/v1/certificate-templates/{certificate_template.uuid}/')
+        response = organizer_client.delete(f"/api/v1/certificate-templates/{certificate_template.uuid}/")
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
     def test_cannot_access_other_organizer_template(self, organizer_client, other_organizer, db):
@@ -92,7 +92,7 @@ class TestCertificateTemplateDetail:
 
         other_template = CertificateTemplateFactory(owner=other_organizer)
 
-        response = organizer_client.get(f'/api/v1/certificate-templates/{other_template.uuid}/')
+        response = organizer_client.get(f"/api/v1/certificate-templates/{other_template.uuid}/")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -111,7 +111,7 @@ class TestSetDefaultTemplate:
 
         template = CertificateTemplateFactory(owner=organizer, is_default=False)
 
-        response = organizer_client.post(f'/api/v1/certificate-templates/{template.uuid}/set-default/')
+        response = organizer_client.post(f"/api/v1/certificate-templates/{template.uuid}/set-default/")
         assert response.status_code == status.HTTP_200_OK
         template.refresh_from_db()
         assert template.is_default is True
@@ -122,7 +122,7 @@ class TestSetDefaultTemplate:
 
         new_template = CertificateTemplateFactory(owner=organizer, is_default=False)
 
-        response = organizer_client.post(f'/api/v1/certificate-templates/{new_template.uuid}/set-default/')
+        response = organizer_client.post(f"/api/v1/certificate-templates/{new_template.uuid}/set-default/")
         assert response.status_code == status.HTTP_200_OK
 
         certificate_template.refresh_from_db()
@@ -140,25 +140,11 @@ class TestAvailableTemplates:
 
     def test_get_available_templates(self, organizer_client, certificate_template):
         """Organizer can get all available templates."""
-        response = organizer_client.get('/api/v1/certificate-templates/available/')
+        response = organizer_client.get("/api/v1/certificate-templates/available/")
         assert response.status_code == status.HTTP_200_OK
         # Should include own templates
-        template_uuids = [t['uuid'] for t in response.data['templates']]
+        template_uuids = [t["uuid"] for t in response.data["templates"]]
         assert str(certificate_template.uuid) in template_uuids
-
-    def test_includes_shared_org_templates(self, organizer_client, organization, organizer, db):
-        """Includes shared templates from user's organization."""
-        from factories import CertificateTemplateFactory
-
-        # Create a shared org template
-        shared_template = CertificateTemplateFactory(
-            owner=organizer,
-            organization=organization,
-            is_shared=True,
-        )
-
-        response = organizer_client.get('/api/v1/certificate-templates/available/')
-        assert response.status_code == status.HTTP_200_OK
 
 
 # =============================================================================
@@ -189,11 +175,11 @@ class TestTemplatePreview:
     def test_preview_template(self, organizer_client, certificate_template):
         """Organizer can generate a preview of the template."""
         response = organizer_client.post(
-            f'/api/v1/certificate-templates/{certificate_template.uuid}/preview/',
+            f"/api/v1/certificate-templates/{certificate_template.uuid}/preview/",
             {
-                'recipient_name': 'John Doe',
-                'event_title': 'Test Event',
-                'completion_date': '2024-01-01',
+                "recipient_name": "John Doe",
+                "event_title": "Test Event",
+                "completion_date": "2024-01-01",
             },
         )
         # Preview may return URL or file

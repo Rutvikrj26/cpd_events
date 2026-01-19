@@ -1,8 +1,15 @@
 """
-Common API permissions.
+Common API permissions for CPD Events platform.
+
+Simple capability-based permissions tied to subscription plans.
 """
 
 from rest_framework import permissions
+
+
+# ============================================================================
+# Object-level Permissions
+# ============================================================================
 
 
 class IsOwner(permissions.BasePermission):
@@ -21,56 +28,8 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         return obj.owner == request.user
 
 
-class IsOrganizer(permissions.BasePermission):
-    """Only users with organizer or admin account type."""
-
-    message = "Organizer or admin account required."
-
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.account_type in ("organizer", "admin")
-
-
-class IsOrganizerOrOrgAdmin(permissions.BasePermission):
-    """Organizers, admins, or organization admins/organizers."""
-
-    message = "Organizer, admin, or organization admin required."
-
-    def has_permission(self, request, view):
-        if not request.user.is_authenticated:
-            return False
-        if request.user.is_staff:
-            return True
-        if request.user.account_type in ("organizer", "admin"):
-            return True
-        from organizations.models import OrganizationMembership
-
-        return OrganizationMembership.objects.filter(
-            user=request.user,
-            is_active=True,
-            role__in=["admin", "organizer"],
-        ).exists()
-
-
-class IsOrganizerOrCourseManager(permissions.BasePermission):
-    """Organizers, course managers, or admins."""
-
-    message = "Organizer, course manager, or admin account required."
-
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.account_type in ["organizer", "course_manager", "admin"]
-
-
-class IsOrganizerOrReadOnly(permissions.BasePermission):
-    """Organizers can write, everyone can read."""
-
-    def has_permission(self, request, view):
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        return request.user.is_authenticated and request.user.account_type == "organizer"
-
-
 class IsEventOwner(permissions.BasePermission):
-    """Permission for event-related objects."""
+    """Permission for event-related objects (modules, sessions, etc.)."""
 
     def has_object_permission(self, request, view, obj):
         if hasattr(obj, "event"):
@@ -109,84 +68,6 @@ class IsEventOwnerOrRegistrant(permissions.BasePermission):
         return bool(hasattr(obj, "registration") and obj.registration.user == user)
 
 
-class HasActiveSubscription(permissions.BasePermission):
-    """
-    Requires user to have an active subscription.
-
-    Checks that user has a subscription in 'active' or 'trialing' status.
-    """
-
-    message = "Active subscription required."
-
-    def has_permission(self, request, view):
-        if not request.user.is_authenticated:
-            return False
-
-        try:
-            from billing.models import Subscription
-
-            subscription = Subscription.objects.get(user=request.user)
-            return subscription.is_active
-        except Exception:
-            return False
-
-
-class CanCreateEvent(permissions.BasePermission):
-    """
-    Checks if user can create events based on subscription limits.
-    """
-
-    message = "Event creation limit reached for your plan."
-
-    def has_permission(self, request, view):
-        if not request.user.is_authenticated:
-            return False
-
-        if request.user.account_type != "organizer":
-            return False
-
-        try:
-            from billing.models import Subscription
-
-            subscription = Subscription.objects.get(user=request.user)
-            return subscription.check_event_limit()
-        except Exception:
-            # No subscription - allow if they're a new user (will get free tier)
-            return True
-
-
-class CanIssueCertificate(permissions.BasePermission):
-    """
-    Checks if user can issue certificates based on subscription limits.
-    """
-
-    message = "Certificate issuance limit reached for your plan."
-
-    def has_permission(self, request, view):
-        if not request.user.is_authenticated:
-            return False
-
-        if request.user.account_type != "organizer":
-            return False
-
-        try:
-            from billing.models import Subscription
-
-            subscription = Subscription.objects.get(user=request.user)
-            return subscription.check_certificate_limit()
-        except Exception:
-            return True
-
-
-class IsAdminOrReadOnly(permissions.BasePermission):
-    """Admin users can write, others can only read."""
-
-    def has_permission(self, request, view):
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        return request.user.is_authenticated and request.user.is_staff
-
-
 class IsSelfOrAdmin(permissions.BasePermission):
     """User can only access their own data, unless admin."""
 
@@ -198,3 +79,170 @@ class IsSelfOrAdmin(permissions.BasePermission):
             return obj.user == request.user
 
         return obj == request.user
+
+
+# ============================================================================
+# Capability-based Permissions (Subscription-driven)
+# ============================================================================
+
+
+class CanCreateEvents(permissions.BasePermission):
+    """
+    User can create events if they have organizer or pro plan.
+    Checks both capability and quota limits.
+    """
+
+    message = "Event creation requires organizer or pro plan."
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+
+        from billing.capability_service import capability_service
+
+        # Check capability (subscription plan)
+        if not capability_service.can_create_events(request.user):
+            return False
+
+        # Check quota limit (if creating)
+        if request.method == "POST":
+            summary = capability_service.get_usage_summary(request.user)
+            # If remaining is 0 (and limit exists/is not None), deny
+            if summary.events_remaining is not None and summary.events_remaining <= 0:
+                self.message = f"Event creation limit reached ({summary.events_limit}/month). Please upgrade."
+                return False
+
+        return True
+
+
+class CanCreateCourses(permissions.BasePermission):
+    """
+    User can create courses if they have LMS or pro plan.
+    Checks both capability and quota limits.
+    """
+
+    message = "Course creation requires LMS or pro plan."
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+
+        from billing.capability_service import capability_service
+
+        # Check capability (subscription plan)
+        if not capability_service.can_create_courses(request.user):
+            return False
+
+        # Check quota limit (if creating)
+        if request.method == "POST":
+            summary = capability_service.get_usage_summary(request.user)
+            if summary.courses_remaining is not None and summary.courses_remaining <= 0:
+                self.message = f"Course creation limit reached ({summary.courses_limit}/month). Please upgrade."
+                return False
+
+        return True
+
+
+class CanIssueCertificates(permissions.BasePermission):
+    """
+    Checks if user can issue certificates based on subscription limits.
+    """
+
+    message = "Certificate issuance limit reached for your plan."
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+
+        from billing.capability_service import capability_service
+
+        # Only event/course creators can issue certificates
+        if not capability_service.can_issue_certificates(request.user):
+            self.message = "Certificate issuance requires Organizer, LMS, or Pro plan."
+            return False
+
+        # Check quota limit
+        summary = capability_service.get_usage_summary(request.user)
+        if summary.certificates_remaining is not None and summary.certificates_remaining <= 0:
+            self.message = f"Certificate issuance limit reached ({summary.certificates_limit}/month)."
+            return False
+
+        return True
+
+
+class HasActiveSubscription(permissions.BasePermission):
+    """
+    Requires user to have an active subscription.
+    Checks that user has a subscription in 'active' or 'trialing' status.
+    """
+
+    message = "Active subscription required."
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+
+        from billing.capability_service import capability_service
+
+        return capability_service.has_active_subscription(request.user)
+
+
+# ============================================================================
+# Legacy Permission Aliases (for migration period)
+# ============================================================================
+
+
+class IsOrganizer(permissions.BasePermission):
+    """
+    User can create events (has organizer or pro plan).
+    Legacy alias for CanCreateEvents.
+    """
+
+    message = "Event creation capability required."
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        return request.user.can_create_events or request.user.can_create_courses
+
+
+class IsOrganizerOrCourseManager(permissions.BasePermission):
+    """
+    User can create events or courses.
+    Legacy alias - checks if user has any content creation capability.
+    """
+
+    message = "Content creation capability required."
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        return request.user.can_create_events or request.user.can_create_courses
+
+
+class IsOrganizerOrOrgAdmin(permissions.BasePermission):
+    """
+    User can create events.
+    Legacy alias for CanCreateEvents (org admin concept removed).
+    """
+
+    message = "Event creation capability required."
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        return request.user.can_create_events
+
+
+# ============================================================================
+# Admin Permissions
+# ============================================================================
+
+
+class IsAdminOrReadOnly(permissions.BasePermission):
+    """Admin users can write, others can only read."""
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return request.user.is_authenticated and request.user.is_staff

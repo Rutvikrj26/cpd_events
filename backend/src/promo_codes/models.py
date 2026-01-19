@@ -25,22 +25,14 @@ class PromoCode(BaseModel):
     """
 
     class DiscountType(models.TextChoices):
-        PERCENTAGE = 'percentage', 'Percentage'
-        FIXED_AMOUNT = 'fixed_amount', 'Fixed Amount'
+        PERCENTAGE = "percentage", "Percentage"
+        FIXED_AMOUNT = "fixed_amount", "Fixed Amount"
 
     # =========================================
     # Ownership
     # =========================================
     owner = models.ForeignKey(
-        'accounts.User', on_delete=models.CASCADE, related_name='promo_codes', help_text="Organizer who created this code"
-    )
-    organization = models.ForeignKey(
-        'organizations.Organization',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='promo_codes',
-        help_text="Organization that owns this code",
+        "accounts.User", on_delete=models.CASCADE, related_name="promo_codes", help_text="Organizer who created this code"
     )
 
     # =========================================
@@ -54,14 +46,14 @@ class PromoCode(BaseModel):
     # =========================================
     currency = models.CharField(
         max_length=3,
-        default='USD',
+        default="USD",
         help_text="Currency code for fixed-amount discounts",
     )
     discount_type = models.CharField(max_length=20, choices=DiscountType.choices, default=DiscountType.PERCENTAGE)
     discount_value = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.01'))],
+        validators=[MinValueValidator(Decimal("0.01"))],
         help_text="Discount amount (percentage 0-100 or fixed amount in currency)",
     )
 
@@ -93,15 +85,15 @@ class PromoCode(BaseModel):
     # =========================================
     # If events is empty, code applies to ALL events by this organizer
     events = models.ManyToManyField(
-        'events.Event',
+        "events.Event",
         blank=True,
-        related_name='promo_codes',
+        related_name="promo_codes",
         help_text="Specific events this code applies to (empty = all organizer events)",
     )
 
     # Minimum order value
     minimum_order_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal('0.00'), help_text="Minimum ticket price to use this code"
+        max_digits=10, decimal_places=2, default=Decimal("0.00"), help_text="Minimum ticket price to use this code"
     )
 
     # =========================================
@@ -110,16 +102,16 @@ class PromoCode(BaseModel):
     first_time_only = models.BooleanField(default=False, help_text="Only for users who haven't registered for any event before")
 
     class Meta:
-        db_table = 'promo_codes'
-        ordering = ['-created_at']
+        db_table = "promo_codes"
+        ordering = ["-created_at"]
         # Code must be unique per owner (organizer can't have duplicate codes)
-        unique_together = [['owner', 'code']]
+        unique_together = [["owner", "code"]]
         indexes = [
-            models.Index(fields=['owner', 'is_active']),
-            models.Index(fields=['code']),
+            models.Index(fields=["owner", "is_active"]),
+            models.Index(fields=["code"]),
         ]
-        verbose_name = 'Promo Code'
-        verbose_name_plural = 'Promo Codes'
+        verbose_name = "Promo Code"
+        verbose_name_plural = "Promo Codes"
 
     def __str__(self):
         return f"{self.code} ({self.get_discount_display()})"
@@ -184,27 +176,27 @@ class PromoCode(BaseModel):
             The discount amount (not the final price)
         """
         if self.discount_type == self.DiscountType.PERCENTAGE:
-            discount = (original_price * self.discount_value) / Decimal('100')
+            discount = (original_price * self.discount_value) / Decimal("100")
             if self.max_discount_amount:
                 discount = min(discount, self.max_discount_amount)
         else:
             discount = min(self.discount_value, original_price)
 
-        return discount.quantize(Decimal('0.01'))
+        return discount.quantize(Decimal("0.01"))
 
     def increment_usage(self):
         """Increment usage count."""
         from django.db.models import F
 
-        self.current_uses = F('current_uses') + 1
-        self.save(update_fields=['current_uses', 'updated_at'])
+        self.current_uses = F("current_uses") + 1
+        self.save(update_fields=["current_uses", "updated_at"])
 
     def decrement_usage(self, count: int = 1):
         """Decrement usage count (used when a payment fails or is refunded)."""
         from django.db.models import F
 
         PromoCode.objects.filter(pk=self.pk, current_uses__gte=count).update(
-            current_uses=F('current_uses') - count,
+            current_uses=F("current_uses") - count,
             updated_at=timezone.now(),
         )
 
@@ -216,17 +208,17 @@ class PromoCodeUsage(BaseModel):
     Tracks which registration used which code for audit and limit enforcement.
     """
 
-    promo_code = models.ForeignKey(PromoCode, on_delete=models.CASCADE, related_name='usages')
-    registration = models.ForeignKey('registrations.Registration', on_delete=models.CASCADE, related_name='promo_code_usages')
+    promo_code = models.ForeignKey(PromoCode, on_delete=models.CASCADE, related_name="usages")
+    registration = models.ForeignKey("registrations.Registration", on_delete=models.CASCADE, related_name="promo_code_usages")
 
     # Denormalized for easy querying
     user_email = models.EmailField(db_index=True, help_text="Email used for registration")
     user = models.ForeignKey(
-        'accounts.User',
+        "accounts.User",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='promo_code_usages',
+        related_name="promo_code_usages",
         help_text="User account if registered",
     )
 
@@ -236,14 +228,14 @@ class PromoCodeUsage(BaseModel):
     final_price = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
-        db_table = 'promo_code_usages'
-        ordering = ['-created_at']
+        db_table = "promo_code_usages"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['promo_code', 'user_email']),
-            models.Index(fields=['registration']),
+            models.Index(fields=["promo_code", "user_email"]),
+            models.Index(fields=["registration"]),
         ]
-        verbose_name = 'Promo Code Usage'
-        verbose_name_plural = 'Promo Code Usages'
+        verbose_name = "Promo Code Usage"
+        verbose_name_plural = "Promo Code Usages"
 
     @classmethod
     def release_for_registration(cls, registration) -> int:
@@ -253,7 +245,7 @@ class PromoCodeUsage(BaseModel):
         Returns:
             Number of usages released
         """
-        usages = cls.objects.filter(registration=registration).select_related('promo_code')
+        usages = cls.objects.filter(registration=registration).select_related("promo_code")
         count = 0
         for usage in usages:
             usage.promo_code.decrement_usage()

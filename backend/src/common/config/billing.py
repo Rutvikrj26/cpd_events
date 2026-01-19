@@ -3,7 +3,7 @@ Billing configuration constants.
 
 Centralizes all billing-related magic numbers including:
 - Trial and grace period settings
-- Plan limits (individual and organization)
+- Plan limits
 - Platform fees
 """
 
@@ -146,96 +146,31 @@ class TicketingTaxCodes:
 
 
 # =============================================================================
-# Individual Subscription Plan Limits
+# Plan Limits
 # =============================================================================
 
-
-class IndividualPlanLimits:
-    """
-    Feature limits for individual user subscription plans.
-
-    None = unlimited for that feature.
-
-    Plans:
-    - ATTENDEE: Free tier, can only attend events (no creation)
-    - ORGANIZER: Paid tier for individual organizers
-    - ORGANIZATION: Paid tier with team features
-    """
-
-    ATTENDEE: dict = {
+PLAN_LIMITS = {
+    "attendee": {
         "events_per_month": 0,
         "courses_per_month": 0,
-        "certificates_per_month": 0,
-        "max_attendees_per_event": 0,
-    }
-
-    ORGANIZER: dict = {
+        "certificates_per_month": 10,
+    },
+    "organizer": {
         "events_per_month": 30,
         "courses_per_month": 0,
         "certificates_per_month": 500,
-        "max_attendees_per_event": 500,
-    }
-
-    LMS: dict = {
+    },
+    "lms": {
         "events_per_month": 0,
         "courses_per_month": 30,
         "certificates_per_month": 500,
-        "max_attendees_per_event": 0,
-    }
-
-    ORGANIZATION: dict = {
-        "events_per_month": None,  # Unlimited
-        "courses_per_month": None,  # Unlimited
-        "certificates_per_month": None,  # Unlimited
-        "max_attendees_per_event": 2000,
-    }
-
-    @classmethod
-    def get_limits(cls, plan: str) -> dict:
-        """Get limits for a plan by name."""
-        limits_map = {
-            "attendee": cls.ATTENDEE,
-            "organizer": cls.ORGANIZER,
-            "lms": cls.LMS,
-            "organization": cls.ORGANIZATION,
-        }
-        return limits_map.get(plan, cls.ATTENDEE)
-
-
-# =============================================================================
-# Organization Subscription Plan Limits
-# =============================================================================
-
-
-class OrganizationPlanLimits:
-    """
-    Feature limits for organization subscription plans.
-
-    Organization plan structure:
-    - $199/month base price
-    - 1 Admin included (can create courses + events)
-    - Unlimited Course Instructors (free)
-    - Can add Organizers (requires separate organizer subscription)
-    """
-
-    # Organization Plan - $199/month
-    ORGANIZATION: dict = {
-        "name": "Organization",
-        "price_cents": 19900,  # $199/month base
-        "events_per_month": None,  # Unlimited (admin has organizer capabilities)
-        "courses_per_month": None,  # Unlimited
-        "max_attendees_per_event": None,  # Unlimited
-        "course_instructors_limit": None,  # Unlimited free instructors
-        "admin_has_organizer_capabilities": True,  # Admin can create events
-    }
-
-    @classmethod
-    def get_limits(cls, plan: str) -> dict:
-        """Get limits for a plan by name."""
-        limits_map = {
-            "organization": cls.ORGANIZATION,
-        }
-        return limits_map.get(plan, cls.ORGANIZATION)
+    },
+    "pro": {
+        "events_per_month": None,  # unlimited
+        "courses_per_month": None,  # unlimited
+        "certificates_per_month": None,  # unlimited
+    },
+}
 
 
 # =============================================================================
@@ -257,7 +192,6 @@ __all__ = [
     "PlatformFees",
     "TicketingFees",
     "TicketingTaxCodes",
-    "IndividualPlanLimits",
-    "OrganizationPlanLimits",
+    "PLAN_LIMITS",
     "DefaultPlan",
 ]

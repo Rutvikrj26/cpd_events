@@ -29,7 +29,6 @@ class EmailService:
         "password_reset": "emails/password_reset.html",
         "email_verification": "emails/email_verification.html",
         "invitation": "emails/invitation.html",
-        "organization_invitation": "emails/organization_invitation.html",
         "payment_failed": "emails/payment_failed.html",
         "waitlist_promotion": "emails/waitlist_promotion.html",
         "refund_processed": "emails/refund_processed.html",
@@ -47,7 +46,6 @@ class EmailService:
         "password_reset": "Password Reset Request",
         "email_verification": "Verify Your Email",
         "invitation": "You're invited: {event_title}",
-        "organization_invitation": "You're invited to join {organization_name}",
         "payment_failed": "Payment Failed: Invoice #{invoice_number}",
         "waitlist_promotion": "Spot Available: {event_title}",
         "refund_processed": "Refund Processed: {event_title}",
@@ -177,16 +175,6 @@ class EmailService:
 
         elif template == "event_reminder":
             lines.append(f"<p><strong>{context.get('event_title', 'Your event')}</strong> starts soon.</p>")
-
-        elif template == "organization_invitation":
-            lines.append(
-                f"<p>{context.get('inviter_name', 'Someone')} has invited you to join <strong>{context.get('organization_name', 'their organization')}</strong> as a <strong>{context.get('role', 'member')}</strong>.</p>"
-            )
-            if context.get("invitation_url"):
-                lines.append(
-                    f"<p><a href='{context['invitation_url']}' style='background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Accept Invitation</a></p>"
-                )
-            lines.append("<p>This invitation will expire in 7 days.</p>")
 
         else:
             for key, value in context.items():
@@ -509,7 +497,7 @@ class AttendanceMatcher:
     This service aggregates that data and updates registration attendance summaries.
     """
 
-    def match_attendance(self, event) -> dict[str, Any]:
+    def match_attendance(self, event, pull_from_zoom: bool = False) -> dict[str, Any]:
         """
         Aggregate attendance data and update registration summaries.
 
@@ -522,7 +510,48 @@ class AttendanceMatcher:
         Returns:
             Dict with match results: {matched, unmatched, eligible, ineligible}
         """
+        from django.utils import timezone
+        from django.utils.dateparse import parse_datetime
+
         from registrations.models import AttendanceRecord, Registration
+
+        if pull_from_zoom:
+            from accounts.services import zoom_service
+
+            zoom_result = zoom_service.get_past_meeting_participants(event)
+            if zoom_result.get("success"):
+                participants = zoom_result.get("data", {}).get("participants", [])
+                for participant in participants:
+                    email = (participant.get("user_email") or "").lower()
+                    if not email:
+                        continue
+
+                    registration = Registration.objects.filter(event=event, email__iexact=email).first()
+                    join_time = parse_datetime(participant.get("join_time") or "")
+                    leave_time = parse_datetime(participant.get("leave_time") or "")
+                    duration = participant.get("duration") or 0
+                    duration_minutes = int(duration / 60) if duration and duration > 1000 else int(duration)
+
+                    defaults = {
+                        "registration": registration,
+                        "zoom_user_email": email,
+                        "zoom_user_name": participant.get("name") or "",
+                        "join_time": join_time or timezone.now(),
+                        "leave_time": leave_time,
+                        "duration_minutes": duration_minutes,
+                        "is_matched": bool(registration),
+                        "matched_at": timezone.now() if registration else None,
+                    }
+
+                    participant_id = participant.get("id") or ""
+                    if participant_id:
+                        AttendanceRecord.objects.update_or_create(
+                            event=event,
+                            zoom_participant_id=participant_id,
+                            defaults=defaults,
+                        )
+                    else:
+                        AttendanceRecord.objects.create(event=event, **defaults)
 
         results = {"matched": 0, "unmatched": 0, "eligible": 0, "ineligible": 0}
 

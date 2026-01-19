@@ -20,6 +20,7 @@ class Command(BaseCommand):
         email = options['email']
         password = options['password']
         full_name = options['name']
+        first_name, last_name = User.split_full_name(full_name)
 
         if User.objects.filter(email=email).exists():
             self.stdout.write(self.style.WARNING(f'User {email} already exists. Updating to superuser...'))
@@ -35,6 +36,7 @@ class Command(BaseCommand):
             User.objects.create_superuser(
                 email=email,
                 password=password,
-                full_name=full_name,
+                first_name=first_name,
+                last_name=last_name,
             )
             self.stdout.write(self.style.SUCCESS(f'Successfully created superuser: {email}'))

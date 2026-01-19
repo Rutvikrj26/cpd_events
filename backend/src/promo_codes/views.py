@@ -7,8 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from common.permissions import IsOrganizer
-from common.rbac import roles
+from common.permissions import CanCreateEvents
 from events.models import Event
 
 from .models import PromoCode
@@ -24,7 +23,6 @@ from .services import (
 )
 
 
-@roles('organizer', 'admin', route_name='promo_codes')
 class PromoCodeViewSet(viewsets.ModelViewSet):
     """
     API endpoints for managing promo codes (organizer).
@@ -38,21 +36,15 @@ class PromoCodeViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = PromoCodeSerializer
-    permission_classes = [IsAuthenticated, IsOrganizer]
-    lookup_field = 'uuid'
+    permission_classes = [IsAuthenticated, CanCreateEvents]
+    lookup_field = "uuid"
 
     def get_queryset(self):
-        """Filter to codes owned by current user or their organization."""
+        """Filter to codes owned by current user."""
         user = self.request.user
-        queryset = PromoCode.objects.filter(owner=user)
+        return PromoCode.objects.filter(owner=user).prefetch_related("events").distinct()
 
-        # Include organization codes if user belongs to one
-        if hasattr(user, 'organization') and user.organization:
-            queryset = queryset | PromoCode.objects.filter(organization=user.organization)
-
-        return queryset.prefetch_related('events').distinct()
-
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def usages(self, request, uuid=None):
         """
         Get usage records for a promo code.
@@ -60,12 +52,12 @@ class PromoCodeViewSet(viewsets.ModelViewSet):
         GET /promo-codes/{uuid}/usages/
         """
         promo_code = self.get_object()
-        usages = promo_code.usages.select_related('registration', 'registration__event').order_by('-created_at')
+        usages = promo_code.usages.select_related("registration", "registration__event").order_by("-created_at")
 
         serializer = PromoCodeUsageSerializer(usages, many=True)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def toggle_active(self, request, uuid=None):
         """
         Toggle promo code active status.
@@ -74,17 +66,16 @@ class PromoCodeViewSet(viewsets.ModelViewSet):
         """
         promo_code = self.get_object()
         promo_code.is_active = not promo_code.is_active
-        promo_code.save(update_fields=['is_active', 'updated_at'])
+        promo_code.save(update_fields=["is_active", "updated_at"])
 
         return Response(
             {
-                'is_active': promo_code.is_active,
-                'message': f"Promo code {'activated' if promo_code.is_active else 'deactivated'}.",
+                "is_active": promo_code.is_active,
+                "message": f"Promo code {'activated' if promo_code.is_active else 'deactivated'}.",
             }
         )
 
 
-@roles('public', route_name='public_promo_codes')
 class PublicPromoCodeViewSet(viewsets.ViewSet):
     """
     Public API for validating promo codes during registration.
@@ -92,7 +83,7 @@ class PublicPromoCodeViewSet(viewsets.ViewSet):
 
     permission_classes = [AllowAny]
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def validate(self, request):
         """
         Validate a promo code and return discount preview.
@@ -128,15 +119,15 @@ class PublicPromoCodeViewSet(viewsets.ViewSet):
         serializer = ValidatePromoCodeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        code = serializer.validated_data['code']
-        event_uuid = serializer.validated_data['event_uuid']
-        email = serializer.validated_data['email']
+        code = serializer.validated_data["code"]
+        event_uuid = serializer.validated_data["event_uuid"]
+        email = serializer.validated_data["email"]
 
         # Get event
         try:
             event = Event.objects.get(uuid=event_uuid, deleted_at__isnull=True)
         except Event.DoesNotExist:
-            return Response({'valid': False, 'error': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"valid": False, "error": "Event not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Get current user if authenticated
         user = request.user if request.user.is_authenticated else None
@@ -146,6 +137,6 @@ class PublicPromoCodeViewSet(viewsets.ViewSet):
             return Response(result)
 
         except PromoCodeNotFoundError as e:
-            return Response({'valid': False, 'error': str(e)}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"valid": False, "error": str(e)}, status=status.HTTP_404_NOT_FOUND)
         except PromoCodeError as e:
-            return Response({'valid': False, 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"valid": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

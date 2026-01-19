@@ -127,13 +127,6 @@ class StripeProductAdmin(admin.ModelAdmin):
             },
         ),
         (
-            'Seat Configuration',
-            {
-                'fields': ('included_seats', 'seat_price_cents'),
-                'description': 'Seat limits and pricing for organization plans.',
-            },
-        ),
-        (
             'Stripe Integration',
             {
                 'fields': ('stripe_product_id',),

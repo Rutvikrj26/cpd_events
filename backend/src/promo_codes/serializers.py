@@ -10,7 +10,7 @@ from .models import PromoCode, PromoCodeUsage
 class PromoCodeSerializer(serializers.ModelSerializer):
     """Full promo code serializer for organizers."""
 
-    discount_display = serializers.CharField(source='get_discount_display', read_only=True)
+    discount_display = serializers.CharField(source="get_discount_display", read_only=True)
     uses_remaining = serializers.IntegerField(read_only=True)
     is_valid = serializers.BooleanField(read_only=True)
     is_expired = serializers.BooleanField(read_only=True)
@@ -20,35 +20,35 @@ class PromoCodeSerializer(serializers.ModelSerializer):
     class Meta:
         model = PromoCode
         fields = [
-            'uuid',
-            'code',
-            'description',
-            'currency',
-            'discount_type',
-            'discount_value',
-            'max_discount_amount',
-            'discount_display',
-            'is_active',
-            'valid_from',
-            'valid_until',
-            'max_uses',
-            'max_uses_per_user',
-            'current_uses',
-            'uses_remaining',
-            'minimum_order_amount',
-            'first_time_only',
-            'is_valid',
-            'is_expired',
-            'event_uuids',
-            'events_data',
-            'created_at',
-            'updated_at',
+            "uuid",
+            "code",
+            "description",
+            "currency",
+            "discount_type",
+            "discount_value",
+            "max_discount_amount",
+            "discount_display",
+            "is_active",
+            "valid_from",
+            "valid_until",
+            "max_uses",
+            "max_uses_per_user",
+            "current_uses",
+            "uses_remaining",
+            "minimum_order_amount",
+            "first_time_only",
+            "is_valid",
+            "is_expired",
+            "event_uuids",
+            "events_data",
+            "created_at",
+            "updated_at",
         ]
-        read_only_fields = ['uuid', 'current_uses', 'created_at', 'updated_at']
+        read_only_fields = ["uuid", "current_uses", "created_at", "updated_at"]
 
     def get_events_data(self, obj):
         """Return basic event info for linked events."""
-        return [{'uuid': str(e.uuid), 'title': e.title} for e in obj.events.all()]
+        return [{"uuid": str(e.uuid), "title": e.title} for e in obj.events.all()]
 
     def validate_code(self, value):
         """Normalize code to uppercase."""
@@ -62,28 +62,26 @@ class PromoCodeSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """Cross-field validation."""
-        discount_type = data.get('discount_type', getattr(self.instance, 'discount_type', None))
-        discount_value = data.get('discount_value', getattr(self.instance, 'discount_value', None))
+        discount_type = data.get("discount_type", getattr(self.instance, "discount_type", None))
+        discount_value = data.get("discount_value", getattr(self.instance, "discount_value", None))
 
         if discount_type == PromoCode.DiscountType.PERCENTAGE:
             if discount_value and discount_value > 100:
-                raise serializers.ValidationError({'discount_value': 'Percentage discount cannot exceed 100%.'})
+                raise serializers.ValidationError({"discount_value": "Percentage discount cannot exceed 100%."})
 
         # Validate date range
-        valid_from = data.get('valid_from')
-        valid_until = data.get('valid_until')
+        valid_from = data.get("valid_from")
+        valid_until = data.get("valid_until")
         if valid_from and valid_until and valid_from >= valid_until:
-            raise serializers.ValidationError({'valid_until': 'End date must be after start date.'})
+            raise serializers.ValidationError({"valid_until": "End date must be after start date."})
 
         return data
 
     def create(self, validated_data):
-        event_uuids = validated_data.pop('event_uuids', [])
-        request = self.context.get('request')
+        event_uuids = validated_data.pop("event_uuids", [])
+        request = self.context.get("request")
 
-        promo_code = PromoCode.objects.create(
-            owner=request.user, organization=getattr(request.user, 'organization', None), **validated_data
-        )
+        promo_code = PromoCode.objects.create(owner=request.user, **validated_data)
 
         # Link events
         if event_uuids:
@@ -95,7 +93,7 @@ class PromoCodeSerializer(serializers.ModelSerializer):
         return promo_code
 
     def update(self, instance, validated_data):
-        event_uuids = validated_data.pop('event_uuids', None)
+        event_uuids = validated_data.pop("event_uuids", None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -105,7 +103,7 @@ class PromoCodeSerializer(serializers.ModelSerializer):
         if event_uuids is not None:
             from events.models import Event
 
-            request = self.context.get('request')
+            request = self.context.get("request")
             events = Event.objects.filter(uuid__in=event_uuids, owner=request.user, deleted_at__isnull=True)
             instance.events.set(events)
 
@@ -115,22 +113,22 @@ class PromoCodeSerializer(serializers.ModelSerializer):
 class PromoCodeUsageSerializer(serializers.ModelSerializer):
     """Serializer for usage records."""
 
-    promo_code_code = serializers.CharField(source='promo_code.code', read_only=True)
-    registration_uuid = serializers.UUIDField(source='registration.uuid', read_only=True)
-    event_title = serializers.CharField(source='registration.event.title', read_only=True)
+    promo_code_code = serializers.CharField(source="promo_code.code", read_only=True)
+    registration_uuid = serializers.UUIDField(source="registration.uuid", read_only=True)
+    event_title = serializers.CharField(source="registration.event.title", read_only=True)
 
     class Meta:
         model = PromoCodeUsage
         fields = [
-            'uuid',
-            'promo_code_code',
-            'registration_uuid',
-            'event_title',
-            'user_email',
-            'original_price',
-            'discount_amount',
-            'final_price',
-            'created_at',
+            "uuid",
+            "promo_code_code",
+            "registration_uuid",
+            "event_title",
+            "user_email",
+            "original_price",
+            "discount_amount",
+            "final_price",
+            "created_at",
         ]
 
 

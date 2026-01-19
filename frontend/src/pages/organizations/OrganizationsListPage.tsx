@@ -50,16 +50,18 @@ const OrganizationsListPage: React.FC = () => {
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Organizations</h1>
+                    <h1 className="text-3xl font-bold tracking-tight">Teams</h1>
                     <p className="text-muted-foreground mt-1">
-                        Manage your organizations and team accounts
+                        Manage your collaborative teams and shared accounts
                     </p>
                 </div>
                 {hasFeature('can_create_organization') && (
-                    <Button onClick={() => navigate('/organizations/new')}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Organization
-                    </Button>
+                    <Link to="/contact?subject=New%20Organization%20Deployment">
+                        <Button>
+                            <Building2 className="h-4 w-4 mr-2" />
+                            Request New Organization
+                        </Button>
+                    </Link>
                 )}
             </div>
 
@@ -69,17 +71,19 @@ const OrganizationsListPage: React.FC = () => {
                     <CardHeader>
                         <div className="flex items-center gap-2">
                             <Sparkles className="h-5 w-5 text-primary" />
-                            <CardTitle className="text-lg">Upgrade to Organization</CardTitle>
+                            <CardTitle className="text-lg">Scale to a Branded Organization</CardTitle>
                         </div>
                         <CardDescription>
-                            Create an organization to invite team members and collaborate on events.
-                            Your existing {linkableData.events_count} event(s) and {linkableData.templates_count} template(s) will be transferred.
+                            Get a dedicated standalone deployment with your own branding and domain.
+                            Perfect for growing training agencies.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <Button onClick={() => navigate('/organizations/new?from=account')}>
-                            Create Your Organization
-                        </Button>
+                        <Link to="/contact?subject=Organization%20Upgrade">
+                            <Button>
+                                Contact Sales for Upgrade
+                            </Button>
+                        </Link>
                     </CardContent>
                 </Card>
             )}
@@ -109,18 +113,20 @@ const OrganizationsListPage: React.FC = () => {
                     <CardContent>
                         <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                         <h3 className="text-lg font-semibold mb-2">
-                            {hasFeature('can_create_organization') ? 'No Organizations Yet' : 'No Organizations'}
+                            {hasFeature('can_create_organization') ? 'No Active Teams' : 'No Teams Found'}
                         </h3>
                         <p className="text-muted-foreground mb-4">
                             {hasFeature('can_create_organization')
-                                ? 'Create an organization to collaborate with team members on events and courses.'
-                                : 'You are not a member of any organizations yet.'}
+                                ? 'Need a dedicated branded deployment for your team? Contact us to set up your organization.'
+                                : 'You are not a member of any teams yet.'}
                         </p>
                         {hasFeature('can_create_organization') && (
-                            <Button onClick={() => navigate('/organizations/new')}>
-                                <Plus className="h-4 w-4 mr-2" />
-                                Create Your First Organization
-                            </Button>
+                            <Link to="/contact">
+                                <Button>
+                                    <Building2 className="h-4 w-4 mr-2" />
+                                    Contact for Organization Account
+                                </Button>
+                            </Link>
                         )}
                     </CardContent>
                 </Card>

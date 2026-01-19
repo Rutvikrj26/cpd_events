@@ -84,8 +84,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                         <ListItem href="/products/lms" title="LMS & Courses">
                           Create and sell self-paced online courses.
                         </ListItem>
-                        <ListItem href="/products/organizations" title="Organizations">
-                          Tools for training agencies and teams.
+                        <ListItem href="/products/organizations" title="Branded Deployments">
+                          Standalone platforms for enterprise teams.
                         </ListItem>
                       </ul>
                     </NavigationMenuContent>
@@ -250,7 +250,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  Organizations
+                  Branded Deployments
                 </Link>
               </div>
 

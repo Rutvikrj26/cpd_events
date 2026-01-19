@@ -108,9 +108,6 @@ class SubscriptionCreateSerializer(serializers.Serializer):
     )
 
     def validate_plan(self, value):
-        user = self.context['request'].user
-        if hasattr(user, 'subscription') and user.subscription.plan == value:
-            raise serializers.ValidationError("Already on this plan")
         return value
 
 

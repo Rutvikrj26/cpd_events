@@ -8,7 +8,7 @@ organized by domain. Import from here for cleaner code:
 
 Or import specific modules:
 
-    from common.config.billing import TrialConfig, IndividualPlanLimits
+    from common.config.billing import PLAN_LIMITS
     from common.config.events import EventDuration, AttendanceThresholds
 
 All constants are validated at import time - invalid values will raise
@@ -42,8 +42,7 @@ from .api import (
 )
 from .billing import (
     DefaultPlan,
-    IndividualPlanLimits,
-    OrganizationPlanLimits,
+    PLAN_LIMITS,
     PlatformFees,
     TicketingFees,
     TicketingTaxCodes,
@@ -75,36 +74,35 @@ from .learning import (
 
 __all__ = [
     # Billing
-    'PlatformFees',
-    'TicketingFees',
-    'TicketingTaxCodes',
-    'IndividualPlanLimits',
-    'OrganizationPlanLimits',
-    'DefaultPlan',
+    "PlatformFees",
+    "TicketingFees",
+    "TicketingTaxCodes",
+    "PLAN_LIMITS",
+    "DefaultPlan",
     # Events
-    'EventDuration',
-    'AttendanceThresholds',
-    'SessionDefaults',
-    'EventDuplication',
+    "EventDuration",
+    "AttendanceThresholds",
+    "SessionDefaults",
+    "EventDuplication",
     # Accounts
-    'TokenExpiry',
-    'TokenLength',
-    'JwtConfig',
-    'ZoomConfig',
+    "TokenExpiry",
+    "TokenLength",
+    "JwtConfig",
+    "ZoomConfig",
     # Learning
-    'ScoringDefaults',
-    'AssignmentDefaults',
-    'CourseDefaults',
-    'ModuleDefaults',
+    "ScoringDefaults",
+    "AssignmentDefaults",
+    "CourseDefaults",
+    "ModuleDefaults",
     # Integrations
-    'WebhookConfig',
-    'ErrorTruncation',
-    'FeedbackRatings',
-    'TimeConstants',
+    "WebhookConfig",
+    "ErrorTruncation",
+    "FeedbackRatings",
+    "TimeConstants",
     # API
-    'Pagination',
-    'ThrottleRates',
-    'UploadLimits',
-    'CertificateTemplateDimensions',
-    'VerificationCodes',
+    "Pagination",
+    "ThrottleRates",
+    "UploadLimits",
+    "CertificateTemplateDimensions",
+    "VerificationCodes",
 ]

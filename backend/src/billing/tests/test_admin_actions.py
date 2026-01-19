@@ -8,10 +8,9 @@ from django.utils import timezone
 
 from billing.admin import SubscriptionAdmin
 from billing.models import Subscription
-from organizations.admin import OrganizationSubscriptionAdmin
-from organizations.models import Organization, OrganizationSubscription
 
 User = get_user_model()
+
 
 class MockRequest:
     def __init__(self, user=None):
@@ -19,16 +18,15 @@ class MockRequest:
         self.method = "POST"
         self._messages = []
 
-    def add_message(self, level, message, extra_tags=''):
+    def add_message(self, level, message, extra_tags=""):
         self._messages.append(message)
 
 
 @pytest.mark.django_db
 class TestAdminTrialSync:
-
     @pytest.fixture
     def user(self):
-        user = User.objects.create_user(email="test@example.com", password="password", account_type="attendee")
+        user = User.objects.create_user(email="test@example.com", password="password")
         return user
 
     @pytest.fixture
@@ -41,42 +39,16 @@ class TestAdminTrialSync:
         return sub
 
     @pytest.fixture
-    def organization(self, user):
-        # Organization creation triggers signal for OrganizationSubscription
-        return Organization.objects.create(name="Test Org", slug="test-org", created_by=user)
-
-    @pytest.fixture
-    def org_subscription(self, organization):
-        sub = OrganizationSubscription.objects.get(organization=organization)
-        sub.stripe_subscription_id = "sub_org_123"
-        sub.trial_ends_at = timezone.now() + timedelta(days=10)
-        sub.save()
-        return sub
-
-    @pytest.fixture
     def mock_stripe_service(self):
         # Patch the class where it is defined, because it is imported locally in the function
-        with patch('billing.services.StripeService') as mock:
+        with patch("billing.services.StripeService") as mock:
             instance = mock.return_value
-            instance.update_subscription_trial.return_value = {'success': True}
-            yield instance
-
-    @pytest.fixture
-    def mock_org_stripe_service(self):
-        # Same here
-        with patch('billing.services.StripeService') as mock:
-            instance = mock.return_value
-            instance.update_subscription_trial.return_value = {'success': True}
+            instance.update_subscription_trial.return_value = {"success": True}
             yield instance
 
     @pytest.fixture
     def mock_messages(self):
-        with patch('billing.admin.messages') as mock:
-            yield mock
-
-    @pytest.fixture
-    def mock_org_messages(self):
-        with patch('organizations.admin.messages') as mock:
+        with patch("billing.admin.messages") as mock:
             yield mock
 
     def test_subscription_admin_save_model_syncs_trial(self, user, subscription, mock_stripe_service, mock_messages):
@@ -89,14 +61,12 @@ class TestAdminTrialSync:
         subscription.trial_ends_at = new_trial_end
 
         form = MagicMock()
-        form.changed_data = ['trial_ends_at']
+        form.changed_data = ["trial_ends_at"]
 
         admin.save_model(request, subscription, form, change=True)
 
         # Verify service was called
-        mock_stripe_service.update_subscription_trial.assert_called_once_with(
-            "sub_test_123", new_trial_end
-        )
+        mock_stripe_service.update_subscription_trial.assert_called_once_with("sub_test_123", new_trial_end)
         # Verify message added (optional)
         mock_messages.success.assert_called()
 
@@ -106,28 +76,8 @@ class TestAdminTrialSync:
         request = MockRequest(user=user)
 
         form = MagicMock()
-        form.changed_data = [] # Nothing changed
+        form.changed_data = []  # Nothing changed
 
         admin.save_model(request, subscription, form, change=True)
 
         mock_stripe_service.update_subscription_trial.assert_not_called()
-
-    def test_org_subscription_admin_save_model_syncs_trial(self, user, org_subscription, mock_org_stripe_service, mock_org_messages):
-        site = AdminSite()
-        admin = OrganizationSubscriptionAdmin(OrganizationSubscription, site)
-        request = MockRequest(user=user)
-
-        # Simulate form data with changed trial_ends_at
-        new_trial_end = timezone.now() + timedelta(days=45)
-        org_subscription.trial_ends_at = new_trial_end
-
-        form = MagicMock()
-        form.changed_data = ['trial_ends_at']
-
-        admin.save_model(request, org_subscription, form, change=True)
-
-        # Verify service was called
-        mock_org_stripe_service.update_subscription_trial.assert_called_once_with(
-            "sub_org_123", new_trial_end
-        )
-        mock_org_messages.success.assert_called()

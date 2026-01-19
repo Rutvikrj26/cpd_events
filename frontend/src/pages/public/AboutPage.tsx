@@ -30,7 +30,7 @@ export function AboutPage() {
                             <span className="gradient-text">Development</span>
                         </h1>
                         <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-                            We're on a mission to make CPD event management effortless for organizations worldwide.
+                            We're on a mission to make CPD event management effortless for individual providers and large organizations alike.
                         </p>
                     </div>
                 </div>

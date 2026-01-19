@@ -43,7 +43,6 @@ def expire_trials():
     Business Rule: Auto-downgrade to attendee plan.
     - Sets subscription status to CANCELED
     - Downgrades subscription plan to ATTENDEE
-    - Downgrades user account_type to ATTENDEE
     - Sends notification email
     - Creates in-app notification
     """

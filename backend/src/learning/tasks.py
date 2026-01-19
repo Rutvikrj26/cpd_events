@@ -74,7 +74,7 @@ def create_zoom_meeting_for_session(session_id: int):
     from learning.models import CourseSession
 
     try:
-        session = CourseSession.objects.select_related('course', 'course__created_by').get(id=session_id)
+        session = CourseSession.objects.select_related("course", "course__owner").get(id=session_id)
 
         # Check if meeting already exists
         if session.zoom_meeting_id:

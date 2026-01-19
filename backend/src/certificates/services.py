@@ -75,7 +75,7 @@ class CertificateService:
                 template_reader = PdfReader(BytesIO(template_bytes))
                 if len(template_reader.pages) == 0:
                     logger.error("Template PDF has no pages")
-                    return b''
+                    return b""
 
                 template_page = template_reader.pages[0]
                 page_width = float(template_page.mediabox.width)
@@ -95,19 +95,19 @@ class CertificateService:
 
             # Draw text fields
             for field_name, field_data in positions.items():
-                text = data.get(field_name, '')
+                text = data.get(field_name, "")
                 if not text:
                     continue
 
-                x = field_data.get('x', 100)
-                y = page_height - field_data.get('y', 100)  # Convert from top-left to PDF coords
-                font_size = field_data.get('fontSize', field_data.get('font_size', 12))
-                font_family = field_data.get('fontFamily', field_data.get('font', 'Helvetica'))
+                x = field_data.get("x", 100)
+                y = page_height - field_data.get("y", 100)  # Convert from top-left to PDF coords
+                font_size = field_data.get("fontSize", field_data.get("font_size", 12))
+                font_family = field_data.get("fontFamily", field_data.get("font", "Helvetica"))
 
                 try:
                     c.setFont(font_family, font_size)
                 except KeyError:
-                    c.setFont('Helvetica', font_size)
+                    c.setFont("Helvetica", font_size)
 
                 c.setFillColor(black)
                 c.drawString(x, y, str(text))
@@ -134,10 +134,10 @@ class CertificateService:
 
         except ImportError as e:
             logger.error(f"PDF library not installed: {e}")
-            return b''
+            return b""
         except Exception as e:
             logger.error(f"PDF rendering failed: {e}")
-            return b''
+            return b""
 
     def generate_template_preview(self, template, field_positions: dict, sample_data: dict) -> bytes | None:
         """
@@ -181,19 +181,19 @@ class CertificateService:
 
             # Draw text at field positions
             for field_name, position in (field_positions or {}).items():
-                text = sample_data.get(field_name, '')
+                text = sample_data.get(field_name, "")
                 if not text:
                     continue
 
-                x = position.get('x', 100)
-                y = page_height - position.get('y', 100)  # Convert from top-left to PDF coords
-                font_size = position.get('fontSize', 24)
-                font_family = position.get('fontFamily', 'Helvetica')
+                x = position.get("x", 100)
+                y = page_height - position.get("y", 100)  # Convert from top-left to PDF coords
+                font_size = position.get("fontSize", 24)
+                font_family = position.get("fontFamily", "Helvetica")
 
                 try:
                     c.setFont(font_family, font_size)
                 except KeyError:
-                    c.setFont('Helvetica', font_size)
+                    c.setFont("Helvetica", font_size)
 
                 c.setFillColor(black)
                 c.drawString(x, y, str(text))
@@ -231,17 +231,17 @@ class CertificateService:
             from common.storage import gcs_storage
 
             file_url = template.file_url
-            if file_url.startswith('gs://'):
-                path = '/'.join(file_url.split('/')[3:])
+            if file_url.startswith("gs://"):
+                path = "/".join(file_url.split("/")[3:])
                 return gcs_storage.download(path)
-            elif file_url.startswith('/media/'):
+            elif file_url.startswith("/media/"):
                 # Local file
                 import os
 
                 from django.conf import settings
 
-                local_path = os.path.join(settings.MEDIA_ROOT, file_url.replace('/media/', ''))
-                with open(local_path, 'rb') as f:
+                local_path = os.path.join(settings.MEDIA_ROOT, file_url.replace("/media/", ""))
+                with open(local_path, "rb") as f:
                     return f.read()
             else:
                 logger.warning(f"Unknown file URL format: {file_url}")
@@ -268,12 +268,12 @@ class CertificateService:
         # Draw text at field positions
         for field_name, position in (field_positions or {}).items():
             text = sample_data.get(field_name, field_name)
-            x = position.get('x', 100)
-            y = height - position.get('y', 100)
-            font_size = position.get('fontSize', 24)
+            x = position.get("x", 100)
+            y = height - position.get("y", 100)
+            font_size = position.get("fontSize", 24)
 
             c.setFillColorRGB(0, 0, 0)
-            c.setFont('Helvetica', font_size)
+            c.setFont("Helvetica", font_size)
             c.drawString(x, y, str(text))
 
         c.save()
@@ -306,20 +306,20 @@ class CertificateService:
             url = gcs_storage.upload(
                 content=pdf_bytes,
                 path=path,
-                content_type='application/pdf',
+                content_type="application/pdf",
                 public=False,  # Use signed URLs for access
                 metadata={
-                    'certificate_id': str(certificate.uuid),
-                    'registration_id': str(certificate.registration.uuid),
-                    'event_id': str(certificate.registration.event.uuid),
-                    'issued_at': timezone.now().isoformat(),
+                    "certificate_id": str(certificate.uuid),
+                    "registration_id": str(certificate.registration.uuid),
+                    "event_id": str(certificate.registration.event.uuid),
+                    "issued_at": timezone.now().isoformat(),
                 },
             )
 
             if url:
                 certificate.file_url = url
                 certificate.file_generated_at = timezone.now()
-                certificate.save(update_fields=['file_url', 'file_generated_at', 'updated_at'])
+                certificate.save(update_fields=["file_url", "file_generated_at", "updated_at"])
                 logger.info(f"Certificate PDF uploaded to GCS: {path}")
                 return url
 
@@ -329,23 +329,23 @@ class CertificateService:
         # Fallback to local media storage
         try:
             # Create certificates directory if it doesn't exist
-            cert_dir = os.path.join(settings.MEDIA_ROOT, 'certificates')
+            cert_dir = os.path.join(settings.MEDIA_ROOT, "certificates")
             os.makedirs(cert_dir, exist_ok=True)
 
             # Save file locally
             filename = f"{certificate.uuid}.pdf"
             filepath = os.path.join(cert_dir, filename)
 
-            with open(filepath, 'wb') as f:
+            with open(filepath, "wb") as f:
                 f.write(pdf_bytes)
 
             # Build URL using MEDIA_URL
-            media_url = getattr(settings, 'MEDIA_URL', '/media/')
+            media_url = getattr(settings, "MEDIA_URL", "/media/")
             url = f"{media_url}certificates/{filename}"
 
             certificate.file_url = url
             certificate.file_generated_at = timezone.now()
-            certificate.save(update_fields=['file_url', 'file_generated_at', 'updated_at'])
+            certificate.save(update_fields=["file_url", "file_generated_at", "updated_at"])
             logger.info(f"Certificate PDF saved locally: {filepath}")
             return url
 
@@ -371,16 +371,16 @@ class CertificateService:
 
         # Extract path from gs:// URI or return as-is if already a URL
         file_url = certificate.file_url
-        if file_url.startswith('gs://'):
+        if file_url.startswith("gs://"):
             # Extract path from gs://bucket/path
-            path = '/'.join(file_url.split('/')[3:])
+            path = "/".join(file_url.split("/")[3:])
             return gcs_storage.get_signed_url(path, expiration_minutes)
 
         # For local paths, construct absolute URL
-        if file_url.startswith('/'):
+        if file_url.startswith("/"):
             from django.conf import settings
 
-            base_url = getattr(settings, 'SITE_URL', 'http://localhost:8000')
+            base_url = getattr(settings, "SITE_URL", "http://localhost:8000")
             return f"{base_url.rstrip('/')}{file_url}"
 
         # Already a public URL
@@ -399,73 +399,73 @@ class CertificateService:
             Dict with success status and certificate
         """
         from certificates.models import Certificate
+        from django.db import transaction
+        from billing.capability_service import capability_service
 
         try:
             event = registration.event
             owner = event.owner
-
-            # Check subscription certificate limit
-            subscription = getattr(owner, 'subscription', None)
-            if subscription:
-                if not subscription.check_certificate_limit():
-                    limit = subscription.limits.get('certificates_per_month')
-                    return {
-                        'success': False,
-                        'error': f"Certificate limit reached ({limit} per month). Please upgrade your plan to issue more certificates.",
-                        'limit_exceeded': True,
-                    }
 
             # Use event's template if not specified
             if not template:
                 template = event.certificate_template
 
             if not template:
-                return {'success': False, 'error': 'No certificate template configured'}
+                return {"success": False, "error": "No certificate template configured"}
 
             # Check if certificate already exists
-            existing = Certificate.objects.filter(registration=registration, status='active').first()
+            existing = Certificate.objects.filter(registration=registration, status="active").first()
 
             if existing:
-                return {'success': True, 'certificate': existing, 'already_issued': True}
+                return {"success": True, "certificate": existing, "already_issued": True}
 
-            # Create certificate
-            certificate = Certificate.objects.create(
-                registration=registration,
-                template=template,
-                status='pending',
-                issued_by=issued_by,
-            )
+            # Perform issuance atomically
+            with transaction.atomic():
+                # Check limits and increment atomically
+                result = capability_service.check_and_increment_certificate(owner)
+                if not result.allowed:
+                    return {
+                        "success": False,
+                        "error": result.error_message,
+                        "limit_exceeded": True,
+                    }
 
-            # Build and save certificate data snapshot
-            cert_data = certificate.build_certificate_data()
-            certificate.certificate_data = cert_data
-            certificate.save()
+                # Create certificate
+                certificate = Certificate.objects.create(
+                    registration=registration,
+                    template=template,
+                    status="pending",
+                    issued_by=issued_by,
+                )
 
-            # Generate PDF
-            pdf_bytes = self.generate_pdf(certificate)
-            if pdf_bytes:
+                # Build and save certificate data snapshot
+                cert_data = certificate.build_certificate_data()
+                certificate.certificate_data = cert_data
+                certificate.save()
+
+                # Generate PDF
+                pdf_bytes = self.generate_pdf(certificate)
+                if not pdf_bytes:
+                    raise Exception("PDF generation failed")
+
                 self.upload_pdf(certificate, pdf_bytes)
 
-            # Mark as issued
-            certificate.status = 'active'
-            certificate.issued_at = timezone.now()
-            certificate.issued_by = issued_by
-            certificate.save()
+                # Mark as issued
+                certificate.status = "active"
+                certificate.issued_at = timezone.now()
+                certificate.issued_by = issued_by
+                certificate.save()
 
-            # Update registration
-            registration.certificate_issued = True
-            registration.certificate_issued_at = timezone.now()
-            registration.save(update_fields=['certificate_issued', 'certificate_issued_at', 'updated_at'])
+                # Update registration
+                registration.certificate_issued = True
+                registration.certificate_issued_at = timezone.now()
+                registration.save(update_fields=["certificate_issued", "certificate_issued_at", "updated_at"])
 
-            # Increment certificate counter in subscription
-            if subscription:
-                subscription.increment_certificates()
-
-            return {'success': True, 'certificate': certificate}
+            return {"success": True, "certificate": certificate}
 
         except Exception as e:
             logger.error(f"Certificate issuance failed: {e}")
-            return {'success': False, 'error': str(e)}
+            return {"success": False, "error": str(e)}
 
     def issue_bulk(self, event, registrations: list | None = None, issued_by=None) -> dict[str, Any]:
         """
@@ -484,18 +484,18 @@ class CertificateService:
         if registrations is None:
             # Get all eligible registrations
             registrations = Registration.objects.filter(
-                event=event, status='attended', attendance_eligible=True, certificate_issued=False
+                event=event, status="attended", attendance_eligible=True, certificate_issued=False
             )
 
-        results = {'total': len(registrations), 'success': 0, 'failed': 0, 'errors': []}
+        results = {"total": len(registrations), "success": 0, "failed": 0, "errors": []}
 
         for reg in registrations:
             result = self.issue_certificate(reg, issued_by=issued_by)
-            if result['success']:
-                results['success'] += 1
+            if result["success"]:
+                results["success"] += 1
             else:
-                results['failed'] += 1
-                results['errors'].append({'registration_id': str(reg.uuid), 'error': result.get('error', 'Unknown error')})
+                results["failed"] += 1
+                results["errors"].append({"registration_id": str(reg.uuid), "error": result.get("error", "Unknown error")})
 
         return results
 
@@ -516,15 +516,15 @@ class CertificateService:
             event = certificate.registration.event
 
             return email_service.send_email(
-                template='certificate_issued',
+                template="certificate_issued",
                 recipient=user.email,
                 context={
-                    'user_name': user.full_name,
-                    'event_title': event.title,
-                    'certificate_url': certificate.pdf_url,
-                    'verification_url': certificate.verification_url,
-                    'cpd_credits': str(certificate.cpd_credits),
-                    'cpd_type': certificate.cpd_type,
+                    "user_name": user.full_name,
+                    "event_title": event.title,
+                    "certificate_url": certificate.pdf_url,
+                    "verification_url": certificate.verification_url,
+                    "cpd_credits": str(certificate.cpd_credits),
+                    "cpd_type": certificate.cpd_type,
                 },
             )
 

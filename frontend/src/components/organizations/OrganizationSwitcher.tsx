@@ -46,7 +46,7 @@ export const OrganizationSwitcher: React.FC<OrganizationSwitcherProps> = ({
     };
 
     const handleCreateOrg = () => {
-        navigate('/organizations/new');
+        navigate('/contact?subject=New%20Organization%20Deployment');
     };
 
     const displayName = currentOrg ? currentOrg.name : (user?.organization_name || 'Personal Account');
@@ -162,7 +162,7 @@ const SwitcherContent: React.FC<SwitcherContentProps> = ({
                 <>
                     <DropdownMenuSeparator />
                     <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                        Organizations
+                        Teams
                     </div>
                     {organizations.map((org) => (
                         <DropdownMenuItem
@@ -201,7 +201,7 @@ const SwitcherContent: React.FC<SwitcherContentProps> = ({
                         className="cursor-pointer"
                     >
                         <Plus className="h-4 w-4 mr-2" />
-                        Create Organization
+                        Request Organization
                     </DropdownMenuItem>
                 </>
             )}

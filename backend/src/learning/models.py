@@ -552,14 +552,14 @@ class ModuleProgress(BaseModel):
 
 class Course(BaseModel):
     """
-    Self-paced learning course, owned by an organization.
+    Self-paced learning course, owned by an individual.
 
     Courses are standalone learning experiences with modules, content,
     and assignments. Unlike events, courses don't have scheduled times -
     learners can complete them at their own pace.
 
     Key Features:
-    - Organization ownership
+    - Individual ownership
     - Self-paced modules and content
     - Enrollment management
     - Progress tracking
@@ -574,20 +574,12 @@ class Course(BaseModel):
     # =========================================
     # Ownership
     # =========================================
-    organization = models.ForeignKey(
-        "organizations.Organization",
-        on_delete=models.CASCADE,
-        related_name="courses",
-        null=True,
-        blank=True,
-        help_text="Organization that owns this course (null for personal LMS plans)",
-    )
-    created_by = models.ForeignKey(
+    owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name="created_courses",
-        help_text="User who created this course",
+        related_name="owned_courses",
+        help_text="User who owns this course",
     )
 
     # =========================================
@@ -732,19 +724,13 @@ class Course(BaseModel):
         ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["organization", "slug"],
-                condition=models.Q(organization__isnull=False),
-                name="unique_course_slug_per_organization",
-            ),
-            models.UniqueConstraint(
-                fields=["created_by", "slug"],
-                condition=models.Q(organization__isnull=True),
+                fields=["owner", "slug"],
                 name="unique_course_slug_per_owner",
             ),
         ]
         indexes = [
             models.Index(fields=["status"]),
-            models.Index(fields=["organization", "status"]),
+            models.Index(fields=["owner", "status"]),
             models.Index(fields=["is_public", "status"]),
         ]
         verbose_name = "Course"
@@ -759,35 +745,18 @@ class Course(BaseModel):
             return False
         if user.is_staff:
             return True
-        if self.organization_id:
-            return self.organization.memberships.filter(
-                user=user,
-                role__in=["admin", "course_manager"],
-                is_active=True,
-            ).exists()
-        return self.created_by_id == user.id
+        return self.owner_id == user.id
 
     def can_instruct(self, user) -> bool:
         """Check if user is an instructor assigned to this course."""
         if not user or not getattr(user, "is_authenticated", False):
             return False
-        if not self.organization_id:
-            return False
-        return self.organization.memberships.filter(
-            user=user,
-            role="instructor",
-            assigned_course=self,
-            is_active=True,
-        ).exists()
-
-    @property
-    def owner(self):
-        """Map created_by to owner for Zoom service compatibility."""
-        return self.created_by
+        # Only owner can instruct
+        return self.owner_id == user.id
 
     @property
     def is_free(self):
-        return self.price_cents == 0
+        return self.price_cents == 0 and not self.stripe_price_id
 
     @property
     def effective_image_url(self):
@@ -1005,7 +974,7 @@ class CourseEnrollment(BaseModel):
                         course_enrollment=self,
                         template=self.course.certificate_template,
                         status=Certificate.Status.ACTIVE,
-                        issued_by=self.course.created_by or self.user,  # Fallback to user if creator deleted? Or system user?
+                        issued_by=self.course.owner or self.user,  # Fallback to user if owner deleted
                     )
                     cert.build_certificate_data()
                     cert.save()
@@ -1023,7 +992,7 @@ class CourseEnrollment(BaseModel):
                 badge_service.issue_badge(
                     course_enrollment=self,
                     template=self.course.badge_template,
-                    issued_by=self.course.created_by or self.user,
+                    issued_by=self.course.owner or self.user,
                 )
 
         self.save(

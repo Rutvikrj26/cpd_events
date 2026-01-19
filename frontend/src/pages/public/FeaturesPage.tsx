@@ -198,23 +198,23 @@ export function FeaturesPage() {
                 ctaText="Start Managing Contacts"
             />
 
-            {/* Feature Highlight 6: Team Management */}
+            {/* Feature Highlight 6: Standalone Branded Deployment */}
             <FeatureSection
                 id="organizations"
-                badge="Organizations"
-                title="Team Collaboration at Scale"
-                description="Create organizations and invite team members with specific roles. Collaborate on events and courses with shared resources and centralized billing."
+                badge="Standalone Deployment"
+                title="Your Own Branded Training Platform"
+                description="For large organizations and agencies, we offer standalone instances of Accredit with full white-labeling and dedicated infrastructure."
                 features={[
-                    "Admin: Full control over events, courses, billing & team",
-                    "Organizer: Create events, manage registrations",
-                    "Course Manager: Build courses, track enrollments",
-                    "Instructor: Manage assigned courses, grade assignments",
-                    "Organization branding with logos and custom domains"
+                    "Complete brand ownership with custom CSS and assets",
+                    "Dedicated infrastructure for isolated data and performance",
+                    "Custom domains (e.g., training.yourcompany.com)",
+                    "Unlimited team members and custom RBAC roles",
+                    "Enterprise-grade security and custom billing structures"
                 ]}
                 visual={<TeamManagementVisual />}
                 reversed={true}
                 ctaLink="/products/organizations"
-                ctaText="Learn About Organizations"
+                ctaText="View Standalone Options"
             />
 
             {/* All Features Grid */}

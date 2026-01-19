@@ -22,7 +22,15 @@ class UserManager(BaseUserManager):
         """Create and save a user with the given email and password."""
         if not email:
             raise ValueError("Users must have an email address")
+
         email = self.normalize_email(email).lower()
+        full_name = extra_fields.pop("full_name", None)
+        if full_name and not (extra_fields.get("first_name") or extra_fields.get("last_name")):
+            first_name, last_name = self.model.split_full_name(full_name)
+            extra_fields.setdefault("first_name", first_name)
+            extra_fields.setdefault("last_name", last_name)
+        extra_fields.setdefault("first_name", "")
+        extra_fields.setdefault("last_name", "")
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -59,7 +67,6 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
 
     Key Features:
     - Email-based authentication (no username)
-    - Account types: Attendee (default) and Organizer
     - Soft delete with data anonymization
     - Email verification flow
     - Notification preferences
@@ -70,12 +77,6 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     - Personal data cleared for GDPR compliance
     - Related data (registrations, certificates) preserved
     """
-
-    class AccountType(models.TextChoices):
-        ATTENDEE = "attendee", "Attendee"
-        ORGANIZER = "organizer", "Organizer"
-        COURSE_MANAGER = "course_manager", "Course Manager"
-        ADMIN = "admin", "Admin"
 
     # =========================================
     # Authentication Fields
@@ -96,7 +97,8 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     # =========================================
     # Profile Fields
     # =========================================
-    full_name = models.CharField(max_length=255, validators=[MinLengthValidator(2)], help_text="Full name")
+    first_name = models.CharField(max_length=150, help_text="First name")
+    last_name = models.CharField(max_length=150, help_text="Last name")
     professional_title = models.CharField(max_length=255, blank=True, help_text="Professional title (e.g., MD, PhD)")
     organization_name = models.CharField(max_length=255, blank=True, help_text="Organization/company name")
     timezone = models.CharField(max_length=50, default="UTC", help_text="User's preferred timezone")
@@ -104,17 +106,34 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     profile_image = models.ImageField(upload_to="profile_images/", blank=True, null=True, help_text="Profile image file")
     bio = models.TextField(blank=True, max_length=1000, help_text="User bio/description")
 
-    # =========================================
-    # Account Type & Status
-    # =========================================
-    account_type = models.CharField(
-        max_length=20,
-        choices=AccountType.choices,
-        default=AccountType.ATTENDEE,
-        db_index=True,
-        help_text="Account type determines available features",
-    )
+    @staticmethod
+    def split_full_name(value: str) -> tuple[str, str]:
+        """Split a full name into first/last components."""
+        if not value:
+            return "", ""
+        name = value.strip()
+        if not name:
+            return "", ""
+        parts = name.split()
+        first_name = parts[0]
+        last_name = " ".join(parts[1:]) if len(parts) > 1 else ""
+        return first_name, last_name
 
+    @property
+    def full_name(self):
+        """Return the first_name plus the last_name, with a space in between."""
+        full_name = f"{self.first_name} {self.last_name}"
+        return full_name.strip()
+
+    @full_name.setter
+    def full_name(self, value: str):
+        first_name, last_name = self.split_full_name(value)
+        self.first_name = first_name
+        self.last_name = last_name
+
+    # =========================================
+    # Account Status
+    # =========================================
     is_active = models.BooleanField(default=True, help_text="Whether user can log in")
     is_staff = models.BooleanField(default=False, help_text="Can access admin site")
     onboarding_completed = models.BooleanField(default=False, help_text="Whether user completed initial onboarding")
@@ -184,7 +203,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     objects = UserManager()
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["full_name"]
+    REQUIRED_FIELDS = ["first_name", "last_name"]
 
     class Meta:
         db_table = "users"
@@ -192,7 +211,6 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         verbose_name_plural = "Users"
         indexes = [
             models.Index(fields=["email"]),
-            models.Index(fields=["account_type"]),
             models.Index(fields=["uuid"]),
             models.Index(fields=["organizer_slug"]),
         ]
@@ -204,19 +222,26 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     # Properties
     # =========================================
     @property
-    def is_organizer(self):
-        """Check if user is an organizer."""
-        return self.account_type == self.AccountType.ORGANIZER
+    def can_create_events(self) -> bool:
+        """
+        User can create events if on organizer or pro plan.
+
+        Delegates to CapabilityService for centralized logic.
+        """
+        from billing.capability_service import capability_service
+
+        return capability_service.can_create_events(self)
 
     @property
-    def is_attendee(self):
-        """Check if user is an attendee."""
-        return self.account_type == self.AccountType.ATTENDEE
+    def can_create_courses(self) -> bool:
+        """
+        User can create courses if on LMS or pro plan.
 
-    @property
-    def is_course_manager(self):
-        """Check if user is a course manager."""
-        return self.account_type == self.AccountType.COURSE_MANAGER
+        Delegates to CapabilityService for centralized logic.
+        """
+        from billing.capability_service import capability_service
+
+        return capability_service.can_create_courses(self)
 
     @property
     def display_name(self):
@@ -240,47 +265,6 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     # =========================================
     # Methods
     # =========================================
-    def upgrade_to_organizer(self):
-        """Upgrade account to organizer."""
-        if self.account_type != self.AccountType.ORGANIZER:
-            self.account_type = self.AccountType.ORGANIZER
-            self.save(update_fields=["account_type", "updated_at"])
-
-    def upgrade_to_course_manager(self):
-        """Upgrade account to course manager."""
-        if self.account_type != self.AccountType.COURSE_MANAGER:
-            self.account_type = self.AccountType.COURSE_MANAGER
-            self.save(update_fields=["account_type", "updated_at"])
-
-    def upgrade_to_admin(self):
-        """Upgrade account to admin (can create both events and courses)."""
-        if self.account_type != self.AccountType.ADMIN:
-            self.account_type = self.AccountType.ADMIN
-            self.save(update_fields=["account_type", "updated_at"])
-
-    def downgrade_from_admin(self):
-        """
-        Downgrade from admin based on subscription.
-        Called when user is no longer an org admin.
-        """
-        subscription = getattr(self, "subscription", None)
-        if subscription and subscription.is_active:
-            if subscription.plan == "organizer":
-                self.account_type = self.AccountType.ORGANIZER
-            elif subscription.plan == "lms":
-                self.account_type = self.AccountType.COURSE_MANAGER
-            else:
-                self.account_type = self.AccountType.ATTENDEE
-        else:
-            self.account_type = self.AccountType.ATTENDEE
-        self.save(update_fields=["account_type", "updated_at"])
-
-    def downgrade_to_attendee(self):
-        """Downgrade account to attendee."""
-        if self.account_type != self.AccountType.ATTENDEE:
-            self.account_type = self.AccountType.ATTENDEE
-            self.save(update_fields=["account_type", "updated_at"])
-
     def generate_email_verification_token(self):
         """Generate and save email verification token."""
         self.email_verification_token = generate_verification_code(32)
@@ -328,7 +312,8 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         """
         import uuid
 
-        self.full_name = "Deleted User"
+        self.first_name = "Deleted"
+        self.last_name = "User"
         self.email = f"deleted-{uuid.uuid4()}@example.com"
         self.professional_title = ""
         self.organization_name = ""
@@ -359,7 +344,8 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         # Anonymize personal data
         anon_suffix = str(uuid_lib.uuid4())[:8]
         self.email = f"deleted_{anon_suffix}@deleted.local"
-        self.full_name = "Deleted User"
+        self.first_name = "Deleted"
+        self.last_name = "User"
         self.professional_title = ""
         self.organization_name = ""
         self.profile_photo_url = ""
@@ -378,6 +364,20 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         """Record successful login."""
         self.last_login_at = timezone.now()
         self.save(update_fields=["last_login_at", "updated_at"])
+
+    def downgrade_to_attendee(self):
+        """
+        Downgrade user to attendee plan.
+
+        Delegates to CapabilityService for centralized logic.
+        This method is called from views after subscription cancellation.
+
+        Returns:
+            CapabilityResult indicating success or failure
+        """
+        from billing.capability_service import capability_service
+
+        return capability_service.downgrade_to_attendee(self, skip_content_check=True)
 
 
 class ZoomConnection(BaseModel):
@@ -669,7 +669,6 @@ class Notification(BaseModel):
     """
 
     class Type(models.TextChoices):
-        ORG_INVITE = "org_invite", "Organization Invitation"
         PAYMENT_FAILED = "payment_failed", "Payment Failed"
         REFUND_PROCESSED = "refund_processed", "Refund Processed"
         TRIAL_ENDING = "trial_ending", "Trial Ending"
@@ -724,12 +723,13 @@ class AuditLog(BaseModel):
         blank=True,
         related_name="audit_logs",
     )
-    organization = models.ForeignKey(
-        "organizations.Organization",
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="audit_logs",
+        related_name="audit_logs_about",
+        help_text="User this audit log is about (if applicable)",
     )
     action = models.CharField(max_length=120, db_index=True)
     object_type = models.CharField(max_length=120, blank=True)
@@ -743,7 +743,7 @@ class AuditLog(BaseModel):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["actor", "action"]),
-            models.Index(fields=["organization", "action"]),
+            models.Index(fields=["user", "action"]),
             models.Index(fields=["-created_at"]),
         ]
 

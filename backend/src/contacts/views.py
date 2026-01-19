@@ -9,8 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from common.permissions import IsOrganizer
-from common.rbac import roles
+from common.permissions import CanCreateEvents
 from common.utils import error_response
 from common.viewsets import BaseModelViewSet
 
@@ -25,16 +24,16 @@ from .models import Contact, ContactList, Tag
 class ContactFilter(filters.FilterSet):
     """Filter contacts."""
 
-    email = filters.CharFilter(lookup_expr='icontains')
-    full_name = filters.CharFilter(lookup_expr='icontains')
-    organization = filters.CharFilter(field_name='organization_name', lookup_expr='icontains')
-    tag = filters.UUIDFilter(field_name='tags__uuid')
-    opted_out = filters.BooleanFilter(field_name='email_opted_out')
-    bounced = filters.BooleanFilter(field_name='email_bounced')
+    email = filters.CharFilter(lookup_expr="icontains")
+    full_name = filters.CharFilter(lookup_expr="icontains")
+    organization = filters.CharFilter(field_name="organization_name", lookup_expr="icontains")
+    tag = filters.UUIDFilter(field_name="tags__uuid")
+    opted_out = filters.BooleanFilter(field_name="email_opted_out")
+    bounced = filters.BooleanFilter(field_name="email_bounced")
 
     class Meta:
         model = Contact
-        fields = ['email', 'full_name', 'organization', 'tag', 'opted_out', 'bounced']
+        fields = ["email", "full_name", "organization", "tag", "opted_out", "bounced"]
 
 
 # =============================================================================
@@ -42,7 +41,6 @@ class ContactFilter(filters.FilterSet):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='tags')
 class TagViewSet(BaseModelViewSet):
     """
     Manage tags.
@@ -53,38 +51,19 @@ class TagViewSet(BaseModelViewSet):
     PATCH /api/v1/tags/{uuid}/
     DELETE /api/v1/tags/{uuid}/
 
-    Returns personal tags (organization=NULL) AND org-shared tags
-    for organizations the user belongs to.
+    Returns tags owned by the user.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, CanCreateEvents]
 
     def get_queryset(self):
-        from django.db.models import Q
-
-        user = self.request.user
-
-        # Personal tags (no org)
-        personal = Q(owner=user, organization__isnull=True)
-
-        # Org-shared tags (user is member of the org)
-        user_org_ids = user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
-        org_shared = Q(organization_id__in=user_org_ids)
-
-        return Tag.objects.filter(personal | org_shared).distinct()
+        """Return tags owned by current user."""
+        return Tag.objects.filter(owner=self.request.user)
 
     def get_serializer_class(self):
-        if self.action in ['create', 'update', 'partial_update']:
+        if self.action in ["create", "update", "partial_update"]:
             return serializers.TagCreateSerializer
         return serializers.TagSerializer
-
-    def get_serializer_context(self):
-        """Add user's org IDs to context for create serializer."""
-        context = super().get_serializer_context()
-        context['user_org_ids'] = list(
-            self.request.user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
-        )
-        return context
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -94,19 +73,19 @@ class TagViewSet(BaseModelViewSet):
         operation_description="Merge this tag into another tag. Contacts will be re-tagged.",
         responses={200: serializers.TagSerializer, 400: '{"error": {}}'},
     )
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def merge(self, request, uuid=None):
         """Merge this tag into another."""
         tag = self.get_object()
-        target_uuid = request.data.get('target_uuid')
+        target_uuid = request.data.get("target_uuid")
 
         if not target_uuid:
-            return error_response('target_uuid required.', code='MISSING_TARGET')
+            return error_response("target_uuid required.", code="MISSING_TARGET")
 
         try:
             target = self.get_queryset().get(uuid=target_uuid)
         except Tag.DoesNotExist:
-            return error_response('Target tag not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+            return error_response("Target tag not found.", code="NOT_FOUND", status_code=status.HTTP_404_NOT_FOUND)
 
         tag.merge_into(target)
         return Response(serializers.TagSerializer(target).data)
@@ -117,7 +96,6 @@ class TagViewSet(BaseModelViewSet):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='contact_lists')
 class ContactListViewSet(BaseModelViewSet):
     """
     Manage contact lists.
@@ -128,40 +106,21 @@ class ContactListViewSet(BaseModelViewSet):
     PATCH /api/v1/contact-lists/{uuid}/
     DELETE /api/v1/contact-lists/{uuid}/
 
-    Returns personal lists (organization=NULL) AND org-shared lists
-    for organizations the user belongs to.
+    Returns personal lists owned by the user.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, CanCreateEvents]
 
     def get_queryset(self):
-        from django.db.models import Q
-
-        user = self.request.user
-
-        # Personal lists (no org)
-        personal = Q(owner=user, organization__isnull=True)
-
-        # Org-shared lists (user is member of the org)
-        user_org_ids = user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
-        org_shared = Q(organization_id__in=user_org_ids)
-
-        return ContactList.objects.filter(personal | org_shared).distinct()
+        """Return lists owned by current user."""
+        return ContactList.objects.filter(owner=self.request.user)
 
     def get_serializer_class(self):
-        if self.action in ['create', 'update', 'partial_update']:
+        if self.action in ["create", "update", "partial_update"]:
             return serializers.ContactListCreateSerializer
-        if self.action == 'retrieve':
+        if self.action == "retrieve":
             return serializers.ContactListDetailSerializer
         return serializers.ContactListSerializer
-
-    def get_serializer_context(self):
-        """Add user's org IDs to context for create serializer."""
-        context = super().get_serializer_context()
-        context['user_org_ids'] = list(
-            self.request.user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
-        )
-        return context
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -171,11 +130,11 @@ class ContactListViewSet(BaseModelViewSet):
         operation_description="Create a copy of this contact list with all contacts.",
         responses={201: serializers.ContactListDetailSerializer},
     )
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def duplicate(self, request, uuid=None):
         """Duplicate this contact list."""
         contact_list = self.get_object()
-        new_name = request.data.get('name')
+        new_name = request.data.get("name")
 
         new_list = contact_list.duplicate(new_name)
         return Response(serializers.ContactListDetailSerializer(new_list).data, status=status.HTTP_201_CREATED)
@@ -185,19 +144,19 @@ class ContactListViewSet(BaseModelViewSet):
         operation_description="Merge this contact list into another list.",
         responses={200: serializers.ContactListDetailSerializer, 400: '{"error": {}}'},
     )
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def merge(self, request, uuid=None):
         """Merge this list into another."""
         contact_list = self.get_object()
-        target_uuid = request.data.get('target_uuid')
+        target_uuid = request.data.get("target_uuid")
 
         if not target_uuid:
-            return error_response('target_uuid required.', code='MISSING_TARGET')
+            return error_response("target_uuid required.", code="MISSING_TARGET")
 
         try:
             target = self.get_queryset().get(uuid=target_uuid)
         except ContactList.DoesNotExist:
-            return error_response('Target list not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+            return error_response("Target list not found.", code="NOT_FOUND", status_code=status.HTTP_404_NOT_FOUND)
 
         contact_list.merge_into(target)
         return Response(serializers.ContactListDetailSerializer(target).data)
@@ -205,9 +164,9 @@ class ContactListViewSet(BaseModelViewSet):
     @swagger_auto_schema(
         operation_summary="Export contacts as CSV",
         operation_description="Download all contacts in this list as a CSV file.",
-        responses={200: 'text/csv'},
+        responses={200: "text/csv"},
     )
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def export(self, request, uuid=None):
         """Export contacts in this list as CSV."""
         import csv
@@ -215,42 +174,42 @@ class ContactListViewSet(BaseModelViewSet):
         from django.http import HttpResponse
 
         contact_list = self.get_object()
-        contacts = contact_list.contacts.all().prefetch_related('tags')
+        contacts = contact_list.contacts.all().prefetch_related("tags")
 
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = f'attachment; filename="{contact_list.name}_contacts.csv"'
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{contact_list.name}_contacts.csv"'
 
         writer = csv.writer(response)
         writer.writerow(
             [
-                'Email',
-                'Full Name',
-                'Professional Title',
-                'Organization',
-                'Phone',
-                'Notes',
-                'Tags',
-                'Source',
-                'Events Invited',
-                'Events Attended',
-                'Status',
+                "Email",
+                "Full Name",
+                "Professional Title",
+                "Organization",
+                "Phone",
+                "Notes",
+                "Tags",
+                "Source",
+                "Events Invited",
+                "Events Attended",
+                "Status",
             ]
         )
 
         for contact in contacts:
-            status_str = 'Bounced' if contact.email_bounced else ('Opted Out' if contact.email_opted_out else 'Active')
-            tags_str = ', '.join(tag.name for tag in contact.tags.all())
+            status_str = "Bounced" if contact.email_bounced else ("Opted Out" if contact.email_opted_out else "Active")
+            tags_str = ", ".join(tag.name for tag in contact.tags.all())
 
             writer.writerow(
                 [
                     contact.email,
                     contact.full_name,
-                    contact.professional_title or '',
-                    contact.organization_name or '',
-                    contact.phone or '',
-                    contact.notes or '',
+                    contact.professional_title or "",
+                    contact.organization_name or "",
+                    contact.phone or "",
+                    contact.notes or "",
                     tags_str,
-                    contact.source or '',
+                    contact.source or "",
                     contact.events_invited_count,
                     contact.events_attended_count,
                     status_str,
@@ -265,7 +224,6 @@ class ContactListViewSet(BaseModelViewSet):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='contacts')
 class ContactViewSet(BaseModelViewSet):
     """
     Manage contacts.
@@ -280,11 +238,11 @@ class ContactViewSet(BaseModelViewSet):
     Tags are used for segmentation instead of multiple lists.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, CanCreateEvents]
     filterset_class = ContactFilter
-    search_fields = ['email', 'full_name', 'organization_name']
-    ordering_fields = ['full_name', 'email', 'created_at', 'events_attended_count']
-    ordering = ['full_name']
+    search_fields = ["email", "full_name", "organization_name"]
+    ordering_fields = ["full_name", "email", "created_at", "events_attended_count"]
+    ordering = ["full_name"]
 
     def _get_user_list(self):
         """Get or create the user's personal contact list."""
@@ -292,21 +250,21 @@ class ContactViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         contact_list = self._get_user_list()
-        return Contact.objects.filter(contact_list=contact_list).prefetch_related('tags')
+        return Contact.objects.filter(contact_list=contact_list).prefetch_related("tags")
 
     def get_serializer_class(self):
-        if self.action == 'create':
+        if self.action == "create":
             return serializers.ContactCreateSerializer
-        if self.action in ['update', 'partial_update']:
+        if self.action in ["update", "partial_update"]:
             return serializers.ContactUpdateSerializer
-        if self.action == 'list':
+        if self.action == "list":
             return serializers.ContactListItemSerializer
         return serializers.ContactSerializer
 
     def get_serializer_context(self):
         """Add contact_list to serializer context."""
         context = super().get_serializer_context()
-        context['contact_list'] = self._get_user_list()
+        context["contact_list"] = self._get_user_list()
         return context
 
     def perform_create(self, serializer):
@@ -318,7 +276,7 @@ class ContactViewSet(BaseModelViewSet):
         operation_description="Import multiple contacts.",
         request_body=serializers.ContactBulkCreateSerializer,
     )
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def bulk_create(self, request):
         """Bulk import contacts."""
         serializer = serializers.ContactBulkCreateSerializer(data=request.data)
@@ -329,24 +287,24 @@ class ContactViewSet(BaseModelViewSet):
         created = []
         skipped = []
 
-        for contact_data in serializer.validated_data['contacts']:
-            email = contact_data['email'].lower()
+        for contact_data in serializer.validated_data["contacts"]:
+            email = contact_data["email"].lower()
 
             # Check for duplicate
             if Contact.objects.filter(contact_list=contact_list, email__iexact=email).exists():
-                if serializer.validated_data['skip_duplicates']:
+                if serializer.validated_data["skip_duplicates"]:
                     skipped.append(email)
                     continue
 
             contact = Contact.objects.create(
                 contact_list=contact_list,
                 email=email,
-                full_name=contact_data['full_name'],
-                professional_title=contact_data.get('professional_title', ''),
-                organization_name=contact_data.get('organization_name', ''),
-                phone=contact_data.get('phone', ''),
-                notes=contact_data.get('notes', ''),
-                source='import',
+                full_name=contact_data["full_name"],
+                professional_title=contact_data.get("professional_title", ""),
+                organization_name=contact_data.get("organization_name", ""),
+                phone=contact_data.get("phone", ""),
+                notes=contact_data.get("notes", ""),
+                source="import",
             )
             created.append(str(contact.uuid))
 
@@ -354,9 +312,9 @@ class ContactViewSet(BaseModelViewSet):
 
         return Response(
             {
-                'created': len(created),
-                'skipped': len(skipped),
-                'skipped_emails': skipped,
+                "created": len(created),
+                "skipped": len(skipped),
+                "skipped_emails": skipped,
             },
             status=status.HTTP_201_CREATED,
         )
@@ -365,7 +323,7 @@ class ContactViewSet(BaseModelViewSet):
         operation_summary="Export contacts",
         operation_description="Export contacts as CSV.",
     )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def export(self, request):
         """Export contacts as CSV."""
         import csv
@@ -373,42 +331,42 @@ class ContactViewSet(BaseModelViewSet):
         from django.http import HttpResponse
 
         contact_list = self._get_user_list()
-        contacts = contact_list.contacts.all().prefetch_related('tags')
+        contacts = contact_list.contacts.all().prefetch_related("tags")
 
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="contacts.csv"'
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="contacts.csv"'
 
         writer = csv.writer(response)
         writer.writerow(
             [
-                'Email',
-                'Full Name',
-                'Professional Title',
-                'Organization',
-                'Phone',
-                'Notes',
-                'Tags',
-                'Source',
-                'Events Invited',
-                'Events Attended',
-                'Status',
+                "Email",
+                "Full Name",
+                "Professional Title",
+                "Organization",
+                "Phone",
+                "Notes",
+                "Tags",
+                "Source",
+                "Events Invited",
+                "Events Attended",
+                "Status",
             ]
         )
 
         for contact in contacts:
-            status_str = 'Bounced' if contact.email_bounced else ('Opted Out' if contact.email_opted_out else 'Active')
-            tags_str = ', '.join(tag.name for tag in contact.tags.all())
+            status_str = "Bounced" if contact.email_bounced else ("Opted Out" if contact.email_opted_out else "Active")
+            tags_str = ", ".join(tag.name for tag in contact.tags.all())
 
             writer.writerow(
                 [
                     contact.email,
                     contact.full_name,
-                    contact.professional_title or '',
-                    contact.organization_name or '',
-                    contact.phone or '',
-                    contact.notes or '',
+                    contact.professional_title or "",
+                    contact.organization_name or "",
+                    contact.phone or "",
+                    contact.notes or "",
                     tags_str,
-                    contact.source or '',
+                    contact.source or "",
                     contact.events_invited_count,
                     contact.events_attended_count,
                     status_str,

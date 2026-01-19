@@ -1,13 +1,10 @@
 from django.db import models as django_models
 from rest_framework import permissions, viewsets
 
-from common.rbac import roles
-
 from .models import EventFeedback
 from .serializers import EventFeedbackSerializer
 
 
-@roles('attendee', 'organizer', 'admin', route_name='event_feedback')
 class EventFeedbackViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing event feedback.
@@ -19,7 +16,7 @@ class EventFeedbackViewSet(viewsets.ModelViewSet):
     queryset = EventFeedback.objects.all()
     serializer_class = EventFeedbackSerializer
     permission_classes = [permissions.IsAuthenticated]
-    lookup_field = 'uuid'
+    lookup_field = "uuid"
 
     def get_queryset(self):
         user = self.request.user
@@ -35,11 +32,11 @@ class EventFeedbackViewSet(viewsets.ModelViewSet):
                 | django_models.Q(registration__user__isnull=True, registration__email__iexact=user.email)
             ).distinct()
 
-        event_uuid = self.request.query_params.get('event')
+        event_uuid = self.request.query_params.get("event")
         if event_uuid:
             queryset = queryset.filter(event__uuid=event_uuid)
 
-        registration_uuid = self.request.query_params.get('registration')
+        registration_uuid = self.request.query_params.get("registration")
         if registration_uuid:
             queryset = queryset.filter(registration__uuid=registration_uuid)
 
@@ -48,7 +45,7 @@ class EventFeedbackViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # Ensure the user owns the registration they are submitting for
         # This is a critical security check to prevent submitting for others
-        registration = serializer.validated_data.get('registration')
+        registration = serializer.validated_data.get("registration")
         user = self.request.user
 
         # Check ownership: either user is linked OR emails match (for guest registrations)
@@ -87,7 +84,7 @@ class EventFeedbackViewSet(viewsets.ModelViewSet):
                 logger.debug(f"Certificate already issued for registration {registration.uuid}")
                 return
 
-            if registration.status != 'attended':
+            if registration.status != "attended":
                 logger.debug(f"Registration {registration.uuid} not marked as attended")
                 return
 
@@ -102,8 +99,8 @@ class EventFeedbackViewSet(viewsets.ModelViewSet):
                 return
 
             # Auto-issue if require_feedback_for_certificate OR auto_issue_certificates is enabled
-            should_auto_issue = getattr(event, 'require_feedback_for_certificate', False) or getattr(
-                event, 'auto_issue_certificates', True
+            should_auto_issue = getattr(event, "require_feedback_for_certificate", False) or getattr(
+                event, "auto_issue_certificates", True
             )
 
             if not should_auto_issue:
@@ -119,12 +116,12 @@ class EventFeedbackViewSet(viewsets.ModelViewSet):
                 issued_by=event.owner,
             )
 
-            if result.get('success'):
+            if result.get("success"):
                 logger.info(f"Auto-issued certificate for registration {registration.uuid} after feedback")
 
                 # Send certificate email
-                certificate = result.get('certificate')
-                if certificate and not result.get('already_issued'):
+                certificate = result.get("certificate")
+                if certificate and not result.get("already_issued"):
                     certificate_service.send_certificate_email(certificate)
             else:
                 logger.warning(f"Failed to auto-issue certificate: {result.get('error')}")

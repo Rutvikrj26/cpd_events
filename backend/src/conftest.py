@@ -26,8 +26,6 @@ from factories import (
     EventModuleFactory,
     EventSessionFactory,
     ModuleContentFactory,
-    OrganizationFactory,
-    OrganizationMembershipFactory,
     OrganizerFactory,
     RegistrationFactory,
     TagFactory,
@@ -97,8 +95,8 @@ def admin_client(admin_user):
 def user(db):
     """A regular attendee user."""
     return UserFactory(
-        email='test@example.com',
-        full_name='Test User',
+        email="test@example.com",
+        full_name="Test User",
     )
 
 
@@ -106,7 +104,7 @@ def user(db):
 def unverified_user(db):
     """An attendee user with unverified email."""
     return UserFactory(
-        email='unverified@example.com',
+        email="unverified@example.com",
         email_verified=False,
     )
 
@@ -115,18 +113,18 @@ def unverified_user(db):
 def organizer(db):
     """An organizer user."""
     organizer = OrganizerFactory(
-        email='organizer@example.com',
-        full_name='Test Organizer',
-        organizer_slug='test-organizer',
+        email="organizer@example.com",
+        full_name="Test Organizer",
+        organizer_slug="test-organizer",
     )
 
-    # Update subscription to organization plan with ACTIVE status so tests can create events
+    # Update subscription to organizer plan with ACTIVE status so tests can create events
     # Signal creates subscription with TRIALING status, we need ACTIVE to bypass trial expiration
     from billing.models import Subscription
 
     sub = Subscription.objects.get(user=organizer)
-    sub.plan = 'organization'
-    sub.status = 'active'  # Set to active to bypass trial expiration checks
+    sub.plan = "organizer"
+    sub.status = "active"  # Set to active to bypass trial expiration checks
     sub.save()
 
     # Refresh to ensure relationship is loaded
@@ -138,18 +136,17 @@ def organizer(db):
 @pytest.fixture
 def course_manager(db):
     """A course manager user."""
-    user = UserFactory(
-        email='course-manager@example.com',
-        full_name='Course Manager',
-        account_type='course_manager',
+    user = OrganizerFactory(
+        email="course-manager@example.com",
+        full_name="Course Manager",
     )
 
     # Update subscription to LMS plan with ACTIVE status so tests can create courses
     from billing.models import Subscription
 
     sub = Subscription.objects.get(user=user)
-    sub.plan = 'lms'
-    sub.status = 'active'  # Set to active to bypass trial expiration checks
+    sub.plan = "lms"
+    sub.status = "active"  # Set to active to bypass trial expiration checks
     sub.save()
 
     user.refresh_from_db()
@@ -160,9 +157,9 @@ def course_manager(db):
 def other_organizer(db):
     """A different organizer user for permission testing."""
     return OrganizerFactory(
-        email='other-organizer@example.com',
-        full_name='Other Organizer',
-        organizer_slug='other-organizer',
+        email="other-organizer@example.com",
+        full_name="Other Organizer",
+        organizer_slug="other-organizer",
     )
 
 
@@ -170,43 +167,10 @@ def other_organizer(db):
 def admin_user(db):
     """A Django superuser/admin."""
     return User.objects.create_superuser(
-        email='admin@example.com',
-        password='adminpass123',
-        full_name='Admin User',
+        email="admin@example.com",
+        password="adminpass123",
+        full_name="Admin User",
     )
-
-
-# =============================================================================
-# Organization Fixtures
-# =============================================================================
-
-
-@pytest.fixture
-def organization(db, organizer):
-    """An organization owned by the organizer."""
-    org = OrganizationFactory(
-        name='Test Organization',
-        created_by=organizer,
-    )
-    # Create owner membership
-    OrganizationMembershipFactory(
-        organization=org,
-        user=organizer,
-        role='admin',
-    )
-    return org
-
-
-@pytest.fixture
-def org_member(db, organization):
-    """A member of the organization."""
-    member_user = OrganizerFactory()
-    OrganizationMembershipFactory(
-        organization=organization,
-        user=member_user,
-        role='instructor',
-    )
-    return member_user
 
 
 # =============================================================================
@@ -219,8 +183,8 @@ def event(db, organizer):
     """A draft event owned by the organizer."""
     return EventFactory(
         owner=organizer,
-        title='Test Event',
-        status='draft',
+        title="Test Event",
+        status="draft",
     )
 
 
@@ -229,8 +193,8 @@ def published_event(db, organizer):
     """A published event ready for registration."""
     return EventFactory(
         owner=organizer,
-        title='Published Event',
-        status='published',
+        title="Published Event",
+        status="published",
     )
 
 
@@ -239,8 +203,8 @@ def live_event(db, organizer):
     """A live event currently in progress."""
     return EventFactory(
         owner=organizer,
-        title='Live Event',
-        status='live',
+        title="Live Event",
+        status="live",
         starts_at=timezone.now() - timedelta(hours=1),
     )
 
@@ -250,8 +214,8 @@ def completed_event(db, organizer):
     """A completed past event."""
     return EventFactory(
         owner=organizer,
-        title='Completed Event',
-        status='completed',
+        title="Completed Event",
+        status="completed",
         starts_at=timezone.now() - timedelta(days=7),
     )
 
@@ -261,7 +225,7 @@ def other_organizer_event(db, other_organizer):
     """An event owned by another organizer for permission testing."""
     return EventFactory(
         owner=other_organizer,
-        title='Other Organizer Event',
+        title="Other Organizer Event",
     )
 
 
@@ -269,18 +233,18 @@ def other_organizer_event(db, other_organizer):
 def event_with_sessions(db, event):
     """An event with multiple sessions."""
     event.is_multi_session = True
-    event.save(update_fields=['is_multi_session'])
-    EventSessionFactory(event=event, title='Session 1', order=0)
-    EventSessionFactory(event=event, title='Session 2', order=1)
-    EventSessionFactory(event=event, title='Session 3', order=2)
+    event.save(update_fields=["is_multi_session"])
+    EventSessionFactory(event=event, title="Session 1", order=0)
+    EventSessionFactory(event=event, title="Session 2", order=1)
+    EventSessionFactory(event=event, title="Session 3", order=2)
     return event
 
 
 @pytest.fixture
 def event_with_custom_fields(db, event):
     """An event with custom registration fields."""
-    EventCustomFieldFactory(event=event, label='Company', field_type='text', order=0)
-    EventCustomFieldFactory(event=event, label='Dietary Requirements', field_type='select', order=1)
+    EventCustomFieldFactory(event=event, label="Company", field_type="text", order=0)
+    EventCustomFieldFactory(event=event, label="Dietary Requirements", field_type="select", order=1)
     return event
 
 
@@ -297,7 +261,7 @@ def registration(db, published_event, user):
         user=user,
         email=user.email,
         full_name=user.full_name,
-        status='confirmed',
+        status="confirmed",
     )
 
 
@@ -309,7 +273,7 @@ def attended_registration(db, completed_event, user):
         user=user,
         email=user.email,
         full_name=user.full_name,
-        status='confirmed',
+        status="confirmed",
         attended=True,
         attendance_eligible=True,
         total_attendance_minutes=120,
@@ -322,9 +286,9 @@ def guest_registration(db, published_event):
     return RegistrationFactory(
         event=published_event,
         user=None,
-        email='guest@example.com',
-        full_name='Guest User',
-        status='confirmed',
+        email="guest@example.com",
+        full_name="Guest User",
+        status="confirmed",
     )
 
 
@@ -334,7 +298,7 @@ def waitlisted_registration(db, published_event, user):
     return RegistrationFactory(
         event=published_event,
         user=user,
-        status='waitlisted',
+        status="waitlisted",
     )
 
 
@@ -348,7 +312,7 @@ def certificate_template(db, organizer):
     """A certificate template owned by the organizer."""
     return CertificateTemplateFactory(
         owner=organizer,
-        name='Default Template',
+        name="Default Template",
         is_default=True,
     )
 
@@ -373,7 +337,7 @@ def contact_list(db, organizer):
     """A contact list owned by the organizer."""
     return ContactListFactory(
         owner=organizer,
-        name='Test Contact List',
+        name="Test Contact List",
     )
 
 
@@ -382,8 +346,8 @@ def contact(db, contact_list):
     """A contact in the contact list."""
     return ContactFactory(
         contact_list=contact_list,
-        email='contact@example.com',
-        full_name='Test Contact',
+        email="contact@example.com",
+        full_name="Test Contact",
     )
 
 
@@ -392,7 +356,7 @@ def tag(db, organizer):
     """A tag owned by the organizer."""
     return TagFactory(
         owner=organizer,
-        name='VIP',
+        name="VIP",
     )
 
 
@@ -407,7 +371,7 @@ def subscription(db, organizer):
     from billing.models import Subscription
 
     # Signal auto-creates subscription for organizers, so get or update it
-    sub, created = Subscription.objects.get_or_create(user=organizer, defaults={'plan': 'free', 'status': 'active'})
+    sub, created = Subscription.objects.get_or_create(user=organizer, defaults={"plan": "free", "status": "active"})
     return sub
 
 
@@ -421,7 +385,7 @@ def event_module(db, event):
     """A learning module for an event."""
     return EventModuleFactory(
         event=event,
-        title='Test Module',
+        title="Test Module",
     )
 
 
@@ -430,8 +394,8 @@ def module_content(db, event_module):
     """Content within a module."""
     return ModuleContentFactory(
         module=event_module,
-        title='Introduction',
-        content_type='text',
+        title="Introduction",
+        content_type="text",
     )
 
 
@@ -440,17 +404,17 @@ def assignment(db, event_module):
     """An assignment within a module."""
     return AssignmentFactory(
         module=event_module,
-        title='Quiz 1',
+        title="Quiz 1",
         max_score=100,
     )
 
 
 @pytest.fixture
-def course(db, organization):
-    """A course owned by the organization."""
+def course(db, course_manager):
+    """A course owned by the course manager."""
     return CourseFactory(
-        organization=organization,
-        title='Test Course',
+        owner=course_manager,
+        title="Test Course",
     )
 
 
@@ -463,16 +427,16 @@ def course(db, organization):
 def event_create_data():
     """Valid data for creating an event."""
     return {
-        'title': 'New Test Event',
-        'description': 'A test event description',
-        'starts_at': (timezone.now() + timedelta(days=7)).isoformat(),
-        'ends_at': (timezone.now() + timedelta(days=7, hours=2)).isoformat(),
-        'timezone': 'UTC',
-        'max_attendees': 100,
-        'registration_enabled': True,
-        'cpd_credit_value': '1.5',
-        'event_type': 'webinar',
-        'event_format': 'online',
+        "title": "New Test Event",
+        "description": "A test event description",
+        "starts_at": (timezone.now() + timedelta(days=7)).isoformat(),
+        "ends_at": (timezone.now() + timedelta(days=7, hours=2)).isoformat(),
+        "timezone": "UTC",
+        "max_attendees": 100,
+        "registration_enabled": True,
+        "cpd_credit_value": "1.5",
+        "event_type": "webinar",
+        "event_format": "online",
     }
 
 
@@ -480,8 +444,8 @@ def event_create_data():
 def registration_create_data(user):
     """Valid data for creating a registration."""
     return {
-        'email': user.email,
-        'full_name': user.full_name,
+        "email": user.email,
+        "full_name": user.full_name,
     }
 
 
@@ -493,25 +457,25 @@ def registration_create_data(user):
 @pytest.fixture
 def mock_stripe(settings):
     """Mock Stripe API for billing tests."""
-    settings.STRIPE_SECRET_KEY = 'sk_test_mock'
+    settings.STRIPE_SECRET_KEY = "sk_test_mock"
     with (
-        patch('stripe.Customer') as mock_customer,
-        patch('stripe.Subscription') as mock_sub,
-        patch('stripe.checkout.Session') as mock_checkout,
-        patch('stripe.billing_portal.Session') as mock_portal,
-        patch('stripe.PaymentMethod') as mock_pm,
+        patch("stripe.Customer") as mock_customer,
+        patch("stripe.Subscription") as mock_sub,
+        patch("stripe.checkout.Session") as mock_checkout,
+        patch("stripe.billing_portal.Session") as mock_portal,
+        patch("stripe.PaymentMethod") as mock_pm,
     ):
-        mock_customer.create.return_value = MagicMock(id='cus_test123')
+        mock_customer.create.return_value = MagicMock(id="cus_test123")
         mock_sub.create.return_value = MagicMock(
-            id='sub_test123',
-            status='active',
+            id="sub_test123",
+            status="active",
         )
         mock_checkout.create.return_value = MagicMock(
-            id='cs_test123',
-            url='https://checkout.stripe.com/test',
+            id="cs_test123",
+            url="https://checkout.stripe.com/test",
         )
         mock_portal.create.return_value = MagicMock(
-            url='https://billing.stripe.com/test',
+            url="https://billing.stripe.com/test",
         )
         yield MagicMock(
             Customer=mock_customer,
@@ -527,8 +491,8 @@ def mock_zoom():
     """Mock Zoom API for integration tests."""
     mock_instance = MagicMock()
     mock_instance.create_meeting.return_value = {
-        'id': 123456789,
-        'join_url': 'https://zoom.us/j/123456789',
+        "id": 123456789,
+        "join_url": "https://zoom.us/j/123456789",
     }
     mock_instance.refresh_token.return_value = True
     yield mock_instance
@@ -537,14 +501,14 @@ def mock_zoom():
 @pytest.fixture
 def mock_email():
     """Mock email sending for tests."""
-    with patch('django.core.mail.send_mail') as mock:
+    with patch("django.core.mail.send_mail") as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_cloud_tasks():
     """Mock Google Cloud Tasks for async task tests."""
-    with patch('common.cloud_tasks.enqueue_task') as mock:
+    with patch("common.cloud_tasks.enqueue_task") as mock:
         yield mock
 
 
@@ -552,33 +516,33 @@ def mock_cloud_tasks():
 def stripe_products(db):
     from billing.models import StripePrice, StripeProduct
 
-    if not StripeProduct.objects.filter(plan='organizer').exists():
+    if not StripeProduct.objects.filter(plan="organizer").exists():
         prod = StripeProduct.objects.create(
-            name='Organizer',
-            plan='organizer',
-            stripe_product_id='prod_test_org',
+            name="Organizer",
+            plan="organizer",
+            stripe_product_id="prod_test_org",
             is_active=True,
         )
         StripePrice.objects.create(
             product=prod,
-            stripe_price_id='price_test_org_month',
+            stripe_price_id="price_test_org_month",
             amount_cents=2900,
-            currency='usd',
-            billing_interval='month',
+            currency="usd",
+            billing_interval="month",
             is_active=True,
         )
-    if not StripeProduct.objects.filter(plan='lms').exists():
+    if not StripeProduct.objects.filter(plan="lms").exists():
         prod = StripeProduct.objects.create(
-            name='LMS',
-            plan='lms',
-            stripe_product_id='prod_test_lms',
+            name="LMS",
+            plan="lms",
+            stripe_product_id="prod_test_lms",
             is_active=True,
         )
         StripePrice.objects.create(
             product=prod,
-            stripe_price_id='price_test_lms_month',
+            stripe_price_id="price_test_lms_month",
             amount_cents=9900,
-            currency='usd',
-            billing_interval='month',
+            currency="usd",
+            billing_interval="month",
             is_active=True,
         )

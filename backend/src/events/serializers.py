@@ -24,17 +24,17 @@ class EventCustomFieldSerializer(BaseModelSerializer):
     class Meta(BaseModelSerializer.Meta):
         model = EventCustomField
         fields = [
-            'uuid',
-            'field_type',
-            'label',
-            'placeholder',
-            'help_text',
-            'required',
-            'options',
-            'order',
-            'created_at',
+            "uuid",
+            "field_type",
+            "label",
+            "placeholder",
+            "help_text",
+            "required",
+            "options",
+            "order",
+            "created_at",
         ]
-        read_only_fields = ['uuid', 'created_at']
+        read_only_fields = ["uuid", "created_at"]
 
 
 class EventCustomFieldCreateSerializer(serializers.ModelSerializer):
@@ -43,17 +43,17 @@ class EventCustomFieldCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = EventCustomField
         fields = [
-            'field_type',
-            'label',
-            'placeholder',
-            'help_text',
-            'required',
-            'options',
-            'min_value',
-            'max_value',
-            'order',
+            "field_type",
+            "label",
+            "placeholder",
+            "help_text",
+            "required",
+            "options",
+            "min_value",
+            "max_value",
+            "order",
         ]
-        read_only_fields = ['uuid', 'created_at']
+        read_only_fields = ["uuid", "created_at"]
 
 
 # =============================================================================
@@ -69,18 +69,18 @@ class SpeakerSerializer(BaseModelSerializer):
     class Meta(BaseModelSerializer.Meta):
         model = Speaker
         fields = [
-            'uuid',
-            'name',
-            'bio',
-            'qualifications',
-            'photo',
-            'email',
-            'linkedin_url',
-            'is_active',
-            'owner_name',
-            'created_at',
+            "uuid",
+            "name",
+            "bio",
+            "qualifications",
+            "photo",
+            "email",
+            "linkedin_url",
+            "is_active",
+            "owner_name",
+            "created_at",
         ]
-        read_only_fields = ['uuid', 'owner_name', 'created_at']
+        read_only_fields = ["uuid", "owner_name", "created_at"]
 
     def get_owner_name(self, obj):
         return obj.owner.display_name
@@ -100,21 +100,21 @@ class EventSessionListSerializer(BaseModelSerializer):
     class Meta(BaseModelSerializer.Meta):
         model = EventSession
         fields = [
-            'uuid',
-            'title',
-            'description',
-            'speaker_names',
-            'order',
-            'starts_at',
-            'ends_at',
-            'duration_minutes',
-            'timezone',
-            'session_type',
-            'is_mandatory',
-            'is_published',
-            'is_past',
-            'cpd_credits',
-            'created_at',
+            "uuid",
+            "title",
+            "description",
+            "speaker_names",
+            "order",
+            "starts_at",
+            "ends_at",
+            "duration_minutes",
+            "timezone",
+            "session_type",
+            "is_mandatory",
+            "is_published",
+            "is_past",
+            "cpd_credits",
+            "created_at",
         ]
         read_only_fields = fields
 
@@ -130,40 +130,40 @@ class EventSessionDetailSerializer(BaseModelSerializer):
     class Meta(BaseModelSerializer.Meta):
         model = EventSession
         fields = [
-            'uuid',
-            'title',
-            'description',
-            'speaker_names',
-            'order',
-            'starts_at',
-            'ends_at',
-            'duration_minutes',
-            'timezone',
-            'session_type',
-            'has_separate_zoom',
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'zoom_host_url',
-            'cpd_credits',
-            'minimum_attendance_percent',
-            'minimum_required_minutes',
-            'is_mandatory',
-            'is_published',
-            'is_past',
-            'attendance_count',
-            'created_at',
-            'updated_at',
+            "uuid",
+            "title",
+            "description",
+            "speaker_names",
+            "order",
+            "starts_at",
+            "ends_at",
+            "duration_minutes",
+            "timezone",
+            "session_type",
+            "has_separate_zoom",
+            "zoom_meeting_id",
+            "zoom_join_url",
+            "zoom_host_url",
+            "cpd_credits",
+            "minimum_attendance_percent",
+            "minimum_required_minutes",
+            "is_mandatory",
+            "is_published",
+            "is_past",
+            "attendance_count",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = [
-            'uuid',
-            'ends_at',
-            'is_past',
-            'minimum_required_minutes',
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'attendance_count',
-            'created_at',
-            'updated_at',
+            "uuid",
+            "ends_at",
+            "is_past",
+            "minimum_required_minutes",
+            "zoom_meeting_id",
+            "zoom_join_url",
+            "attendance_count",
+            "created_at",
+            "updated_at",
         ]
 
     def get_attendance_count(self, obj):
@@ -177,22 +177,22 @@ class EventSessionCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = EventSession
         fields = [
-            'title',
-            'description',
-            'speaker_names',
-            'order',
-            'starts_at',
-            'duration_minutes',
-            'timezone',
-            'session_type',
-            'cpd_credits',
-            'minimum_attendance_percent',
-            'is_mandatory',
-            'is_published',
-            'has_separate_zoom',
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'zoom_host_url',
+            "title",
+            "description",
+            "speaker_names",
+            "order",
+            "starts_at",
+            "duration_minutes",
+            "timezone",
+            "session_type",
+            "cpd_credits",
+            "minimum_attendance_percent",
+            "is_mandatory",
+            "is_published",
+            "has_separate_zoom",
+            "zoom_meeting_id",
+            "zoom_join_url",
+            "zoom_host_url",
         ]
 
 
@@ -202,22 +202,22 @@ class EventSessionUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = EventSession
         fields = [
-            'title',
-            'description',
-            'speaker_names',
-            'order',
-            'starts_at',
-            'duration_minutes',
-            'timezone',
-            'session_type',
-            'cpd_credits',
-            'minimum_attendance_percent',
-            'is_mandatory',
-            'is_published',
-            'has_separate_zoom',
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'zoom_host_url',
+            "title",
+            "description",
+            "speaker_names",
+            "order",
+            "starts_at",
+            "duration_minutes",
+            "timezone",
+            "session_type",
+            "cpd_credits",
+            "minimum_attendance_percent",
+            "is_mandatory",
+            "is_published",
+            "has_separate_zoom",
+            "zoom_meeting_id",
+            "zoom_join_url",
+            "zoom_host_url",
         ]
 
 
@@ -230,27 +230,27 @@ class SessionReorderSerializer(serializers.Serializer):
 class SessionAttendanceSerializer(BaseModelSerializer):
     """Session attendance for a registration."""
 
-    session_title = serializers.CharField(source='session.title', read_only=True)
-    session_starts_at = serializers.DateTimeField(source='session.starts_at', read_only=True)
+    session_title = serializers.CharField(source="session.title", read_only=True)
+    session_starts_at = serializers.DateTimeField(source="session.starts_at", read_only=True)
     attendance_percent = serializers.IntegerField(read_only=True)
     final_eligibility = serializers.BooleanField(read_only=True)
 
     class Meta(BaseModelSerializer.Meta):
         model = SessionAttendance
         fields = [
-            'uuid',
-            'session',
-            'session_title',
-            'session_starts_at',
-            'joined_at',
-            'left_at',
-            'duration_minutes',
-            'attendance_percent',
-            'is_eligible',
-            'override_eligible',
-            'override_reason',
-            'final_eligibility',
-            'created_at',
+            "uuid",
+            "session",
+            "session_title",
+            "session_starts_at",
+            "joined_at",
+            "left_at",
+            "duration_minutes",
+            "attendance_percent",
+            "is_eligible",
+            "override_eligible",
+            "override_reason",
+            "final_eligibility",
+            "created_at",
         ]
         read_only_fields = fields
 
@@ -268,8 +268,8 @@ class SessionAttendanceOverrideSerializer(serializers.Serializer):
 
 
 def _validate_certificate_settings(attrs, instance=None):
-    certificates_enabled = attrs.get('certificates_enabled')
-    certificate_template = attrs.get('certificate_template')
+    certificates_enabled = attrs.get("certificates_enabled")
+    certificate_template = attrs.get("certificate_template")
 
     if instance is not None:
         if certificates_enabled is None:
@@ -279,15 +279,15 @@ def _validate_certificate_settings(attrs, instance=None):
 
     if certificates_enabled and not certificate_template:
         raise serializers.ValidationError(
-            {'certificate_template': 'Select a certificate template when certificates are enabled.'}
+            {"certificate_template": "Select a certificate template when certificates are enabled."}
         )
 
     return attrs
 
 
 def _validate_badge_settings(attrs, instance=None):
-    badges_enabled = attrs.get('badges_enabled')
-    badge_template = attrs.get('badge_template')
+    badges_enabled = attrs.get("badges_enabled")
+    badge_template = attrs.get("badge_template")
 
     if instance is not None:
         if badges_enabled is None:
@@ -296,9 +296,7 @@ def _validate_badge_settings(attrs, instance=None):
             badge_template = instance.badge_template
 
     if badges_enabled and not badge_template:
-        raise serializers.ValidationError(
-            {'badge_template': 'Select a badge template when badges are enabled.'}
-        )
+        raise serializers.ValidationError({"badge_template": "Select a badge template when badges are enabled."})
 
     return attrs
 
@@ -307,9 +305,7 @@ class EventListSerializer(SoftDeleteModelSerializer):
     """Lightweight event for list views."""
 
     owner_name = serializers.SerializerMethodField()
-    organization_info = serializers.SerializerMethodField()
     registration_count = serializers.IntegerField(read_only=True)
-    attendee_count = serializers.IntegerField(read_only=True)
     attendee_count = serializers.IntegerField(read_only=True)
     waitlist_count = serializers.IntegerField(read_only=True)
     featured_image_url = serializers.SerializerMethodField()
@@ -317,47 +313,35 @@ class EventListSerializer(SoftDeleteModelSerializer):
     class Meta(SoftDeleteModelSerializer.Meta):
         model = Event
         fields = [
-            'uuid',
-            'slug',
-            'title',
-            'status',
-            'event_type',
-            'starts_at',
-            'ends_at',
-            'timezone',
-            'price',
-            'currency',
-            'registration_count',
-            'attendee_count',
-            'waitlist_count',
-            'owner_name',
-            'organization_info',
-            'is_public',
-            'featured_image_url',
-            'certificates_enabled',
-            'require_feedback_for_certificate',
-            'created_at',
+            "uuid",
+            "slug",
+            "title",
+            "status",
+            "event_type",
+            "starts_at",
+            "ends_at",
+            "timezone",
+            "price",
+            "currency",
+            "registration_count",
+            "attendee_count",
+            "waitlist_count",
+            "owner_name",
+            "is_public",
+            "featured_image_url",
+            "certificates_enabled",
+            "require_feedback_for_certificate",
+            "created_at",
         ]
         read_only_fields = fields
 
     def get_owner_name(self, obj):
         return obj.owner.display_name
 
-    def get_organization_info(self, obj):
-        """Return organization info if event belongs to an organization."""
-        if obj.organization:
-            return {
-                'uuid': str(obj.organization.uuid),
-                'name': obj.organization.name,
-                'slug': obj.organization.slug,
-                'logo_url': obj.organization.logo.url if obj.organization.logo else None,
-            }
-        return None
-
     def get_featured_image_url(self, obj):
         """Return featured image URL."""
         if obj.featured_image:
-            request = self.context.get('request')
+            request = self.context.get("request")
             if request:
                 return request.build_absolute_uri(obj.featured_image.url)
             return obj.featured_image.url
@@ -371,127 +355,127 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
     custom_fields = EventCustomFieldSerializer(many=True, read_only=True)
     status_transitions = serializers.SerializerMethodField()
     # Field aliases to match API contract with model field names
-    capacity = serializers.IntegerField(source='max_attendees', read_only=True)
-    zoom_passcode = serializers.CharField(source='zoom_password', read_only=True)
-    cpd_credits = serializers.DecimalField(source='cpd_credit_value', max_digits=5, decimal_places=2, read_only=True)
-    cpd_type = serializers.CharField(source='cpd_credit_type', read_only=True)
+    capacity = serializers.IntegerField(source="max_attendees", read_only=True)
+    zoom_passcode = serializers.CharField(source="zoom_password", read_only=True)
+    cpd_credits = serializers.DecimalField(source="cpd_credit_value", max_digits=5, decimal_places=2, read_only=True)
+    cpd_type = serializers.CharField(source="cpd_credit_type", read_only=True)
     featured_image_url = serializers.SerializerMethodField()
-    attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
-    attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
-    certificate_template = serializers.SlugRelatedField(read_only=True, slug_field='uuid')
-    badge_template = serializers.SlugRelatedField(read_only=True, slug_field='uuid')
+    attendee_count = serializers.IntegerField(source="attendance_count", read_only=True)
+    attendee_count = serializers.IntegerField(source="attendance_count", read_only=True)
+    certificate_template = serializers.SlugRelatedField(read_only=True, slug_field="uuid")
+    badge_template = serializers.SlugRelatedField(read_only=True, slug_field="uuid")
     speakers = SpeakerSerializer(many=True, read_only=True)
     sessions = EventSessionListSerializer(many=True, read_only=True)
 
     class Meta(SoftDeleteModelSerializer.Meta):
         model = Event
         fields = [
-            'uuid',
-            'slug',
-            'title',
-            'short_description',
-            'description',
-            'status',
-            'event_type',
-            'format',
+            "uuid",
+            "slug",
+            "title",
+            "short_description",
+            "description",
+            "status",
+            "event_type",
+            "format",
             # Scheduling
-            'starts_at',
-            'ends_at',
-            'timezone',
-            'duration_minutes',
+            "starts_at",
+            "ends_at",
+            "timezone",
+            "duration_minutes",
             # Multi-session fields (H2)
-            'is_multi_session',
-            'minimum_attendance_percent',
-            'minimum_attendance_minutes',
+            "is_multi_session",
+            "minimum_attendance_percent",
+            "minimum_attendance_minutes",
             # Registration
-            'registration_enabled',
-            'registration_deadline',
-            'registration_opens_at',
-            'registration_closes_at',
-            'price',
-            'currency',
-            'capacity',
-            'waitlist_enabled',
-            'waitlist_max',
-            'waitlist_auto_promote',
+            "registration_enabled",
+            "registration_deadline",
+            "registration_opens_at",
+            "registration_closes_at",
+            "price",
+            "currency",
+            "capacity",
+            "waitlist_enabled",
+            "waitlist_max",
+            "waitlist_auto_promote",
             # Zoom
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'zoom_passcode',
-            'zoom_settings',
-            'zoom_error',
-            'zoom_error_at',
+            "zoom_meeting_id",
+            "zoom_join_url",
+            "zoom_passcode",
+            "zoom_settings",
+            "zoom_error",
+            "zoom_error_at",
             # CPD
-            'cpd_credits',
-            'cpd_type',
+            "cpd_credits",
+            "cpd_type",
             # Certificates
-            'certificates_enabled',
-            'certificate_template',
-            'auto_issue_certificates',
-            'require_feedback_for_certificate',
+            "certificates_enabled",
+            "certificate_template",
+            "auto_issue_certificates",
+            "require_feedback_for_certificate",
             # Badges
-            'badges_enabled',
-            'badge_template',
-            'auto_issue_badges',
+            "badges_enabled",
+            "badge_template",
+            "auto_issue_badges",
             # Branding
-            'featured_image_url',
-            'location',
-            'is_public',
+            "featured_image_url",
+            "location",
+            "is_public",
             # Counts
-            'registration_count',
-            'attendee_count',
-            'waitlist_count',
-            'capacity',
+            "registration_count",
+            "attendee_count",
+            "waitlist_count",
+            "capacity",
             # Owner
-            'owner',
+            "owner",
             # Custom fields
-            'custom_fields',
+            "custom_fields",
             # CPD & Education
-            'learning_objectives',
-            'speakers',
+            "learning_objectives",
+            "speakers",
             # Sessions
-            'sessions',
+            "sessions",
             # Status transitions
-            'status_transitions',
+            "status_transitions",
             # Timestamps
-            'created_at',
-            'updated_at',
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = [
-            'uuid',
-            'slug',
-            'status',
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'registration_count',
-            'attendee_count',
-            'waitlist_count',
-            'created_at',
-            'updated_at',
+            "uuid",
+            "slug",
+            "status",
+            "zoom_meeting_id",
+            "zoom_join_url",
+            "registration_count",
+            "attendee_count",
+            "waitlist_count",
+            "created_at",
+            "updated_at",
         ]
 
     def get_owner(self, obj):
         return {
-            'uuid': str(obj.owner.uuid),
-            'display_name': obj.owner.display_name,
+            "uuid": str(obj.owner.uuid),
+            "display_name": obj.owner.display_name,
         }
 
     def get_status_transitions(self, obj):
         """Available status transitions for current status."""
         transitions = {
-            'draft': ['published'],
-            'published': ['live', 'cancelled', 'draft'],
-            'live': ['completed'],
-            'completed': ['closed'],
-            'closed': [],
-            'cancelled': [],
+            "draft": ["published"],
+            "published": ["live", "cancelled", "draft"],
+            "live": ["completed"],
+            "completed": ["closed"],
+            "closed": [],
+            "cancelled": [],
         }
         return transitions.get(obj.status, [])
 
     def get_featured_image_url(self, obj):
         """Return featured image URL, preferring uploaded image over URL."""
         if obj.featured_image:
-            request = self.context.get('request')
+            request = self.context.get("request")
             if request:
                 return request.build_absolute_uri(obj.featured_image.url)
             return obj.featured_image.url
@@ -505,72 +489,69 @@ class EventCreateSerializer(serializers.ModelSerializer):
     auto_issue_certificates = serializers.BooleanField(required=False, default=False)
     custom_fields = EventCustomFieldCreateSerializer(many=True, required=False)
     certificate_template = serializers.SlugRelatedField(
-        slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
+        slug_field="uuid", queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
     badges_enabled = serializers.BooleanField(required=False, default=False)
     auto_issue_badges = serializers.BooleanField(required=False, default=False)
     badge_template = serializers.SlugRelatedField(
-        slug_field='uuid', queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
+        slug_field="uuid", queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
     )
-    organization = serializers.UUIDField(required=False, allow_null=True, write_only=True)
-    speakers = serializers.SlugRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
+    speakers = serializers.SlugRelatedField(slug_field="uuid", queryset=Speaker.objects.all(), many=True, required=False)
 
     class Meta:
         model = Event
         fields = [
-            'uuid',
-            'slug',
-            'title',
-            'status',
-            'short_description',
-            'description',
-            'event_type',
-            'format',
+            "uuid",
+            "slug",
+            "title",
+            "status",
+            "short_description",
+            "description",
+            "event_type",
+            "format",
             # Scheduling
-            'starts_at',
-            'duration_minutes',
-            'timezone',
+            "starts_at",
+            "duration_minutes",
+            "timezone",
             # Registration
-            'registration_enabled',
-            'registration_deadline',
-            'registration_opens_at',
-            'registration_closes_at',
-            'max_attendees',
-            'price',
-            'currency',
-            'waitlist_enabled',
-            'waitlist_max',
-            'waitlist_auto_promote',
+            "registration_enabled",
+            "registration_deadline",
+            "registration_opens_at",
+            "registration_closes_at",
+            "max_attendees",
+            "price",
+            "currency",
+            "waitlist_enabled",
+            "waitlist_max",
+            "waitlist_auto_promote",
             # CPD
-            'cpd_credit_value',
-            'cpd_credit_type',
+            "cpd_credit_value",
+            "cpd_credit_type",
             # Certificates
-            'certificates_enabled',
-            'certificate_template',
-            'auto_issue_certificates',
-            'require_feedback_for_certificate',
+            "certificates_enabled",
+            "certificate_template",
+            "auto_issue_certificates",
+            "require_feedback_for_certificate",
             # Badges
-            'badges_enabled',
-            'badge_template',
-            'auto_issue_badges',
+            "badges_enabled",
+            "badge_template",
+            "auto_issue_badges",
             # Branding
-            'is_public',
-            'custom_fields',
+            "is_public",
+            "custom_fields",
             # Attendance
-            'minimum_attendance_percent',
-            'minimum_attendance_minutes',
-            'zoom_settings',
+            "minimum_attendance_percent",
+            "minimum_attendance_minutes",
+            "zoom_settings",
             # Location
-            'location',
+            "location",
             # Multi-session
-            'is_multi_session',
+            "is_multi_session",
             # Education
-            'learning_objectives',
-            'speakers',
-            # Organization (optional, for org-owned events)
-            'organization',
+            "learning_objectives",
+            "speakers",
         ]
-        read_only_fields = ['uuid', 'slug']
+        read_only_fields = ["uuid", "slug"]
 
     def validate(self, attrs):
         attrs = _validate_certificate_settings(attrs)
@@ -578,24 +559,19 @@ class EventCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        custom_fields_data = validated_data.pop('custom_fields', [])
-        speakers_data = validated_data.pop('speakers', None)
-        organization_uuid = validated_data.pop('organization', None)
-
-        # Handle write-only organization UUID
-        if organization_uuid:
-            validated_data['organization_id'] = organization_uuid
+        custom_fields_data = validated_data.pop("custom_fields", [])
+        speakers_data = validated_data.pop("speakers", None)
 
         # Generate unique slug (M1)
-        title = validated_data.get('title', '')
+        title = validated_data.get("title", "")
         base_slug = slugify(title)[:40]
-        validated_data['slug'] = generate_unique_slug(Event, base_slug)
+        validated_data["slug"] = generate_unique_slug(Event, base_slug)
 
         event = super().create(validated_data)
 
         # Create custom fields
         for order, field_data in enumerate(custom_fields_data):
-            field_data['order'] = order
+            field_data["order"] = order
             EventCustomField.objects.create(event=event, **field_data)
 
         # Set speakers
@@ -609,61 +585,61 @@ class EventUpdateSerializer(serializers.ModelSerializer):
     """Update existing event."""
 
     certificate_template = serializers.SlugRelatedField(
-        slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
+        slug_field="uuid", queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
     certificate_template = serializers.SlugRelatedField(
-        slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
+        slug_field="uuid", queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
     badge_template = serializers.SlugRelatedField(
-        slug_field='uuid', queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
+        slug_field="uuid", queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
     )
-    speakers = serializers.SlugRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
+    speakers = serializers.SlugRelatedField(slug_field="uuid", queryset=Speaker.objects.all(), many=True, required=False)
 
     class Meta:
         model = Event
         fields = [
-            'title',
-            'short_description',
-            'description',
-            'format',
+            "title",
+            "short_description",
+            "description",
+            "format",
             # Scheduling
-            'starts_at',
-            'duration_minutes',
-            'timezone',
+            "starts_at",
+            "duration_minutes",
+            "timezone",
             # Registration
-            'registration_enabled',
-            'registration_opens_at',
-            'registration_closes_at',
-            'max_attendees',
-            'price',
-            'currency',
-            'waitlist_enabled',
-            'waitlist_max',
-            'waitlist_auto_promote',
+            "registration_enabled",
+            "registration_opens_at",
+            "registration_closes_at",
+            "max_attendees",
+            "price",
+            "currency",
+            "waitlist_enabled",
+            "waitlist_max",
+            "waitlist_auto_promote",
             # CPD
-            'cpd_credit_value',
-            'cpd_credit_type',
+            "cpd_credit_value",
+            "cpd_credit_type",
             # Certificates
-            'certificates_enabled',
-            'certificate_template',
-            'auto_issue_certificates',
-            'require_feedback_for_certificate',
+            "certificates_enabled",
+            "certificate_template",
+            "auto_issue_certificates",
+            "require_feedback_for_certificate",
             # Badges
-            'badges_enabled',
-            'badge_template',
-            'auto_issue_badges',
+            "badges_enabled",
+            "badge_template",
+            "auto_issue_badges",
             # Branding
-            'is_public',
-            'minimum_attendance_percent',
-            'minimum_attendance_minutes',
-            'zoom_settings',
+            "is_public",
+            "minimum_attendance_percent",
+            "minimum_attendance_minutes",
+            "zoom_settings",
             # Location
-            'location',
+            "location",
             # Multi-session
-            'is_multi_session',
+            "is_multi_session",
             # Education
-            'learning_objectives',
-            'speakers',
+            "learning_objectives",
+            "speakers",
         ]
 
     def validate(self, attrs):
@@ -699,16 +675,16 @@ class PublicSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = EventSession
         fields = [
-            'uuid',
-            'title',
-            'description',
-            'speaker_names',
-            'order',
-            'starts_at',
-            'ends_at',
-            'duration_minutes',
-            'session_type',
-            'is_mandatory',
+            "uuid",
+            "title",
+            "description",
+            "speaker_names",
+            "order",
+            "starts_at",
+            "ends_at",
+            "duration_minutes",
+            "session_type",
+            "is_mandatory",
         ]
         read_only_fields = fields
 
@@ -717,50 +693,37 @@ class PublicEventListSerializer(serializers.ModelSerializer):
     """Public event list for discovery."""
 
     organizer_name = serializers.SerializerMethodField()
-    organization_info = serializers.SerializerMethodField()
     is_registration_open = serializers.SerializerMethodField()
     # Field aliases to match API contract with model field names
-    cpd_credits = serializers.DecimalField(source='cpd_credit_value', max_digits=5, decimal_places=2, read_only=True)
+    cpd_credits = serializers.DecimalField(source="cpd_credit_value", max_digits=5, decimal_places=2, read_only=True)
     featured_image_url = serializers.SerializerMethodField()
-    capacity = serializers.IntegerField(source='max_attendees', read_only=True)
+    capacity = serializers.IntegerField(source="max_attendees", read_only=True)
 
     class Meta:
         model = Event
         fields = [
-            'uuid',
-            'slug',
-            'title',
-            'short_description',
-            'event_type',
-            'format',
-            'starts_at',
-            'ends_at',
-            'duration_minutes',
-            'timezone',
-            'cpd_credits',
-            'organizer_name',
-            'organization_info',
-            'featured_image_url',
-            'is_registration_open',
-            'registration_enabled',
-            'registration_deadline',
-            'registration_count',
-            'capacity',
+            "uuid",
+            "slug",
+            "title",
+            "short_description",
+            "event_type",
+            "format",
+            "starts_at",
+            "ends_at",
+            "duration_minutes",
+            "timezone",
+            "cpd_credits",
+            "organizer_name",
+            "featured_image_url",
+            "is_registration_open",
+            "registration_enabled",
+            "registration_deadline",
+            "registration_count",
+            "capacity",
         ]
 
     def get_organizer_name(self, obj):
         return obj.owner.display_name
-
-    def get_organization_info(self, obj):
-        if obj.organization:
-            return {
-                'uuid': str(obj.organization.uuid),
-                'name': obj.organization.name,
-                'slug': obj.organization.slug,
-                'logo_url': obj.organization.effective_logo_url,
-                'primary_color': obj.organization.primary_color,
-            }
-        return None
 
     def get_is_registration_open(self, obj):
         now = timezone.now()
@@ -773,7 +736,7 @@ class PublicEventListSerializer(serializers.ModelSerializer):
     def get_featured_image_url(self, obj):
         """Return featured image URL, preferring uploaded image over URL."""
         if obj.featured_image:
-            request = self.context.get('request')
+            request = self.context.get("request")
             if request:
                 return request.build_absolute_uri(obj.featured_image.url)
             return obj.featured_image.url
@@ -790,28 +753,28 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
 
     class Meta(PublicEventListSerializer.Meta):
         fields = PublicEventListSerializer.Meta.fields + [
-            'description',
-            'custom_fields',
-            'organizer',
-            'certificates_enabled',
-            'waitlist_enabled',
-            'spots_remaining',
-            'is_multi_session',
-            'sessions',
-            'sessions',
-            'location',
+            "description",
+            "custom_fields",
+            "organizer",
+            "certificates_enabled",
+            "waitlist_enabled",
+            "spots_remaining",
+            "is_multi_session",
+            "sessions",
+            "sessions",
+            "location",
             # Education
-            'learning_objectives',
-            'speakers',
+            "learning_objectives",
+            "speakers",
         ]
 
     speakers = SpeakerSerializer(many=True, read_only=True)
 
     def get_organizer(self, obj):
         return {
-            'uuid': str(obj.owner.uuid),
-            'display_name': obj.owner.display_name,
-            'logo_url': obj.owner.organizer_logo_url,
+            "uuid": str(obj.owner.uuid),
+            "display_name": obj.owner.display_name,
+            "logo_url": obj.owner.organizer_logo_url,
         }
 
     def get_spots_remaining(self, obj):
@@ -823,25 +786,26 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
         """Return published sessions for multi-session events."""
         if not obj.is_multi_session:
             return []
-        sessions = obj.sessions.filter(is_published=True).order_by('order', 'starts_at')
+        sessions = obj.sessions.filter(is_published=True).order_by("order", "starts_at")
         return PublicSessionSerializer(sessions, many=True).data
 
 
 class EventStatusHistorySerializer(BaseModelSerializer):
     """Event status change log."""
 
-    changed_by_name = serializers.CharField(source='changed_by.full_name', read_only=True)
+    changed_by_name = serializers.CharField(source="changed_by.full_name", read_only=True)
 
     class Meta(BaseModelSerializer.Meta):
         model = EventStatusHistory
         fields = [
-            'uuid',
-            'from_status',
-            'to_status',
-            'reason',
-            'changed_by_name',
-            'created_at',
+            "uuid",
+            "from_status",
+            "to_status",
+            "reason",
+            "changed_by_name",
+            "created_at",
         ]
+
 
 class UnmatchedParticipantSerializer(serializers.Serializer):
     """Zoom participant not matched to any registration."""
