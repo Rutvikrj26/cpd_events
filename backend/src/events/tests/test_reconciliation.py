@@ -1,10 +1,12 @@
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from django.utils import timezone
 from rest_framework import status
+
 from events.models import Event
-from registrations.models import Registration, AttendanceRecord
-from events.serializers import UnmatchedParticipantSerializer
+from registrations.models import AttendanceRecord, Registration
+
 
 @pytest.mark.django_db
 class TestEventReconciliation:
@@ -106,7 +108,7 @@ class TestEventReconciliation:
         response = api_client.post(url, payload)
 
         assert response.status_code == status.HTTP_200_OK
-        
+
         # Verify AttendanceRecord was created
         record = AttendanceRecord.objects.get(event=event, registration=reg)
         assert record.zoom_user_email == 'zoom_user@example.com'

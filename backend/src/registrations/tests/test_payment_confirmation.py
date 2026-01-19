@@ -6,16 +6,15 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.utils import timezone
 
-from registrations.services import payment_confirmation_service
+from factories import RegistrationFactory
 from registrations.models import Registration
-from factories import RegistrationFactory, EventFactory
+from registrations.services import payment_confirmation_service
 
 
 @pytest.mark.django_db
 class TestPaymentConfirmationService:
-    
+
     @pytest.fixture
     def setup_service(self, settings):
         settings.STRIPE_SECRET_KEY = 'sk_test_123'
@@ -80,7 +79,7 @@ class TestPaymentConfirmationService:
 
         assert result['status'] == 'failed'
         assert result['message'] == 'Card declined'
-        
+
         registration.refresh_from_db()
         assert registration.payment_status == Registration.PaymentStatus.FAILED
         mock_release.assert_called_once_with(registration)
@@ -90,11 +89,11 @@ class TestPaymentConfirmationService:
         """Should return processing status."""
         mock_intent = MagicMock(status='processing')
         mock_retrieve.return_value = mock_intent
-        
+
         # We mock time.sleep to avoid wait
         with patch('time.sleep'):
              result = setup_service.confirm_registration_payment(registration, max_retries=2)
-             
+
         assert result['status'] == 'processing'
 
     @patch('billing.services.stripe_payment_service.retrieve_payment_intent')
@@ -104,16 +103,16 @@ class TestPaymentConfirmationService:
         # Set event capacity to 1
         registration.event.max_attendees = 1
         registration.event.save()
-        
+
         # Create another confirmed registration to fill capacity
         RegistrationFactory(
             event=registration.event,
             status=Registration.Status.CONFIRMED
         )
-        
+
         mock_intent = MagicMock(status='succeeded', amount_received=10000)
         mock_retrieve.return_value = mock_intent
-        
+
         mock_refund.return_value = {'success': True}
 
         result = setup_service.confirm_registration_payment(registration)

@@ -5,7 +5,6 @@ Tests for CertificateService.
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.utils import timezone
 
 from certificates.services import certificate_service
 
@@ -27,13 +26,12 @@ class TestCertificateService:
             cert.save()
             return 'http://example.com/cert.pdf'
 
-        with patch.object(certificate_service, 'generate_pdf', return_value=b'pdf-content'):
-            with patch.object(
-                certificate_service, 'upload_pdf', side_effect=mock_upload
-            ):
-                result = certificate_service.issue_certificate(
-                    attended_registration, template=certificate_template, issued_by=organizer
-                )
+        with patch.object(certificate_service, 'generate_pdf', return_value=b'pdf-content'), patch.object(
+            certificate_service, 'upload_pdf', side_effect=mock_upload
+        ):
+            result = certificate_service.issue_certificate(
+                attended_registration, template=certificate_template, issued_by=organizer
+            )
 
         assert result['success'] is True
         certificate = result['certificate']
@@ -64,13 +62,13 @@ class TestCertificateService:
         mock_sub = MagicMock()
         mock_sub.check_certificate_limit.return_value = False
         mock_sub.limits = {'certificates_per_month': 10}
-        
+
         # We need to attach this mock to the owner
         # Since owner is a model instance, we can just patch 'subscription' property if it existed
         # But it's likely a related object. Let's just mock getattr or the attribute.
         # Assuming the code uses getattr(owner, 'subscription', None)
-        
-        # Depending on how subscription is implemented (OneToOne usually), 
+
+        # Depending on how subscription is implemented (OneToOne usually),
         # let's try to mock the attribute on the user instance provided by the fixture
         with patch.object(type(organizer), 'subscription', mock_sub, create=True):
              result = certificate_service.issue_certificate(
@@ -102,11 +100,11 @@ class TestCertificateService:
 
         assert result == b'pdf-bytes'
         mock_render.assert_called_once()
-    
+
     def test_generate_pdf_no_template(self, certificate):
         """Test generate_pdf fails if certificate has no template."""
         certificate.template = None
-        
+
         # Check that it handles it gracefully
         result = certificate_service.generate_pdf(certificate)
         assert result is None
@@ -115,9 +113,9 @@ class TestCertificateService:
     def test_upload_pdf_gcs_success(self, mock_upload, certificate):
         """Test uploading to GCS."""
         mock_upload.return_value = 'gs://bucket/cert.pdf'
-        
+
         result = certificate_service.upload_pdf(certificate, b'content')
-        
+
         assert result == 'gs://bucket/cert.pdf'
         certificate.refresh_from_db()
         assert certificate.file_url == 'gs://bucket/cert.pdf'
@@ -126,11 +124,10 @@ class TestCertificateService:
     def test_upload_pdf_fallback(self, mock_upload, certificate):
         """Test fallback to local storage if GCS fails."""
         mock_upload.side_effect = Exception("GCS Error")
-        
-        with patch('builtins.open', new_callable=MagicMock) as mock_open:
-            with patch('os.makedirs'):
-                result = certificate_service.upload_pdf(certificate, b'content')
-        
+
+        with patch('builtins.open', new_callable=MagicMock) as mock_open, patch('os.makedirs'):
+            result = certificate_service.upload_pdf(certificate, b'content')
+
         # Should return a local URL
         assert result.startswith('/media/certificates/')
         assert result.endswith('.pdf')

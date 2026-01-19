@@ -41,11 +41,19 @@ export function ResetPasswordPage() {
 
     const form = useForm<z.infer<typeof resetPasswordSchema>>({
         resolver: zodResolver(resetPasswordSchema),
+        mode: "onChange",
         defaultValues: {
             password: "",
             confirmPassword: "",
         },
     });
+
+    // Debug errors
+    React.useEffect(() => {
+        if (Object.keys(form.formState.errors).length > 0) {
+            console.log("Form Errors:", form.formState.errors);
+        }
+    }, [form.formState.errors]);
 
     // Validate URL parameters
     if (!token) {
@@ -84,6 +92,7 @@ export function ResetPasswordPage() {
             await confirmPasswordReset({
                 token,
                 new_password: values.password,
+                new_password_confirm: values.confirmPassword,
             });
             setIsSuccess(true);
             toast.success("Password reset successfully!");
@@ -141,17 +150,17 @@ export function ResetPasswordPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>New Password</FormLabel>
-                                    <FormControl>
-                                        <div className="relative">
-                                            <Lock className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
+                                    <div className="relative">
+                                        <Lock className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground z-10" />
+                                        <FormControl>
                                             <Input
                                                 type="password"
                                                 placeholder="Enter new password"
                                                 className="pl-10"
                                                 {...field}
                                             />
-                                        </div>
-                                    </FormControl>
+                                        </FormControl>
+                                    </div>
                                     <FormMessage />
                                 </FormItem>
                             )}
@@ -162,17 +171,17 @@ export function ResetPasswordPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Confirm Password</FormLabel>
-                                    <FormControl>
-                                        <div className="relative">
-                                            <Lock className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
+                                    <div className="relative">
+                                        <Lock className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground z-10" />
+                                        <FormControl>
                                             <Input
                                                 type="password"
                                                 placeholder="Confirm new password"
                                                 className="pl-10"
                                                 {...field}
                                             />
-                                        </div>
-                                    </FormControl>
+                                        </FormControl>
+                                    </div>
                                     <FormMessage />
                                 </FormItem>
                             )}

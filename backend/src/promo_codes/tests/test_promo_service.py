@@ -2,31 +2,29 @@
 Tests for PromoCodeService.
 """
 
-from decimal import Decimal
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from decimal import Decimal
 
 import pytest
 from django.utils import timezone
-from django.core.exceptions import ValidationError
 
-from promo_codes.services import (
-    PromoCodeService,
-    PromoCodeInactiveError,
-    PromoCodeExpiredError,
-    PromoCodeNotYetValidError,
-    PromoCodeExhaustedError,
-    PromoCodeUserLimitError,
-    PromoCodeNotApplicableError,
-    PromoCodeMinimumNotMetError,
-)
-from promo_codes.models import PromoCode
 from factories import EventFactory, RegistrationFactory
+from promo_codes.models import PromoCode
+from promo_codes.services import (
+    PromoCodeExhaustedError,
+    PromoCodeExpiredError,
+    PromoCodeInactiveError,
+    PromoCodeMinimumNotMetError,
+    PromoCodeNotApplicableError,
+    PromoCodeNotYetValidError,
+    PromoCodeService,
+    PromoCodeUserLimitError,
+)
 
 
 @pytest.mark.django_db
 class TestPromoCodeService:
-    
+
     @pytest.fixture
     def event(self, db):
         return EventFactory(price=Decimal('100.00'), currency='USD')
@@ -49,7 +47,7 @@ class TestPromoCodeService:
         """Should find code case-insensitively."""
         found = PromoCodeService.find_code('testcode', event)
         assert found == promo_code
-        
+
         found_upper = PromoCodeService.find_code('TESTCODE', event)
         assert found_upper == promo_code
 
@@ -67,7 +65,7 @@ class TestPromoCodeService:
         """Should fail if inactive."""
         promo_code.is_active = False
         promo_code.save()
-        
+
         with pytest.raises(PromoCodeInactiveError):
             PromoCodeService.validate_code(promo_code, event, 'test@example.com')
 
@@ -75,7 +73,7 @@ class TestPromoCodeService:
         """Should fail if expired."""
         promo_code.valid_until = timezone.now() - timedelta(days=1)
         promo_code.save()
-        
+
         with pytest.raises(PromoCodeExpiredError):
             PromoCodeService.validate_code(promo_code, event, 'test@example.com')
 
@@ -83,7 +81,7 @@ class TestPromoCodeService:
         """Should fail if valid_from is in future."""
         promo_code.valid_from = timezone.now() + timedelta(days=1)
         promo_code.save()
-        
+
         with pytest.raises(PromoCodeNotYetValidError):
             PromoCodeService.validate_code(promo_code, event, 'test@example.com')
 
@@ -92,7 +90,7 @@ class TestPromoCodeService:
         promo_code.current_uses = 10
         promo_code.max_uses = 10
         promo_code.save()
-        
+
         with pytest.raises(PromoCodeExhaustedError):
             PromoCodeService.validate_code(promo_code, event, 'test@example.com')
 
@@ -101,7 +99,7 @@ class TestPromoCodeService:
         # Create usage
         reg = RegistrationFactory(event=event, email='user@example.com')
         PromoCodeService.apply_code(promo_code, reg, event.price)
-        
+
         with pytest.raises(PromoCodeUserLimitError):
             PromoCodeService.validate_code(promo_code, event, 'user@example.com')
 
@@ -109,7 +107,7 @@ class TestPromoCodeService:
         """Should fail if not applicable to event."""
         other_event = EventFactory(owner=event.owner, price=Decimal('100.00'))
         # Code is linked to 'event', not 'other_event'
-        
+
         with pytest.raises(PromoCodeNotApplicableError):
             PromoCodeService.validate_code(promo_code, other_event, 'test@example.com')
 
@@ -117,16 +115,16 @@ class TestPromoCodeService:
         """Should fail if event price < minimum_order_amount."""
         promo_code.minimum_order_amount = Decimal('200.00')
         promo_code.save()
-        
+
         with pytest.raises(PromoCodeMinimumNotMetError):
             PromoCodeService.validate_code(promo_code, event, 'test@example.com')
 
     def test_apply_code_atomic(self, promo_code, event):
         """Should atomically increment usage."""
         reg = RegistrationFactory(event=event, email='apply@example.com')
-        
+
         usage = PromoCodeService.apply_code(promo_code, reg, event.price)
-        
+
         promo_code.refresh_from_db()
         assert promo_code.current_uses == 1
         assert usage.discount_amount == Decimal('10.00') # 10% of 100
@@ -140,14 +138,14 @@ class TestPromoCodeService:
         promo_code.current_uses = 9
         promo_code.max_uses = 10
         promo_code.save()
-        
+
         # First use OK
         reg1 = RegistrationFactory(event=event, email='user1@example.com')
         PromoCodeService.apply_code(promo_code, reg1, event.price)
-        
+
         promo_code.refresh_from_db()
         assert promo_code.current_uses == 10
-        
+
         # Second use should fail
         reg2 = RegistrationFactory(event=event, email='user2@example.com')
         with pytest.raises(PromoCodeExhaustedError):
@@ -156,7 +154,7 @@ class TestPromoCodeService:
     def test_validate_and_preview(self, promo_code, event):
         """Verify preview dictionary structure."""
         res = PromoCodeService.validate_and_preview('TESTCODE', event, 'new@example.com')
-        
+
         assert res['valid'] is True
         assert res['code'] == 'TESTCODE'
         assert res['discount_amount'] == '10.00'

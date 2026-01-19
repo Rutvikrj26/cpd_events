@@ -6,7 +6,6 @@ import csv
 import io
 import json
 from datetime import date
-from decimal import Decimal
 
 from django.http import HttpResponse
 

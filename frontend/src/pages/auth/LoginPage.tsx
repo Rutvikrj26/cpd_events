@@ -52,7 +52,23 @@ export function LoginPage() {
     try {
       await login({ email: values.email, password: values.password });
       toast.success("Logged in successfully");
-      navigate(returnUrl || "/dashboard");
+
+      // SMART REDIRECT LOGIC
+      // 1. Return URL (explicit intent)
+      if (returnUrl) {
+        navigate(returnUrl);
+        return;
+      }
+
+      // 2. Last active organization (pick up where left off)
+      const lastOrgSlug = localStorage.getItem("current_org_slug");
+      if (lastOrgSlug) {
+        navigate(`/org/${lastOrgSlug}`);
+        return;
+      }
+
+      // 3. Default fallback
+      navigate("/dashboard");
     } catch (error) {
       toast.error("Invalid email or password");
     } finally {

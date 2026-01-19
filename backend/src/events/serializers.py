@@ -673,7 +673,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
         instance = self.instance
         if instance and instance.starts_at <= timezone.now():
             raise serializers.ValidationError("Cannot edit event details after the event has started.")
-        
+
         attrs = _validate_certificate_settings(attrs, instance=instance)
         attrs = _validate_badge_settings(attrs, instance=instance)
         return attrs

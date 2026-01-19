@@ -1,15 +1,15 @@
+from datetime import timedelta
+from unittest.mock import MagicMock, patch
+
 import pytest
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from datetime import timedelta, datetime
-from unittest.mock import MagicMock, patch
 
-from billing.models import Subscription, StripeProduct
 from billing.admin import SubscriptionAdmin
-from billing.services import StripeService
-from organizations.models import Organization, OrganizationSubscription
+from billing.models import Subscription
 from organizations.admin import OrganizationSubscriptionAdmin
+from organizations.models import Organization, OrganizationSubscription
 
 User = get_user_model()
 
@@ -83,16 +83,16 @@ class TestAdminTrialSync:
         site = AdminSite()
         admin = SubscriptionAdmin(Subscription, site)
         request = MockRequest(user=user)
-        
+
         # Simulate form data with changed trial_ends_at
         new_trial_end = timezone.now() + timedelta(days=30)
         subscription.trial_ends_at = new_trial_end
-        
+
         form = MagicMock()
         form.changed_data = ['trial_ends_at']
-        
+
         admin.save_model(request, subscription, form, change=True)
-        
+
         # Verify service was called
         mock_stripe_service.update_subscription_trial.assert_called_once_with(
             "sub_test_123", new_trial_end
@@ -104,28 +104,28 @@ class TestAdminTrialSync:
         site = AdminSite()
         admin = SubscriptionAdmin(Subscription, site)
         request = MockRequest(user=user)
-        
+
         form = MagicMock()
         form.changed_data = [] # Nothing changed
-        
+
         admin.save_model(request, subscription, form, change=True)
-        
+
         mock_stripe_service.update_subscription_trial.assert_not_called()
 
     def test_org_subscription_admin_save_model_syncs_trial(self, user, org_subscription, mock_org_stripe_service, mock_org_messages):
         site = AdminSite()
         admin = OrganizationSubscriptionAdmin(OrganizationSubscription, site)
         request = MockRequest(user=user)
-        
+
         # Simulate form data with changed trial_ends_at
         new_trial_end = timezone.now() + timedelta(days=45)
         org_subscription.trial_ends_at = new_trial_end
-        
+
         form = MagicMock()
         form.changed_data = ['trial_ends_at']
-        
+
         admin.save_model(request, org_subscription, form, change=True)
-        
+
         # Verify service was called
         mock_org_stripe_service.update_subscription_trial.assert_called_once_with(
             "sub_org_123", new_trial_end

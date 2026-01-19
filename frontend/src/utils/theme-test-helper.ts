@@ -49,7 +49,7 @@ export function getCSSVariable(variable: string): string {
 /**
  * Check if an element uses semantic color classes
  */
-export function usesSemantic Color(element: HTMLElement): {
+export function usesSemanticColor(element: HTMLElement): {
   hasSemanticColors: boolean;
   hardcodedClasses: string[];
 } {
@@ -116,7 +116,7 @@ export function validateAccessibility(): {
   valid: boolean;
   issues: string[];
 } {
-  const issues: string[];
+  const issues: string[] = [];
   
   // Check contrast ratios for semantic colors
   const semanticElements = document.querySelectorAll('[class*="text-success"], [class*="text-info"], [class*="text-warning"], [class*="text-error"]');
@@ -166,7 +166,7 @@ export function getSemanticColors(): Record<string, string> {
 /**
  * Check if theme transitions are smooth
  */
-export function hasSmooth Transitions(element: HTMLElement): boolean {
+export function hasSmoothTransitions(element: HTMLElement): boolean {
   const styles = getComputedStyle(element);
   const transition = styles.transition;
   

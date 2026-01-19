@@ -3,11 +3,11 @@ Badge services for Image generation and delivery.
 """
 
 import logging
-from typing import Any
 from io import BytesIO
+from typing import Any
+
 from django.utils import timezone
 from PIL import Image, ImageDraw, ImageFont
-import requests
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class BadgeService:
                     # Check if field is enabled (defaults to True for backward compatibility)
                     if field_data.get('enabled', True) is False:
                         continue
-                        
+
                     text = data.get(field_name, '')
                     if not text:
                         continue
@@ -78,7 +78,7 @@ class BadgeService:
                     y = field_data.get('y', 100)
                     font_size = field_data.get('fontSize', field_data.get('font_size', 24))
                     color = field_data.get('color', '#000000')
-                    
+
                     # Try to load font (default to basic compatible font if custom not found)
                     try:
                         # In a real app, you'd load custom fonts from files
@@ -103,12 +103,11 @@ class BadgeService:
             return None
 
         try:
-            from common.storage import gcs_storage
-            
+
             # If it's a field file, we can read it directly usually
             # But let's stick to the pattern used in certificates if possible
             # Or use standard django storage API
-            
+
             with template.start_image.open('rb') as f:
                 return f.read()
 
@@ -138,9 +137,9 @@ class BadgeService:
         """Upload generated badge image."""
         try:
             from common.storage import gcs_storage
-            
+
             path = f"badges/issued/{badge.uuid}.png"
-            
+
             url = gcs_storage.upload(
                 content=image_bytes,
                 path=path,
@@ -148,13 +147,13 @@ class BadgeService:
                 public=True, # Badges are usually public
                 metadata={'badge_id': str(badge.uuid)}
             )
-            
+
             if url:
                 badge.image_url = url
                 badge.image_generated_at = timezone.now()
                 badge.save(update_fields=['image_url', 'image_generated_at'])
                 return url
-                
+
         except Exception as e:
             logger.error(f"Badge upload failed: {e}")
             return None
@@ -170,13 +169,13 @@ class BadgeService:
             course_enrollment: Optional CourseEnrollment (for courses)
         """
         from badges.models import IssuedBadge
-        
+
         if not registration and not course_enrollment:
             return {'success': False, 'error': 'Must provide registration or course_enrollment'}
-        
+
         if registration and course_enrollment:
             return {'success': False, 'error': 'Cannot provide both registration and course_enrollment'}
-        
+
         try:
             # Determine recipient and context
             if registration:
@@ -189,10 +188,10 @@ class BadgeService:
                 owner = course_enrollment.course.created_by
             else:
                 return {'success': False, 'error': 'Invalid state: no registration or enrollment provided'}
-            
+
             # Check existing
             existing = IssuedBadge.objects.filter(**existing_filter).first()
-            
+
             if existing:
                  return {'success': True, 'badge': existing, 'already_issued': True}
 
@@ -203,7 +202,7 @@ class BadgeService:
             except Exception:
                 # RelatedObjectDoesNotExist or similar
                 pass
-            
+
             if subscription:
                 # We reuse the certificate limit for now as "Credentials Limit"
                 if not subscription.check_certificate_limit():
@@ -223,7 +222,7 @@ class BadgeService:
                 issued_by=issued_by,
                 status='active'
             )
-            
+
             # Generate Image
             image_bytes = self.generate_badge_image(badge)
             if image_bytes:
@@ -232,10 +231,10 @@ class BadgeService:
             # Increment subscription counter
             if subscription:
                 subscription.increment_certificates()
-                
+
             # Send Email
             self.send_badge_email(badge)
-                
+
             return {'success': True, 'badge': badge}
 
         except Exception as e:
@@ -246,22 +245,22 @@ class BadgeService:
         """
         Issue badges in bulk for an event.
         """
-        from registrations.models import Registration
         from badges.models import BadgeTemplate
+        from registrations.models import Registration
 
         # Determine template (logic: use first active template for this event/org)
         # Since we don't have explicit event-template link yet, we search for a template owned by event owner
         # matching the event name or just the default one.
         # This is a heuristic. Ideally passed in.
         template = BadgeTemplate.objects.filter(owner=event.owner, is_active=True).first()
-        
+
         if not template:
             return {'total': 0, 'success': 0, 'failed': 0, 'errors': ['No suitable badge template found for event owner']}
 
         if registrations is None:
             # Get all eligible registrations
             qs = Registration.objects.filter(
-                event=event, 
+                event=event,
                 status='attended',
             )
             registrations = list(qs)
@@ -275,13 +274,13 @@ class BadgeService:
              else:
                  results['failed'] += 1
                  results['errors'].append({'registration': str(reg.uuid), 'error': res.get('error')})
-             
+
         return results
 
     def _generate_qr_code(self, url: str):
         """Generate QR code image as PIL Image."""
         import qrcode
-        
+
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -290,9 +289,9 @@ class BadgeService:
         )
         qr.add_data(url)
         qr.make(fit=True)
-        
+
         img = qr.make_image(fill_color="black", back_color="white")
-        
+
         # Ensure it's a PIL Image by saving/loading if needed, or just return
         # The safest way to handle potential 'PyPNGImage' or other types is to buffer it
         buffer = BytesIO()
@@ -310,10 +309,10 @@ class BadgeService:
             user = badge.recipient
             # Use event info if available, else course
             title = badge.registration.event.title if badge.registration else (badge.course_enrollment.course.title if badge.course_enrollment else "Training")
-            
+
             # Using existing certificate template as fallback or a new one
             # Ideally we register 'badge_issued' template
-            
+
             return email_service.send_email(
                 template='badge_issued', # Need to ensure this exists or use generic
                 recipient=user.email,

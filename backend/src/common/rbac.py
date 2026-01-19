@@ -23,7 +23,7 @@ from typing import Literal
 from rest_framework import permissions
 
 # Valid role types
-Role = Literal['attendee', 'organizer', 'course_manager', 'instructor', 'admin', 'public']
+Role = Literal["attendee", "organizer", "course_manager", "instructor", "admin", "public"]
 
 # Global registry: route_name -> dict with roles and allowed plans
 # This is used by the manifest endpoint to return allowed routes per user
@@ -31,10 +31,10 @@ ROUTE_REGISTRY: dict[str, dict] = {}
 
 # Plan hierarchy for capability inheritance
 PLAN_HIERARCHY = {
-    'attendee': 0,
-    'organizer': 1,
-    'lms': 1,
-    'organization': 2,
+    "attendee": 0,
+    "organizer": 1,
+    "lms": 1,
+    "organization": 2,
 }
 
 
@@ -49,8 +49,8 @@ def get_effective_plan(user) -> str:
         str: The effective plan ('attendee', 'organizer', 'lms', 'organization')
     """
     # Start with personal plan
-    subscription = getattr(user, 'subscription', None)
-    personal_plan = getattr(subscription, 'plan', 'attendee') if subscription else 'attendee'
+    subscription = getattr(user, "subscription", None)
+    personal_plan = getattr(subscription, "plan", "attendee") if subscription else "attendee"
     personal_level = PLAN_HIERARCHY.get(personal_plan, 0)
 
     # Check if user is a member of any organization
@@ -60,10 +60,10 @@ def get_effective_plan(user) -> str:
 
     if user_orgs.exists():
         # Org members inherit 'organization' tier capabilities
-        org_level = PLAN_HIERARCHY.get('organization', 2)
+        org_level = PLAN_HIERARCHY.get("organization", 2)
         # Return the higher of personal plan or org-derived plan
         if org_level > personal_level:
-            return 'organization'
+            return "organization"
 
     return personal_plan
 
@@ -93,7 +93,7 @@ def roles(*allowed_roles: Role, route_name: str | None = None, plans: list[str] 
         name = route_name or cls.__name__
 
         # Register in global registry
-        ROUTE_REGISTRY[name] = {'roles': set(allowed_roles), 'plans': set(plans) if plans else set()}
+        ROUTE_REGISTRY[name] = {"roles": set(allowed_roles), "plans": set(plans) if plans else set()}
 
         # Store on class for permission checking
         cls._allowed_roles = set(allowed_roles)
@@ -101,7 +101,7 @@ def roles(*allowed_roles: Role, route_name: str | None = None, plans: list[str] 
         cls._route_name = name
 
         # Prepend RoleBasedPermission to existing permission classes
-        existing = list(getattr(cls, 'permission_classes', []))
+        existing = list(getattr(cls, "permission_classes", []))
         cls.permission_classes = [RoleBasedPermission, *existing]
 
         return cls
@@ -121,11 +121,11 @@ class RoleBasedPermission(permissions.BasePermission):
 
     def has_permission(self, request, view):
         """Check if the user's role is in the allowed roles for this view."""
-        allowed_roles = getattr(view, '_allowed_roles', set())
-        allowed_plans = getattr(view, '_allowed_plans', set())
+        allowed_roles = getattr(view, "_allowed_roles", set())
+        allowed_plans = getattr(view, "_allowed_plans", set())
 
         # Public routes are accessible to everyone
-        if 'public' in allowed_roles:
+        if "public" in allowed_roles:
             return True
 
         # Must be authenticated for non-public routes
@@ -134,11 +134,11 @@ class RoleBasedPermission(permissions.BasePermission):
 
         # Admin/staff override when 'admin' is in allowed roles
         # Note: We check this early to bypass plan checks for admins
-        if request.user.is_staff and 'admin' in allowed_roles:
+        if request.user.is_staff and "admin" in allowed_roles:
             return True
 
         # Check user's role against allowed roles
-        user_role = getattr(request.user, 'account_type', None)
+        user_role = getattr(request.user, "account_type", None)
         if user_role not in allowed_roles:
             org_roles = self._get_allowed_org_roles(allowed_roles)
             if not org_roles:
@@ -162,9 +162,9 @@ class RoleBasedPermission(permissions.BasePermission):
         Map allowed roles to organization membership roles.
         Organization admins should be allowed wherever organizer or course_manager is allowed.
         """
-        org_roles = {role for role in allowed_roles if role in {'organizer', 'course_manager', 'instructor'}}
-        if 'organizer' in allowed_roles or 'course_manager' in allowed_roles:
-            org_roles.add('admin')
+        org_roles = {role for role in allowed_roles if role in {"organizer", "course_manager", "instructor"}}
+        if "organizer" in allowed_roles or "course_manager" in allowed_roles:
+            org_roles.add("admin")
         # Do not map allowed 'admin' (staff) to org admin unless explicitly allowed above.
         return org_roles
 
@@ -190,9 +190,9 @@ def get_allowed_routes_for_user(user) -> list[str]:
     """
     if not user.is_authenticated:
         # Anonymous users can only access public routes
-        return [route for route, config in ROUTE_REGISTRY.items() if 'public' in config['roles']]
+        return [route for route, config in ROUTE_REGISTRY.items() if "public" in config["roles"]]
 
-    user_role = getattr(user, 'account_type', None)
+    user_role = getattr(user, "account_type", None)
     is_admin = user.is_staff
 
     # Use effective plan (considers org membership)
@@ -200,10 +200,10 @@ def get_allowed_routes_for_user(user) -> list[str]:
 
     allowed = []
     for route, config in ROUTE_REGISTRY.items():
-        roles = config['roles']
-        plans = config['plans']
+        roles = config["roles"]
+        plans = config["plans"]
 
-        if 'public' in roles or is_admin and 'admin' in roles:
+        if "public" in roles or is_admin and "admin" in roles:
             allowed.append(route)
         elif user_role in roles:
             # If plans are restricted, check effective plan matches
@@ -228,20 +228,20 @@ def get_features_for_user(user) -> dict[str, bool]:
     """
     if not user.is_authenticated:
         return {
-            'create_events': False,
-            'manage_certificates': False,
-            'view_billing': False,
-            'browse_events': True,
-            'register_for_events': True,
+            "create_events": False,
+            "manage_certificates": False,
+            "view_billing": False,
+            "browse_events": True,
+            "register_for_events": True,
         }
 
-    role = getattr(user, 'account_type', 'attendee')
-    is_event_creator = role in ('organizer', 'admin') or user.is_staff
-    is_course_creator = role in ('course_manager', 'organizer', 'admin') or user.is_staff
+    role = getattr(user, "account_type", "attendee")
+    is_event_creator = role in ("organizer", "admin") or user.is_staff
+    is_course_creator = role in ("course_manager", "admin") or user.is_staff
 
     # Get user plan
-    subscription = getattr(user, 'subscription', None)
-    user_plan = getattr(subscription, 'plan', 'attendee') if subscription else 'attendee'
+    subscription = getattr(user, "subscription", None)
+    user_plan = getattr(subscription, "plan", "attendee") if subscription else "attendee"
     effective_plan = get_effective_plan(user)
 
     # Check if user is already part of an organization
@@ -251,15 +251,15 @@ def get_features_for_user(user) -> dict[str, bool]:
     has_organization = user_organizations.exists()
 
     return {
-        'create_events': is_event_creator and effective_plan in ('organizer', 'organization'),
-        'create_courses': is_course_creator and effective_plan in ('lms', 'organization'),
-        'manage_certificates': is_event_creator,
-        'view_billing': role in ('organizer', 'course_manager'),
-        'browse_events': True,
-        'register_for_events': True,
-        'view_own_registrations': True,
-        'view_own_certificates': True,
-        'can_create_organization': is_event_creator
+        "create_events": is_event_creator and effective_plan in ("organizer", "organization"),
+        "create_courses": is_course_creator and effective_plan in ("lms", "organization"),
+        "manage_certificates": is_event_creator,
+        "view_billing": role in ("organizer", "course_manager", "admin"),
+        "browse_events": True,
+        "register_for_events": True,
+        "view_own_registrations": True,
+        "view_own_certificates": True,
+        "can_create_organization": is_event_creator
         and not has_organization
-        and (effective_plan == 'organization' or user.is_staff),
+        and (effective_plan == "organization" or user.is_staff),
     }

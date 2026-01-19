@@ -22,42 +22,42 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
 
 
 class IsOrganizer(permissions.BasePermission):
-    """Only users with organizer account type."""
+    """Only users with organizer or admin account type."""
 
-    message = "Organizer account required."
+    message = "Organizer or admin account required."
 
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.account_type == 'organizer'
+        return request.user.is_authenticated and request.user.account_type in ("organizer", "admin")
 
 
 class IsOrganizerOrOrgAdmin(permissions.BasePermission):
-    """Organizers or organization admins/organizers."""
+    """Organizers, admins, or organization admins/organizers."""
 
-    message = "Organizer or organization admin required."
+    message = "Organizer, admin, or organization admin required."
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
         if request.user.is_staff:
             return True
-        if request.user.account_type == 'organizer':
+        if request.user.account_type in ("organizer", "admin"):
             return True
         from organizations.models import OrganizationMembership
 
         return OrganizationMembership.objects.filter(
             user=request.user,
             is_active=True,
-            role__in=['admin', 'organizer'],
+            role__in=["admin", "organizer"],
         ).exists()
 
 
 class IsOrganizerOrCourseManager(permissions.BasePermission):
-    """Organizers or course managers."""
+    """Organizers, course managers, or admins."""
 
-    message = "Organizer or course manager account required."
+    message = "Organizer, course manager, or admin account required."
 
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.account_type in ['organizer', 'course_manager']
+        return request.user.is_authenticated and request.user.account_type in ["organizer", "course_manager", "admin"]
 
 
 class IsOrganizerOrReadOnly(permissions.BasePermission):
@@ -66,16 +66,16 @@ class IsOrganizerOrReadOnly(permissions.BasePermission):
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
             return True
-        return request.user.is_authenticated and request.user.account_type == 'organizer'
+        return request.user.is_authenticated and request.user.account_type == "organizer"
 
 
 class IsEventOwner(permissions.BasePermission):
     """Permission for event-related objects."""
 
     def has_object_permission(self, request, view, obj):
-        if hasattr(obj, 'event'):
+        if hasattr(obj, "event"):
             return obj.event.owner == request.user
-        if hasattr(obj, 'owner'):
+        if hasattr(obj, "owner"):
             return obj.owner == request.user
         return False
 
@@ -84,9 +84,9 @@ class IsRegistrant(permissions.BasePermission):
     """User can access their own registrations."""
 
     def has_object_permission(self, request, view, obj):
-        if hasattr(obj, 'user'):
+        if hasattr(obj, "user"):
             return obj.user == request.user
-        if hasattr(obj, 'registration'):
+        if hasattr(obj, "registration"):
             return obj.registration.user == request.user
         return False
 
@@ -98,15 +98,15 @@ class IsEventOwnerOrRegistrant(permissions.BasePermission):
         user = request.user
 
         # Check if owner
-        if hasattr(obj, 'event') and obj.event.owner == user:
+        if hasattr(obj, "event") and obj.event.owner == user:
             return True
-        if hasattr(obj, 'owner') and obj.owner == user:
+        if hasattr(obj, "owner") and obj.owner == user:
             return True
 
         # Check if registrant
-        if hasattr(obj, 'user') and obj.user == user:
+        if hasattr(obj, "user") and obj.user == user:
             return True
-        return bool(hasattr(obj, 'registration') and obj.registration.user == user)
+        return bool(hasattr(obj, "registration") and obj.registration.user == user)
 
 
 class HasActiveSubscription(permissions.BasePermission):
@@ -142,7 +142,7 @@ class CanCreateEvent(permissions.BasePermission):
         if not request.user.is_authenticated:
             return False
 
-        if request.user.account_type != 'organizer':
+        if request.user.account_type != "organizer":
             return False
 
         try:
@@ -166,7 +166,7 @@ class CanIssueCertificate(permissions.BasePermission):
         if not request.user.is_authenticated:
             return False
 
-        if request.user.account_type != 'organizer':
+        if request.user.account_type != "organizer":
             return False
 
         try:
@@ -194,7 +194,7 @@ class IsSelfOrAdmin(permissions.BasePermission):
         if request.user.is_staff:
             return True
 
-        if hasattr(obj, 'user'):
+        if hasattr(obj, "user"):
             return obj.user == request.user
 
         return obj == request.user

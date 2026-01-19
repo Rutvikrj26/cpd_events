@@ -1,8 +1,11 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from django.utils import timezone
 from rest_framework import status
+
 from events.models import Event
+
 
 @pytest.mark.django_db
 class TestSyncAttendanceEndpoint:
@@ -23,7 +26,7 @@ class TestSyncAttendanceEndpoint:
         )
 
         url = f"/api/v1/events/{event.uuid}/sync_attendance/"
-        
+
         # Mock CloudTask response (object with .name attribute)
         mock_task = MagicMock()
         mock_task.name = "projects/test/locations/test/queues/default/tasks/123"
@@ -50,7 +53,7 @@ class TestSyncAttendanceEndpoint:
         )
 
         url = f"/api/v1/events/{event.uuid}/sync_attendance/"
-        
+
         # Mock dictionary response (sync mode)
         mock_result = {'status': 'success', 'matched_count': 5}
 
@@ -129,7 +132,7 @@ class TestSyncAttendanceEndpoint:
             starts_at=timezone.now()
         )
 
-        from registrations.models import Registration, AttendanceRecord
+        from registrations.models import AttendanceRecord, Registration
         reg = Registration.objects.create(
             event=event,
             full_name="Confirmed User",
@@ -159,10 +162,10 @@ class TestSyncAttendanceEndpoint:
             with patch('events.tasks.sync_zoom_attendance.delay', side_effect=lambda event_id: {'status': 'success'}):
                 response = api_client.post(url)
                 assert response.status_code == status.HTTP_200_OK
-                
+
                 # Now manually trigger the task since we matched the delay result
                 from integrations.services import attendance_matcher
                 result = attendance_matcher.match_attendance(event, pull_from_zoom=True)
-                
+
                 assert result['matched'] == 1
                 assert AttendanceRecord.objects.filter(event=event, registration=reg).exists()

@@ -23,7 +23,7 @@ def reset_subscription_usage():
 
     now = timezone.now()
     count = 0
-    for sub in Subscription.objects.filter(status__in=['active', 'trialing']):
+    for sub in Subscription.objects.filter(status__in=["active", "trialing"]):
         if sub.current_period_end and sub.current_period_end > now:
             continue
         if sub.last_usage_reset_at and sub.current_period_end and sub.last_usage_reset_at >= sub.current_period_end:
@@ -55,7 +55,7 @@ def expire_trials():
         status=Subscription.Status.TRIALING,
         trial_ends_at__isnull=False,
         trial_ends_at__lte=now,
-    ).select_related('user')
+    ).select_related("user")
 
     expired_count = 0
     for sub in trials:
@@ -65,8 +65,8 @@ def expire_trials():
         sub.status = Subscription.Status.CANCELED
         sub.plan = Subscription.Plan.ATTENDEE
         sub.canceled_at = now
-        sub.cancellation_reason = 'Trial expired - auto-downgraded'
-        sub.save(update_fields=['status', 'plan', 'canceled_at', 'cancellation_reason', 'updated_at'])
+        sub.cancellation_reason = "Trial expired - auto-downgraded"
+        sub.save(update_fields=["status", "plan", "canceled_at", "cancellation_reason", "updated_at"])
 
         # Downgrade user account type
         sub.user.downgrade_to_attendee()
@@ -74,12 +74,12 @@ def expire_trials():
         # Send expiration email
         try:
             email_service.send_email(
-                template='trial_expired',
+                template="trial_expired",
                 recipient=sub.user.email,
                 context={
-                    'user_name': sub.user.full_name,
-                    'previous_plan': previous_plan,
-                    'trial_ended_at': sub.trial_ends_at.strftime('%B %d, %Y'),
+                    "user_name": sub.user.full_name,
+                    "previous_plan": previous_plan,
+                    "trial_ended_at": sub.trial_ends_at.strftime("%B %d, %Y"),
                 },
             )
         except Exception as exc:
@@ -91,11 +91,11 @@ def expire_trials():
 
             create_notification(
                 user=sub.user,
-                notification_type='trial_expired',
-                title='Trial expired',
-                message=f'Your {previous_plan} trial has ended. Upgrade to continue creating events and courses.',
-                action_url='/billing',
-                metadata={'previous_plan': previous_plan},
+                notification_type="trial_expired",
+                title="Trial expired",
+                message=f"Your {previous_plan} trial has ended. Upgrade to continue creating events and courses.",
+                action_url="/billing",
+                metadata={"previous_plan": previous_plan},
             )
         except Exception as exc:
             logger.warning(f"Failed to create trial expired notification: {exc}")
@@ -118,17 +118,17 @@ def send_trial_ending_reminders():
     # Find trials ending in 3 days
     target_date = timezone.now().date() + timedelta(days=3)
 
-    trials = Subscription.objects.filter(status='trialing', trial_ends_at__date=target_date).select_related('user')
+    trials = Subscription.objects.filter(status="trialing", trial_ends_at__date=target_date).select_related("user")
 
     count = 0
     for sub in trials:
         email_service.send_email(
-            template='trial_ending',
+            template="trial_ending",
             recipient=sub.user.email,
             context={
-                'user_name': sub.user.full_name,
-                'trial_ends_at': sub.trial_ends_at.strftime('%B %d, %Y'),
-                'plan': sub.get_plan_display(),
+                "user_name": sub.user.full_name,
+                "trial_ends_at": sub.trial_ends_at.strftime("%B %d, %Y"),
+                "plan": sub.get_plan_display(),
             },
         )
         try:
@@ -136,11 +136,11 @@ def send_trial_ending_reminders():
 
             create_notification(
                 user=sub.user,
-                notification_type='trial_ending',
-                title='Trial ending soon',
+                notification_type="trial_ending",
+                title="Trial ending soon",
                 message=f"Your trial ends on {sub.trial_ends_at.strftime('%B %d, %Y')}.",
-                action_url='/billing',
-                metadata={'plan': sub.plan},
+                action_url="/billing",
+                metadata={"plan": sub.plan},
             )
         except Exception as exc:
             logger.warning("Failed to create trial ending notification: %s", exc)
@@ -159,16 +159,16 @@ def send_payment_failed_email(subscription_id: int):
     from integrations.services import email_service
 
     try:
-        sub = Subscription.objects.select_related('user').get(id=subscription_id)
+        sub = Subscription.objects.select_related("user").get(id=subscription_id)
     except Subscription.DoesNotExist:
         return False
 
     return email_service.send_email(
-        template='payment_failed',
+        template="payment_failed",
         recipient=sub.user.email,
         context={
-            'user_name': sub.user.full_name,
-            'plan': sub.get_plan_display(),
+            "user_name": sub.user.full_name,
+            "plan": sub.get_plan_display(),
         },
     )
 
@@ -193,15 +193,15 @@ def handle_expired_payment_methods():
         .filter(
             models.Q(card_exp_year__lt=now.year) | (models.Q(card_exp_year=now.year) & models.Q(card_exp_month__lt=now.month))
         )
-        .select_related('user')
+        .select_related("user")
     )
 
     handled = 0
     for method in expired_defaults:
         method.is_default = False
-        method.save(update_fields=['is_default', 'updated_at'])
+        method.save(update_fields=["is_default", "updated_at"])
 
-        replacement = PaymentMethod.objects.filter(user=method.user).exclude(pk=method.pk).order_by('-created_at')
+        replacement = PaymentMethod.objects.filter(user=method.user).exclude(pk=method.pk).order_by("-created_at")
 
         for candidate in replacement:
             if not candidate.is_expired:
@@ -209,14 +209,14 @@ def handle_expired_payment_methods():
                 break
 
         email_service.send_email(
-            template='payment_method_expired',
+            template="payment_method_expired",
             recipient=method.user.email,
             context={
-                'user_name': method.user.full_name,
-                'card_brand': method.card_brand,
-                'card_last4': method.card_last4,
-                'exp_month': method.card_exp_month,
-                'exp_year': method.card_exp_year,
+                "user_name": method.user.full_name,
+                "card_brand": method.card_brand,
+                "card_last4": method.card_last4,
+                "exp_month": method.card_exp_month,
+                "exp_year": method.card_exp_year,
             },
         )
         try:
@@ -224,11 +224,11 @@ def handle_expired_payment_methods():
 
             create_notification(
                 user=method.user,
-                notification_type='payment_method_expired',
-                title='Payment method expired',
+                notification_type="payment_method_expired",
+                title="Payment method expired",
                 message=f"Your {method.card_brand} card ending in {method.card_last4} expired.",
-                action_url='/settings?tab=billing',
-                metadata={'card_last4': method.card_last4},
+                action_url="/settings?tab=billing",
+                metadata={"card_last4": method.card_last4},
             )
         except Exception as exc:
             logger.warning("Failed to create payment method notification: %s", exc)
@@ -263,8 +263,6 @@ def sync_stripe_subscription(subscription_id: int):
 
     except Subscription.DoesNotExist:
         return False
-    except Subscription.DoesNotExist:
-        return False
 
 
 @task()
@@ -276,21 +274,21 @@ def send_refund_notification(refund_id: int):
     from integrations.services import email_service
 
     try:
-        refund = RefundRecord.objects.select_related('registration', 'registration__event').get(id=refund_id)
+        refund = RefundRecord.objects.select_related("registration", "registration__event").get(id=refund_id)
         if not refund.registration:
             return False
 
         registration = refund.registration
 
         return email_service.send_email(
-            template='refund_processed',
+            template="refund_processed",
             recipient=registration.email,
             context={
-                'user_name': registration.full_name,
-                'event_title': registration.event.title,
-                'refund': refund,
-                'registration': registration,
-                'event': registration.event,
+                "user_name": registration.full_name,
+                "event_title": registration.event.title,
+                "refund": refund,
+                "registration": registration,
+                "event": registration.event,
             },
         )
     except RefundRecord.DoesNotExist:

@@ -1,16 +1,16 @@
 from rest_framework import serializers
+
 from badges.models import BadgeTemplate, IssuedBadge
-from registrations.models import Registration
-from learning.models import CourseEnrollment
+
 
 class BadgeTemplateSerializer(serializers.ModelSerializer):
     """Serializer for Badge templates."""
-    
+
     class Meta:
         model = BadgeTemplate
         fields = [
-            'uuid', 'name', 'description', 
-            'start_image', 'width_px', 'height_px', 
+            'uuid', 'name', 'description',
+            'start_image', 'width_px', 'height_px',
             'field_positions', 'is_active', 'is_shared',
             'created_at', 'updated_at'
         ]
@@ -28,7 +28,7 @@ class IssuedBadgeSerializer(serializers.ModelSerializer):
     template_name = serializers.CharField(source='template.name', read_only=True)
     recipient_name = serializers.CharField(source='recipient.display_name', read_only=True)
     image_url = serializers.CharField(read_only=True)
-    
+
     # Event/Course details
     event_title = serializers.SerializerMethodField()
     course_title = serializers.SerializerMethodField()

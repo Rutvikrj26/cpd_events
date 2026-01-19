@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.utils import timezone
-from rest_framework import status
 
 from accounts.services import zoom_service
 

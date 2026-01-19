@@ -47,9 +47,9 @@ class OrganizationLinkingService:
         organization = Organization.objects.create(
             name=org_name,
             slug=org_slug,
-            description=user.organizer_bio or '',
-            website=user.organizer_website or '',
-            logo_url=user.organizer_logo_url or '',
+            description=user.organizer_bio or "",
+            website=user.organizer_website or "",
+            logo_url=user.organizer_logo_url or "",
             created_by=user,
         )
 
@@ -63,6 +63,22 @@ class OrganizationLinkingService:
             linked_at=timezone.now(),
         )
 
+        # Upgrade user to admin account type
+        user.upgrade_to_admin()
+
+        # Cancel individual subscription (billing moves to org)
+        subscription = getattr(user, "subscription", None)
+        if subscription and subscription.stripe_subscription_id:
+            from billing.services import stripe_service
+
+            stripe_service.cancel_subscription(subscription, immediate=True, reason="Transitioned to organization billing")
+
+        # Downgrade local subscription record to 'attendee' (org billing takes over)
+        if subscription:
+            subscription.plan = "attendee"
+            subscription.status = "active"  # Keep active but as attendee
+            subscription.save(update_fields=["plan", "status", "updated_at"])
+
         # Create free subscription
         OrganizationSubscription.create_for_organization(organization)
 
@@ -75,7 +91,7 @@ class OrganizationLinkingService:
         return organization
 
     @staticmethod
-    def link_organizer_to_org(user, organization, role='organizer', invited_by=None):
+    def link_organizer_to_org(user, organization, role="organizer", invited_by=None):
         """
         Link an individual organizer's data to an existing organization.
 
@@ -98,11 +114,11 @@ class OrganizationLinkingService:
             organization=organization,
             user=user,
             defaults={
-                'role': role,
-                'accepted_at': timezone.now(),
-                'invited_by': invited_by,
-                'linked_from_individual': True,
-                'linked_at': timezone.now(),
+                "role": role,
+                "accepted_at": timezone.now(),
+                "invited_by": invited_by,
+                "linked_from_individual": True,
+                "linked_at": timezone.now(),
             },
         )
 
@@ -110,18 +126,18 @@ class OrganizationLinkingService:
             # Update existing membership with linking info
             membership.linked_from_individual = True
             membership.linked_at = timezone.now()
-            membership.save(update_fields=['linked_from_individual', 'linked_at', 'updated_at'])
+            membership.save(update_fields=["linked_from_individual", "linked_at", "updated_at"])
 
         # Link data
         result = OrganizationLinkingService._link_user_data(user, organization)
-        result['membership'] = membership
-        result['membership_created'] = created
+        result["membership"] = membership
+        result["membership_created"] = created
 
         # Update counts
         organization.update_counts()
 
         # Update subscription seat usage
-        if hasattr(organization, 'subscription'):
+        if hasattr(organization, "subscription"):
             organization.subscription.update_seat_usage()
 
         return result
@@ -162,12 +178,12 @@ class OrganizationLinkingService:
             pass
 
         # Update organization counts
-        organization.events_count = getattr(organization, 'events', type('', (), {'count': lambda: 0})()).count()
-        organization.save(update_fields=['events_count', 'updated_at'])
+        organization.events_count = getattr(organization, "events", type("", (), {"count": lambda: 0})()).count()
+        organization.save(update_fields=["events_count", "updated_at"])
 
         return {
-            'events_transferred': events_transferred,
-            'templates_transferred': templates_transferred,
+            "events_transferred": events_transferred,
+            "templates_transferred": templates_transferred,
         }
 
     @staticmethod
@@ -201,7 +217,7 @@ class OrganizationLinkingService:
             pass
 
         return {
-            'events_count': events_count,
-            'templates_count': templates_count,
-            'has_linkable_data': events_count > 0 or templates_count > 0,
+            "events_count": events_count,
+            "templates_count": templates_count,
+            "has_linkable_data": events_count > 0 or templates_count > 0,
         }

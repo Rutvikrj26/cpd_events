@@ -2,6 +2,8 @@
 Events app views and viewsets.
 """
 
+import logging
+
 from django.db.models import Q
 from django.utils import timezone
 from django_filters import rest_framework as filters
@@ -18,7 +20,6 @@ from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import SoftDeleteModelViewSet
 
-import logging
 logger = logging.getLogger(__name__)
 
 from . import serializers
@@ -342,6 +343,7 @@ class EventViewSet(SoftDeleteModelViewSet):
 
         from django.db.models import Max, Sum
         from django.db.models.functions import Coalesce
+
         from registrations.models import AttendanceRecord
 
         try:
@@ -379,8 +381,9 @@ class EventViewSet(SoftDeleteModelViewSet):
     def match_participant(self, request, uuid=None):
         """Manually match a participant to a registration."""
         from django.shortcuts import get_object_or_404
-        from integrations.services import attendance_matcher
+
         from registrations.models import AttendanceRecord, Registration
+
         from .serializers import MatchParticipantSerializer
 
         event = self.get_object()
@@ -390,7 +393,7 @@ class EventViewSet(SoftDeleteModelViewSet):
         data = serializer.validated_data
         if not data:
              return error_response('Invalid data provided.', code='INVALID_DATA')
-             
+
         registration_uuid = data.get('registration_uuid')
         registration = get_object_or_404(Registration, uuid=registration_uuid, event=event)
 
@@ -413,7 +416,7 @@ class EventViewSet(SoftDeleteModelViewSet):
 
         # Trigger registration summary update
         registration.update_attendance_summary()
-        
+
         # update denormalized counts on event
         event.update_counts()
 

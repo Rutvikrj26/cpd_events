@@ -41,7 +41,7 @@ from .services import OrganizationLinkingService
 logger = logging.getLogger(__name__)
 
 
-@roles('organizer', 'admin', route_name='organizations', plans=['organization'])
+@roles("organizer", "admin", route_name="organizations", plans=["organization"])
 class OrganizationViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Organization CRUD operations.
@@ -60,11 +60,11 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         return get_user_organizations(self.request.user)
 
     def get_serializer_class(self):
-        if self.action == 'list':
+        if self.action == "list":
             return OrganizationListSerializer
-        if self.action == 'create':
+        if self.action == "create":
             return OrganizationCreateSerializer
-        if self.action in ['update', 'partial_update']:
+        if self.action in ["update", "partial_update"]:
             return OrganizationUpdateSerializer
         return OrganizationDetailSerializer
 
@@ -72,7 +72,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         """Get organization by UUID."""
         # Use get_queryset to ensure user permission (must be a member)
         queryset = self.get_queryset()
-        obj = get_object_or_404(queryset, uuid=self.kwargs['pk'])
+        obj = get_object_or_404(queryset, uuid=self.kwargs["pk"])
         self.check_object_permissions(self.request, obj)
         return obj
 
@@ -80,9 +80,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         """Update organization (admin+ required)."""
         organization = self.get_object()
         # Check admin permission
-        if not organization.memberships.filter(user=request.user, role__in=['admin'], is_active=True).exists():
+        if not organization.memberships.filter(user=request.user, role__in=["admin"], is_active=True).exists():
             return Response(
-                {'detail': 'You do not have permission to update this organization.'},
+                {"detail": "You do not have permission to update this organization."},
                 status=status.HTTP_403_FORBIDDEN,
             )
         return super().update(request, *args, **kwargs)
@@ -91,37 +91,39 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         """Delete organization (admin only - soft delete)."""
         organization = self.get_object()
         # Check admin permission
-        if not organization.memberships.filter(user=request.user, role='admin', is_active=True).exists():
+        if not organization.memberships.filter(user=request.user, role="admin", is_active=True).exists():
             return Response(
-                {'detail': 'Only admins can delete organizations.'},
+                {"detail": "Only admins can delete organizations."},
                 status=status.HTTP_403_FORBIDDEN,
             )
         organization.soft_delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=True, methods=['post'], url_path='onboarding/complete')
+    @action(detail=True, methods=["post"], url_path="onboarding/complete")
     def complete_onboarding(self, request, pk=None):
         """Mark organization onboarding as complete."""
         organization = self.get_object()
 
         # Verify user is admin
-        if not organization.memberships.filter(user=request.user, role='admin', is_active=True).exists():
+        if not organization.memberships.filter(user=request.user, role="admin", is_active=True).exists():
             return Response(
-                {'detail': 'Admin access required'},
+                {"detail": "Admin access required"},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         if not organization.onboarding_completed:
             organization.onboarding_completed = True
             organization.onboarding_completed_at = timezone.now()
-            organization.save(update_fields=['onboarding_completed', 'onboarding_completed_at', 'updated_at'])
+            organization.save(update_fields=["onboarding_completed", "onboarding_completed_at", "updated_at"])
 
-        return Response({
-            'message': 'Onboarding completed.',
-            'onboarding_completed': organization.onboarding_completed,
-        })
+        return Response(
+            {
+                "message": "Onboarding completed.",
+                "onboarding_completed": organization.onboarding_completed,
+            }
+        )
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def members(self, request, pk=None):
         """List organization members (active and pending)."""
         organization = self.get_object()
@@ -129,19 +131,19 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         from django.db.models import Q
 
         memberships = organization.memberships.filter(
-            Q(is_active=True) | (Q(invitation_token__isnull=False) & ~Q(invitation_token='') & Q(accepted_at__isnull=True))
-        ).select_related('user', 'invited_by')
+            Q(is_active=True) | (Q(invitation_token__isnull=False) & ~Q(invitation_token="") & Q(accepted_at__isnull=True))
+        ).select_related("user", "invited_by")
         serializer = OrganizationMembershipListSerializer(memberships, many=True)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['get'], url_path='events')
+    @action(detail=True, methods=["get"], url_path="events")
     def events(self, request, pk=None):
         """List all events for this organization (admin oversight)."""
         organization = self.get_object()
 
-        if not organization.memberships.filter(user=request.user, role='admin', is_active=True).exists():
+        if not organization.memberships.filter(user=request.user, role="admin", is_active=True).exists():
             return Response(
-                {'detail': 'You do not have permission to view organization events.'},
+                {"detail": "You do not have permission to view organization events."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -150,28 +152,28 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 organization=organization,
                 deleted_at__isnull=True,
             )
-            .select_related('owner', 'certificate_template')
-            .order_by('-created_at')
+            .select_related("owner", "certificate_template")
+            .order_by("-created_at")
         )
 
         page = self.paginate_queryset(queryset)
         serializer = EventListSerializer(
             page if page is not None else queryset,
             many=True,
-            context={'request': request},
+            context={"request": request},
         )
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['get'], url_path='courses')
+    @action(detail=True, methods=["get"], url_path="courses")
     def courses(self, request, pk=None):
         """List all courses for this organization (admin oversight)."""
         organization = self.get_object()
 
-        if not organization.memberships.filter(user=request.user, role='admin', is_active=True).exists():
+        if not organization.memberships.filter(user=request.user, role="admin", is_active=True).exists():
             return Response(
-                {'detail': 'You do not have permission to view organization courses.'},
+                {"detail": "You do not have permission to view organization courses."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -179,29 +181,29 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             Course.objects.filter(
                 organization=organization,
             )
-            .select_related('organization', 'created_by')
-            .order_by('-created_at')
+            .select_related("organization", "created_by")
+            .order_by("-created_at")
         )
 
         page = self.paginate_queryset(queryset)
         serializer = CourseListSerializer(
             page if page is not None else queryset,
             many=True,
-            context={'request': request},
+            context={"request": request},
         )
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['get'], url_path='members/lookup')
+    @action(detail=True, methods=["get"], url_path="members/lookup")
     def lookup_user(self, request, pk=None):
         """Lookup a user by email before inviting."""
         # Use get_object to verify user has access to this org
         self.get_object()
 
-        email = request.query_params.get('email')
+        email = request.query_params.get("email")
         if not email:
-            return Response({'detail': 'Email parameter is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Email parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         from accounts.models import User
 
@@ -210,18 +212,18 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if user:
             return Response(
                 {
-                    'found': True,
-                    'user': {
-                        'email': user.email,
-                        'full_name': user.full_name,
+                    "found": True,
+                    "user": {
+                        "email": user.email,
+                        "full_name": user.full_name,
                         # Optional: avatar_url
                     },
                 }
             )
 
-        return Response({'found': False})
+        return Response({"found": False})
 
-    @action(detail=True, methods=['post'], url_path='members/invite')
+    @action(detail=True, methods=["post"], url_path="members/invite")
     def invite_member(self, request, pk=None):
         """Invite a new member to the organization."""
         organization = self.get_object()
@@ -231,25 +233,25 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             requester_membership = organization.memberships.get(user=request.user, is_active=True)
         except OrganizationMembership.DoesNotExist:
             return Response(
-                {'detail': 'You are not a member of this organization.'},
+                {"detail": "You are not a member of this organization."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        allowed_roles = ['admin', 'course_manager']
+        allowed_roles = ["admin", "course_manager"]
         if requester_membership.role not in allowed_roles:
             return Response(
-                {'detail': 'You do not have permission to invite members.'},
+                {"detail": "You do not have permission to invite members."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = OrganizationMembershipInviteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        email = serializer.validated_data['email']
-        role = serializer.validated_data['role']
-        title = serializer.validated_data.get('title', '')
-        billing_payer = serializer.validated_data.get('billing_payer')  # For organizer role
-        assigned_course_uuid = serializer.validated_data.get('assigned_course_uuid')
+        email = serializer.validated_data["email"]
+        role = serializer.validated_data["role"]
+        title = serializer.validated_data.get("title", "")
+        billing_payer = serializer.validated_data.get("billing_payer")  # For organizer role
+        assigned_course_uuid = serializer.validated_data.get("assigned_course_uuid")
         assigned_course = None
 
         if assigned_course_uuid:
@@ -261,15 +263,15 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             ).first()
             if not assigned_course:
                 return Response(
-                    {'detail': 'Assigned course not found for this organization.'},
+                    {"detail": "Assigned course not found for this organization."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
         # Course Manager restriction: Can only invite instructors
-        if requester_membership.role == 'course_manager':
+        if requester_membership.role == "course_manager":
             if role != OrganizationMembership.Role.INSTRUCTOR:
                 return Response(
-                    {'detail': 'Course Managers can only invite Instructors.'},
+                    {"detail": "Course Managers can only invite Instructors."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
@@ -283,7 +285,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             if existing_membership:
                 if existing_membership.is_active:
                     return Response(
-                        {'detail': 'User is already a member of this organization.'},
+                        {"detail": "User is already a member of this organization."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 # If pending or inactive, we can proceed to re-invite/reactivate
@@ -298,9 +300,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             existing_membership = organization.memberships.filter(invitation_email=email, user__isnull=True).first()
 
         # Check seat availability for org-paid billable roles (organizer + course_manager)
-        payer = billing_payer or 'organization'
+        payer = billing_payer or "organization"
         uses_org_seat = role in OrganizationMembership.BILLABLE_ROLES and (
-            role != OrganizationMembership.Role.ORGANIZER or payer == 'organization'
+            role != OrganizationMembership.Role.ORGANIZER or payer == "organization"
         )
 
         if uses_org_seat:
@@ -308,18 +310,18 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             is_reinvite = False
             if existing_membership and existing_membership.role == role:
                 if role == OrganizationMembership.Role.ORGANIZER:
-                    if existing_membership.organizer_billing_payer == 'organization':
+                    if existing_membership.organizer_billing_payer == "organization":
                         is_reinvite = True
                 else:
                     is_reinvite = True
 
-            if not is_reinvite and hasattr(organization, 'subscription'):
+            if not is_reinvite and hasattr(organization, "subscription"):
                 # Count occupied org-paid billable seats (active + pending invites)
                 from django.db.models import Q
 
                 occupied_seats = (
                     organization.memberships.filter(
-                        Q(role=OrganizationMembership.Role.ORGANIZER, organizer_billing_payer='organization')
+                        Q(role=OrganizationMembership.Role.ORGANIZER, organizer_billing_payer="organization")
                         | Q(role=OrganizationMembership.Role.COURSE_MANAGER)
                     )
                     .filter(Q(is_active=True) | Q(invitation_token__isnull=False))
@@ -330,10 +332,10 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                     config = organization.subscription.config
                     return Response(
                         {
-                            'error': {
-                                'code': 'SEAT_LIMIT_REACHED',
-                                'message': 'This organization has used all available seats.',
-                                'details': {'seat_price_cents': config.get('seat_price_cents', 12900), 'action': 'buy_seat'},
+                            "error": {
+                                "code": "SEAT_LIMIT_REACHED",
+                                "message": "This organization has used all available seats.",
+                                "details": {"seat_price_cents": config.get("seat_price_cents", 12900), "action": "buy_seat"},
                             }
                         },
                         status=status.HTTP_402_PAYMENT_REQUIRED,
@@ -350,13 +352,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
             if existing_admin:
                 return Response(
-                    {'detail': 'Organization already has an admin. Only one admin per organization is allowed.'},
+                    {"detail": "Organization already has an admin. Only one admin per organization is allowed."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
         # Determine billing payer default based on role
         if role == OrganizationMembership.Role.ORGANIZER:
-            billing_payer = billing_payer or 'organization'
+            billing_payer = billing_payer or "organization"
         else:
             billing_payer = None
 
@@ -388,22 +390,22 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             membership.generate_invitation_token()
         else:
             membership_data = {
-                'organization': organization,
-                'user': user,  # Can be None
-                'role': role,
-                'title': title,
-                'invited_by': request.user,
-                'invited_at': timezone.now(),
-                'invitation_email': email,
-                'is_active': False,  # Pending until accepted
+                "organization": organization,
+                "user": user,  # Can be None
+                "role": role,
+                "title": title,
+                "invited_by": request.user,
+                "invited_at": timezone.now(),
+                "invitation_email": email,
+                "is_active": False,  # Pending until accepted
             }
 
             # Add organizer billing info
             if role == OrganizationMembership.Role.ORGANIZER:
-                membership_data['organizer_billing_payer'] = billing_payer
+                membership_data["organizer_billing_payer"] = billing_payer
 
             if assigned_course_uuid is not None:
-                membership_data['assigned_course'] = assigned_course
+                membership_data["assigned_course"] = assigned_course
 
             membership = OrganizationMembership.objects.create(**membership_data)
             membership.generate_invitation_token()
@@ -416,14 +418,14 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         invitation_url = f"{settings.SITE_URL}/accept-invite/{membership.invitation_token}"
 
         email_service.send_email(
-            template='organization_invitation',
+            template="organization_invitation",
             recipient=email,
             context={
-                'invitee_email': email,
-                'organization_name': organization.name,
-                'inviter_name': request.user.full_name or request.user.email,
-                'role': role,
-                'invitation_url': invitation_url,
+                "invitee_email": email,
+                "organization_name": organization.name,
+                "inviter_name": request.user.full_name or request.user.email,
+                "role": role,
+                "invitation_url": invitation_url,
             },
         )
 
@@ -433,14 +435,14 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
                 create_notification(
                     user=membership.user,
-                    notification_type='org_invite',
+                    notification_type="org_invite",
                     title=f"Invitation to join {organization.name}",
                     message=f"{request.user.full_name or request.user.email} invited you to join as {role}.",
                     action_url=f"/accept-invite/{membership.invitation_token}",
                     metadata={
-                        'organization_uuid': str(organization.uuid),
-                        'organization_name': organization.name,
-                        'role': role,
+                        "organization_uuid": str(organization.uuid),
+                        "organization_name": organization.name,
+                        "role": role,
                     },
                 )
             except Exception as exc:
@@ -449,11 +451,11 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         try:
             log_audit_event(
                 actor=request.user,
-                action='org_member_invited',
-                object_type='organization_membership',
+                action="org_member_invited",
+                object_type="organization_membership",
                 object_uuid=str(membership.uuid),
                 organization=organization,
-                metadata={'role': role, 'invitation_email': email},
+                metadata={"role": role, "invitation_email": email},
                 request=request,
             )
         except Exception:
@@ -461,13 +463,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         return Response(
             {
-                'detail': f'Invitation sent to {email}',
-                'invitation_token': membership.invitation_token,
+                "detail": f"Invitation sent to {email}",
+                "invitation_token": membership.invitation_token,
             },
             status=status.HTTP_201_CREATED,
         )
 
-    @action(detail=True, methods=['patch'], url_path='members/(?P<member_uuid>[^/.]+)')
+    @action(detail=True, methods=["patch"], url_path="members/(?P<member_uuid>[^/.]+)")
     def update_member(self, request, pk=None, member_uuid=None):
         """Update a member's role or title."""
         organization = self.get_object()
@@ -477,51 +479,51 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             requester_membership = organization.memberships.get(user=request.user, is_active=True)
         except OrganizationMembership.DoesNotExist:
             return Response(
-                {'detail': 'You are not a member of this organization.'},
+                {"detail": "You are not a member of this organization."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        allowed_roles = ['admin', 'course_manager']
+        allowed_roles = ["admin", "course_manager"]
         if requester_membership.role not in allowed_roles:
             return Response(
-                {'detail': 'You do not have permission to update members.'},
+                {"detail": "You do not have permission to update members."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         membership = get_object_or_404(
-            organization.memberships.select_related('user'),
+            organization.memberships.select_related("user"),
             user__uuid=member_uuid,
         )
 
         # Can't change your own role
         if membership.user == request.user:
             return Response(
-                {'detail': 'You cannot change your own role.'},
+                {"detail": "You cannot change your own role."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Course Manager restriction: Can only manage instructors
-        if requester_membership.role == 'course_manager':
+        if requester_membership.role == "course_manager":
             # Cannot manage non-instructors
             if membership.role != OrganizationMembership.Role.INSTRUCTOR:
                 return Response(
-                    {'detail': 'Course Managers can only manage Instructors.'},
+                    {"detail": "Course Managers can only manage Instructors."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
             # Cannot change role to anything other than instructor (redundant but safe)
-            new_role = request.data.get('role')
+            new_role = request.data.get("role")
             if new_role and new_role != OrganizationMembership.Role.INSTRUCTOR:
                 return Response(
-                    {'detail': 'Course Managers can only assign the Instructor role.'},
+                    {"detail": "Course Managers can only assign the Instructor role."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        assigned_course_uuid = request.data.get('assigned_course_uuid')
+        assigned_course_uuid = request.data.get("assigned_course_uuid")
         if assigned_course_uuid is not None:
-            role_target = request.data.get('role') or membership.role
+            role_target = request.data.get("role") or membership.role
             if role_target != OrganizationMembership.Role.INSTRUCTOR:
                 return Response(
-                    {'detail': 'Only instructors can be assigned to a course.'},
+                    {"detail": "Only instructors can be assigned to a course."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if assigned_course_uuid:
@@ -533,7 +535,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 ).first()
                 if not assigned_course:
                     return Response(
-                        {'detail': 'Assigned course not found for this organization.'},
+                        {"detail": "Assigned course not found for this organization."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
@@ -542,17 +544,17 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         serializer.save()
 
         # Update subscription seat count
-        if hasattr(organization, 'subscription'):
+        if hasattr(organization, "subscription"):
             organization.subscription.update_seat_usage()
 
         try:
             log_audit_event(
                 actor=request.user,
-                action='org_member_updated',
-                object_type='organization_membership',
+                action="org_member_updated",
+                object_type="organization_membership",
                 object_uuid=str(membership.uuid),
                 organization=organization,
-                metadata={'role': membership.role},
+                metadata={"role": membership.role},
                 request=request,
             )
         except Exception:
@@ -560,7 +562,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         return Response(OrganizationMembershipListSerializer(membership).data)
 
-    @action(detail=True, methods=['delete'], url_path='members/(?P<member_uuid>[^/.]+)/remove')
+    @action(detail=True, methods=["delete"], url_path="members/(?P<member_uuid>[^/.]+)/remove")
     def remove_member(self, request, pk=None, member_uuid=None):
         """Remove a member from the organization."""
         organization = self.get_object()
@@ -570,34 +572,34 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             requester_membership = organization.memberships.get(user=request.user, is_active=True)
         except OrganizationMembership.DoesNotExist:
             return Response(
-                {'detail': 'You are not a member of this organization.'},
+                {"detail": "You are not a member of this organization."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        allowed_roles = ['admin', 'course_manager']
+        allowed_roles = ["admin", "course_manager"]
         if requester_membership.role not in allowed_roles:
             return Response(
-                {'detail': 'You do not have permission to remove members.'},
+                {"detail": "You do not have permission to remove members."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         membership = get_object_or_404(
-            organization.memberships.select_related('user'),
+            organization.memberships.select_related("user"),
             uuid=member_uuid,  # Look up by membership UUID, not user UUID
         )
 
         # Can't remove yourself (only applies if membership has a linked user)
         if membership.user and membership.user == request.user:
             return Response(
-                {'detail': 'You cannot remove yourself. Leave the organization instead.'},
+                {"detail": "You cannot remove yourself. Leave the organization instead."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Course Manager restriction: Can only remove instructors
-        if requester_membership.role == 'course_manager':
+        if requester_membership.role == "course_manager":
             if membership.role != OrganizationMembership.Role.INSTRUCTOR:
                 return Response(
-                    {'detail': 'Course Managers can only remove Instructors.'},
+                    {"detail": "Course Managers can only remove Instructors."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
@@ -609,7 +611,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             ).count()
             if admin_count <= 1:
                 return Response(
-                    {'detail': 'Cannot remove the last admin. Assign another admin first.'},
+                    {"detail": "Cannot remove the last admin. Assign another admin first."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -618,11 +620,11 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         try:
             log_audit_event(
                 actor=request.user,
-                action='org_member_removed',
-                object_type='organization_membership',
+                action="org_member_removed",
+                object_type="organization_membership",
                 object_uuid=str(membership.uuid),
                 organization=organization,
-                metadata={'role': membership.role},
+                metadata={"role": membership.role},
                 request=request,
             )
         except Exception:
@@ -630,15 +632,15 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=True, methods=['post'], url_path='link-organizer')
+    @action(detail=True, methods=["post"], url_path="link-organizer")
     def link_organizer(self, request, pk=None):
         """Link an individual organizer's data to this organization."""
         organization = self.get_object()
 
         # Check admin permission
-        if not organization.memberships.filter(user=request.user, role__in=['admin'], is_active=True).exists():
+        if not organization.memberships.filter(user=request.user, role__in=["admin"], is_active=True).exists():
             return Response(
-                {'detail': 'You do not have permission to link organizers.'},
+                {"detail": "You do not have permission to link organizers."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -646,41 +648,41 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         # Link current user's data if no email specified
-        if not serializer.validated_data.get('organizer_email'):
+        if not serializer.validated_data.get("organizer_email"):
             result = OrganizationLinkingService.link_organizer_to_org(
                 user=request.user,
                 organization=organization,
-                role=serializer.validated_data['role'],
+                role=serializer.validated_data["role"],
             )
             try:
                 log_audit_event(
                     actor=request.user,
-                    action='org_organizer_linked',
-                    object_type='organization_membership',
-                    object_uuid=str(result['membership'].uuid),
+                    action="org_organizer_linked",
+                    object_type="organization_membership",
+                    object_uuid=str(result["membership"].uuid),
                     organization=organization,
-                    metadata={'role': serializer.validated_data['role']},
+                    metadata={"role": serializer.validated_data["role"]},
                     request=request,
                 )
             except Exception:
                 pass
             return Response(
                 {
-                    'detail': 'Your data has been linked to this organization.',
-                    'events_transferred': result['events_transferred'],
-                    'templates_transferred': result['templates_transferred'],
+                    "detail": "Your data has been linked to this organization.",
+                    "events_transferred": result["events_transferred"],
+                    "templates_transferred": result["templates_transferred"],
                 }
             )
 
         # Handle invitation for external email
-        if serializer.validated_data.get('organizer_email'):
-            email = serializer.validated_data['organizer_email']
-            role = serializer.validated_data['role']
+        if serializer.validated_data.get("organizer_email"):
+            email = serializer.validated_data["organizer_email"]
+            role = serializer.validated_data["role"]
 
             # Check if membership already exists
             if OrganizationMembership.objects.filter(organization=organization, user__email=email, is_active=True).exists():
                 return Response(
-                    {'detail': 'User is already a member of this organization.'},
+                    {"detail": "User is already a member of this organization."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -705,7 +707,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 user_to_invite = User.objects.get(email=email)
             except User.DoesNotExist:
                 return Response(
-                    {'detail': 'User with this email does not exist. Please ask them to sign up first.'},
+                    {"detail": "User with this email does not exist. Please ask them to sign up first."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -714,9 +716,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 organization=organization,
                 user=user_to_invite,
                 defaults={
-                    'role': role,
-                    'is_active': False,  # Pending acceptance
-                    'invited_by': request.user,
+                    "role": role,
+                    "is_active": False,  # Pending acceptance
+                    "invited_by": request.user,
                 },
             )
 
@@ -726,13 +728,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             # Send email
             invite_url = f"{settings.FRONTEND_URL}/dashboard/organizations/accept-invite?token={token}"
             email_service.send_email(
-                template='organization_invitation',
+                template="organization_invitation",
                 recipient=email,
                 context={
-                    'organization_name': organization.name,
-                    'inviter_name': request.user.full_name,
-                    'role': role,
-                    'invitation_url': invite_url,
+                    "organization_name": organization.name,
+                    "inviter_name": request.user.full_name,
+                    "role": role,
+                    "invitation_url": invite_url,
                 },
             )
 
@@ -741,14 +743,14 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
                 create_notification(
                     user=user_to_invite,
-                    notification_type='org_invite',
+                    notification_type="org_invite",
                     title=f"Invitation to join {organization.name}",
                     message=f"{request.user.full_name or request.user.email} invited you to join as {role}.",
                     action_url=f"/accept-invite/{token}",
                     metadata={
-                        'organization_uuid': str(organization.uuid),
-                        'organization_name': organization.name,
-                        'role': role,
+                        "organization_uuid": str(organization.uuid),
+                        "organization_name": organization.name,
+                        "role": role,
                     },
                 )
             except Exception as exc:
@@ -757,19 +759,19 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             try:
                 log_audit_event(
                     actor=request.user,
-                    action='org_member_invited',
-                    object_type='organization_membership',
+                    action="org_member_invited",
+                    object_type="organization_membership",
                     object_uuid=str(membership.uuid),
                     organization=organization,
-                    metadata={'role': role, 'invitation_email': email},
+                    metadata={"role": role, "invitation_email": email},
                     request=request,
                 )
             except Exception:
                 pass
 
-            return Response({'detail': f'Invitation sent to {email}.'}, status=status.HTTP_201_CREATED)
+            return Response({"detail": f"Invitation sent to {email}."}, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=['post'], url_path='stripe/connect')
+    @action(detail=True, methods=["post"], url_path="stripe/connect")
     def stripe_connect(self, request, pk=None):
         """
         Initiate Stripe Connect onboarding.
@@ -778,9 +780,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         organization = self.get_object()
 
         # Check admin permission
-        if not organization.memberships.filter(user=request.user, role__in=['admin'], is_active=True).exists():
+        if not organization.memberships.filter(user=request.user, role__in=["admin"], is_active=True).exists():
             return Response(
-                {'detail': 'You do not have permission to manage billing.'},
+                {"detail": "You do not have permission to manage billing."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -790,16 +792,16 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if not organization.stripe_connect_id:
             account_id = stripe_connect_service.create_account(
                 email=organization.contact_email or request.user.email,
-                country='US',  # Default to US for now, or make dynamic
+                country="US",  # Default to US for now, or make dynamic
             )
             if not account_id:
                 return Response(
-                    {'detail': 'Failed to create Stripe account.'},
+                    {"detail": "Failed to create Stripe account."},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
             organization.stripe_connect_id = account_id
-            organization.save(update_fields=['stripe_connect_id'])
+            organization.save(update_fields=["stripe_connect_id"])
 
         # 2. Generate Onboarding Link
         # Redirect back to frontend organization settings -> payments
@@ -814,13 +816,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         if not onboarding_url:
             return Response(
-                {'detail': 'Failed to generate onboarding link.'},
+                {"detail": "Failed to generate onboarding link."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        return Response({'url': onboarding_url})
+        return Response({"url": onboarding_url})
 
-    @action(detail=True, methods=['post'], url_path='subscription/upgrade')
+    @action(detail=True, methods=["post"], url_path="subscription/upgrade")
     def upgrade_subscription(self, request, pk=None):
         """
         Upgrade organization subscription.
@@ -829,15 +831,15 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         organization = self.get_object()
 
         # Check permissions (Admin only)
-        if not organization.memberships.filter(user=request.user, role__in=['admin'], is_active=True).exists():
+        if not organization.memberships.filter(user=request.user, role__in=["admin"], is_active=True).exists():
             return Response(
-                {'detail': 'You do not have permission to manage billing.'},
+                {"detail": "You do not have permission to manage billing."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        plan = request.data.get('plan')
+        plan = request.data.get("plan")
         if not plan:
-            return Response({'detail': 'Plan is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Plan is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Create checkout session
         success_url = f"{settings.FRONTEND_URL}/org/{organization.slug}/billing?success=true"
@@ -851,55 +853,55 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             organization_uuid=str(organization.uuid),  # Pass organization UUID for webhook
         )
 
-        if not result.get('success'):
-            return Response({'detail': result.get('error')}, status=status.HTTP_400_BAD_REQUEST)
+        if not result.get("success"):
+            return Response({"detail": result.get("error")}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             log_audit_event(
                 actor=request.user,
-                action='org_subscription_upgrade_started',
-                object_type='organization',
+                action="org_subscription_upgrade_started",
+                object_type="organization",
                 object_uuid=str(organization.uuid),
                 organization=organization,
-                metadata={'plan': plan},
+                metadata={"plan": plan},
                 request=request,
             )
         except Exception:
             pass
 
-        return Response({'url': result.get('url')})
+        return Response({"url": result.get("url")})
 
-    @action(detail=True, methods=['post'], url_path='subscription/confirm')
+    @action(detail=True, methods=["post"], url_path="subscription/confirm")
     def confirm_checkout(self, request, pk=None, slug=None):
         """Confirm valid Stripe checkout session for organization."""
         organization = self.get_object()
-        session_id = request.data.get('session_id')
+        session_id = request.data.get("session_id")
 
         if not session_id:
-            return Response({'detail': 'Session ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Session ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         result = stripe_service.confirm_organization_checkout_session(organization=organization, session_id=session_id)
 
-        if result['success']:
+        if result["success"]:
             try:
                 log_audit_event(
                     actor=request.user,
-                    action='org_subscription_confirmed',
-                    object_type='organization',
+                    action="org_subscription_confirmed",
+                    object_type="organization",
                     object_uuid=str(organization.uuid),
                     organization=organization,
-                    metadata={'status': result['subscription'].status},
+                    metadata={"status": result["subscription"].status},
                     request=request,
                 )
             except Exception:
                 pass
-            return Response({'status': 'confirmed', 'subscription_status': result['subscription'].status})
+            return Response({"status": "confirmed", "subscription_status": result["subscription"].status})
         else:
             return Response(
-                {'detail': result.get('error', 'Failed to confirm subscription')}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": result.get("error", "Failed to confirm subscription")}, status=status.HTTP_400_BAD_REQUEST
             )
 
-    @action(detail=True, methods=['post'], url_path='subscription/add-seats')
+    @action(detail=True, methods=["post"], url_path="subscription/add-seats")
     def add_seats(self, request, pk=None):
         """
         Add seats to organization subscription.
@@ -908,24 +910,24 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         organization = self.get_object()
 
         # Check permissions (Admin only)
-        if not organization.memberships.filter(user=request.user, role__in=['admin'], is_active=True).exists():
+        if not organization.memberships.filter(user=request.user, role__in=["admin"], is_active=True).exists():
             return Response(
-                {'detail': 'You do not have permission to manage billing.'},
+                {"detail": "You do not have permission to manage billing."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if not hasattr(organization, 'subscription') or not organization.subscription.stripe_subscription_id:
+        if not hasattr(organization, "subscription") or not organization.subscription.stripe_subscription_id:
             return Response(
-                {'detail': 'Organization has no active Stripe subscription.'},
+                {"detail": "Organization has no active Stripe subscription."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            seats_to_add = int(request.data.get('seats', 1))
+            seats_to_add = int(request.data.get("seats", 1))
             if seats_to_add < 1:
-                return Response({'detail': 'Must add at least 1 seat.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"detail": "Must add at least 1 seat."}, status=status.HTTP_400_BAD_REQUEST)
         except (ValueError, TypeError):
-            return Response({'detail': 'Invalid seat count.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Invalid seat count."}, status=status.HTTP_400_BAD_REQUEST)
 
         subscription = organization.subscription
         new_total_seats = subscription.total_seats + seats_to_add
@@ -933,21 +935,21 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         # Update Stripe
         result = stripe_service.update_subscription_quantity(subscription.stripe_subscription_id, quantity=new_total_seats)
 
-        if not result.get('success'):
-            return Response({'detail': result.get('error')}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        if not result.get("success"):
+            return Response({"detail": result.get("error")}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Update local
         subscription.additional_seats += seats_to_add
-        subscription.save(update_fields=['additional_seats', 'updated_at'])
+        subscription.save(update_fields=["additional_seats", "updated_at"])
 
         try:
             log_audit_event(
                 actor=request.user,
-                action='org_seats_added',
-                object_type='organization_subscription',
+                action="org_seats_added",
+                object_type="organization_subscription",
                 object_uuid=str(subscription.uuid),
                 organization=organization,
-                metadata={'seats_added': seats_to_add, 'total_seats': subscription.total_seats},
+                metadata={"seats_added": seats_to_add, "total_seats": subscription.total_seats},
                 request=request,
             )
         except Exception:
@@ -955,13 +957,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         return Response(
             {
-                'detail': f'Added {seats_to_add} seat(s).',
-                'total_seats': subscription.total_seats,
-                'additional_seats': subscription.additional_seats,
+                "detail": f"Added {seats_to_add} seat(s).",
+                "total_seats": subscription.total_seats,
+                "additional_seats": subscription.additional_seats,
             }
         )
 
-    @action(detail=True, methods=['post'], url_path='subscription/remove-seats')
+    @action(detail=True, methods=["post"], url_path="subscription/remove-seats")
     def remove_seats(self, request, pk=None):
         """
         Remove seats from organization subscription.
@@ -970,24 +972,24 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         organization = self.get_object()
 
         # Check permissions (Admin only)
-        if not organization.memberships.filter(user=request.user, role__in=['admin'], is_active=True).exists():
+        if not organization.memberships.filter(user=request.user, role__in=["admin"], is_active=True).exists():
             return Response(
-                {'detail': 'You do not have permission to manage billing.'},
+                {"detail": "You do not have permission to manage billing."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if not hasattr(organization, 'subscription') or not organization.subscription.stripe_subscription_id:
+        if not hasattr(organization, "subscription") or not organization.subscription.stripe_subscription_id:
             return Response(
-                {'detail': 'Organization has no active Stripe subscription.'},
+                {"detail": "Organization has no active Stripe subscription."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            seats_to_remove = int(request.data.get('seats', 1))
+            seats_to_remove = int(request.data.get("seats", 1))
             if seats_to_remove < 1:
-                return Response({'detail': 'Must remove at least 1 seat.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"detail": "Must remove at least 1 seat."}, status=status.HTTP_400_BAD_REQUEST)
         except (ValueError, TypeError):
-            return Response({'detail': 'Invalid seat count.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Invalid seat count."}, status=status.HTTP_400_BAD_REQUEST)
 
         subscription = organization.subscription
 
@@ -999,8 +1001,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if seats_to_remove > unused_seats:
             return Response(
                 {
-                    'detail': f'Cannot remove {seats_to_remove} seats. Only {unused_seats} unused seats available.',
-                    'unused_seats': unused_seats,
+                    "detail": f"Cannot remove {seats_to_remove} seats. Only {unused_seats} unused seats available.",
+                    "unused_seats": unused_seats,
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -1009,7 +1011,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         # We can only remove 'additional_seats'
         if seats_to_remove > subscription.additional_seats:
             return Response(
-                {'detail': 'Cannot check remove included base seats.'},
+                {"detail": "Cannot check remove included base seats."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1018,21 +1020,21 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         # Update Stripe
         result = stripe_service.update_subscription_quantity(subscription.stripe_subscription_id, quantity=new_total_seats)
 
-        if not result.get('success'):
-            return Response({'detail': result.get('error')}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        if not result.get("success"):
+            return Response({"detail": result.get("error")}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Update local
         subscription.additional_seats -= seats_to_remove
-        subscription.save(update_fields=['additional_seats', 'updated_at'])
+        subscription.save(update_fields=["additional_seats", "updated_at"])
 
         try:
             log_audit_event(
                 actor=request.user,
-                action='org_seats_removed',
-                object_type='organization_subscription',
+                action="org_seats_removed",
+                object_type="organization_subscription",
                 object_uuid=str(subscription.uuid),
                 organization=organization,
-                metadata={'seats_removed': seats_to_remove, 'total_seats': subscription.total_seats},
+                metadata={"seats_removed": seats_to_remove, "total_seats": subscription.total_seats},
                 request=request,
             )
         except Exception:
@@ -1040,27 +1042,27 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         return Response(
             {
-                'detail': f'Removed {seats_to_remove} seat(s).',
-                'total_seats': subscription.total_seats,
-                'additional_seats': subscription.additional_seats,
+                "detail": f"Removed {seats_to_remove} seat(s).",
+                "total_seats": subscription.total_seats,
+                "additional_seats": subscription.additional_seats,
             }
         )
 
-    @action(detail=True, methods=['post'], url_path='portal')
+    @action(detail=True, methods=["post"], url_path="portal")
     def portal(self, request, pk=None):
         """Create Stripe Customer Portal session."""
         organization = self.get_object()
 
         # Check permissions (Admin only)
-        if not organization.memberships.filter(user=request.user, role__in=['admin'], is_active=True).exists():
+        if not organization.memberships.filter(user=request.user, role__in=["admin"], is_active=True).exists():
             return Response(
-                {'detail': 'You do not have permission to manage billing.'},
+                {"detail": "You do not have permission to manage billing."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if not hasattr(organization, 'subscription') or not organization.subscription.stripe_customer_id:
+        if not hasattr(organization, "subscription") or not organization.subscription.stripe_customer_id:
             return Response(
-                {'detail': 'Organization has no billing account configured.'},
+                {"detail": "Organization has no billing account configured."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1070,14 +1072,14 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             user=request.user, return_url=return_url, customer_id=organization.subscription.stripe_customer_id
         )
 
-        if result['success']:
-            return Response({'url': result['url']})
+        if result["success"]:
+            return Response({"url": result["url"]})
         else:
             return Response(
-                {'detail': result.get('error', 'Failed to create portal session')}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": result.get("error", "Failed to create portal session")}, status=status.HTTP_400_BAD_REQUEST
             )
 
-    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    @action(detail=False, methods=["get"], permission_classes=[AllowAny])
     def plans(self, request):
         """
         Get available organization plans and capabilities.
@@ -1092,29 +1094,29 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 OrganizationSubscription.PLAN_CONFIG[OrganizationSubscription.Plan.ORGANIZATION],
             ).copy()
 
-            product = StripeProduct.objects.filter(plan=plan_value, is_active=True).prefetch_related('prices').first()
+            product = StripeProduct.objects.filter(plan=plan_value, is_active=True).prefetch_related("prices").first()
             if product:
                 feature_limits = product.get_feature_limits()
                 for key, value in feature_limits.items():
                     if value is not None:
                         config[key] = value
                 if product.included_seats is not None:
-                    config['included_seats'] = product.included_seats
+                    config["included_seats"] = product.included_seats
                 if product.seat_price_cents is not None:
-                    config['seat_price_cents'] = product.seat_price_cents
-                monthly_price = product.prices.filter(billing_interval='month', is_active=True).first()
+                    config["seat_price_cents"] = product.seat_price_cents
+                monthly_price = product.prices.filter(billing_interval="month", is_active=True).first()
                 if monthly_price:
-                    config['price_cents'] = monthly_price.amount_cents
-                annual_price = product.prices.filter(billing_interval='year', is_active=True).first()
+                    config["price_cents"] = monthly_price.amount_cents
+                annual_price = product.prices.filter(billing_interval="year", is_active=True).first()
                 if annual_price:
-                    config['annual_price_cents'] = annual_price.amount_cents
-                config['show_contact_sales'] = product.show_contact_sales
+                    config["annual_price_cents"] = annual_price.amount_cents
+                config["show_contact_sales"] = product.show_contact_sales
 
             plans[plan_value] = config
 
         return Response(plans)
 
-    @action(detail=True, methods=['get'], url_path='stripe/status')
+    @action(detail=True, methods=["get"], url_path="stripe/status")
     def stripe_status(self, request, pk=None):
         """
         Check and sync Stripe Connect status.
@@ -1122,18 +1124,18 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         organization = self.get_object()
 
         # Check admin permission
-        if not organization.memberships.filter(user=request.user, role__in=['admin'], is_active=True).exists():
+        if not organization.memberships.filter(user=request.user, role__in=["admin"], is_active=True).exists():
             return Response(
-                {'detail': 'You do not have permission to view billing status.'},
+                {"detail": "You do not have permission to view billing status."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         if not organization.stripe_connect_id:
             return Response(
                 {
-                    'connected': False,
-                    'status': 'not_connected',
-                    'charges_enabled': False,
+                    "connected": False,
+                    "status": "not_connected",
+                    "charges_enabled": False,
                 }
             )
 
@@ -1141,35 +1143,35 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         status_info = stripe_connect_service.get_account_status(organization.stripe_connect_id)
 
-        if 'error' in status_info:
+        if "error" in status_info:
             return Response(
-                {'detail': 'Failed to retrieve status from Stripe.'},
+                {"detail": "Failed to retrieve status from Stripe."},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         # Update local state
-        organization.stripe_charges_enabled = status_info.get('charges_enabled', False)
+        organization.stripe_charges_enabled = status_info.get("charges_enabled", False)
         # Use details_submitted or charges_enabled to determine 'active' status
-        if status_info.get('charges_enabled'):
-            organization.stripe_account_status = 'active'
-        elif status_info.get('details_submitted'):
-            organization.stripe_account_status = 'pending_verification'
+        if status_info.get("charges_enabled"):
+            organization.stripe_account_status = "active"
+        elif status_info.get("details_submitted"):
+            organization.stripe_account_status = "pending_verification"
         else:
-            organization.stripe_account_status = 'restricted'
+            organization.stripe_account_status = "restricted"
 
-        organization.save(update_fields=['stripe_charges_enabled', 'stripe_account_status'])
+        organization.save(update_fields=["stripe_charges_enabled", "stripe_account_status"])
 
         return Response(
             {
-                'connected': True,
-                'status': organization.stripe_account_status,
-                'charges_enabled': organization.stripe_charges_enabled,
-                'stripe_id': organization.stripe_connect_id,
-                'details': status_info,
+                "connected": True,
+                "status": organization.stripe_account_status,
+                "charges_enabled": organization.stripe_charges_enabled,
+                "stripe_id": organization.stripe_connect_id,
+                "details": status_info,
             }
         )
 
-    @action(detail=False, methods=['get'], url_path='public/(?P<slug>[^/.]+)', permission_classes=[AllowAny])
+    @action(detail=False, methods=["get"], url_path="public/(?P<slug>[^/.]+)", permission_classes=[AllowAny])
     def public_profile(self, request, slug=None):
         """
         Get public profile for an organization by slug.
@@ -1177,26 +1179,26 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         """
         organization = get_object_or_404(Organization.objects.filter(is_active=True, is_public=True), slug=slug)
 
-        serializer = OrganizationPublicSerializer(organization, context={'request': request})
+        serializer = OrganizationPublicSerializer(organization, context={"request": request})
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'], url_path='public', permission_classes=[AllowAny])
+    @action(detail=False, methods=["get"], url_path="public", permission_classes=[AllowAny])
     def public_list(self, request):
         """
         List public organizations for discovery.
         """
         queryset = Organization.objects.filter(is_active=True, is_public=True)
 
-        search = request.query_params.get('q', '').strip()
+        search = request.query_params.get("q", "").strip()
         if search:
             queryset = queryset.filter(name__icontains=search)
 
-        queryset = queryset.order_by('-is_verified', 'name')
-        serializer = OrganizationPublicSerializer(queryset, many=True, context={'request': request})
+        queryset = queryset.order_by("-is_verified", "name")
+        serializer = OrganizationPublicSerializer(queryset, many=True, context={"request": request})
         return Response(serializer.data)
 
 
-@roles('attendee', 'organizer', 'admin', route_name='accept_invitation')
+@roles("attendee", "organizer", "admin", route_name="accept_invitation")
 class AcceptInvitationView(APIView):
     """Accept an organization invitation."""
 
@@ -1205,54 +1207,54 @@ class AcceptInvitationView(APIView):
     def get(self, request, token):
         """Get invitation details without accepting."""
         membership = get_object_or_404(
-            OrganizationMembership.objects.select_related('organization', 'invited_by'),
+            OrganizationMembership.objects.select_related("organization", "invited_by"),
             invitation_token=token,
         )
 
         # Check if already accepted
         if membership.accepted_at:
             return Response(
-                {'detail': 'This invitation has already been accepted.'},
+                {"detail": "This invitation has already been accepted."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         requires_subscription = False
-        if membership.role == OrganizationMembership.Role.ORGANIZER and membership.organizer_billing_payer == 'organizer':
+        if membership.role == OrganizationMembership.Role.ORGANIZER and membership.organizer_billing_payer == "organizer":
             from billing.models import Subscription
 
-            subscription = getattr(request.user, 'subscription', None)
+            subscription = getattr(request.user, "subscription", None)
             if not subscription or not subscription.is_active or subscription.plan == Subscription.Plan.ATTENDEE:
                 requires_subscription = True
 
         return Response(
             {
-                'organization': {
-                    'uuid': str(membership.organization.uuid),
-                    'name': membership.organization.name,
-                    'slug': membership.organization.slug,
-                    'logo_url': membership.organization.effective_logo_url,
+                "organization": {
+                    "uuid": str(membership.organization.uuid),
+                    "name": membership.organization.name,
+                    "slug": membership.organization.slug,
+                    "logo_url": membership.organization.effective_logo_url,
                 },
-                'role': membership.role,
-                'role_display': membership.get_role_display(),
-                'billing_payer': membership.organizer_billing_payer,
-                'requires_subscription': requires_subscription,
-                'invited_by': membership.invited_by.full_name if membership.invited_by else 'Team Admin',
-                'invited_by_email': membership.invited_by.email if membership.invited_by else None,
-                'invitation_email': membership.invitation_email,
+                "role": membership.role,
+                "role_display": membership.get_role_display(),
+                "billing_payer": membership.organizer_billing_payer,
+                "requires_subscription": requires_subscription,
+                "invited_by": membership.invited_by.full_name if membership.invited_by else "Team Admin",
+                "invited_by_email": membership.invited_by.email if membership.invited_by else None,
+                "invitation_email": membership.invitation_email,
             }
         )
 
     def post(self, request, token):
         """Accept invitation using token."""
         membership = get_object_or_404(
-            OrganizationMembership.objects.select_related('organization'),
+            OrganizationMembership.objects.select_related("organization"),
             invitation_token=token,
         )
 
         # Check if already accepted
         if membership.accepted_at:
             return Response(
-                {'detail': 'This invitation has already been accepted.'},
+                {"detail": "This invitation has already been accepted."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1263,41 +1265,58 @@ class AcceptInvitationView(APIView):
         # Verify email matches
         elif membership.user != request.user:
             return Response(
-                {'detail': 'This invitation was sent to a different email address.'},
+                {"detail": "This invitation was sent to a different email address."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         # Organizer-paid invites require an active organizer subscription
-        if membership.role == OrganizationMembership.Role.ORGANIZER and membership.organizer_billing_payer == 'organizer':
+        if membership.role == OrganizationMembership.Role.ORGANIZER and membership.organizer_billing_payer == "organizer":
             from billing.models import Subscription
 
             subscription, _ = Subscription.objects.get_or_create(
-                user=request.user, defaults={'plan': Subscription.Plan.ATTENDEE}
+                user=request.user, defaults={"plan": Subscription.Plan.ATTENDEE}
             )
             if not subscription.is_active or subscription.plan == Subscription.Plan.ATTENDEE:
                 return Response(
                     {
-                        'detail': 'An active organizer subscription is required to accept this invitation.',
-                        'code': 'ORGANIZER_SUBSCRIPTION_REQUIRED',
+                        "detail": "An active organizer subscription is required to accept this invitation.",
+                        "code": "ORGANIZER_SUBSCRIPTION_REQUIRED",
                     },
                     status=status.HTTP_402_PAYMENT_REQUIRED,
                 )
 
             membership.linked_subscription = subscription
 
+        # Admin role: upgrade user to admin account type and cancel individual subscription
+        if membership.role == OrganizationMembership.Role.ADMIN:
+            request.user.upgrade_to_admin()
+
+            # Cancel individual subscription (billing moves to org)
+            subscription = getattr(request.user, "subscription", None)
+            if subscription and subscription.stripe_subscription_id:
+                from billing.services import stripe_service
+
+                stripe_service.cancel_subscription(subscription, immediate=True, reason="Joined organization as admin")
+
+            # Downgrade local subscription to attendee
+            if subscription:
+                subscription.plan = "attendee"
+                subscription.status = "active"
+                subscription.save(update_fields=["plan", "status", "updated_at"])
+
         # Accept the invitation
         membership.accept_invitation()
         if membership.linked_subscription_id:
-            membership.save(update_fields=['linked_subscription', 'updated_at'])
+            membership.save(update_fields=["linked_subscription", "updated_at"])
 
         try:
             log_audit_event(
                 actor=request.user,
-                action='org_invitation_accepted',
-                object_type='organization_membership',
+                action="org_invitation_accepted",
+                object_type="organization_membership",
                 object_uuid=str(membership.uuid),
                 organization=membership.organization,
-                metadata={'role': membership.role},
+                metadata={"role": membership.role},
                 request=request,
             )
         except Exception:
@@ -1305,16 +1324,16 @@ class AcceptInvitationView(APIView):
 
         return Response(
             {
-                'detail': f'You have joined {membership.organization.name}.',
-                'organization': OrganizationListSerializer(
+                "detail": f"You have joined {membership.organization.name}.",
+                "organization": OrganizationListSerializer(
                     membership.organization,
-                    context={'request': request},
+                    context={"request": request},
                 ).data,
             }
         )
 
 
-@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='my_invitations')
+@roles("attendee", "organizer", "course_manager", "admin", route_name="my_invitations")
 class MyInvitationsView(APIView):
     """Get current user's pending organization invitations."""
 
@@ -1335,33 +1354,33 @@ class MyInvitationsView(APIView):
                 invitation_token__isnull=False,
             )
             .exclude(
-                invitation_token='',
+                invitation_token="",
             )
-            .select_related('organization', 'invited_by')
+            .select_related("organization", "invited_by")
         )
 
         invitations = []
         for m in pending:
             invitations.append(
                 {
-                    'token': m.invitation_token,
-                    'organization': {
-                        'uuid': str(m.organization.uuid),
-                        'name': m.organization.name,
-                        'slug': m.organization.slug,
-                        'logo_url': m.organization.effective_logo_url,
+                    "token": m.invitation_token,
+                    "organization": {
+                        "uuid": str(m.organization.uuid),
+                        "name": m.organization.name,
+                        "slug": m.organization.slug,
+                        "logo_url": m.organization.effective_logo_url,
                     },
-                    'role': m.role,
-                    'role_display': m.get_role_display(),
-                    'invited_by': m.invited_by.full_name if m.invited_by else 'Team Admin',
-                    'invited_at': m.invited_at.isoformat() if m.invited_at else None,
+                    "role": m.role,
+                    "role_display": m.get_role_display(),
+                    "invited_by": m.invited_by.full_name if m.invited_by else "Team Admin",
+                    "invited_at": m.invited_at.isoformat() if m.invited_at else None,
                 }
             )
 
         return Response(invitations)
 
 
-@roles('organizer', 'admin', route_name='create_org_from_account')
+@roles("organizer", "admin", route_name="create_org_from_account")
 class CreateOrgFromAccountView(APIView):
     """Create an organization from the current organizer's account."""
 
@@ -1371,7 +1390,7 @@ class CreateOrgFromAccountView(APIView):
         """Preview what data would be linked."""
         if not request.user.is_organizer:
             return Response(
-                {'detail': 'Only organizers can create organizations.'},
+                {"detail": "Only organizers can create organizations."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -1382,7 +1401,7 @@ class CreateOrgFromAccountView(APIView):
         """Create organization from current account."""
         if not request.user.is_organizer:
             return Response(
-                {'detail': 'Only organizers can create organizations.'},
+                {"detail": "Only organizers can create organizations."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -1391,11 +1410,11 @@ class CreateOrgFromAccountView(APIView):
 
         organization = OrganizationLinkingService.create_org_from_organizer(
             user=request.user,
-            name=serializer.validated_data.get('name'),
-            slug=serializer.validated_data.get('slug'),
+            name=serializer.validated_data.get("name"),
+            slug=serializer.validated_data.get("slug"),
         )
 
         return Response(
-            OrganizationDetailSerializer(organization, context={'request': request}).data,
+            OrganizationDetailSerializer(organization, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )

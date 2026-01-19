@@ -304,7 +304,7 @@ class PublicCertificateVerificationSerializer(serializers.ModelSerializer):
     def get_registrant(self, obj):
         registrant_name = "Unknown"
         allow_public = False
-        
+
         if obj.registration:
             registrant_name = obj.registration.full_name
             allow_public = obj.registration.allow_public_verification
@@ -312,7 +312,7 @@ class PublicCertificateVerificationSerializer(serializers.ModelSerializer):
             registrant_name = obj.course_enrollment.user.display_name
             # Assuming course enrollments might not have the same privacy flag yet, defaulting to True or checking user prefs
             # For now, let's assume public if they shared the link.
-            allow_public = True 
+            allow_public = True
 
         # Check if registration allows public verification
         if not allow_public:
@@ -336,8 +336,8 @@ class PublicCertificateVerificationSerializer(serializers.ModelSerializer):
 
     def get_file_url(self, obj):
          if obj.file_url:
-            # For public view, we might want a signed URL if it's private, 
-            # but usually these are public read if knowing the UUID? 
+            # For public view, we might want a signed URL if it's private,
+            # but usually these are public read if knowing the UUID?
             # Sticking to the service method to be safe.
             from .services import certificate_service
             # 1 hour expiration for the download link on this page load

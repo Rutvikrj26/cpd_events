@@ -31,16 +31,16 @@ class EventModule(BaseModel):
     """
 
     class ReleaseType(models.TextChoices):
-        IMMEDIATE = 'immediate', 'Immediate'
-        SCHEDULED = 'scheduled', 'Scheduled Date'
-        DAYS_AFTER_REG = 'days_after_registration', 'Days After Registration'
-        PREREQUISITE = 'prerequisite', 'After Prerequisite'
+        IMMEDIATE = "immediate", "Immediate"
+        SCHEDULED = "scheduled", "Scheduled Date"
+        DAYS_AFTER_REG = "days_after_registration", "Days After Registration"
+        PREREQUISITE = "prerequisite", "After Prerequisite"
 
     # Relationships
     # Relationships
-    event = models.ForeignKey('events.Event', on_delete=models.CASCADE, related_name='modules', null=True, blank=True)
+    event = models.ForeignKey("events.Event", on_delete=models.CASCADE, related_name="modules", null=True, blank=True)
     prerequisite_module = models.ForeignKey(
-        'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='dependent_modules'
+        "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="dependent_modules"
     )
 
     # Basic info
@@ -66,14 +66,14 @@ class EventModule(BaseModel):
     is_published = models.BooleanField(default=False)
 
     class Meta:
-        db_table = 'event_modules'
-        verbose_name = 'Event Module'
-        verbose_name_plural = 'Event Modules'
-        ordering = ['event', 'order']
-        unique_together = [['event', 'order']]
+        db_table = "event_modules"
+        verbose_name = "Event Module"
+        verbose_name_plural = "Event Modules"
+        ordering = ["event", "order"]
+        unique_together = [["event", "order"]]
         indexes = [
-            models.Index(fields=['event', 'order']),
-            models.Index(fields=['is_published']),
+            models.Index(fields=["event", "order"]),
+            models.Index(fields=["is_published"]),
         ]
 
     def __str__(self):
@@ -123,7 +123,7 @@ class EventModule(BaseModel):
                 else:
                     return False
 
-                return prereq_progress.status == 'completed'
+                return prereq_progress.status == "completed"
             except ModuleProgress.DoesNotExist:
                 return False
 
@@ -142,15 +142,15 @@ class ModuleContent(BaseModel):
     """
 
     class ContentType(models.TextChoices):
-        VIDEO = 'video', 'Video'
-        DOCUMENT = 'document', 'Document'
-        TEXT = 'text', 'Text/HTML'
-        QUIZ = 'quiz', 'Quiz'
-        EXTERNAL = 'external', 'External Link'
-        LESSON = 'lesson', 'Mixed Lesson'
+        VIDEO = "video", "Video"
+        DOCUMENT = "document", "Document"
+        TEXT = "text", "Text/HTML"
+        QUIZ = "quiz", "Quiz"
+        EXTERNAL = "external", "External Link"
+        LESSON = "lesson", "Mixed Lesson"
 
     # Relationships
-    module = models.ForeignKey(EventModule, on_delete=models.CASCADE, related_name='contents')
+    module = models.ForeignKey(EventModule, on_delete=models.CASCADE, related_name="contents")
 
     # Basic info
     title = models.CharField(max_length=255)
@@ -169,7 +169,7 @@ class ModuleContent(BaseModel):
     # external: {url, open_in_new_tab}
     content_data = models.JSONField(default=dict)
     file = models.FileField(
-        upload_to='learning/modules/', blank=True, null=True, help_text="Uploaded file (for document/video)"
+        upload_to="learning/modules/", blank=True, null=True, help_text="Uploaded file (for document/video)"
     )
 
     # Requirements
@@ -177,11 +177,11 @@ class ModuleContent(BaseModel):
     is_published = models.BooleanField(default=True)
 
     class Meta:
-        db_table = 'module_contents'
-        verbose_name = 'Module Content'
-        verbose_name_plural = 'Module Contents'
-        ordering = ['module', 'order']
-        unique_together = [['module', 'order']]
+        db_table = "module_contents"
+        verbose_name = "Module Content"
+        verbose_name_plural = "Module Contents"
+        ordering = ["module", "order"]
+        unique_together = [["module", "order"]]
 
     def __str__(self):
         return f"{self.module.title} - {self.title}"
@@ -195,13 +195,13 @@ class Assignment(BaseModel):
     """
 
     class SubmissionType(models.TextChoices):
-        TEXT = 'text', 'Text Response'
-        FILE = 'file', 'File Upload'
-        URL = 'url', 'URL/Link'
-        MIXED = 'mixed', 'Mixed (Text + File)'
+        TEXT = "text", "Text Response"
+        FILE = "file", "File Upload"
+        URL = "url", "URL/Link"
+        MIXED = "mixed", "Mixed (Text + File)"
 
     # Relationships
-    module = models.ForeignKey(EventModule, on_delete=models.CASCADE, related_name='assignments')
+    module = models.ForeignKey(EventModule, on_delete=models.CASCADE, related_name="assignments")
 
     # Basic info
     title = models.CharField(max_length=255)
@@ -225,10 +225,10 @@ class Assignment(BaseModel):
     rubric = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        db_table = 'assignments'
-        verbose_name = 'Assignment'
-        verbose_name_plural = 'Assignments'
-        ordering = ['module', 'created_at']
+        db_table = "assignments"
+        verbose_name = "Assignment"
+        verbose_name_plural = "Assignments"
+        ordering = ["module", "created_at"]
 
     def __str__(self):
         return f"{self.module.title} - {self.title}"
@@ -247,23 +247,23 @@ class AssignmentSubmission(BaseModel):
     """
 
     class Status(models.TextChoices):
-        DRAFT = 'draft', 'Draft'
-        SUBMITTED = 'submitted', 'Submitted'
-        IN_REVIEW = 'in_review', 'In Review'
-        NEEDS_REVISION = 'needs_revision', 'Needs Revision'
-        GRADED = 'graded', 'Graded'
-        APPROVED = 'approved', 'Approved'
+        DRAFT = "draft", "Draft"
+        SUBMITTED = "submitted", "Submitted"
+        IN_REVIEW = "in_review", "In Review"
+        NEEDS_REVISION = "needs_revision", "Needs Revision"
+        GRADED = "graded", "Graded"
+        APPROVED = "approved", "Approved"
 
     # Relationships
-    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='submissions')
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name="submissions")
     registration = models.ForeignKey(
-        'registrations.Registration', on_delete=models.CASCADE, related_name='assignment_submissions', null=True, blank=True
+        "registrations.Registration", on_delete=models.CASCADE, related_name="assignment_submissions", null=True, blank=True
     )
     course_enrollment = models.ForeignKey(
-        'learning.CourseEnrollment', on_delete=models.CASCADE, related_name='assignment_submissions', null=True, blank=True
+        "learning.CourseEnrollment", on_delete=models.CASCADE, related_name="assignment_submissions", null=True, blank=True
     )
     graded_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='graded_submissions'
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="graded_submissions"
     )
 
     # Submission details
@@ -281,14 +281,14 @@ class AssignmentSubmission(BaseModel):
     graded_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = 'assignment_submissions'
-        verbose_name = 'Assignment Submission'
-        verbose_name_plural = 'Assignment Submissions'
-        ordering = ['-submitted_at']
+        db_table = "assignment_submissions"
+        verbose_name = "Assignment Submission"
+        verbose_name_plural = "Assignment Submissions"
+        ordering = ["-submitted_at"]
         indexes = [
-            models.Index(fields=['assignment', 'registration']),
-            models.Index(fields=['assignment', 'course_enrollment']),
-            models.Index(fields=['status']),
+            models.Index(fields=["assignment", "registration"]),
+            models.Index(fields=["assignment", "course_enrollment"]),
+            models.Index(fields=["status"]),
         ]
 
     def clean(self):
@@ -301,9 +301,6 @@ class AssignmentSubmission(BaseModel):
     def __str__(self):
         user = self.registration.user if self.registration else self.course_enrollment.user
         return f"{user.email} - {self.assignment.title}"
-
-    def __str__(self):
-        return f"{self.registration.user.email} - {self.assignment.title}"
 
     @property
     def is_passing(self):
@@ -318,7 +315,7 @@ class AssignmentSubmission(BaseModel):
         self.submitted_at = timezone.now()
         self.save()
 
-    def grade(self, score, feedback='', graded_by=None):
+    def grade(self, score, feedback="", graded_by=None):
         """Grade the submission."""
         self.score = score
         self.feedback = feedback
@@ -336,17 +333,17 @@ class SubmissionReview(BaseModel):
     """
 
     class Action(models.TextChoices):
-        SUBMITTED = 'submitted', 'Submitted'
-        REVIEWED = 'reviewed', 'Reviewed'
-        GRADED = 'graded', 'Graded'
-        RETURNED = 'returned', 'Returned for Revision'
-        APPROVED = 'approved', 'Approved'
-        RESUBMITTED = 'resubmitted', 'Resubmitted'
+        SUBMITTED = "submitted", "Submitted"
+        REVIEWED = "reviewed", "Reviewed"
+        GRADED = "graded", "Graded"
+        RETURNED = "returned", "Returned for Revision"
+        APPROVED = "approved", "Approved"
+        RESUBMITTED = "resubmitted", "Resubmitted"
 
     # Relationships
-    submission = models.ForeignKey(AssignmentSubmission, on_delete=models.CASCADE, related_name='reviews')
+    submission = models.ForeignKey(AssignmentSubmission, on_delete=models.CASCADE, related_name="reviews")
     reviewer = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='submission_reviews'
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="submission_reviews"
     )
 
     # Action details
@@ -360,10 +357,10 @@ class SubmissionReview(BaseModel):
     rubric_scores = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        db_table = 'submission_reviews'
-        verbose_name = 'Submission Review'
-        verbose_name_plural = 'Submission Reviews'
-        ordering = ['-created_at']
+        db_table = "submission_reviews"
+        verbose_name = "Submission Review"
+        verbose_name_plural = "Submission Reviews"
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.submission} - {self.action}"
@@ -375,19 +372,19 @@ class ContentProgress(BaseModel):
     """
 
     class Status(models.TextChoices):
-        NOT_STARTED = 'not_started', 'Not Started'
-        IN_PROGRESS = 'in_progress', 'In Progress'
-        COMPLETED = 'completed', 'Completed'
+        NOT_STARTED = "not_started", "Not Started"
+        IN_PROGRESS = "in_progress", "In Progress"
+        COMPLETED = "completed", "Completed"
 
     # Relationships
     # Relationships
     registration = models.ForeignKey(
-        'registrations.Registration', on_delete=models.CASCADE, related_name='content_progress', null=True, blank=True
+        "registrations.Registration", on_delete=models.CASCADE, related_name="content_progress", null=True, blank=True
     )
     course_enrollment = models.ForeignKey(
-        'learning.CourseEnrollment', on_delete=models.CASCADE, related_name='content_progress', null=True, blank=True
+        "learning.CourseEnrollment", on_delete=models.CASCADE, related_name="content_progress", null=True, blank=True
     )
-    content = models.ForeignKey(ModuleContent, on_delete=models.CASCADE, related_name='progress_records')
+    content = models.ForeignKey(ModuleContent, on_delete=models.CASCADE, related_name="progress_records")
 
     # Progress
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOT_STARTED)
@@ -400,18 +397,18 @@ class ContentProgress(BaseModel):
     last_position = models.JSONField(default=dict)  # {time, page, etc.}
 
     class Meta:
-        db_table = 'content_progress'
-        verbose_name = 'Content Progress'
-        verbose_name_plural = 'Content Progress'
+        db_table = "content_progress"
+        verbose_name = "Content Progress"
+        verbose_name_plural = "Content Progress"
         constraints = [
             models.UniqueConstraint(
-                fields=['registration', 'content'],
-                name='unique_registration_content',
+                fields=["registration", "content"],
+                name="unique_registration_content",
                 condition=models.Q(registration__isnull=False),
             ),
             models.UniqueConstraint(
-                fields=['course_enrollment', 'content'],
-                name='unique_enrollment_content',
+                fields=["course_enrollment", "content"],
+                name="unique_enrollment_content",
                 condition=models.Q(course_enrollment__isnull=False),
             ),
         ]
@@ -460,19 +457,19 @@ class ModuleProgress(BaseModel):
     """
 
     class Status(models.TextChoices):
-        NOT_STARTED = 'not_started', 'Not Started'
-        IN_PROGRESS = 'in_progress', 'In Progress'
-        COMPLETED = 'completed', 'Completed'
+        NOT_STARTED = "not_started", "Not Started"
+        IN_PROGRESS = "in_progress", "In Progress"
+        COMPLETED = "completed", "Completed"
 
     # Relationships
     # Relationships
     registration = models.ForeignKey(
-        'registrations.Registration', on_delete=models.CASCADE, related_name='module_progress', null=True, blank=True
+        "registrations.Registration", on_delete=models.CASCADE, related_name="module_progress", null=True, blank=True
     )
     course_enrollment = models.ForeignKey(
-        'learning.CourseEnrollment', on_delete=models.CASCADE, related_name='module_progress', null=True, blank=True
+        "learning.CourseEnrollment", on_delete=models.CASCADE, related_name="module_progress", null=True, blank=True
     )
-    module = models.ForeignKey(EventModule, on_delete=models.CASCADE, related_name='progress_records')
+    module = models.ForeignKey(EventModule, on_delete=models.CASCADE, related_name="progress_records")
 
     # Progress
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOT_STARTED)
@@ -488,18 +485,18 @@ class ModuleProgress(BaseModel):
     attempts = models.PositiveIntegerField(default=0)
 
     class Meta:
-        db_table = 'module_progress'
-        verbose_name = 'Module Progress'
-        verbose_name_plural = 'Module Progress'
+        db_table = "module_progress"
+        verbose_name = "Module Progress"
+        verbose_name_plural = "Module Progress"
         constraints = [
             models.UniqueConstraint(
-                fields=['registration', 'module'],
-                name='unique_registration_module',
+                fields=["registration", "module"],
+                name="unique_registration_module",
                 condition=models.Q(registration__isnull=False),
             ),
             models.UniqueConstraint(
-                fields=['course_enrollment', 'module'],
-                name='unique_enrollment_module',
+                fields=["course_enrollment", "module"],
+                name="unique_enrollment_module",
                 condition=models.Q(course_enrollment__isnull=False),
             ),
         ]
@@ -570,17 +567,17 @@ class Course(BaseModel):
     """
 
     class Status(models.TextChoices):
-        DRAFT = 'draft', 'Draft'
-        PUBLISHED = 'published', 'Published'
-        ARCHIVED = 'archived', 'Archived'
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Published"
+        ARCHIVED = "archived", "Archived"
 
     # =========================================
     # Ownership
     # =========================================
     organization = models.ForeignKey(
-        'organizations.Organization',
+        "organizations.Organization",
         on_delete=models.CASCADE,
-        related_name='courses',
+        related_name="courses",
         null=True,
         blank=True,
         help_text="Organization that owns this course (null for personal LMS plans)",
@@ -589,7 +586,7 @@ class Course(BaseModel):
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='created_courses',
+        related_name="created_courses",
         help_text="User who created this course",
     )
 
@@ -597,8 +594,8 @@ class Course(BaseModel):
     # Basic Info
     # =========================================
     class CourseFormat(models.TextChoices):
-        ONLINE = 'online', 'Online (Self-Paced)'
-        HYBRID = 'hybrid', 'Hybrid (Includes Live Sessions)'
+        ONLINE = "online", "Online (Self-Paced)"
+        HYBRID = "hybrid", "Hybrid (Includes Live Sessions)"
 
     title = models.CharField(max_length=255, help_text="Course title")
     format = models.CharField(
@@ -607,7 +604,7 @@ class Course(BaseModel):
     slug = models.SlugField(max_length=100, help_text="URL-friendly identifier")
     description = models.TextField(blank=True, max_length=5000, help_text="Course description")
     short_description = models.CharField(max_length=300, blank=True, help_text="Brief description for listings")
-    featured_image = models.ImageField(upload_to='courses/images/', null=True, blank=True, help_text="Featured image")
+    featured_image = models.ImageField(upload_to="courses/images/", null=True, blank=True, help_text="Featured image")
     featured_image_url = models.URLField(blank=True, help_text="External featured image URL")
 
     # =========================================
@@ -632,8 +629,7 @@ class Course(BaseModel):
     # Live session scheduling (for Hybrid format)
     live_session_start = models.DateTimeField(null=True, blank=True, help_text="Start time for live session")
     live_session_end = models.DateTimeField(null=True, blank=True, help_text="End time for live session")
-    live_session_timezone = models.CharField(max_length=64, default='UTC', help_text="Timezone for live sessions")
-
+    live_session_timezone = models.CharField(max_length=64, default="UTC", help_text="Timezone for live sessions")
 
     # =========================================
     # CPD Settings
@@ -650,13 +646,13 @@ class Course(BaseModel):
     # =========================================
     # Pricing
     # =========================================
-    thumbnail = models.ImageField(upload_to='courses/thumbnails/', blank=True, null=True)
+    thumbnail = models.ImageField(upload_to="courses/thumbnails/", blank=True, null=True)
 
     # =========================================
     # Pricing & Payments
     # =========================================
     price_cents = models.PositiveIntegerField(default=0, help_text="Price in cents (0 for free)")
-    currency = models.CharField(max_length=3, default='USD', help_text="Currency code (ISO 4217)")
+    currency = models.CharField(max_length=3, default="USD", help_text="Currency code (ISO 4217)")
     stripe_product_id = models.CharField(max_length=255, blank=True, help_text="Stripe Product ID")
     stripe_price_id = models.CharField(max_length=255, blank=True, help_text="Stripe Price ID")
 
@@ -679,21 +675,20 @@ class Course(BaseModel):
     # Hybrid Completion Criteria
     # =========================================
     class HybridCompletionCriteria(models.TextChoices):
-        MODULES_ONLY = 'modules_only', 'Complete All Required Modules'
-        SESSIONS_ONLY = 'sessions_only', 'Attend All Required Sessions'
-        BOTH = 'both', 'Complete Modules AND Attend Sessions'
-        EITHER = 'either', 'Complete Modules OR Attend Sessions'
-        MIN_SESSIONS = 'min_sessions', 'Complete Modules + Minimum Sessions'
+        MODULES_ONLY = "modules_only", "Complete All Required Modules"
+        SESSIONS_ONLY = "sessions_only", "Attend All Required Sessions"
+        BOTH = "both", "Complete Modules AND Attend Sessions"
+        EITHER = "either", "Complete Modules OR Attend Sessions"
+        MIN_SESSIONS = "min_sessions", "Complete Modules + Minimum Sessions"
 
     hybrid_completion_criteria = models.CharField(
         max_length=20,
         choices=HybridCompletionCriteria.choices,
         default=HybridCompletionCriteria.BOTH,
-        help_text="How to determine completion for hybrid courses"
+        help_text="How to determine completion for hybrid courses",
     )
     min_sessions_required = models.PositiveIntegerField(
-        default=1,
-        help_text="Minimum sessions to attend (when using MIN_SESSIONS criteria)"
+        default=1, help_text="Minimum sessions to attend (when using MIN_SESSIONS criteria)"
     )
 
     # =========================================
@@ -702,11 +697,11 @@ class Course(BaseModel):
 
     certificates_enabled = models.BooleanField(default=True, help_text="Issue certificates on completion")
     certificate_template = models.ForeignKey(
-        'certificates.CertificateTemplate',
+        "certificates.CertificateTemplate",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='courses',
+        related_name="courses",
         help_text="Template for certificates",
     )
     auto_issue_certificates = models.BooleanField(default=True, help_text="Auto-issue when course is completed")
@@ -716,11 +711,11 @@ class Course(BaseModel):
     # =========================================
     badges_enabled = models.BooleanField(default=False, help_text="Issue badges on completion")
     badge_template = models.ForeignKey(
-        'badges.BadgeTemplate',
+        "badges.BadgeTemplate",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='courses',
+        related_name="courses",
         help_text="Template for badges",
     )
     auto_issue_badges = models.BooleanField(default=True, help_text="Auto-issue badges when course is completed")
@@ -733,54 +728,54 @@ class Course(BaseModel):
     module_count = models.PositiveIntegerField(default=0, help_text="Number of modules")
 
     class Meta:
-        db_table = 'courses'
-        ordering = ['-created_at']
+        db_table = "courses"
+        ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=['organization', 'slug'],
+                fields=["organization", "slug"],
                 condition=models.Q(organization__isnull=False),
-                name='unique_course_slug_per_organization',
+                name="unique_course_slug_per_organization",
             ),
             models.UniqueConstraint(
-                fields=['created_by', 'slug'],
+                fields=["created_by", "slug"],
                 condition=models.Q(organization__isnull=True),
-                name='unique_course_slug_per_owner',
+                name="unique_course_slug_per_owner",
             ),
         ]
         indexes = [
-            models.Index(fields=['status']),
-            models.Index(fields=['organization', 'status']),
-            models.Index(fields=['is_public', 'status']),
+            models.Index(fields=["status"]),
+            models.Index(fields=["organization", "status"]),
+            models.Index(fields=["is_public", "status"]),
         ]
-        verbose_name = 'Course'
-        verbose_name_plural = 'Courses'
+        verbose_name = "Course"
+        verbose_name_plural = "Courses"
 
     def __str__(self):
         return self.title
 
     def can_manage(self, user) -> bool:
         """Check if user can manage this course."""
-        if not user or not getattr(user, 'is_authenticated', False):
+        if not user or not getattr(user, "is_authenticated", False):
             return False
         if user.is_staff:
             return True
         if self.organization_id:
             return self.organization.memberships.filter(
                 user=user,
-                role__in=['admin', 'course_manager'],
+                role__in=["admin", "course_manager"],
                 is_active=True,
             ).exists()
         return self.created_by_id == user.id
 
     def can_instruct(self, user) -> bool:
         """Check if user is an instructor assigned to this course."""
-        if not user or not getattr(user, 'is_authenticated', False):
+        if not user or not getattr(user, "is_authenticated", False):
             return False
         if not self.organization_id:
             return False
         return self.organization.memberships.filter(
             user=user,
-            role='instructor',
+            role="instructor",
             assigned_course=self,
             is_active=True,
         ).exists()
@@ -799,7 +794,7 @@ class Course(BaseModel):
         """Get image URL, preferring uploaded file."""
         if self.featured_image:
             return self.featured_image.url
-        return self.featured_image_url or ''
+        return self.featured_image_url or ""
 
     @property
     def is_published(self):
@@ -823,12 +818,12 @@ class Course(BaseModel):
     def publish(self):
         """Publish the course."""
         self.status = self.Status.PUBLISHED
-        self.save(update_fields=['status', 'updated_at'])
+        self.save(update_fields=["status", "updated_at"])
 
     def archive(self):
         """Archive the course."""
         self.status = self.Status.ARCHIVED
-        self.save(update_fields=['status', 'updated_at'])
+        self.save(update_fields=["status", "updated_at"])
 
     def update_counts(self):
         """Update denormalized counts."""
@@ -837,7 +832,7 @@ class Course(BaseModel):
         ).count()
         self.completion_count = self.enrollments.filter(status=CourseEnrollment.Status.COMPLETED).count()
         self.module_count = self.modules.count()
-        self.save(update_fields=['enrollment_count', 'completion_count', 'module_count', 'updated_at'])
+        self.save(update_fields=["enrollment_count", "completion_count", "module_count", "updated_at"])
 
 
 class CourseAnnouncement(BaseModel):
@@ -845,7 +840,7 @@ class CourseAnnouncement(BaseModel):
     Announcements for a course.
     """
 
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='announcements')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="announcements")
     title = models.CharField(max_length=255)
     body = models.TextField()
     is_published = models.BooleanField(default=True)
@@ -854,14 +849,14 @@ class CourseAnnouncement(BaseModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='course_announcements',
+        related_name="course_announcements",
     )
 
     class Meta:
-        db_table = 'course_announcements'
-        ordering = ['-created_at']
-        verbose_name = 'Course Announcement'
-        verbose_name_plural = 'Course Announcements'
+        db_table = "course_announcements"
+        ordering = ["-created_at"]
+        verbose_name = "Course Announcement"
+        verbose_name_plural = "Course Announcements"
 
     def __str__(self):
         return f"{self.course.title} - {self.title}"
@@ -874,17 +869,17 @@ class CourseModule(BaseModel):
     This allows EventModule to be reused for both event-based and course-based learning.
     """
 
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='modules')
-    module = models.ForeignKey(EventModule, on_delete=models.CASCADE, related_name='course_links')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="modules")
+    module = models.ForeignKey(EventModule, on_delete=models.CASCADE, related_name="course_links")
     order = models.PositiveIntegerField(default=0, help_text="Display order in course")
     is_required = models.BooleanField(default=True, help_text="Required for course completion")
 
     class Meta:
-        db_table = 'course_modules'
-        ordering = ['order']
-        unique_together = ['course', 'module']
-        verbose_name = 'Course Module'
-        verbose_name_plural = 'Course Modules'
+        db_table = "course_modules"
+        ordering = ["order"]
+        unique_together = ["course", "module"]
+        verbose_name = "Course Module"
+        verbose_name_plural = "Course Modules"
 
     def __str__(self):
         return f"{self.course.title} - {self.module.title}"
@@ -898,20 +893,20 @@ class CourseEnrollment(BaseModel):
     """
 
     class Status(models.TextChoices):
-        PENDING = 'pending', 'Pending Approval'
-        ACTIVE = 'active', 'Active'
-        COMPLETED = 'completed', 'Completed'
-        DROPPED = 'dropped', 'Dropped'
-        EXPIRED = 'expired', 'Expired'
+        PENDING = "pending", "Pending Approval"
+        ACTIVE = "active", "Active"
+        COMPLETED = "completed", "Completed"
+        DROPPED = "dropped", "Dropped"
+        EXPIRED = "expired", "Expired"
 
     class AccessType(models.TextChoices):
-        LIFETIME = 'lifetime', 'Lifetime Access'
-        LIMITED = 'limited', 'Limited Access'
-        SUBSCRIPTION = 'subscription', 'Subscription Access'
+        LIFETIME = "lifetime", "Lifetime Access"
+        LIMITED = "limited", "Limited Access"
+        SUBSCRIPTION = "subscription", "Subscription Access"
 
     # Relationships
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='enrollments')
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='course_enrollments')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="enrollments")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="course_enrollments")
 
     # Status
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True)
@@ -951,21 +946,21 @@ class CourseEnrollment(BaseModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='manual_course_completions',
+        related_name="manual_course_completions",
         help_text="User who manually marked this enrollment complete",
     )
 
     class Meta:
-        db_table = 'course_enrollments'
-        ordering = ['-enrolled_at']
-        unique_together = ['course', 'user']
+        db_table = "course_enrollments"
+        ordering = ["-enrolled_at"]
+        unique_together = ["course", "user"]
         indexes = [
-            models.Index(fields=['status']),
-            models.Index(fields=['course', 'status']),
-            models.Index(fields=['user', 'status']),
+            models.Index(fields=["status"]),
+            models.Index(fields=["course", "status"]),
+            models.Index(fields=["user", "status"]),
         ]
-        verbose_name = 'Course Enrollment'
-        verbose_name_plural = 'Course Enrollments'
+        verbose_name = "Course Enrollment"
+        verbose_name_plural = "Course Enrollments"
 
     def __str__(self):
         return f"{self.user.email} - {self.course.title}"
@@ -991,7 +986,7 @@ class CourseEnrollment(BaseModel):
         """Mark enrollment as started."""
         if not self.started_at:
             self.started_at = timezone.now()
-            self.save(update_fields=['started_at', 'updated_at'])
+            self.save(update_fields=["started_at", "updated_at"])
 
     def complete(self):
         """Mark enrollment as completed."""
@@ -1033,12 +1028,12 @@ class CourseEnrollment(BaseModel):
 
         self.save(
             update_fields=[
-                'status',
-                'completed_at',
-                'progress_percent',
-                'certificate_issued',
-                'certificate_issued_at',
-                'updated_at',
+                "status",
+                "completed_at",
+                "progress_percent",
+                "certificate_issued",
+                "certificate_issued_at",
+                "updated_at",
             ]
         )
         self.course.update_counts()
@@ -1046,7 +1041,7 @@ class CourseEnrollment(BaseModel):
     def drop(self):
         """Drop the enrollment."""
         self.status = self.Status.DROPPED
-        self.save(update_fields=['status', 'updated_at'])
+        self.save(update_fields=["status", "updated_at"])
         self.course.update_counts()
 
     def update_progress(self):
@@ -1088,7 +1083,7 @@ class CourseEnrollment(BaseModel):
             return False
 
         # Check for manual completion override
-        if getattr(self, 'manually_completed', False):
+        if getattr(self, "manually_completed", False):
             self.complete()
             return True
 
@@ -1098,7 +1093,7 @@ class CourseEnrollment(BaseModel):
             return True
 
         # Not complete yet, just save progress
-        self.save(update_fields=['modules_completed', 'progress_percent', 'updated_at'])
+        self.save(update_fields=["modules_completed", "progress_percent", "updated_at"])
         return False
 
     def _are_all_requirements_passed(self) -> bool:
@@ -1142,7 +1137,7 @@ class CourseEnrollment(BaseModel):
     def _check_module_requirements(self) -> bool:
         """Check if module/assignment requirements are passed."""
         # Get all required modules for this course
-        required_modules = self.course.modules.filter(is_required=True).values_list('module_id', flat=True)
+        required_modules = self.course.modules.filter(is_required=True).values_list("module_id", flat=True)
 
         if not required_modules:
             # No required modules, check if 100% progress
@@ -1182,30 +1177,25 @@ class CourseEnrollment(BaseModel):
 
         # If strict session count is required, use that logic regardless of "mandatory" flags
         if criteria == Course.HybridCompletionCriteria.MIN_SESSIONS:
-             eligible_count = CourseSessionAttendance.objects.filter(
-                 enrollment=self,
-                 is_eligible=True,
-                 session__course=course
-             ).count()
-             return eligible_count >= course.min_sessions_required
+            eligible_count = CourseSessionAttendance.objects.filter(
+                enrollment=self, is_eligible=True, session__course=course
+            ).count()
+            return eligible_count >= course.min_sessions_required
 
         # Otherwise (SESSIONS_ONLY, BOTH, EITHER), use Mandatory flags
         # Get all mandatory sessions
         mandatory_sessions = course.sessions.filter(is_mandatory=True, is_published=True)
 
         if not mandatory_sessions.exists():
-             return True
+            return True
 
         # Check attendance for each mandatory session
         # Optimization: count passed mandatory sessions
         count_passed = CourseSessionAttendance.objects.filter(
-            session__in=mandatory_sessions,
-            enrollment=self,
-            is_eligible=True
+            session__in=mandatory_sessions, enrollment=self, is_eligible=True
         ).count()
 
         return count_passed >= mandatory_sessions.count()
-
 
     def mark_complete_manually(self, completed_by):
         """
@@ -1216,7 +1206,7 @@ class CourseEnrollment(BaseModel):
         """
         self.manually_completed = True
         self.manually_completed_by = completed_by
-        self.save(update_fields=['manually_completed', 'manually_completed_by', 'updated_at'])
+        self.save(update_fields=["manually_completed", "manually_completed_by", "updated_at"])
         self.complete()
 
 
@@ -1234,25 +1224,23 @@ class CourseSession(BaseModel):
     """
 
     class SessionType(models.TextChoices):
-        LIVE = 'live', 'Live Session'
-        RECORDED = 'recorded', 'Recorded/On-demand'
-        HYBRID = 'hybrid', 'Hybrid'
+        LIVE = "live", "Live Session"
+        RECORDED = "recorded", "Recorded/On-demand"
+        HYBRID = "hybrid", "Hybrid"
 
     # Relationships
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='sessions')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="sessions")
 
     # Basic info
     title = models.CharField(max_length=255, help_text="Session title")
     description = models.TextField(blank=True, help_text="Session description")
     order = models.PositiveIntegerField(default=0, help_text="Display order")
-    session_type = models.CharField(
-        max_length=20, choices=SessionType.choices, default=SessionType.LIVE
-    )
+    session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.LIVE)
 
     # Schedule
     starts_at = models.DateTimeField(help_text="Session start time")
     duration_minutes = models.PositiveIntegerField(default=60, help_text="Duration in minutes")
-    timezone = models.CharField(max_length=50, default='UTC', help_text="Session timezone")
+    timezone = models.CharField(max_length=50, default="UTC", help_text="Session timezone")
 
     # Zoom integration (per-session)
     zoom_meeting_id = models.CharField(max_length=100, blank=True, db_index=True)
@@ -1270,9 +1258,7 @@ class CourseSession(BaseModel):
     zoom_error_at = models.DateTimeField(null=True, blank=True)
 
     # CPD credits for this session
-    cpd_credits = models.DecimalField(
-        max_digits=5, decimal_places=2, default=0, help_text="CPD credits for attending"
-    )
+    cpd_credits = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="CPD credits for attending")
 
     # Attendance requirements
     is_mandatory = models.BooleanField(default=True, help_text="Required for course completion")
@@ -1284,13 +1270,13 @@ class CourseSession(BaseModel):
     is_published = models.BooleanField(default=True)
 
     class Meta:
-        db_table = 'course_sessions'
-        ordering = ['course', 'order', 'starts_at']
-        verbose_name = 'Course Session'
-        verbose_name_plural = 'Course Sessions'
+        db_table = "course_sessions"
+        ordering = ["course", "order", "starts_at"]
+        verbose_name = "Course Session"
+        verbose_name_plural = "Course Sessions"
         indexes = [
-            models.Index(fields=['course', 'starts_at']),
-            models.Index(fields=['zoom_meeting_id']),
+            models.Index(fields=["course", "starts_at"]),
+            models.Index(fields=["zoom_meeting_id"]),
         ]
 
     def __str__(self):
@@ -1326,12 +1312,8 @@ class CourseSessionAttendance(BaseModel):
     and whether they met the minimum attendance threshold.
     """
 
-    session = models.ForeignKey(
-        CourseSession, on_delete=models.CASCADE, related_name='attendance_records'
-    )
-    enrollment = models.ForeignKey(
-        CourseEnrollment, on_delete=models.CASCADE, related_name='session_attendance'
-    )
+    session = models.ForeignKey(CourseSession, on_delete=models.CASCADE, related_name="attendance_records")
+    enrollment = models.ForeignKey(CourseEnrollment, on_delete=models.CASCADE, related_name="session_attendance")
 
     # Attendance tracking
     attendance_minutes = models.PositiveIntegerField(default=0, help_text="Minutes attended")
@@ -1350,19 +1332,19 @@ class CourseSessionAttendance(BaseModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='course_attendance_overrides',
+        related_name="course_attendance_overrides",
     )
     override_reason = models.TextField(blank=True)
 
     class Meta:
-        db_table = 'course_session_attendance'
-        unique_together = ['session', 'enrollment']
-        ordering = ['-created_at']
-        verbose_name = 'Course Session Attendance'
-        verbose_name_plural = 'Course Session Attendance'
+        db_table = "course_session_attendance"
+        unique_together = ["session", "enrollment"]
+        ordering = ["-created_at"]
+        verbose_name = "Course Session Attendance"
+        verbose_name_plural = "Course Session Attendance"
         indexes = [
-            models.Index(fields=['session', 'enrollment']),
-            models.Index(fields=['zoom_user_email']),
+            models.Index(fields=["session", "enrollment"]),
+            models.Index(fields=["zoom_user_email"]),
         ]
 
     def __str__(self):
@@ -1380,7 +1362,7 @@ class CourseSessionAttendance(BaseModel):
         self.is_eligible = self.attendance_percent >= self.session.minimum_attendance_percent
         return self.is_eligible
 
-    def set_override(self, eligible: bool, user, reason: str = ''):
+    def set_override(self, eligible: bool, user, reason: str = ""):
         """Set manual override for attendance eligibility."""
         self.is_eligible = eligible
         self.is_manual_override = True

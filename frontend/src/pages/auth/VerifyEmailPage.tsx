@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, CheckCircle, XCircle, Eye, EyeOff, Lock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,6 +26,7 @@ export function VerifyEmailPage() {
 
     const token = searchParams.get('token');
     const passwordToken = searchParams.get('password_token');
+    const verificationAttempted = useRef(false);
 
     // Store verified user data for after password setup
     const [verifiedAuth, setVerifiedAuth] = useState<{
@@ -41,6 +42,9 @@ export function VerifyEmailPage() {
                 setErrorMessage('No verification token provided.');
                 return;
             }
+
+            if (verificationAttempted.current) return;
+            verificationAttempted.current = true;
 
             try {
                 const response = await verifyEmail(token);
@@ -108,7 +112,7 @@ export function VerifyEmailPage() {
 
         try {
             // Call password reset endpoint
-            await confirmPasswordReset({ token: passwordToken, new_password: password });
+            await confirmPasswordReset({ token: passwordToken, new_password: password, new_password_confirm: confirmPassword });
 
             // Now complete login with stored auth
             if (verifiedAuth) {

@@ -41,6 +41,7 @@ export interface PasswordResetRequest {
 export interface PasswordResetConfirm {
     token: string;
     new_password: string;
+    new_password_confirm: string;
 }
 
 export interface OrganizerProfile {

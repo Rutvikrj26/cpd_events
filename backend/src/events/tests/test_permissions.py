@@ -1,6 +1,8 @@
 import pytest
 from rest_framework import status
+
 from factories import UserFactory
+
 
 @pytest.mark.django_db
 class TestEventPermissions:

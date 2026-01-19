@@ -2,15 +2,14 @@
 Tests for StripeService.
 """
 
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timedelta
 
 import pytest
 from django.utils import timezone
-from django.conf import settings
 
+from billing.models import StripePrice, StripeProduct, Subscription
 from billing.services import StripeService
-from billing.models import Subscription, StripeProduct, StripePrice
 
 
 @pytest.mark.django_db
@@ -20,7 +19,7 @@ class TestStripeService:
         settings.STRIPE_SECRET_KEY = 'sk_test_123'
         service = StripeService()
         # Force load stripe lib and mock it
-        _ = service.stripe 
+        _ = service.stripe
         return service
 
     @pytest.fixture
@@ -58,7 +57,7 @@ class TestStripeService:
         """Test successful subscription creation flow."""
         # Setup mocks
         mock_stripe.Customer.create.return_value = MagicMock(id='cus_123')
-        
+
         mock_sub_response = MagicMock(
             id='sub_123',
             status='active',
@@ -78,18 +77,18 @@ class TestStripeService:
 
         assert result['success'] is True
         assert result['client_secret'] == 'cs_123'
-        
+
         # Verify DB updates
         sub = Subscription.objects.get(user=user)
         assert sub.stripe_subscription_id == 'sub_123'
         assert sub.stripe_customer_id == 'cus_123'
         assert sub.plan == 'organizer'
         assert sub.status == 'active'
-        
+
         # Verify Stripe calls
         mock_stripe.Customer.create.assert_called_once()
         mock_stripe.Subscription.create.assert_called_once()
-        
+
         # Check arguments
         call_kwargs = mock_stripe.Subscription.create.call_args[1]
         assert call_kwargs['items'][0]['price'] == 'price_month'
@@ -104,7 +103,7 @@ class TestStripeService:
         sub.plan = 'organizer'
         sub.save()
         user.refresh_from_db()
-        
+
         result = stripe_service.create_subscription(user, 'organizer')
         assert result['success'] is False
         assert 'already has an active subscription' in result['error']
@@ -116,7 +115,7 @@ class TestStripeService:
         """
         import uuid
         user = django_user_model.objects.create_user(email=f'test_u1_{uuid.uuid4()}@example.com', password='pass')
-        
+
         # Update existing subscription (created by signal)
         sub = Subscription.objects.get(user=user)
         sub.stripe_subscription_id = 'sub_123'
@@ -129,7 +128,7 @@ class TestStripeService:
         mock_stripe_sub = MagicMock(id='sub_123')
         mock_stripe_sub.__getitem__.return_value = {'data': [MagicMock(id='si_123')]} # items['data']
         mock_stripe.Subscription.retrieve.return_value = mock_stripe_sub
-        
+
         # Mock Stripe Modify
         mock_stripe.Subscription.modify.return_value = {'status': 'active'}
 
@@ -141,11 +140,11 @@ class TestStripeService:
         )
 
         assert result['success'] is True
-        
+
         # Verify proration flag
         mock_stripe.Subscription.modify.assert_called_once()
         call_kwargs = mock_stripe.Subscription.modify.call_args[1]
-        
+
         assert call_kwargs['proration_behavior'] == 'always_invoice'
         assert call_kwargs['items'] == [{'id': 'si_123', 'price': 'price_month'}]
 
@@ -188,7 +187,7 @@ class TestStripeService:
         assert result['success'] is True
         assert sub.pending_plan == 'organizer'
         assert sub.pending_change_at is not None
-        
+
         # Verify Schedule Modify
         mock_stripe.SubscriptionSchedule.modify.assert_called_once()
         call_kwargs = mock_stripe.SubscriptionSchedule.modify.call_args[1]
@@ -205,7 +204,7 @@ class TestStripeService:
         # Setup specific trialing subscription
         trial_end = timezone.now() + timedelta(days=5)
         period_start = timezone.now()
-        
+
         sub = Subscription.objects.get(user=user)
         sub.plan = 'organizer'
         sub.status = Subscription.Status.TRIALING
@@ -219,15 +218,15 @@ class TestStripeService:
         result = stripe_service.sync_trial_period_days('organizer', 14)
 
         assert result['updated'] == 1
-        
+
         # Verify Stripe Call
         mock_stripe.Subscription.modify.assert_called_once()
         args, kwargs = mock_stripe.Subscription.modify.call_args
         assert args[0] == 'sub_trial'
-        
+
         expected_ts = int((period_start + timedelta(days=14)).timestamp())
         assert kwargs['trial_end'] == expected_ts
-        
+
         # Verify DB
         sub.refresh_from_db()
         assert sub.trial_ends_at.timestamp() == pytest.approx(expected_ts, 1)
@@ -242,7 +241,7 @@ class TestStripeService:
         sub.plan = 'attendee'
         sub.status = 'incomplete'
         sub.save()
-        
+
         # Mock Stripe response
         mock_stripe_sub = MagicMock(
             id='sub_remote',
@@ -258,7 +257,7 @@ class TestStripeService:
         mock_item.id = 'si_remote'
         mock_item.price.product = 'prod_123'
         mock_item.price.recurring.interval = 'month'
-        
+
         # Helper for dictionary access - must return object with .data for items
         items_obj = MagicMock()
         items_obj.data = [mock_item]
@@ -272,7 +271,7 @@ class TestStripeService:
         mock_stripe_sub.get.side_effect = get_side_effect
 
         mock_stripe.Subscription.retrieve.return_value = mock_stripe_sub
-        
+
         # Prevent fall-through to Customer.list
         mock_stripe.Customer.list.return_value = MagicMock(data=[])
 
@@ -282,5 +281,5 @@ class TestStripeService:
         assert result['success'] is True, f"Sync failed: {result.get('error')}"
         sub.refresh_from_db()
         assert sub.status == 'active'
-        assert sub.plan == 'organizer' 
+        assert sub.plan == 'organizer'
         assert user.account_type == 'organizer'

@@ -21,7 +21,7 @@ class UserManager(BaseUserManager):
     def _create_user(self, email, password=None, **extra_fields):
         """Create and save a user with the given email and password."""
         if not email:
-            raise ValueError('Users must have an email address')
+            raise ValueError("Users must have an email address")
         email = self.normalize_email(email).lower()
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
@@ -30,21 +30,21 @@ class UserManager(BaseUserManager):
 
     def create_user(self, email, password=None, **extra_fields):
         """Create a regular user."""
-        extra_fields.setdefault('is_staff', False)
-        extra_fields.setdefault('is_superuser', False)
+        extra_fields.setdefault("is_staff", False)
+        extra_fields.setdefault("is_superuser", False)
         return self._create_user(email, password, **extra_fields)
 
     def create_superuser(self, email, password=None, **extra_fields):
         """Create a superuser."""
-        extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('is_active', True)
-        extra_fields.setdefault('email_verified', True)
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+        extra_fields.setdefault("is_active", True)
+        extra_fields.setdefault("email_verified", True)
 
-        if extra_fields.get('is_staff') is not True:
-            raise ValueError('Superuser must have is_staff=True.')
-        if extra_fields.get('is_superuser') is not True:
-            raise ValueError('Superuser must have is_superuser=True.')
+        if extra_fields.get("is_staff") is not True:
+            raise ValueError("Superuser must have is_staff=True.")
+        if extra_fields.get("is_superuser") is not True:
+            raise ValueError("Superuser must have is_superuser=True.")
 
         return self._create_user(email, password, **extra_fields)
 
@@ -72,9 +72,10 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     """
 
     class AccountType(models.TextChoices):
-        ATTENDEE = 'attendee', 'Attendee'
-        ORGANIZER = 'organizer', 'Organizer'
-        COURSE_MANAGER = 'course_manager', 'Course Manager'
+        ATTENDEE = "attendee", "Attendee"
+        ORGANIZER = "organizer", "Organizer"
+        COURSE_MANAGER = "course_manager", "Course Manager"
+        ADMIN = "admin", "Admin"
 
     # =========================================
     # Authentication Fields
@@ -87,8 +88,8 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     )
     auth_provider = models.CharField(
         max_length=20,
-        choices=[('local', 'Local'), ('google', 'Google'), ('zoom', 'Zoom')],
-        default='local',
+        choices=[("local", "Local"), ("google", "Google"), ("zoom", "Zoom")],
+        default="local",
         help_text="Original authentication method used for account creation",
     )
 
@@ -98,9 +99,9 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     full_name = models.CharField(max_length=255, validators=[MinLengthValidator(2)], help_text="Full name")
     professional_title = models.CharField(max_length=255, blank=True, help_text="Professional title (e.g., MD, PhD)")
     organization_name = models.CharField(max_length=255, blank=True, help_text="Organization/company name")
-    timezone = models.CharField(max_length=50, default='UTC', help_text="User's preferred timezone")
+    timezone = models.CharField(max_length=50, default="UTC", help_text="User's preferred timezone")
     profile_photo_url = models.URLField(blank=True, help_text="URL to profile photo")
-    profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True, help_text="Profile image file")
+    profile_image = models.ImageField(upload_to="profile_images/", blank=True, null=True, help_text="Profile image file")
     bio = models.TextField(blank=True, max_length=1000, help_text="User bio/description")
 
     # =========================================
@@ -172,7 +173,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     # Timestamps
     # =========================================
     stripe_connect_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe Connect Account ID")
-    stripe_account_status = models.CharField(max_length=50, default='pending', help_text="Connect account status")
+    stripe_account_status = models.CharField(max_length=50, default="pending", help_text="Connect account status")
     stripe_charges_enabled = models.BooleanField(default=False, help_text="Whether account can accept payments")
 
     # =========================================
@@ -182,18 +183,18 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
 
     objects = UserManager()
 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['full_name']
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["full_name"]
 
     class Meta:
-        db_table = 'users'
-        verbose_name = 'User'
-        verbose_name_plural = 'Users'
+        db_table = "users"
+        verbose_name = "User"
+        verbose_name_plural = "Users"
         indexes = [
-            models.Index(fields=['email']),
-            models.Index(fields=['account_type']),
-            models.Index(fields=['uuid']),
-            models.Index(fields=['organizer_slug']),
+            models.Index(fields=["email"]),
+            models.Index(fields=["account_type"]),
+            models.Index(fields=["uuid"]),
+            models.Index(fields=["organizer_slug"]),
         ]
 
     def __str__(self):
@@ -227,7 +228,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     @property
     def has_zoom_connected(self):
         """Check if Zoom is connected."""
-        return hasattr(self, 'zoom_connection') and self.zoom_connection.is_active
+        return hasattr(self, "zoom_connection") and self.zoom_connection.is_active
 
     @property
     def email_verification_expires_at(self):
@@ -243,25 +244,48 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         """Upgrade account to organizer."""
         if self.account_type != self.AccountType.ORGANIZER:
             self.account_type = self.AccountType.ORGANIZER
-            self.save(update_fields=['account_type', 'updated_at'])
+            self.save(update_fields=["account_type", "updated_at"])
 
     def upgrade_to_course_manager(self):
         """Upgrade account to course manager."""
         if self.account_type != self.AccountType.COURSE_MANAGER:
             self.account_type = self.AccountType.COURSE_MANAGER
-            self.save(update_fields=['account_type', 'updated_at'])
+            self.save(update_fields=["account_type", "updated_at"])
+
+    def upgrade_to_admin(self):
+        """Upgrade account to admin (can create both events and courses)."""
+        if self.account_type != self.AccountType.ADMIN:
+            self.account_type = self.AccountType.ADMIN
+            self.save(update_fields=["account_type", "updated_at"])
+
+    def downgrade_from_admin(self):
+        """
+        Downgrade from admin based on subscription.
+        Called when user is no longer an org admin.
+        """
+        subscription = getattr(self, "subscription", None)
+        if subscription and subscription.is_active:
+            if subscription.plan == "organizer":
+                self.account_type = self.AccountType.ORGANIZER
+            elif subscription.plan == "lms":
+                self.account_type = self.AccountType.COURSE_MANAGER
+            else:
+                self.account_type = self.AccountType.ATTENDEE
+        else:
+            self.account_type = self.AccountType.ATTENDEE
+        self.save(update_fields=["account_type", "updated_at"])
 
     def downgrade_to_attendee(self):
         """Downgrade account to attendee."""
         if self.account_type != self.AccountType.ATTENDEE:
             self.account_type = self.AccountType.ATTENDEE
-            self.save(update_fields=['account_type', 'updated_at'])
+            self.save(update_fields=["account_type", "updated_at"])
 
     def generate_email_verification_token(self):
         """Generate and save email verification token."""
         self.email_verification_token = generate_verification_code(32)
         self.email_verification_sent_at = timezone.now()
-        self.save(update_fields=['email_verification_token', 'email_verification_sent_at', 'updated_at'])
+        self.save(update_fields=["email_verification_token", "email_verification_sent_at", "updated_at"])
         return self.email_verification_token
 
     def verify_email(self, token):
@@ -269,8 +293,8 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         if self.email_verification_token and self.email_verification_token == token:
             self.email_verified = True
             self.email_verified_at = timezone.now()
-            self.email_verification_token = ''
-            self.save(update_fields=['email_verified', 'email_verified_at', 'email_verification_token', 'updated_at'])
+            self.email_verification_token = ""
+            self.save(update_fields=["email_verified", "email_verified_at", "email_verification_token", "updated_at"])
             return True
         return False
 
@@ -278,7 +302,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         """Generate and save password reset token."""
         self.password_reset_token = generate_verification_code(32)
         self.password_reset_sent_at = timezone.now()
-        self.save(update_fields=['password_reset_token', 'password_reset_sent_at', 'updated_at'])
+        self.save(update_fields=["password_reset_token", "password_reset_sent_at", "updated_at"])
         return self.password_reset_token
 
     def reset_password(self, token, new_password):
@@ -293,8 +317,8 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
                 return False
 
         self.set_password(new_password)
-        self.password_reset_token = ''
-        self.save(update_fields=['password', 'password_reset_token', 'updated_at'])
+        self.password_reset_token = ""
+        self.save(update_fields=["password", "password_reset_token", "updated_at"])
         return True
 
     def anonymize(self):
@@ -321,7 +345,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         self.save()
 
         # If the model has soft_delete, use it
-        if hasattr(self, 'soft_delete'):
+        if hasattr(self, "soft_delete"):
             self.soft_delete()
         else:
             self.delete()
@@ -353,7 +377,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     def record_login(self):
         """Record successful login."""
         self.last_login_at = timezone.now()
-        self.save(update_fields=['last_login_at', 'updated_at'])
+        self.save(update_fields=["last_login_at", "updated_at"])
 
 
 class ZoomConnection(BaseModel):
@@ -364,7 +388,7 @@ class ZoomConnection(BaseModel):
     One-to-one with User (only organizers can have this).
     """
 
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='zoom_connection')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="zoom_connection")
 
     # =========================================
     # OAuth Tokens (encrypted at rest)
@@ -395,9 +419,9 @@ class ZoomConnection(BaseModel):
     error_count = models.PositiveIntegerField(default=0, help_text="Consecutive error count")
 
     class Meta:
-        db_table = 'zoom_connections'
-        verbose_name = 'Zoom Connection'
-        verbose_name_plural = 'Zoom Connections'
+        db_table = "zoom_connections"
+        verbose_name = "Zoom Connection"
+        verbose_name_plural = "Zoom Connections"
 
     def __str__(self):
         return f"Zoom: {self.user.email}"
@@ -419,15 +443,15 @@ class ZoomConnection(BaseModel):
         self.refresh_token = refresh_token
         self.token_expires_at = timezone.now() + timezone.timedelta(seconds=expires_in)
         self.error_count = 0
-        self.last_error = ''
+        self.last_error = ""
         self.save(
-            update_fields=['access_token', 'refresh_token', 'token_expires_at', 'error_count', 'last_error', 'updated_at']
+            update_fields=["access_token", "refresh_token", "token_expires_at", "error_count", "last_error", "updated_at"]
         )
 
     def record_usage(self):
         """Record that connection was used."""
         self.last_used_at = timezone.now()
-        self.save(update_fields=['last_used_at', 'updated_at'])
+        self.save(update_fields=["last_used_at", "updated_at"])
 
     def record_error(self, error_message):
         """Record an API error."""
@@ -439,14 +463,14 @@ class ZoomConnection(BaseModel):
         if self.error_count >= 5:
             self.is_active = False
 
-        self.save(update_fields=['last_error', 'last_error_at', 'error_count', 'is_active', 'updated_at'])
+        self.save(update_fields=["last_error", "last_error_at", "error_count", "is_active", "updated_at"])
 
     def disconnect(self):
         """Disconnect Zoom (soft delete)."""
         self.is_active = False
-        self.access_token = ''
-        self.refresh_token = ''
-        self.save(update_fields=['is_active', 'access_token', 'refresh_token', 'updated_at'])
+        self.access_token = ""
+        self.refresh_token = ""
+        self.save(update_fields=["is_active", "access_token", "refresh_token", "updated_at"])
 
 
 class UserSession(BaseModel):
@@ -459,7 +483,7 @@ class UserSession(BaseModel):
     - Analytics
     """
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sessions")
 
     # Session identification
     session_key = models.CharField(max_length=100, unique=True, db_index=True, help_text="Django session key")
@@ -477,10 +501,10 @@ class UserSession(BaseModel):
     is_active = models.BooleanField(default=True, help_text="Whether session is active")
 
     class Meta:
-        db_table = 'user_sessions'
-        ordering = ['-last_activity_at']
-        verbose_name = 'User Session'
-        verbose_name_plural = 'User Sessions'
+        db_table = "user_sessions"
+        ordering = ["-last_activity_at"]
+        verbose_name = "User Session"
+        verbose_name_plural = "User Sessions"
 
     def __str__(self):
         return f"Session: {self.user.email}"
@@ -493,7 +517,7 @@ class UserSession(BaseModel):
     def deactivate(self):
         """Deactivate session (logout)."""
         self.is_active = False
-        self.save(update_fields=['is_active', 'updated_at'])
+        self.save(update_fields=["is_active", "updated_at"])
 
     @classmethod
     def deactivate_all_for_user(cls, user):
@@ -510,12 +534,12 @@ class CPDRequirement(BaseModel):
     """
 
     class PeriodType(models.TextChoices):
-        CALENDAR_YEAR = 'calendar_year', 'Calendar Year (Jan-Dec)'
-        FISCAL_YEAR = 'fiscal_year', 'Fiscal Year'
-        ROLLING_12 = 'rolling_12', 'Rolling 12 Months'
+        CALENDAR_YEAR = "calendar_year", "Calendar Year (Jan-Dec)"
+        FISCAL_YEAR = "fiscal_year", "Fiscal Year"
+        ROLLING_12 = "rolling_12", "Rolling 12 Months"
 
     # Relationships
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='cpd_requirements')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="cpd_requirements")
 
     # Requirement details
     cpd_type = models.CharField(max_length=100, help_text="CPD type code (e.g., 'general', 'clinical', 'ethics')")
@@ -540,13 +564,13 @@ class CPDRequirement(BaseModel):
     is_active = models.BooleanField(default=True, help_text="Whether this requirement is active")
 
     class Meta:
-        db_table = 'cpd_requirements'
-        verbose_name = 'CPD Requirement'
-        verbose_name_plural = 'CPD Requirements'
-        unique_together = [['user', 'cpd_type']]
-        ordering = ['-created_at']
+        db_table = "cpd_requirements"
+        verbose_name = "CPD Requirement"
+        verbose_name_plural = "CPD Requirements"
+        unique_together = [["user", "cpd_type"]]
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=["user", "is_active"]),
         ]
 
     def __str__(self):
@@ -604,16 +628,16 @@ class CPDRequirement(BaseModel):
         certificates = Certificate.objects.filter(
             registration__user=self.user,
             certificate_data__cpd_type=self.cpd_type,
-            status='issued',
+            status="issued",
             created_at__date__gte=start,
             created_at__date__lte=end,
         )
 
-        total = Decimal('0')
+        total = Decimal("0")
         for cert in certificates:
             try:
                 # Value stored as string/number in JSON
-                val = cert.certificate_data.get('cpd_credits', 0)
+                val = cert.certificate_data.get("cpd_credits", 0)
                 total += Decimal(str(val))
             except (TypeError, ValueError):
                 continue
@@ -636,7 +660,7 @@ class CPDRequirement(BaseModel):
 
         earned = self.get_earned_credits()
         remaining = self.annual_requirement - earned
-        return max(remaining, Decimal('0'))
+        return max(remaining, Decimal("0"))
 
 
 class Notification(BaseModel):
@@ -645,17 +669,17 @@ class Notification(BaseModel):
     """
 
     class Type(models.TextChoices):
-        ORG_INVITE = 'org_invite', 'Organization Invitation'
-        PAYMENT_FAILED = 'payment_failed', 'Payment Failed'
-        REFUND_PROCESSED = 'refund_processed', 'Refund Processed'
-        TRIAL_ENDING = 'trial_ending', 'Trial Ending'
-        PAYMENT_METHOD_EXPIRED = 'payment_method_expired', 'Payment Method Expired'
-        SYSTEM = 'system', 'System'
+        ORG_INVITE = "org_invite", "Organization Invitation"
+        PAYMENT_FAILED = "payment_failed", "Payment Failed"
+        REFUND_PROCESSED = "refund_processed", "Refund Processed"
+        TRIAL_ENDING = "trial_ending", "Trial Ending"
+        PAYMENT_METHOD_EXPIRED = "payment_method_expired", "Payment Method Expired"
+        SYSTEM = "system", "System"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='notifications',
+        related_name="notifications",
     )
     notification_type = models.CharField(
         max_length=50,
@@ -670,12 +694,12 @@ class Notification(BaseModel):
     read_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = 'notifications'
-        ordering = ['-created_at']
+        db_table = "notifications"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['user', 'notification_type']),
-            models.Index(fields=['user', 'read_at']),
-            models.Index(fields=['-created_at']),
+            models.Index(fields=["user", "notification_type"]),
+            models.Index(fields=["user", "read_at"]),
+            models.Index(fields=["-created_at"]),
         ]
 
     @property
@@ -685,7 +709,7 @@ class Notification(BaseModel):
     def mark_read(self):
         if not self.read_at:
             self.read_at = timezone.now()
-            self.save(update_fields=['read_at', 'updated_at'])
+            self.save(update_fields=["read_at", "updated_at"])
 
 
 class AuditLog(BaseModel):
@@ -698,14 +722,14 @@ class AuditLog(BaseModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='audit_logs',
+        related_name="audit_logs",
     )
     organization = models.ForeignKey(
-        'organizations.Organization',
+        "organizations.Organization",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='audit_logs',
+        related_name="audit_logs",
     )
     action = models.CharField(max_length=120, db_index=True)
     object_type = models.CharField(max_length=120, blank=True)
@@ -715,14 +739,14 @@ class AuditLog(BaseModel):
     user_agent = models.TextField(blank=True)
 
     class Meta:
-        db_table = 'audit_logs'
-        ordering = ['-created_at']
+        db_table = "audit_logs"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['actor', 'action']),
-            models.Index(fields=['organization', 'action']),
-            models.Index(fields=['-created_at']),
+            models.Index(fields=["actor", "action"]),
+            models.Index(fields=["organization", "action"]),
+            models.Index(fields=["-created_at"]),
         ]
 
     def __str__(self):
-        actor = self.actor.email if self.actor else 'system'
+        actor = self.actor.email if self.actor else "system"
         return f"{actor} - {self.action}"

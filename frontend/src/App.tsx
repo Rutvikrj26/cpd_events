@@ -5,6 +5,7 @@ import { Toaster as SonnerToaster } from "sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { ProtectedRoute } from "@/features/auth";
+import { AuthenticatedRoot } from "@/components/auth/AuthenticatedRoot";
 
 
 // Layouts
@@ -107,7 +108,7 @@ export default function App() {
                 {/* Public Routes */}
                 <Route path="/" element={
                   <PublicLayout>
-                    <LandingPage />
+                    <AuthenticatedRoot />
                   </PublicLayout>
                 } />
 
@@ -262,7 +263,8 @@ export default function App() {
                   </AuthLayout>
                 } />
 
-                <Route path="/reset-password" element={
+                {/* Password Reset - matches backend /auth/reset-password */}
+                <Route path="/auth/reset-password" element={
                   <AuthLayout>
                     <ResetPasswordPage />
                   </AuthLayout>

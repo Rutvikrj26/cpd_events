@@ -621,7 +621,7 @@ class ZoomService:
                 return {'success': False, 'error': f'Unsupported method: {method}'}
 
             if response.status_code == 401 and retry_on_401:
-                logger.warning(f"Zoom API returned 401. Forcing token refresh and retrying.")
+                logger.warning("Zoom API returned 401. Forcing token refresh and retrying.")
                 if self.refresh_tokens(connection):
                     return self._make_zoom_request(method, path, connection, payload, params=params, retry_on_401=False)
 

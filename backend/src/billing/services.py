@@ -648,7 +648,7 @@ class StripeService:
         try:
             # Unix timestamp
             trial_end_ts = int(trial_end.timestamp())
-            
+
             # Ensure future date
             if trial_end_ts <= int(timezone.now().timestamp()):
                 # Stripe requires trial_end to be in the future (or 'now' to end it?)
@@ -1019,10 +1019,10 @@ class StripeService:
                         and existing_sub.status == stripe_sub.status
                     ):
                         logger.info(f"Checkout session {session_id}: Subscription already up to date, skipping DB write")
-                        
+
                         # Ensure payment methods are synced (outside transaction)
                         sync_result = self.sync_payment_methods(user, customer_id=session.customer)
-                        
+
                         return {'success': True, 'subscription': existing_sub}
                 except Subscription.DoesNotExist:
                     pass
@@ -1378,7 +1378,8 @@ class StripeService:
 
         # Database operations with retry for locking
         import time
-        from django.db import transaction, OperationalError
+
+        from django.db import OperationalError, transaction
 
         max_retries = 3
         for attempt in range(max_retries):
@@ -1678,7 +1679,7 @@ class RefundService:
                 # Deduct Stripe fee from the total refundable amount
                 # pi.amount_received is what the customer paid
                 amount_cents = max(0, pi.amount_received - stripe_fee)
-            
+
             # Check if amount is valid
             if amount_cents <= 0:
                  return {'success': False, 'error': 'Refund amount after fees is zero or negative.'}
@@ -1714,13 +1715,11 @@ class RefundService:
 
                 # Update Registration Status if full refund (or close to it)
                 total_amount_cents = int((registration.total_amount or registration.amount_paid) * 100)
-                
+
                 # Check if this is effectively a full refund (allowing for fee deduction)
                 # If we refunded everything minus the fee, it counts as a "full" cancellation
                 is_effectively_full = False
-                if is_full_refund_request:
-                     is_effectively_full = True
-                elif amount_cents >= (total_amount_cents - stripe_fee):
+                if is_full_refund_request or amount_cents >= (total_amount_cents - stripe_fee):
                      is_effectively_full = True
 
                 if is_effectively_full:

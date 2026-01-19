@@ -346,7 +346,7 @@ class TestOrganizationOnboarding:
     def test_complete_onboarding_idempotent(self, organizer_client, organization):
         """Completing onboarding multiple times is safe."""
         from django.utils import timezone
-        
+
         original_timestamp = timezone.now()
         organization.onboarding_completed = True
         organization.onboarding_completed_at = original_timestamp
@@ -408,7 +408,7 @@ class TestOrganizationOnboarding:
         """Organization list endpoint includes onboarding_completed field."""
         response = organizer_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
-        
+
         # Find our org in results
         results = response.data.get('results', response.data)
         org_data = next((o for o in results if o['uuid'] == str(organization.uuid)), None)
@@ -425,8 +425,9 @@ class TestOrganizationOnboarding:
 
     def test_organizer_role_cannot_complete_onboarding(self, organization, db):
         """Organizer role members (not admin) cannot complete onboarding."""
-        from factories import OrganizerFactory, OrganizationMembershipFactory
         from rest_framework.test import APIClient
+
+        from factories import OrganizationMembershipFactory, OrganizerFactory
 
         # Create an organizer member (not admin)
         organizer_member = OrganizerFactory()
@@ -446,8 +447,9 @@ class TestOrganizationOnboarding:
 
     def test_course_manager_cannot_complete_onboarding(self, organization, db):
         """Course manager role members cannot complete onboarding."""
-        from factories import OrganizerFactory, OrganizationMembershipFactory
         from rest_framework.test import APIClient
+
+        from factories import OrganizationMembershipFactory, OrganizerFactory
 
         # Create a course manager member
         cm_user = OrganizerFactory()
@@ -475,7 +477,7 @@ class TestOrganizationOnboarding:
         }
         response = organizer_client.post(self.endpoint, data)
         assert response.status_code == status.HTTP_201_CREATED
-        
+
         # Check database value (create serializer may not include all fields)
         org = Organization.objects.get(name='New Onboarding Test Org')
         assert org.onboarding_completed is False

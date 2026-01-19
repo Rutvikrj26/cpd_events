@@ -55,9 +55,9 @@ def init_bucket():
             blob.upload_from_string('', content_type='application/x-www-form-urlencoded;charset=UTF-8')
             print(f"  ✓ Created folder: {folder}")
 
-        print(f"\n✓ GCS emulator initialized successfully!")
+        print("\n✓ GCS emulator initialized successfully!")
         print(f"  Bucket: {BUCKET_NAME}")
-        print(f"  Emulator: http://localhost:4443")
+        print("  Emulator: http://localhost:4443")
 
         return True
 

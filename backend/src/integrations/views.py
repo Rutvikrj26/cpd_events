@@ -14,7 +14,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from common.permissions import IsOrganizer, IsOrganizerOrCourseManager
+from common.permissions import IsOrganizerOrCourseManager
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import ReadOnlyModelViewSet

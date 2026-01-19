@@ -27,7 +27,7 @@ const OrganizationsListPage: React.FC = () => {
         refreshOrganizations();
 
         // Check if user has data that could be linked
-        if (user?.account_type === 'organizer') {
+        if (user?.account_type === 'organizer' || user?.account_type === 'admin') {
             getLinkableDataPreview()
                 .then(setLinkableData)
                 .catch(() => { });
@@ -64,7 +64,7 @@ const OrganizationsListPage: React.FC = () => {
             </div>
 
             {/* Upgrade CTA for individual organizers */}
-            {hasFeature('can_create_organization') && user?.account_type === 'organizer' && linkableData?.has_linkable_data && organizations.length === 0 && (
+            {hasFeature('can_create_organization') && (user?.account_type === 'organizer' || user?.account_type === 'admin') && linkableData?.has_linkable_data && organizations.length === 0 && (
                 <Card className="mb-8 border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
                     <CardHeader>
                         <div className="flex items-center gap-2">

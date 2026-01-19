@@ -3,8 +3,10 @@ Badges app models - BadgeTemplate, IssuedBadge.
 """
 
 import secrets
+
 from django.db import models
 from django.utils import timezone
+
 from common.models import BaseModel, SoftDeleteModel
 from common.validators import validate_field_positions_schema
 
@@ -46,7 +48,7 @@ class BadgeTemplate(SoftDeleteModel):
     # Basic Info
     name = models.CharField(max_length=100, help_text="Template name")
     description = models.TextField(blank=True, max_length=500)
-    
+
     # Template Image
     start_image = models.ImageField(
         upload_to='badges/templates/',
@@ -127,15 +129,15 @@ class IssuedBadge(SoftDeleteModel):
         db_index=True
     )
     short_code = models.CharField(
-        max_length=10, 
-        unique=True, 
+        max_length=10,
+        unique=True,
         default=generate_short_code
     )
 
     # Status
     status = models.CharField(
-        max_length=20, 
-        choices=Status.choices, 
+        max_length=20,
+        choices=Status.choices,
         default=Status.ACTIVE,
         db_index=True
     )

@@ -5,10 +5,9 @@ Tests for the background task that adds confirmed registrations
 to Zoom meetings as registrants.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from django.utils import timezone
 
 
 @pytest.mark.django_db
