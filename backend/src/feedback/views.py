@@ -1,5 +1,6 @@
 from django.db import models as django_models
 from rest_framework import permissions, viewsets
+from rest_framework.exceptions import PermissionDenied
 
 from .models import EventFeedback
 from .serializers import EventFeedbackSerializer
@@ -52,7 +53,7 @@ class EventFeedbackViewSet(viewsets.ModelViewSet):
         is_owner = registration.user == user or (registration.user is None and registration.email.lower() == user.email.lower())
 
         if not is_owner:
-            raise permissions.PermissionDenied("You can only submit feedback for your own registration.")
+            raise PermissionDenied("You can only submit feedback for your own registration.")
 
         feedback = serializer.save()
 
@@ -93,7 +94,7 @@ class EventFeedbackViewSet(viewsets.ModelViewSet):
                 return
 
             # Check if event has ended
-            event_end = event.end_datetime or event.start_datetime
+            event_end = event.ends_at or event.starts_at
             if event_end and event_end > timezone.now():
                 logger.debug(f"Event {event.uuid} has not ended yet")
                 return

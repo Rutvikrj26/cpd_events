@@ -4,6 +4,7 @@ Learning API views.
 
 from django.db import models
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import parsers, permissions, serializers, status, views, viewsets
 from rest_framework.decorators import action
@@ -197,6 +198,7 @@ class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
     serializer_class = AssignmentSubmissionSerializer
     lookup_field = "uuid"
     http_method_names = ["get", "post", "put", "patch"]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
     def get_queryset(self):
         from django.db.models import Q
@@ -214,11 +216,42 @@ class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
         return AssignmentSubmissionSerializer
 
     def create(self, request, *args, **kwargs):
+        import logging
+
         from learning.models import CourseEnrollment
         from registrations.models import Registration
 
+        logger = logging.getLogger(__name__)
+
         assignment_uuid = request.data.get("assignment")
         assignment = get_object_or_404(Assignment, uuid=assignment_uuid)
+
+        # Validate file if present
+        submission_file = request.FILES.get("submission_file")
+        if submission_file:
+            # Check file size (max 50MB)
+            max_size = 50 * 1024 * 1024  # 50MB in bytes
+            if submission_file.size > max_size:
+                return error_response(
+                    f"File too large. Maximum size is 50MB, got {submission_file.size / (1024 * 1024):.1f}MB",
+                    code="FILE_TOO_LARGE",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Check file type
+            allowed_extensions = ["pdf", "doc", "docx", "txt", "zip", "jpg", "jpeg", "png", "gif"]
+            file_ext = submission_file.name.split(".")[-1].lower() if "." in submission_file.name else ""
+
+            if file_ext not in allowed_extensions:
+                return error_response(
+                    f"File type '.{file_ext}' not allowed. Allowed types: {', '.join(allowed_extensions)}",
+                    code="INVALID_FILE_TYPE",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            logger.info(
+                f"File upload: {submission_file.name} ({submission_file.size} bytes, type: {submission_file.content_type})"
+            )
 
         # Determine context (Event vs Course)
         registration = None
@@ -257,12 +290,20 @@ class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        # Create submission with file metadata
         submission = serializer.save(
             assignment=assignment,
             registration=registration,
             course_enrollment=course_enrollment,
             attempt_number=previous_submissions.count() + 1,
         )
+
+        # Add file metadata if file was uploaded
+        if submission_file and submission.submission_file:
+            submission.file_size_bytes = submission_file.size
+            submission.file_type = submission_file.content_type
+            submission.save(update_fields=["file_size_bytes", "file_type"])
+            logger.info(f"File saved for submission {submission.id}: {submission_file.name}")
 
         return Response(AssignmentSubmissionSerializer(submission).data, status=status.HTTP_201_CREATED)
 
@@ -492,6 +533,125 @@ class ContentProgressView(views.APIView):
             course_enrollment.update_progress()
 
         return Response(ContentProgressSerializer(progress).data)
+
+
+class QuizSubmissionView(views.APIView):
+    """
+    Submit quiz answers for server-side grading.
+
+    POST /learning/quiz/submit/
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from learning.models import CourseEnrollment, QuizAttempt
+        from learning.serializers import QuizAttemptSerializer, QuizSubmissionSerializer
+        from registrations.models import Registration
+
+        serializer = QuizSubmissionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        content_uuid = data["content_uuid"]
+        submitted_answers = data["submitted_answers"]
+        time_spent_seconds = data.get("time_spent_seconds", 0)
+
+        # Get the quiz content
+        content = get_object_or_404(ModuleContent, uuid=content_uuid)
+
+        # Verify it's a quiz
+        if content.content_type != ModuleContent.ContentType.QUIZ:
+            return error_response("Content is not a quiz", code="NOT_A_QUIZ")
+
+        # Determine context (event or course)
+        registration = None
+        course_enrollment = None
+
+        if content.module.event:
+            # Event Context
+            registration = get_object_or_404(Registration, user=request.user, event=content.module.event)
+        else:
+            # Course Context
+            enrollments = CourseEnrollment.objects.filter(
+                user=request.user,
+                course__modules__module=content.module,
+                status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
+            )
+            if not enrollments.exists():
+                return error_response("Not enrolled in course", code="NOT_ENROLLED")
+            course_enrollment = enrollments.first()
+
+        # Check quiz settings for attempt limits
+        quiz_data = content.content_data or {}
+        max_attempts = quiz_data.get("max_attempts", None)
+
+        # Count existing attempts
+        if registration:
+            attempt_count = QuizAttempt.objects.filter(content=content, registration=registration).count()
+        else:
+            attempt_count = QuizAttempt.objects.filter(content=content, course_enrollment=course_enrollment).count()
+
+        # Enforce attempt limit
+        if max_attempts and attempt_count >= max_attempts:
+            return error_response(
+                f"Maximum attempts ({max_attempts}) reached for this quiz",
+                code="MAX_ATTEMPTS_REACHED",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Create quiz attempt
+        attempt = QuizAttempt.objects.create(
+            content=content,
+            registration=registration,
+            course_enrollment=course_enrollment,
+            attempt_number=attempt_count + 1,
+            submitted_answers=submitted_answers,
+            time_spent_seconds=time_spent_seconds,
+            status=QuizAttempt.Status.SUBMITTED,
+            submitted_at=timezone.now(),
+        )
+
+        # Grade the attempt
+        try:
+            score = attempt.grade()
+        except Exception as e:
+            logger.error(f"Error grading quiz attempt {attempt.id}: {e}")
+            return error_response("Error grading quiz", code="GRADING_ERROR", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # If passed, update content progress to completed
+        if attempt.passed:
+            if registration:
+                progress, created = ContentProgress.objects.get_or_create(registration=registration, content=content)
+                module_prog, _ = ModuleProgress.objects.get_or_create(registration=registration, module=content.module)
+            else:
+                progress, created = ContentProgress.objects.get_or_create(course_enrollment=course_enrollment, content=content)
+                module_prog, _ = ModuleProgress.objects.get_or_create(
+                    course_enrollment=course_enrollment, module=content.module
+                )
+
+            if created:
+                progress.start()
+
+            progress.complete()
+
+            # Update module progress
+            module_prog.update_from_content()
+            module_prog.save()
+
+            # Update course enrollment if applicable
+            if course_enrollment:
+                course_enrollment.update_progress()
+
+        return Response(
+            {
+                "attempt": QuizAttemptSerializer(attempt).data,
+                "message": "Quiz graded successfully",
+                "passed": attempt.passed,
+                "score": float(attempt.score) if attempt.score else 0,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class CourseViewSet(viewsets.ModelViewSet):
@@ -793,10 +953,7 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
             )
             course.update_counts()
             return Response(
-                {
-                    "enrollment": CourseEnrollmentSerializer(enrollment).data,
-                    "message": "Enrolled in free course",
-                },
+                {"message": "Enrolled successfully in free course", "enrollment_uuid": str(enrollment.uuid)},
                 status=status.HTTP_201_CREATED,
             )
 
@@ -946,6 +1103,61 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
         will use individual user Connect accounts.
         """
         return None
+
+
+class QuizAttemptHistoryView(views.APIView):
+    """
+    Get quiz attempt history for a specific quiz.
+
+    GET /learning/quiz/<content_uuid>/attempts/
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, content_uuid):
+        from learning.models import CourseEnrollment, QuizAttempt
+        from learning.serializers import QuizAttemptSerializer
+        from registrations.models import Registration
+
+        # Get the quiz content
+        content = get_object_or_404(ModuleContent, uuid=content_uuid)
+
+        # Verify it's a quiz
+        if content.content_type != ModuleContent.ContentType.QUIZ:
+            return error_response("Content is not a quiz", code="NOT_A_QUIZ")
+
+        # Determine context (event or course)
+        registration = None
+        course_enrollment = None
+
+        if content.module.event:
+            # Event Context
+            registration = get_object_or_404(Registration, user=request.user, event=content.module.event)
+            attempts = QuizAttempt.objects.filter(content=content, registration=registration).order_by("-created_at")
+        else:
+            # Course Context
+            enrollments = CourseEnrollment.objects.filter(
+                user=request.user,
+                course__modules__module=content.module,
+                status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
+            )
+            if not enrollments.exists():
+                return error_response("Not enrolled in course", code="NOT_ENROLLED")
+            course_enrollment = enrollments.first()
+            attempts = QuizAttempt.objects.filter(content=content, course_enrollment=course_enrollment).order_by("-created_at")
+
+        # Get quiz settings for max attempts
+        quiz_data = content.content_data or {}
+        max_attempts = quiz_data.get("max_attempts", None)
+
+        return Response(
+            {
+                "attempts": QuizAttemptSerializer(attempts, many=True).data,
+                "total_attempts": attempts.count(),
+                "max_attempts": max_attempts,
+                "remaining_attempts": (max_attempts - attempts.count()) if max_attempts else None,
+            }
+        )
 
 
 class CourseModuleViewSet(viewsets.ModelViewSet):

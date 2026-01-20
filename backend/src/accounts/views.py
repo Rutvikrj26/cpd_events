@@ -2,9 +2,12 @@
 Accounts app views and viewsets.
 """
 
+import logging
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
+from django.db import models
 from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status, viewsets
@@ -20,6 +23,8 @@ from common.utils import error_response
 
 from . import cpd_serializers, serializers
 from .models import CPDRequirement, Notification, UserSession
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -157,11 +162,15 @@ class SignupView(generics.CreateAPIView):
         try:
             verification_url = f"{settings.FRONTEND_URL}/auth/verify-email?token={token}"
 
-            # Print URL prominently for dev testing (the email body below is mangled by quoted-printable encoding)
-            print("\n" + "=" * 80)
-            print("📧 VERIFICATION LINK (copy this, NOT the email body below):")
-            print(f"   {verification_url}")
-            print("=" * 80 + "\n")
+            # Log verification URL for development debugging
+            logger.info(
+                "Email verification link generated",
+                extra={
+                    "user_email": user.email,
+                    "user_uuid": str(user.uuid),
+                    "verification_url": verification_url if settings.DEBUG else "[REDACTED]",
+                },
+            )
 
             send_mail(
                 subject="Verify your email address",
@@ -171,7 +180,7 @@ class SignupView(generics.CreateAPIView):
                 fail_silently=False,
             )
         except Exception as e:
-            # Log error but don't fail signup? Or fail?
+            # Log error but don't fail signup
             # Better to log and maybe return a warning, or fail if critical.
             # Ideally use a task so it doesn't fail the request.
             # For now, let's log.
@@ -309,11 +318,15 @@ class PasswordResetRequestView(generics.GenericAPIView):
             # Construct reset URL
             reset_url = f"{settings.FRONTEND_URL}/auth/reset-password?token={user.password_reset_token}&email={user.email}"
 
-            # Print URL prominently for dev testing
-            print("\n" + "=" * 80)
-            print("🔐 PASSWORD RESET LINK (copy this, NOT the email body below):")
-            print(f"   {reset_url}")
-            print("=" * 80 + "\n")
+            # Log password reset URL for development debugging
+            logger.info(
+                "Password reset link generated",
+                extra={
+                    "user_email": user.email,
+                    "user_uuid": str(user.uuid),
+                    "reset_url": reset_url if settings.DEBUG else "[REDACTED]",
+                },
+            )
 
             send_password_reset.delay(user.uuid, reset_url)
         except User.DoesNotExist:
@@ -875,6 +888,75 @@ class CPDRequirementViewSet(viewsets.ModelViewSet):
             return service.export_pdf(**filters)
         else:
             return service.export_json(**filters)
+
+
+class CPDTransactionViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only viewset for CPD transaction history.
+
+    Endpoints:
+    - GET /api/v1/cpd-transactions/ - List all transactions for current user
+    - GET /api/v1/cpd-transactions/{uuid}/ - Retrieve specific transaction
+
+    Provides complete audit trail of all CPD credit changes including:
+    - Credits earned from certificates
+    - Manual adjustments by admins
+    - Expired or revoked credits
+    """
+
+    permission_classes = [IsAuthenticated]
+    lookup_field = "uuid"
+
+    def get_serializer_class(self):
+        from .serializers import CPDTransactionSerializer
+
+        return CPDTransactionSerializer
+
+    def get_queryset(self):
+        from .models import CPDTransaction
+
+        return CPDTransaction.objects.filter(user=self.request.user).select_related("user", "certificate", "created_by")
+
+    @swagger_auto_schema(
+        operation_summary="CPD transaction summary",
+        operation_description="Get summary statistics for CPD transactions.",
+    )
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        """Get CPD transaction summary statistics."""
+        from decimal import Decimal
+        from .models import CPDTransaction
+
+        transactions = self.get_queryset()
+
+        # Calculate totals by transaction type
+        earned = transactions.filter(transaction_type=CPDTransaction.TransactionType.EARNED).aggregate(
+            total=models.Sum("credits")
+        )["total"] or Decimal("0")
+
+        adjusted = transactions.filter(transaction_type=CPDTransaction.TransactionType.MANUAL_ADJUSTMENT).aggregate(
+            total=models.Sum("credits")
+        )["total"] or Decimal("0")
+
+        revoked = transactions.filter(transaction_type=CPDTransaction.TransactionType.REVOKED).aggregate(
+            total=models.Sum("credits")
+        )["total"] or Decimal("0")
+
+        expired = transactions.filter(transaction_type=CPDTransaction.TransactionType.EXPIRED).aggregate(
+            total=models.Sum("credits")
+        )["total"] or Decimal("0")
+
+        data = {
+            "current_balance": request.user.total_cpd_credits,
+            "total_earned": earned,
+            "total_adjusted": adjusted,
+            "total_revoked": abs(revoked),
+            "total_expired": abs(expired),
+            "transaction_count": transactions.count(),
+            "first_transaction_date": transactions.last().created_at if transactions.exists() else None,
+            "latest_transaction_date": transactions.first().created_at if transactions.exists() else None,
+        }
+        return Response(data)
 
 
 # =============================================================================

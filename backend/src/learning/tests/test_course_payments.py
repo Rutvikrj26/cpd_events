@@ -75,6 +75,7 @@ class TestCoursePayments(APITestCase):
             "type": "checkout.session.completed",
             "data": {
                 "object": {
+                    "payment_status": "paid",
                     "metadata": {
                         "type": "course_enrollment",
                         "course_uuid": str(self.course_paid.uuid),
