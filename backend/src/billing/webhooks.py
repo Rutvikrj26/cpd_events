@@ -12,19 +12,28 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+from django_ratelimit.decorators import ratelimit
 
 logger = logging.getLogger(__name__)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
+@method_decorator(ratelimit(key="ip", rate="200/m", method="POST"), name="dispatch")
 class StripeWebhookView(View):
     """
     Handle Stripe webhooks.
 
     POST /webhooks/stripe/
+
+    Rate limited to 200 requests per minute per IP to prevent webhook spam.
     """
 
     def post(self, request):
+        # Check if rate limited
+        if getattr(request, "limited", False):
+            logger.warning("Stripe webhook rate limit exceeded", extra={"ip": request.META.get("REMOTE_ADDR")})
+            return HttpResponse("Rate limit exceeded", status=429)
+
         payload = request.body
         sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
 
@@ -563,6 +572,7 @@ class StripeWebhookView(View):
         from django.contrib.auth import get_user_model
 
         from learning.models import Course, CourseEnrollment
+        from learning.tasks import send_course_enrollment_confirmation
 
         session_id = data.get("id", "unknown")
         metadata = data.get("metadata", {})
@@ -584,14 +594,71 @@ class StripeWebhookView(View):
             user = User.objects.get(pk=user_id)
             course = Course.objects.get(uuid=course_uuid)
 
+            # Check payment status
+            payment_status = data.get("payment_status")
+            if payment_status != "paid":
+                logger.warning(f"Checkout {session_id}: Payment not completed (status: {payment_status}), skipping enrollment")
+                return
+
+            # Idempotency check - if enrollment already has this session_id, skip
+            existing = CourseEnrollment.objects.filter(stripe_checkout_session_id=session_id).first()
+            if existing:
+                logger.info(f"Checkout {session_id}: Already processed for enrollment {existing.id}, skipping")
+                return
+
             # Create or activate enrollment
             enrollment, created = CourseEnrollment.objects.get_or_create(
-                user=user, course=course, defaults={"status": CourseEnrollment.Status.ACTIVE}
+                user=user,
+                course=course,
+                defaults={
+                    "status": CourseEnrollment.Status.ACTIVE,
+                    "stripe_checkout_session_id": session_id,
+                },
             )
 
-            if not created and enrollment.status != CourseEnrollment.Status.ACTIVE:
-                enrollment.status = CourseEnrollment.Status.ACTIVE
-                enrollment.save(update_fields=["status", "updated_at"])
+            # If enrollment exists, update it
+            if not created:
+                update_fields = []
+                if enrollment.status != CourseEnrollment.Status.ACTIVE:
+                    enrollment.status = CourseEnrollment.Status.ACTIVE
+                    update_fields.append("status")
+
+                if not enrollment.stripe_checkout_session_id:
+                    enrollment.stripe_checkout_session_id = session_id
+                    update_fields.append("stripe_checkout_session_id")
+
+                if update_fields:
+                    update_fields.append("updated_at")
+                    enrollment.save(update_fields=update_fields)
+
+            # Trigger Zoom registration for hybrid courses
+            if course.format == Course.CourseFormat.HYBRID:
+                from learning.services import register_user_for_zoom
+
+                try:
+                    register_user_for_zoom(enrollment)
+                    logger.info(f"Registered user for Zoom: enrollment {enrollment.id}")
+                except Exception as e:
+                    logger.error(f"Failed to register for Zoom: enrollment {enrollment.id}: {e}")
+
+            # Send confirmation email (async task)
+            send_course_enrollment_confirmation.delay(enrollment.id)
+
+            # Create in-app notification
+            from accounts.models import Notification
+
+            Notification.objects.create(
+                user=user,
+                notification_type=Notification.Type.SYSTEM,
+                title=f"Enrolled in {course.title}",
+                message=f"Your enrollment in {course.title} has been confirmed. Start learning now!",
+                action_url=f"/courses/{course.uuid}/learn",
+                metadata={
+                    "course_uuid": str(course.uuid),
+                    "enrollment_id": enrollment.id,
+                    "checkout_session_id": session_id,
+                },
+            )
 
             logger.info(
                 f"Checkout {session_id}: Course enrollment {'created' if created else 'activated'} "

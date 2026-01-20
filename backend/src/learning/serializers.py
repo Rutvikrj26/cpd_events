@@ -17,6 +17,7 @@ from .models import (
     EventModule,
     ModuleContent,
     ModuleProgress,
+    QuizAttempt,
     SubmissionReview,
 )
 
@@ -211,6 +212,7 @@ class AssignmentSubmissionSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     is_passing = serializers.BooleanField(read_only=True)
     assignment_title = serializers.CharField(source="assignment.title", read_only=True)
+    submission_file_url = serializers.SerializerMethodField()
 
     class Meta:
         model = AssignmentSubmission
@@ -224,6 +226,10 @@ class AssignmentSubmissionSerializer(serializers.ModelSerializer):
             "submitted_at",
             "content",
             "file_url",
+            "submission_file",
+            "submission_file_url",
+            "file_size_bytes",
+            "file_type",
             "score",
             "feedback",
             "graded_at",
@@ -238,9 +244,20 @@ class AssignmentSubmissionSerializer(serializers.ModelSerializer):
             "score",
             "feedback",
             "graded_at",
+            "file_size_bytes",
+            "file_type",
             "created_at",
             "updated_at",
         ]
+
+    def get_submission_file_url(self, obj):
+        """Get the URL for the submitted file."""
+        if obj.submission_file:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.submission_file.url)
+            return obj.submission_file.url
+        return None
 
 
 class AssignmentSubmissionStaffSerializer(serializers.ModelSerializer):
@@ -251,6 +268,7 @@ class AssignmentSubmissionStaffSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source="course_enrollment.user.email", read_only=True)
     user_name = serializers.CharField(source="course_enrollment.user.full_name", read_only=True)
     user_uuid = serializers.UUIDField(source="course_enrollment.user.uuid", read_only=True)
+    submission_file_url = serializers.SerializerMethodField()
 
     class Meta:
         model = AssignmentSubmission
@@ -264,6 +282,10 @@ class AssignmentSubmissionStaffSerializer(serializers.ModelSerializer):
             "submitted_at",
             "content",
             "file_url",
+            "submission_file",
+            "submission_file_url",
+            "file_size_bytes",
+            "file_type",
             "score",
             "feedback",
             "graded_at",
@@ -275,13 +297,22 @@ class AssignmentSubmissionStaffSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    def get_submission_file_url(self, obj):
+        """Get the URL for the submitted file."""
+        if obj.submission_file:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.submission_file.url)
+            return obj.submission_file.url
+        return None
+
 
 class AssignmentSubmissionCreateSerializer(serializers.ModelSerializer):
     """Submit assignment."""
 
     class Meta:
         model = AssignmentSubmission
-        fields = ["content", "file_url"]
+        fields = ["content", "file_url", "submission_file"]
 
 
 class SubmissionGradeSerializer(serializers.Serializer):
@@ -345,6 +376,54 @@ class ContentProgressUpdateSerializer(serializers.Serializer):
     time_spent = serializers.IntegerField(min_value=0, required=False, default=0)
     position = serializers.DictField(required=False)
     completed = serializers.BooleanField(required=False, default=False)
+
+
+class QuizAttemptSerializer(serializers.ModelSerializer):
+    """Quiz attempt with scoring details."""
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    content_title = serializers.CharField(source="content.title", read_only=True)
+    user_email = serializers.SerializerMethodField()
+
+    class Meta:
+        model = QuizAttempt
+        fields = [
+            "uuid",
+            "content",
+            "content_title",
+            "attempt_number",
+            "status",
+            "status_display",
+            "submitted_answers",
+            "score",
+            "passed",
+            "started_at",
+            "submitted_at",
+            "graded_at",
+            "time_spent_seconds",
+            "user_email",
+        ]
+        read_only_fields = [
+            "uuid",
+            "attempt_number",
+            "score",
+            "passed",
+            "started_at",
+            "graded_at",
+            "status",
+        ]
+
+    def get_user_email(self, obj):
+        """Get user email."""
+        return obj.get_user().email if obj.get_user() else None
+
+
+class QuizSubmissionSerializer(serializers.Serializer):
+    """Submit quiz answers for grading."""
+
+    content_uuid = serializers.UUIDField()
+    submitted_answers = serializers.DictField(help_text="Dictionary of question_id: answer(s)")
+    time_spent_seconds = serializers.IntegerField(min_value=0, default=0)
 
 
 class ModuleProgressSerializer(serializers.ModelSerializer):

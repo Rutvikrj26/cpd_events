@@ -1,0 +1,2316 @@
+
+
++===========================================================================================================================================================================================+
+
+
+DEPRECATED: this command (`check`) has been DEPRECATED, and will be unsupported beyond 01 June 2024.
+
+
+We highly encourage switching to the new `scan` command which is easier to use, more powerful, and can be set up to mimic the deprecated command if required.
+
+
++===========================================================================================================================================================================================+
+
+
+{
+    "report_meta": {
+        "scan_target": "environment",
+        "scanned": [
+            "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages"
+        ],
+        "scanned_full_path": [
+            "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages"
+        ],
+        "target_languages": [
+            "python"
+        ],
+        "policy_file": null,
+        "policy_file_source": "local",
+        "audit_and_monitor": false,
+        "api_key": false,
+        "account": "",
+        "local_database_path": null,
+        "safety_version": "3.7.0",
+        "timestamp": "2026-01-19 22:04:20",
+        "packages_found": 127,
+        "vulnerabilities_found": 2,
+        "vulnerabilities_ignored": 0,
+        "remediations_recommended": 0,
+        "telemetry": {
+            "safety_options": {
+                "json": {
+                    "--json": 1
+                }
+            },
+            "safety_version": "3.7.0",
+            "safety_source": "cli",
+            "os_type": "Linux",
+            "os_release": "6.14.0-1019-oem",
+            "os_description": "Linux-6.14.0-1019-oem-x86_64-with-glibc2.39",
+            "python_version": "3.13.11",
+            "safety_command": "check"
+        },
+        "git": {
+            "branch": "dev",
+            "tag": "",
+            "commit": "a6ae506c944272b1a8113378da499964d2e00580",
+            "dirty": "True",
+            "origin": "https://github.com/Rutvikrj26/cpd_events.git"
+        },
+        "project": null,
+        "json_version": "1.1",
+        "remediations_attempted": 0,
+        "remediations_completed": 0,
+        "remediation_mode": "NON_INTERACTIVE"
+    },
+    "scanned_packages": {
+        "mypy_extensions": {
+            "name": "mypy_extensions",
+            "version": "1.1.0",
+            "requirements": [
+                {
+                    "raw": "mypy_extensions==1.1.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "mypy_extensions",
+                    "specifier": "==1.1.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/mypy_extensions-1.1.0.dist-info"
+                }
+            ]
+        },
+        "drf-nested-routers": {
+            "name": "drf-nested-routers",
+            "version": "0.95.0",
+            "requirements": [
+                {
+                    "raw": "drf-nested-routers==0.95.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "drf-nested-routers",
+                    "specifier": "==0.95.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/drf_nested_routers-0.95.0.dist-info"
+                }
+            ]
+        },
+        "pip-api": {
+            "name": "pip-api",
+            "version": "0.0.34",
+            "requirements": [
+                {
+                    "raw": "pip-api==0.0.34",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pip-api",
+                    "specifier": "==0.0.34",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pip_api-0.0.34.dist-info"
+                }
+            ]
+        },
+        "google-cloud-storage": {
+            "name": "google-cloud-storage",
+            "version": "2.19.0",
+            "requirements": [
+                {
+                    "raw": "google-cloud-storage==2.19.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "google-cloud-storage",
+                    "specifier": "==2.19.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/google_cloud_storage-2.19.0.dist-info"
+                }
+            ]
+        },
+        "nltk": {
+            "name": "nltk",
+            "version": "3.9.2",
+            "requirements": [
+                {
+                    "raw": "nltk==3.9.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nltk",
+                    "specifier": "==3.9.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/nltk-3.9.2.dist-info"
+                }
+            ]
+        },
+        "msgpack": {
+            "name": "msgpack",
+            "version": "1.1.2",
+            "requirements": [
+                {
+                    "raw": "msgpack==1.1.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "msgpack",
+                    "specifier": "==1.1.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/msgpack-1.1.2.dist-info"
+                }
+            ]
+        },
+        "safety-schemas": {
+            "name": "safety-schemas",
+            "version": "0.0.16",
+            "requirements": [
+                {
+                    "raw": "safety-schemas==0.0.16",
+                    "extras": [],
+                    "marker": null,
+                    "name": "safety-schemas",
+                    "specifier": "==0.0.16",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/safety_schemas-0.0.16.dist-info"
+                }
+            ]
+        },
+        "pip_audit": {
+            "name": "pip_audit",
+            "version": "2.10.0",
+            "requirements": [
+                {
+                    "raw": "pip_audit==2.10.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pip_audit",
+                    "specifier": "==2.10.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pip_audit-2.10.0.dist-info"
+                }
+            ]
+        },
+        "django-storages": {
+            "name": "django-storages",
+            "version": "1.14.6",
+            "requirements": [
+                {
+                    "raw": "django-storages==1.14.6",
+                    "extras": [],
+                    "marker": null,
+                    "name": "django-storages",
+                    "specifier": "==1.14.6",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/django_storages-1.14.6.dist-info"
+                }
+            ]
+        },
+        "requests": {
+            "name": "requests",
+            "version": "2.32.5",
+            "requirements": [
+                {
+                    "raw": "requests==2.32.5",
+                    "extras": [],
+                    "marker": null,
+                    "name": "requests",
+                    "specifier": "==2.32.5",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/requests-2.32.5.dist-info"
+                }
+            ]
+        },
+        "tomli_w": {
+            "name": "tomli_w",
+            "version": "1.2.0",
+            "requirements": [
+                {
+                    "raw": "tomli_w==1.2.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tomli_w",
+                    "specifier": "==1.2.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/tomli_w-1.2.0.dist-info"
+                }
+            ]
+        },
+        "proto-plus": {
+            "name": "proto-plus",
+            "version": "1.27.0",
+            "requirements": [
+                {
+                    "raw": "proto-plus==1.27.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "proto-plus",
+                    "specifier": "==1.27.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/proto_plus-1.27.0.dist-info"
+                }
+            ]
+        },
+        "google-crc32c": {
+            "name": "google-crc32c",
+            "version": "1.8.0",
+            "requirements": [
+                {
+                    "raw": "google-crc32c==1.8.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "google-crc32c",
+                    "specifier": "==1.8.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/google_crc32c-1.8.0.dist-info"
+                }
+            ]
+        },
+        "black": {
+            "name": "black",
+            "version": "24.10.0",
+            "requirements": [
+                {
+                    "raw": "black==24.10.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "black",
+                    "specifier": "==24.10.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/black-24.10.0.dist-info"
+                }
+            ]
+        },
+        "pip": {
+            "name": "pip",
+            "version": "25.3",
+            "requirements": [
+                {
+                    "raw": "pip==25.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pip",
+                    "specifier": "==25.3",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pip-25.3.dist-info"
+                }
+            ]
+        },
+        "coverage": {
+            "name": "coverage",
+            "version": "7.13.0",
+            "requirements": [
+                {
+                    "raw": "coverage==7.13.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "coverage",
+                    "specifier": "==7.13.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/coverage-7.13.0.dist-info"
+                }
+            ]
+        },
+        "pydantic": {
+            "name": "pydantic",
+            "version": "2.12.5",
+            "requirements": [
+                {
+                    "raw": "pydantic==2.12.5",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pydantic",
+                    "specifier": "==2.12.5",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pydantic-2.12.5.dist-info"
+                }
+            ]
+        },
+        "pyparsing": {
+            "name": "pyparsing",
+            "version": "3.3.1",
+            "requirements": [
+                {
+                    "raw": "pyparsing==3.3.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pyparsing",
+                    "specifier": "==3.3.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pyparsing-3.3.1.dist-info"
+                }
+            ]
+        },
+        "sqlparse": {
+            "name": "sqlparse",
+            "version": "0.5.4",
+            "requirements": [
+                {
+                    "raw": "sqlparse==0.5.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "sqlparse",
+                    "specifier": "==0.5.4",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/sqlparse-0.5.4.dist-info"
+                }
+            ]
+        },
+        "qrcode": {
+            "name": "qrcode",
+            "version": "8.2",
+            "requirements": [
+                {
+                    "raw": "qrcode==8.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "qrcode",
+                    "specifier": "==8.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/qrcode-8.2.dist-info"
+                }
+            ]
+        },
+        "ruff": {
+            "name": "ruff",
+            "version": "0.14.9",
+            "requirements": [
+                {
+                    "raw": "ruff==0.14.9",
+                    "extras": [],
+                    "marker": null,
+                    "name": "ruff",
+                    "specifier": "==0.14.9",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/ruff-0.14.9.dist-info"
+                }
+            ]
+        },
+        "filelock": {
+            "name": "filelock",
+            "version": "3.20.3",
+            "requirements": [
+                {
+                    "raw": "filelock==3.20.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "filelock",
+                    "specifier": "==3.20.3",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/filelock-3.20.3.dist-info"
+                }
+            ]
+        },
+        "shellingham": {
+            "name": "shellingham",
+            "version": "1.5.4",
+            "requirements": [
+                {
+                    "raw": "shellingham==1.5.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "shellingham",
+                    "specifier": "==1.5.4",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/shellingham-1.5.4.dist-info"
+                }
+            ]
+        },
+        "stevedore": {
+            "name": "stevedore",
+            "version": "5.6.0",
+            "requirements": [
+                {
+                    "raw": "stevedore==5.6.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "stevedore",
+                    "specifier": "==5.6.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/stevedore-5.6.0.dist-info"
+                }
+            ]
+        },
+        "platformdirs": {
+            "name": "platformdirs",
+            "version": "4.5.1",
+            "requirements": [
+                {
+                    "raw": "platformdirs==4.5.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "platformdirs",
+                    "specifier": "==4.5.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/platformdirs-4.5.1.dist-info"
+                }
+            ]
+        },
+        "gunicorn": {
+            "name": "gunicorn",
+            "version": "22.0.0",
+            "requirements": [
+                {
+                    "raw": "gunicorn==22.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "gunicorn",
+                    "specifier": "==22.0.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/gunicorn-22.0.0.dist-info"
+                }
+            ]
+        },
+        "types-pytz": {
+            "name": "types-pytz",
+            "version": "2025.2.0.20251108",
+            "requirements": [
+                {
+                    "raw": "types-pytz==2025.2.0.20251108",
+                    "extras": [],
+                    "marker": null,
+                    "name": "types-pytz",
+                    "specifier": "==2025.2.0.20251108",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/types_pytz-2025.2.0.20251108.dist-info"
+                }
+            ]
+        },
+        "uritemplate": {
+            "name": "uritemplate",
+            "version": "4.2.0",
+            "requirements": [
+                {
+                    "raw": "uritemplate==4.2.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "uritemplate",
+                    "specifier": "==4.2.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/uritemplate-4.2.0.dist-info"
+                }
+            ]
+        },
+        "sortedcontainers": {
+            "name": "sortedcontainers",
+            "version": "2.4.0",
+            "requirements": [
+                {
+                    "raw": "sortedcontainers==2.4.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "sortedcontainers",
+                    "specifier": "==2.4.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/sortedcontainers-2.4.0.dist-info"
+                }
+            ]
+        },
+        "dparse": {
+            "name": "dparse",
+            "version": "0.6.4",
+            "requirements": [
+                {
+                    "raw": "dparse==0.6.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "dparse",
+                    "specifier": "==0.6.4",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/dparse-0.6.4.dist-info"
+                }
+            ]
+        },
+        "typer": {
+            "name": "typer",
+            "version": "0.21.1",
+            "requirements": [
+                {
+                    "raw": "typer==0.21.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "typer",
+                    "specifier": "==0.21.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/typer-0.21.1.dist-info"
+                }
+            ]
+        },
+        "typing-inspection": {
+            "name": "typing-inspection",
+            "version": "0.4.2",
+            "requirements": [
+                {
+                    "raw": "typing-inspection==0.4.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "typing-inspection",
+                    "specifier": "==0.4.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/typing_inspection-0.4.2.dist-info"
+                }
+            ]
+        },
+        "safety": {
+            "name": "safety",
+            "version": "3.7.0",
+            "requirements": [
+                {
+                    "raw": "safety==3.7.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "safety",
+                    "specifier": "==3.7.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/safety-3.7.0.dist-info"
+                }
+            ]
+        },
+        "factory_boy": {
+            "name": "factory_boy",
+            "version": "3.3.3",
+            "requirements": [
+                {
+                    "raw": "factory_boy==3.3.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "factory_boy",
+                    "specifier": "==3.3.3",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/factory_boy-3.3.3.dist-info"
+                }
+            ]
+        },
+        "cachetools": {
+            "name": "cachetools",
+            "version": "6.2.4",
+            "requirements": [
+                {
+                    "raw": "cachetools==6.2.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "cachetools",
+                    "specifier": "==6.2.4",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/cachetools-6.2.4.dist-info"
+                }
+            ]
+        },
+        "whitenoise": {
+            "name": "whitenoise",
+            "version": "6.11.0",
+            "requirements": [
+                {
+                    "raw": "whitenoise==6.11.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "whitenoise",
+                    "specifier": "==6.11.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/whitenoise-6.11.0.dist-info"
+                }
+            ]
+        },
+        "cffi": {
+            "name": "cffi",
+            "version": "2.0.0",
+            "requirements": [
+                {
+                    "raw": "cffi==2.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "cffi",
+                    "specifier": "==2.0.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/cffi-2.0.0.dist-info"
+                }
+            ]
+        },
+        "CacheControl": {
+            "name": "CacheControl",
+            "version": "0.14.4",
+            "requirements": [
+                {
+                    "raw": "CacheControl==0.14.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "CacheControl",
+                    "specifier": "==0.14.4",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/cachecontrol-0.14.4.dist-info"
+                }
+            ]
+        },
+        "Pygments": {
+            "name": "Pygments",
+            "version": "2.19.2",
+            "requirements": [
+                {
+                    "raw": "Pygments==2.19.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "Pygments",
+                    "specifier": "==2.19.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pygments-2.19.2.dist-info"
+                }
+            ]
+        },
+        "pillow": {
+            "name": "pillow",
+            "version": "10.4.0",
+            "requirements": [
+                {
+                    "raw": "pillow==10.4.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pillow",
+                    "specifier": "==10.4.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pillow-10.4.0.dist-info"
+                }
+            ]
+        },
+        "boolean.py": {
+            "name": "boolean.py",
+            "version": "5.0",
+            "requirements": [
+                {
+                    "raw": "boolean.py==5.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "boolean.py",
+                    "specifier": "==5.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/boolean_py-5.0.dist-info"
+                }
+            ]
+        },
+        "h11": {
+            "name": "h11",
+            "version": "0.16.0",
+            "requirements": [
+                {
+                    "raw": "h11==0.16.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "h11",
+                    "specifier": "==0.16.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/h11-0.16.0.dist-info"
+                }
+            ]
+        },
+        "types-PyYAML": {
+            "name": "types-PyYAML",
+            "version": "6.0.12.20250915",
+            "requirements": [
+                {
+                    "raw": "types-PyYAML==6.0.12.20250915",
+                    "extras": [],
+                    "marker": null,
+                    "name": "types-PyYAML",
+                    "specifier": "==6.0.12.20250915",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/types_pyyaml-6.0.12.20250915.dist-info"
+                }
+            ]
+        },
+        "sentry-sdk": {
+            "name": "sentry-sdk",
+            "version": "2.49.0",
+            "requirements": [
+                {
+                    "raw": "sentry-sdk==2.49.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "sentry-sdk",
+                    "specifier": "==2.49.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/sentry_sdk-2.49.0.dist-info"
+                }
+            ]
+        },
+        "httpx": {
+            "name": "httpx",
+            "version": "0.28.1",
+            "requirements": [
+                {
+                    "raw": "httpx==0.28.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "httpx",
+                    "specifier": "==0.28.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/httpx-0.28.1.dist-info"
+                }
+            ]
+        },
+        "inflection": {
+            "name": "inflection",
+            "version": "0.5.1",
+            "requirements": [
+                {
+                    "raw": "inflection==0.5.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "inflection",
+                    "specifier": "==0.5.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/inflection-0.5.1.dist-info"
+                }
+            ]
+        },
+        "MarkupSafe": {
+            "name": "MarkupSafe",
+            "version": "3.0.3",
+            "requirements": [
+                {
+                    "raw": "MarkupSafe==3.0.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "MarkupSafe",
+                    "specifier": "==3.0.3",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/markupsafe-3.0.3.dist-info"
+                }
+            ]
+        },
+        "google-cloud-core": {
+            "name": "google-cloud-core",
+            "version": "2.5.0",
+            "requirements": [
+                {
+                    "raw": "google-cloud-core==2.5.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "google-cloud-core",
+                    "specifier": "==2.5.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/google_cloud_core-2.5.0.dist-info"
+                }
+            ]
+        },
+        "pip-requirements-parser": {
+            "name": "pip-requirements-parser",
+            "version": "32.0.1",
+            "requirements": [
+                {
+                    "raw": "pip-requirements-parser==32.0.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pip-requirements-parser",
+                    "specifier": "==32.0.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pip_requirements_parser-32.0.1.dist-info"
+                }
+            ]
+        },
+        "reportlab": {
+            "name": "reportlab",
+            "version": "4.4.6",
+            "requirements": [
+                {
+                    "raw": "reportlab==4.4.6",
+                    "extras": [],
+                    "marker": null,
+                    "name": "reportlab",
+                    "specifier": "==4.4.6",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/reportlab-4.4.6.dist-info"
+                }
+            ]
+        },
+        "tomli": {
+            "name": "tomli",
+            "version": "2.4.0",
+            "requirements": [
+                {
+                    "raw": "tomli==2.4.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tomli",
+                    "specifier": "==2.4.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/tomli-2.4.0.dist-info"
+                }
+            ]
+        },
+        "click": {
+            "name": "click",
+            "version": "8.3.1",
+            "requirements": [
+                {
+                    "raw": "click==8.3.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "click",
+                    "specifier": "==8.3.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/click-8.3.1.dist-info"
+                }
+            ]
+        },
+        "Jinja2": {
+            "name": "Jinja2",
+            "version": "3.1.6",
+            "requirements": [
+                {
+                    "raw": "Jinja2==3.1.6",
+                    "extras": [],
+                    "marker": null,
+                    "name": "Jinja2",
+                    "specifier": "==3.1.6",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/jinja2-3.1.6.dist-info"
+                }
+            ]
+        },
+        "python-dateutil": {
+            "name": "python-dateutil",
+            "version": "2.9.0.post0",
+            "requirements": [
+                {
+                    "raw": "python-dateutil==2.9.0.post0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "python-dateutil",
+                    "specifier": "==2.9.0.post0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/python_dateutil-2.9.0.post0.dist-info"
+                }
+            ]
+        },
+        "rich": {
+            "name": "rich",
+            "version": "14.2.0",
+            "requirements": [
+                {
+                    "raw": "rich==14.2.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "rich",
+                    "specifier": "==14.2.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/rich-14.2.0.dist-info"
+                }
+            ]
+        },
+        "anyio": {
+            "name": "anyio",
+            "version": "4.12.1",
+            "requirements": [
+                {
+                    "raw": "anyio==4.12.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "anyio",
+                    "specifier": "==4.12.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/anyio-4.12.1.dist-info"
+                }
+            ]
+        },
+        "drf-yasg": {
+            "name": "drf-yasg",
+            "version": "1.21.11",
+            "requirements": [
+                {
+                    "raw": "drf-yasg==1.21.11",
+                    "extras": [],
+                    "marker": null,
+                    "name": "drf-yasg",
+                    "specifier": "==1.21.11",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/drf_yasg-1.21.11.dist-info"
+                }
+            ]
+        },
+        "pycparser": {
+            "name": "pycparser",
+            "version": "2.23",
+            "requirements": [
+                {
+                    "raw": "pycparser==2.23",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pycparser",
+                    "specifier": "==2.23",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pycparser-2.23.dist-info"
+                }
+            ]
+        },
+        "urllib3": {
+            "name": "urllib3",
+            "version": "2.6.2",
+            "requirements": [
+                {
+                    "raw": "urllib3==2.6.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "urllib3",
+                    "specifier": "==2.6.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/urllib3-2.6.2.dist-info"
+                }
+            ]
+        },
+        "grpcio": {
+            "name": "grpcio",
+            "version": "1.76.0",
+            "requirements": [
+                {
+                    "raw": "grpcio==1.76.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "grpcio",
+                    "specifier": "==1.76.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/grpcio-1.76.0.dist-info"
+                }
+            ]
+        },
+        "mdurl": {
+            "name": "mdurl",
+            "version": "0.1.2",
+            "requirements": [
+                {
+                    "raw": "mdurl==0.1.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "mdurl",
+                    "specifier": "==0.1.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/mdurl-0.1.2.dist-info"
+                }
+            ]
+        },
+        "django-anymail": {
+            "name": "django-anymail",
+            "version": "14.0",
+            "requirements": [
+                {
+                    "raw": "django-anymail==14.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "django-anymail",
+                    "specifier": "==14.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/django_anymail-14.0.dist-info"
+                }
+            ]
+        },
+        "cryptography": {
+            "name": "cryptography",
+            "version": "46.0.3",
+            "requirements": [
+                {
+                    "raw": "cryptography==46.0.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "cryptography",
+                    "specifier": "==46.0.3",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/cryptography-46.0.3.dist-info"
+                }
+            ]
+        },
+        "googleapis-common-protos": {
+            "name": "googleapis-common-protos",
+            "version": "1.72.0",
+            "requirements": [
+                {
+                    "raw": "googleapis-common-protos==1.72.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "googleapis-common-protos",
+                    "specifier": "==1.72.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/googleapis_common_protos-1.72.0.dist-info"
+                }
+            ]
+        },
+        "packaging": {
+            "name": "packaging",
+            "version": "25.0",
+            "requirements": [
+                {
+                    "raw": "packaging==25.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "packaging",
+                    "specifier": "==25.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/packaging-25.0.dist-info"
+                }
+            ]
+        },
+        "ruamel.yaml": {
+            "name": "ruamel.yaml",
+            "version": "0.19.1",
+            "requirements": [
+                {
+                    "raw": "ruamel.yaml==0.19.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "ruamel.yaml",
+                    "specifier": "==0.19.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/ruamel_yaml-0.19.1.dist-info"
+                }
+            ]
+        },
+        "djangorestframework_simplejwt": {
+            "name": "djangorestframework_simplejwt",
+            "version": "5.5.1",
+            "requirements": [
+                {
+                    "raw": "djangorestframework_simplejwt==5.5.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "djangorestframework_simplejwt",
+                    "specifier": "==5.5.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/djangorestframework_simplejwt-5.5.1.dist-info"
+                }
+            ]
+        },
+        "redis": {
+            "name": "redis",
+            "version": "5.3.1",
+            "requirements": [
+                {
+                    "raw": "redis==5.3.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "redis",
+                    "specifier": "==5.3.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/redis-5.3.1.dist-info"
+                }
+            ]
+        },
+        "defusedxml": {
+            "name": "defusedxml",
+            "version": "0.7.1",
+            "requirements": [
+                {
+                    "raw": "defusedxml==0.7.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "defusedxml",
+                    "specifier": "==0.7.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/defusedxml-0.7.1.dist-info"
+                }
+            ]
+        },
+        "pyasn1": {
+            "name": "pyasn1",
+            "version": "0.6.1",
+            "requirements": [
+                {
+                    "raw": "pyasn1==0.6.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pyasn1",
+                    "specifier": "==0.6.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pyasn1-0.6.1.dist-info"
+                }
+            ]
+        },
+        "pypdf": {
+            "name": "pypdf",
+            "version": "6.5.0",
+            "requirements": [
+                {
+                    "raw": "pypdf==6.5.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pypdf",
+                    "specifier": "==6.5.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pypdf-6.5.0.dist-info"
+                }
+            ]
+        },
+        "Faker": {
+            "name": "Faker",
+            "version": "22.7.0",
+            "requirements": [
+                {
+                    "raw": "Faker==22.7.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "Faker",
+                    "specifier": "==22.7.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/Faker-22.7.0.dist-info"
+                }
+            ]
+        },
+        "django-cors-headers": {
+            "name": "django-cors-headers",
+            "version": "4.9.0",
+            "requirements": [
+                {
+                    "raw": "django-cors-headers==4.9.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "django-cors-headers",
+                    "specifier": "==4.9.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/django_cors_headers-4.9.0.dist-info"
+                }
+            ]
+        },
+        "annotated-types": {
+            "name": "annotated-types",
+            "version": "0.7.0",
+            "requirements": [
+                {
+                    "raw": "annotated-types==0.7.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "annotated-types",
+                    "specifier": "==0.7.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/annotated_types-0.7.0.dist-info"
+                }
+            ]
+        },
+        "joblib": {
+            "name": "joblib",
+            "version": "1.5.3",
+            "requirements": [
+                {
+                    "raw": "joblib==1.5.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "joblib",
+                    "specifier": "==1.5.3",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/joblib-1.5.3.dist-info"
+                }
+            ]
+        },
+        "mypy": {
+            "name": "mypy",
+            "version": "1.19.1",
+            "requirements": [
+                {
+                    "raw": "mypy==1.19.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "mypy",
+                    "specifier": "==1.19.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/mypy-1.19.1.dist-info"
+                }
+            ]
+        },
+        "idna": {
+            "name": "idna",
+            "version": "3.11",
+            "requirements": [
+                {
+                    "raw": "idna==3.11",
+                    "extras": [],
+                    "marker": null,
+                    "name": "idna",
+                    "specifier": "==3.11",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/idna-3.11.dist-info"
+                }
+            ]
+        },
+        "django-stubs-ext": {
+            "name": "django-stubs-ext",
+            "version": "5.2.8",
+            "requirements": [
+                {
+                    "raw": "django-stubs-ext==5.2.8",
+                    "extras": [],
+                    "marker": null,
+                    "name": "django-stubs-ext",
+                    "specifier": "==5.2.8",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/django_stubs_ext-5.2.8.dist-info"
+                }
+            ]
+        },
+        "google-cloud-tasks": {
+            "name": "google-cloud-tasks",
+            "version": "2.20.0",
+            "requirements": [
+                {
+                    "raw": "google-cloud-tasks==2.20.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "google-cloud-tasks",
+                    "specifier": "==2.20.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/google_cloud_tasks-2.20.0.dist-info"
+                }
+            ]
+        },
+        "tqdm": {
+            "name": "tqdm",
+            "version": "4.67.1",
+            "requirements": [
+                {
+                    "raw": "tqdm==4.67.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tqdm",
+                    "specifier": "==4.67.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/tqdm-4.67.1.dist-info"
+                }
+            ]
+        },
+        "google-api-core": {
+            "name": "google-api-core",
+            "version": "2.28.1",
+            "requirements": [
+                {
+                    "raw": "google-api-core==2.28.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "google-api-core",
+                    "specifier": "==2.28.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/google_api_core-2.28.1.dist-info"
+                }
+            ]
+        },
+        "PyYAML": {
+            "name": "PyYAML",
+            "version": "6.0.3",
+            "requirements": [
+                {
+                    "raw": "PyYAML==6.0.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "PyYAML",
+                    "specifier": "==6.0.3",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pyyaml-6.0.3.dist-info"
+                }
+            ]
+        },
+        "PyJWT": {
+            "name": "PyJWT",
+            "version": "2.10.1",
+            "requirements": [
+                {
+                    "raw": "PyJWT==2.10.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "PyJWT",
+                    "specifier": "==2.10.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/PyJWT-2.10.1.dist-info"
+                }
+            ]
+        },
+        "bandit": {
+            "name": "bandit",
+            "version": "1.9.3",
+            "requirements": [
+                {
+                    "raw": "bandit==1.9.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "bandit",
+                    "specifier": "==1.9.3",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/bandit-1.9.3.dist-info"
+                }
+            ]
+        },
+        "django-stubs": {
+            "name": "django-stubs",
+            "version": "4.2.7",
+            "requirements": [
+                {
+                    "raw": "django-stubs==4.2.7",
+                    "extras": [],
+                    "marker": null,
+                    "name": "django-stubs",
+                    "specifier": "==4.2.7",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/django_stubs-4.2.7.dist-info"
+                }
+            ]
+        },
+        "python-dotenv": {
+            "name": "python-dotenv",
+            "version": "1.2.1",
+            "requirements": [
+                {
+                    "raw": "python-dotenv==1.2.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "python-dotenv",
+                    "specifier": "==1.2.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/python_dotenv-1.2.1.dist-info"
+                }
+            ]
+        },
+        "pytz": {
+            "name": "pytz",
+            "version": "2025.2",
+            "requirements": [
+                {
+                    "raw": "pytz==2025.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pytz",
+                    "specifier": "==2025.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pytz-2025.2.dist-info"
+                }
+            ]
+        },
+        "markdown-it-py": {
+            "name": "markdown-it-py",
+            "version": "4.0.0",
+            "requirements": [
+                {
+                    "raw": "markdown-it-py==4.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "markdown-it-py",
+                    "specifier": "==4.0.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/markdown_it_py-4.0.0.dist-info"
+                }
+            ]
+        },
+        "certifi": {
+            "name": "certifi",
+            "version": "2025.11.12",
+            "requirements": [
+                {
+                    "raw": "certifi==2025.11.12",
+                    "extras": [],
+                    "marker": null,
+                    "name": "certifi",
+                    "specifier": "==2025.11.12",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/certifi-2025.11.12.dist-info"
+                }
+            ]
+        },
+        "cyclonedx-python-lib": {
+            "name": "cyclonedx-python-lib",
+            "version": "11.6.0",
+            "requirements": [
+                {
+                    "raw": "cyclonedx-python-lib==11.6.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "cyclonedx-python-lib",
+                    "specifier": "==11.6.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/cyclonedx_python_lib-11.6.0.dist-info"
+                }
+            ]
+        },
+        "pdf2image": {
+            "name": "pdf2image",
+            "version": "1.17.0",
+            "requirements": [
+                {
+                    "raw": "pdf2image==1.17.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pdf2image",
+                    "specifier": "==1.17.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pdf2image-1.17.0.dist-info"
+                }
+            ]
+        },
+        "stripe": {
+            "name": "stripe",
+            "version": "8.11.0",
+            "requirements": [
+                {
+                    "raw": "stripe==8.11.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "stripe",
+                    "specifier": "==8.11.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/stripe-8.11.0.dist-info"
+                }
+            ]
+        },
+        "tomlkit": {
+            "name": "tomlkit",
+            "version": "0.14.0",
+            "requirements": [
+                {
+                    "raw": "tomlkit==0.14.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tomlkit",
+                    "specifier": "==0.14.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/tomlkit-0.14.0.dist-info"
+                }
+            ]
+        },
+        "djangorestframework": {
+            "name": "djangorestframework",
+            "version": "3.16.1",
+            "requirements": [
+                {
+                    "raw": "djangorestframework==3.16.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "djangorestframework",
+                    "specifier": "==3.16.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/djangorestframework-3.16.1.dist-info"
+                }
+            ]
+        },
+        "django-filter": {
+            "name": "django-filter",
+            "version": "25.2",
+            "requirements": [
+                {
+                    "raw": "django-filter==25.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "django-filter",
+                    "specifier": "==25.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/django_filter-25.2.dist-info"
+                }
+            ]
+        },
+        "six": {
+            "name": "six",
+            "version": "1.17.0",
+            "requirements": [
+                {
+                    "raw": "six==1.17.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "six",
+                    "specifier": "==1.17.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/six-1.17.0.dist-info"
+                }
+            ]
+        },
+        "marshmallow": {
+            "name": "marshmallow",
+            "version": "4.2.0",
+            "requirements": [
+                {
+                    "raw": "marshmallow==4.2.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "marshmallow",
+                    "specifier": "==4.2.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/marshmallow-4.2.0.dist-info"
+                }
+            ]
+        },
+        "backend": {
+            "name": "backend",
+            "version": "0.1.0",
+            "requirements": [
+                {
+                    "raw": "backend==0.1.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "backend",
+                    "specifier": "==0.1.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/backend-0.1.0.dist-info"
+                }
+            ]
+        },
+        "py-serializable": {
+            "name": "py-serializable",
+            "version": "2.1.0",
+            "requirements": [
+                {
+                    "raw": "py-serializable==2.1.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "py-serializable",
+                    "specifier": "==2.1.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/py_serializable-2.1.0.dist-info"
+                }
+            ]
+        },
+        "pydantic_core": {
+            "name": "pydantic_core",
+            "version": "2.41.5",
+            "requirements": [
+                {
+                    "raw": "pydantic_core==2.41.5",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pydantic_core",
+                    "specifier": "==2.41.5",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pydantic_core-2.41.5.dist-info"
+                }
+            ]
+        },
+        "typing_extensions": {
+            "name": "typing_extensions",
+            "version": "4.15.0",
+            "requirements": [
+                {
+                    "raw": "typing_extensions==4.15.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "typing_extensions",
+                    "specifier": "==4.15.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/typing_extensions-4.15.0.dist-info"
+                }
+            ]
+        },
+        "Authlib": {
+            "name": "Authlib",
+            "version": "1.6.6",
+            "requirements": [
+                {
+                    "raw": "Authlib==1.6.6",
+                    "extras": [],
+                    "marker": null,
+                    "name": "Authlib",
+                    "specifier": "==1.6.6",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/authlib-1.6.6.dist-info"
+                }
+            ]
+        },
+        "rsa": {
+            "name": "rsa",
+            "version": "4.9.1",
+            "requirements": [
+                {
+                    "raw": "rsa==4.9.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "rsa",
+                    "specifier": "==4.9.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/rsa-4.9.1.dist-info"
+                }
+            ]
+        },
+        "regex": {
+            "name": "regex",
+            "version": "2026.1.15",
+            "requirements": [
+                {
+                    "raw": "regex==2026.1.15",
+                    "extras": [],
+                    "marker": null,
+                    "name": "regex",
+                    "specifier": "==2026.1.15",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/regex-2026.1.15.dist-info"
+                }
+            ]
+        },
+        "httpcore": {
+            "name": "httpcore",
+            "version": "1.0.9",
+            "requirements": [
+                {
+                    "raw": "httpcore==1.0.9",
+                    "extras": [],
+                    "marker": null,
+                    "name": "httpcore",
+                    "specifier": "==1.0.9",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/httpcore-1.0.9.dist-info"
+                }
+            ]
+        },
+        "pytest-cov": {
+            "name": "pytest-cov",
+            "version": "4.1.0",
+            "requirements": [
+                {
+                    "raw": "pytest-cov==4.1.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pytest-cov",
+                    "specifier": "==4.1.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pytest_cov-4.1.0.dist-info"
+                }
+            ]
+        },
+        "license-expression": {
+            "name": "license-expression",
+            "version": "30.4.4",
+            "requirements": [
+                {
+                    "raw": "license-expression==30.4.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "license-expression",
+                    "specifier": "==30.4.4",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/license_expression-30.4.4.dist-info"
+                }
+            ]
+        },
+        "pluggy": {
+            "name": "pluggy",
+            "version": "1.6.0",
+            "requirements": [
+                {
+                    "raw": "pluggy==1.6.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pluggy",
+                    "specifier": "==1.6.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pluggy-1.6.0.dist-info"
+                }
+            ]
+        },
+        "pathspec": {
+            "name": "pathspec",
+            "version": "0.12.1",
+            "requirements": [
+                {
+                    "raw": "pathspec==0.12.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pathspec",
+                    "specifier": "==0.12.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pathspec-0.12.1.dist-info"
+                }
+            ]
+        },
+        "google-auth": {
+            "name": "google-auth",
+            "version": "2.45.0",
+            "requirements": [
+                {
+                    "raw": "google-auth==2.45.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "google-auth",
+                    "specifier": "==2.45.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/google_auth-2.45.0.dist-info"
+                }
+            ]
+        },
+        "packageurl-python": {
+            "name": "packageurl-python",
+            "version": "0.17.6",
+            "requirements": [
+                {
+                    "raw": "packageurl-python==0.17.6",
+                    "extras": [],
+                    "marker": null,
+                    "name": "packageurl-python",
+                    "specifier": "==0.17.6",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/packageurl_python-0.17.6.dist-info"
+                }
+            ]
+        },
+        "grpc-google-iam-v1": {
+            "name": "grpc-google-iam-v1",
+            "version": "0.14.3",
+            "requirements": [
+                {
+                    "raw": "grpc-google-iam-v1==0.14.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "grpc-google-iam-v1",
+                    "specifier": "==0.14.3",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/grpc_google_iam_v1-0.14.3.dist-info"
+                }
+            ]
+        },
+        "asgiref": {
+            "name": "asgiref",
+            "version": "3.11.0",
+            "requirements": [
+                {
+                    "raw": "asgiref==3.11.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "asgiref",
+                    "specifier": "==3.11.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/asgiref-3.11.0.dist-info"
+                }
+            ]
+        },
+        "pytest": {
+            "name": "pytest",
+            "version": "8.4.2",
+            "requirements": [
+                {
+                    "raw": "pytest==8.4.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pytest",
+                    "specifier": "==8.4.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pytest-8.4.2.dist-info"
+                }
+            ]
+        },
+        "Django": {
+            "name": "Django",
+            "version": "6.0",
+            "requirements": [
+                {
+                    "raw": "Django==6.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "Django",
+                    "specifier": "==6.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/django-6.0.dist-info"
+                }
+            ]
+        },
+        "grpcio-status": {
+            "name": "grpcio-status",
+            "version": "1.76.0",
+            "requirements": [
+                {
+                    "raw": "grpcio-status==1.76.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "grpcio-status",
+                    "specifier": "==1.76.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/grpcio_status-1.76.0.dist-info"
+                }
+            ]
+        },
+        "pyasn1_modules": {
+            "name": "pyasn1_modules",
+            "version": "0.4.2",
+            "requirements": [
+                {
+                    "raw": "pyasn1_modules==0.4.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pyasn1_modules",
+                    "specifier": "==0.4.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pyasn1_modules-0.4.2.dist-info"
+                }
+            ]
+        },
+        "iniconfig": {
+            "name": "iniconfig",
+            "version": "2.3.0",
+            "requirements": [
+                {
+                    "raw": "iniconfig==2.3.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "iniconfig",
+                    "specifier": "==2.3.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/iniconfig-2.3.0.dist-info"
+                }
+            ]
+        },
+        "librt": {
+            "name": "librt",
+            "version": "0.7.4",
+            "requirements": [
+                {
+                    "raw": "librt==0.7.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "librt",
+                    "specifier": "==0.7.4",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/librt-0.7.4.dist-info"
+                }
+            ]
+        },
+        "pytest-django": {
+            "name": "pytest-django",
+            "version": "4.11.1",
+            "requirements": [
+                {
+                    "raw": "pytest-django==4.11.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pytest-django",
+                    "specifier": "==4.11.1",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/pytest_django-4.11.1.dist-info"
+                }
+            ]
+        },
+        "charset-normalizer": {
+            "name": "charset-normalizer",
+            "version": "3.4.4",
+            "requirements": [
+                {
+                    "raw": "charset-normalizer==3.4.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "charset-normalizer",
+                    "specifier": "==3.4.4",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/charset_normalizer-3.4.4.dist-info"
+                }
+            ]
+        },
+        "google-resumable-media": {
+            "name": "google-resumable-media",
+            "version": "2.8.0",
+            "requirements": [
+                {
+                    "raw": "google-resumable-media==2.8.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "google-resumable-media",
+                    "specifier": "==2.8.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/google_resumable_media-2.8.0.dist-info"
+                }
+            ]
+        },
+        "tenacity": {
+            "name": "tenacity",
+            "version": "9.1.2",
+            "requirements": [
+                {
+                    "raw": "tenacity==9.1.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tenacity",
+                    "specifier": "==9.1.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/tenacity-9.1.2.dist-info"
+                }
+            ]
+        },
+        "python-json-logger": {
+            "name": "python-json-logger",
+            "version": "4.0.0",
+            "requirements": [
+                {
+                    "raw": "python-json-logger==4.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "python-json-logger",
+                    "specifier": "==4.0.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/python_json_logger-4.0.0.dist-info"
+                }
+            ]
+        },
+        "protobuf": {
+            "name": "protobuf",
+            "version": "6.33.2",
+            "requirements": [
+                {
+                    "raw": "protobuf==6.33.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "protobuf",
+                    "specifier": "==6.33.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/protobuf-6.33.2.dist-info"
+                }
+            ]
+        },
+        "psycopg-binary": {
+            "name": "psycopg-binary",
+            "version": "3.3.2",
+            "requirements": [
+                {
+                    "raw": "psycopg-binary==3.3.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "psycopg-binary",
+                    "specifier": "==3.3.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/psycopg_binary-3.3.2.dist-info"
+                }
+            ]
+        },
+        "psycopg": {
+            "name": "psycopg",
+            "version": "3.3.2",
+            "requirements": [
+                {
+                    "raw": "psycopg==3.3.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "psycopg",
+                    "specifier": "==3.3.2",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/psycopg-3.3.2.dist-info"
+                }
+            ]
+        }
+    },
+    "affected_packages": {
+        "django-stubs": {
+            "name": "django-stubs",
+            "version": "4.2.7",
+            "requirements": [
+                {
+                    "raw": "django-stubs==4.2.7",
+                    "extras": [],
+                    "marker": null,
+                    "name": "django-stubs",
+                    "specifier": "==4.2.7",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/django_stubs-4.2.7.dist-info"
+                }
+            ],
+            "found": null,
+            "insecure_versions": [
+                "0.1.0",
+                "0.10.0",
+                "0.10.1",
+                "0.10.2",
+                "0.11.0",
+                "0.11.1",
+                "0.12.0",
+                "0.12.1",
+                "0.2.0",
+                "0.3.0",
+                "0.4.0",
+                "0.5.0",
+                "0.5.1",
+                "0.6.0",
+                "0.7.0",
+                "0.8.0",
+                "0.8.1",
+                "0.8.2",
+                "0.9.0",
+                "1.0.0",
+                "1.0.1",
+                "1.0.2",
+                "1.1.0",
+                "1.10.0",
+                "1.10.1",
+                "1.11.0",
+                "1.12.0",
+                "1.13.0",
+                "1.13.1",
+                "1.13.2",
+                "1.14.0",
+                "1.15.0",
+                "1.16.0",
+                "1.2.0",
+                "1.3.0",
+                "1.3.1",
+                "1.3.2",
+                "1.3.3",
+                "1.4.0",
+                "1.5.0",
+                "1.6.0",
+                "1.7.0",
+                "1.8.0",
+                "1.9.0",
+                "4.2.0",
+                "4.2.1",
+                "4.2.2",
+                "4.2.3",
+                "4.2.4",
+                "4.2.5",
+                "4.2.6",
+                "4.2.7",
+                "5.0.0",
+                "5.0.1",
+                "5.0.2",
+                "5.0.3",
+                "5.0.4",
+                "5.1.0",
+                "5.1.1",
+                "5.1.2",
+                "5.1.3"
+            ],
+            "secure_versions": [
+                "5.2.8",
+                "5.2.7",
+                "5.2.6",
+                "5.2.6a1",
+                "5.2.5",
+                "5.2.4",
+                "5.2.3",
+                "5.2.2",
+                "5.2.1",
+                "5.2.0"
+            ],
+            "latest_version_without_known_vulnerabilities": "5.2.8",
+            "latest_version": "5.2.8",
+            "more_info_url": "https://data.safetycli.com/p/pypi/django-stubs/97c/"
+        },
+        "gunicorn": {
+            "name": "gunicorn",
+            "version": "22.0.0",
+            "requirements": [
+                {
+                    "raw": "gunicorn==22.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "gunicorn",
+                    "specifier": "==22.0.0",
+                    "url": null,
+                    "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/gunicorn-22.0.0.dist-info"
+                }
+            ],
+            "found": null,
+            "insecure_versions": [
+                "0.1",
+                "0.10.0",
+                "0.10.1",
+                "0.11.0",
+                "0.11.1",
+                "0.11.2",
+                "0.12.0",
+                "0.12.1",
+                "0.12.2",
+                "0.13.0",
+                "0.13.1",
+                "0.13.2",
+                "0.13.3",
+                "0.13.4",
+                "0.14.0",
+                "0.14.1",
+                "0.14.2",
+                "0.14.3",
+                "0.14.4",
+                "0.14.5",
+                "0.14.6",
+                "0.15.0",
+                "0.16.0",
+                "0.16.1",
+                "0.17.0",
+                "0.17.1",
+                "0.17.2",
+                "0.17.3",
+                "0.17.4",
+                "0.2",
+                "0.2.1",
+                "0.3",
+                "0.3.1",
+                "0.3.2",
+                "0.4",
+                "0.4.1",
+                "0.4.2",
+                "0.5",
+                "0.5.1",
+                "0.6",
+                "0.6.1",
+                "0.6.2",
+                "0.6.3",
+                "0.6.4",
+                "0.6.5",
+                "0.6.6",
+                "0.7.0",
+                "0.7.1",
+                "0.7.2",
+                "0.8.0",
+                "0.8.1",
+                "0.9.0",
+                "0.9.1",
+                "17.5",
+                "18.0",
+                "19.0.0",
+                "19.1.0",
+                "19.10.0",
+                "19.1.1",
+                "19.2.0",
+                "19.2.1",
+                "19.3.0",
+                "19.4.0",
+                "19.4.1",
+                "19.4.2",
+                "19.4.3",
+                "19.4.4",
+                "19.4.5",
+                "19.5.0",
+                "19.6.0",
+                "19.7.0",
+                "19.7.1",
+                "19.8.0",
+                "19.8.1",
+                "19.9.0",
+                "20.0.0",
+                "20.0.1",
+                "20.0.2",
+                "20.0.3",
+                "20.0.4",
+                "20.1.0",
+                "21.0.0",
+                "21.0.1",
+                "21.1.0",
+                "21.2.0",
+                "22.0.0"
+            ],
+            "secure_versions": [
+                "23.0.0"
+            ],
+            "latest_version_without_known_vulnerabilities": "23.0.0",
+            "latest_version": "23.0.0",
+            "more_info_url": "https://data.safetycli.com/p/pypi/gunicorn/97c/"
+        }
+    },
+    "announcements": [],
+    "vulnerabilities": [
+        {
+            "vulnerability_id": "76910",
+            "package_name": "django-stubs",
+            "ignored": {},
+            "ignored_reason": null,
+            "ignored_expires": null,
+            "vulnerable_spec": [
+                "<5.2.0"
+            ],
+            "all_vulnerable_specs": [
+                "<5.2.0"
+            ],
+            "analyzed_version": "4.2.7",
+            "analyzed_requirement": {
+                "raw": "django-stubs==4.2.7",
+                "extras": [],
+                "marker": null,
+                "name": "django-stubs",
+                "specifier": "==4.2.7",
+                "url": null,
+                "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/django_stubs-4.2.7.dist-info"
+            },
+            "advisory": "Affected versions of django-stubs are potentially vulnerable to Security Misconfiguration. The inclusion of type stubs for deprecated and insecure password hashers (MD5PasswordHasher, SHA1PasswordHasher, and CryptPasswordHasher) may inadvertently encourage their use in Django applications. This can lead to the storage of user passwords using weak hashing algorithms, making them susceptible to brute-force attacks.",
+            "is_transitive": false,
+            "published_date": null,
+            "fixed_versions": [],
+            "closest_versions_without_known_vulnerabilities": [],
+            "resources": [],
+            "CVE": null,
+            "severity": null,
+            "affected_versions": [],
+            "more_info_url": "https://data.safetycli.com/v/76910/97c"
+        },
+        {
+            "vulnerability_id": "72809",
+            "package_name": "gunicorn",
+            "ignored": {},
+            "ignored_reason": null,
+            "ignored_expires": null,
+            "vulnerable_spec": [
+                ">=22.0.0,<23.0.0"
+            ],
+            "all_vulnerable_specs": [
+                ">=22.0.0,<23.0.0"
+            ],
+            "analyzed_version": "22.0.0",
+            "analyzed_requirement": {
+                "raw": "gunicorn==22.0.0",
+                "extras": [],
+                "marker": null,
+                "name": "gunicorn",
+                "specifier": "==22.0.0",
+                "url": null,
+                "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/gunicorn-22.0.0.dist-info"
+            },
+            "advisory": "A vulnerability in Gunicorn allowed the TolerateDangerousFraming setting to process conflicting headers (Transfer-Encoding and Content-Length) and dangerous characters in HTTP header fields. This could lead to HTTP request smuggling and header injection attacks. The issue was resolved by removing this setting and enforcing stricter header validation. \r\nNote: It happens due to an incomplete fix for CVE-2024-1135.",
+            "is_transitive": false,
+            "published_date": null,
+            "fixed_versions": [],
+            "closest_versions_without_known_vulnerabilities": [],
+            "resources": [],
+            "CVE": null,
+            "severity": null,
+            "affected_versions": [],
+            "more_info_url": "https://data.safetycli.com/v/72809/97c"
+        }
+    ],
+    "ignored_vulnerabilities": [],
+    "remediations": {
+        "django-stubs": {
+            "requirements": {
+                "==4.2.7": {
+                    "vulnerabilities_found": 1,
+                    "version": "4.2.7",
+                    "requirement": {
+                        "raw": "django-stubs==4.2.7",
+                        "extras": [],
+                        "marker": null,
+                        "name": "django-stubs",
+                        "specifier": "==4.2.7",
+                        "url": null,
+                        "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/django_stubs-4.2.7.dist-info"
+                    },
+                    "more_info_url": "https://data.safetycli.com/p/pypi/django-stubs/97c/"
+                }
+            },
+            "current_version": null,
+            "vulnerabilities_found": null,
+            "recommended_version": null,
+            "other_recommended_versions": [],
+            "more_info_url": null
+        },
+        "gunicorn": {
+            "requirements": {
+                "==22.0.0": {
+                    "vulnerabilities_found": 1,
+                    "version": "22.0.0",
+                    "requirement": {
+                        "raw": "gunicorn==22.0.0",
+                        "extras": [],
+                        "marker": null,
+                        "name": "gunicorn",
+                        "specifier": "==22.0.0",
+                        "url": null,
+                        "found": "/home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-packages/gunicorn-22.0.0.dist-info"
+                    },
+                    "more_info_url": "https://data.safetycli.com/p/pypi/gunicorn/97c/"
+                }
+            },
+            "current_version": null,
+            "vulnerabilities_found": null,
+            "recommended_version": null,
+            "other_recommended_versions": [],
+            "more_info_url": null
+        }
+    },
+    "remediations_results": {
+        "vulnerabilities_fixed": [],
+        "remediations_applied": {},
+        "remediations_skipped": {}
+    }
+}
+
+
++===========================================================================================================================================================================================+
+
+
+DEPRECATED: this command (`check`) has been DEPRECATED, and will be unsupported beyond 01 June 2024.
+
+
+We highly encourage switching to the new `scan` command which is easier to use, more powerful, and can be set up to mimic the deprecated command if required.
+
+
++===========================================================================================================================================================================================+
+
+

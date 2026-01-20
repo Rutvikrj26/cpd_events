@@ -405,8 +405,16 @@ class CheckoutSessionView(views.APIView):
 
     def post(self, request):
         serializer = CheckoutSessionSerializer(data=request.data)
+
         if not serializer.is_valid():
-            print(f"Checkout Serializer Errors: {serializer.errors}")
+            logger.warning(
+                "Checkout session validation failed",
+                extra={
+                    "errors": serializer.errors,
+                    "user_uuid": str(request.user.uuid),
+                    "data_keys": list(request.data.keys()),
+                },
+            )
         serializer.is_valid(raise_exception=True)
 
         result = stripe_service.create_checkout_session(

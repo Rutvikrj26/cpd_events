@@ -7,6 +7,8 @@ import {
     CPDProgress,
     CPDRequirementCreate,
     CPDExportParams,
+    CPDTransaction,
+    CPDTransactionSummary,
 } from './types';
 
 /**
@@ -88,4 +90,28 @@ export const downloadCPDReport = async (params: CPDExportParams = {}): Promise<v
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
+};
+
+/**
+ * Get all CPD transactions for the current user.
+ */
+export const getCPDTransactions = async (): Promise<CPDTransaction[]> => {
+    const response = await client.get<{ results: CPDTransaction[] }>('/cpd-transactions/');
+    return response.data.results || response.data;
+};
+
+/**
+ * Get CPD transaction summary statistics.
+ */
+export const getCPDTransactionSummary = async (): Promise<CPDTransactionSummary> => {
+    const response = await client.get<CPDTransactionSummary>('/cpd-transactions/summary/');
+    return response.data;
+};
+
+/**
+ * Get a specific CPD transaction.
+ */
+export const getCPDTransaction = async (uuid: string): Promise<CPDTransaction> => {
+    const response = await client.get<CPDTransaction>(`/cpd-transactions/${uuid}/`);
+    return response.data;
 };

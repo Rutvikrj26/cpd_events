@@ -83,18 +83,20 @@ export const getMySubmissions = async (): Promise<AssignmentSubmission[]> => {
 
 export const createSubmission = async (
     assignmentUuid: string,
-    data: { content?: Record<string, any>; file_url?: string }
+    data: { content?: Record<string, any>; file_url?: string } | FormData
 ): Promise<AssignmentSubmission> => {
-    const response = await client.post<AssignmentSubmission>('/submissions/', {
-        assignment: assignmentUuid,
-        ...data,
-    });
+    const response = await client.post<AssignmentSubmission>('/submissions/', 
+        data instanceof FormData ? data : {
+            assignment: assignmentUuid,
+            ...data,
+        }
+    );
     return response.data;
 };
 
 export const updateSubmission = async (
     submissionUuid: string,
-    data: { content?: Record<string, any>; file_url?: string }
+    data: { content?: Record<string, any>; file_url?: string } | FormData
 ): Promise<AssignmentSubmission> => {
     const response = await client.patch<AssignmentSubmission>(`/submissions/${submissionUuid}/`, data);
     return response.data;

@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from accounts.models import Notification
+from accounts.models import CPDTransaction, Notification
 from common.serializers import SoftDeleteModelSerializer
 
 User = get_user_model()
@@ -358,6 +358,47 @@ class DeleteAccountSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError("Password is incorrect.")
         return value
+
+
+# =============================================================================
+# CPD Transaction Serializer
+# =============================================================================
+
+
+class CPDTransactionSerializer(serializers.ModelSerializer):
+    """
+    Serializer for CPD credit transaction history.
+
+    Read-only serializer for displaying transaction records with
+    user details, certificate information, and audit trail.
+    """
+
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    user_full_name = serializers.CharField(source="user.full_name", read_only=True)
+    certificate_short_code = serializers.CharField(source="certificate.short_code", read_only=True, allow_null=True)
+    created_by_email = serializers.EmailField(source="created_by.email", read_only=True, allow_null=True)
+    transaction_type_display = serializers.CharField(source="get_transaction_type_display", read_only=True)
+
+    class Meta:
+        model = CPDTransaction
+        fields = [
+            "uuid",
+            "user_email",
+            "user_full_name",
+            "transaction_type",
+            "transaction_type_display",
+            "credits",
+            "balance_after",
+            "notes",
+            "cpd_type",
+            "certificate",
+            "certificate_short_code",
+            "created_by",
+            "created_by_email",
+            "metadata",
+            "created_at",
+        ]
+        read_only_fields = ["uuid", "created_at"]
 
 
 # =============================================================================

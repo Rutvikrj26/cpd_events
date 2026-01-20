@@ -67,7 +67,9 @@ mediafiles/
 # Terraform tfvars (contain environment-specific config)
 infra/gcp/environments/*/terraform.tfvars
 # Track only templates (contain placeholders only)
+!.env.template
 !.env.dev.template
+!.env.*.template
 
 # ----- Editor -----
 .idea/

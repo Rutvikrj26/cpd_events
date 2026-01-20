@@ -663,6 +663,80 @@ class CPDRequirement(BaseModel):
         return max(remaining, Decimal("0"))
 
 
+class CPDTransaction(BaseModel):
+    """
+    CPD credit transaction record.
+
+    Tracks all changes to a user's CPD credit balance with full audit trail.
+    Every certificate issuance, manual adjustment, or credit revocation creates a transaction.
+    """
+
+    class TransactionType(models.TextChoices):
+        EARNED = "earned", "Earned"
+        MANUAL_ADJUSTMENT = "manual_adjustment", "Manual Adjustment"
+        EXPIRED = "expired", "Expired"
+        REVOKED = "revoked", "Revoked"
+
+    # Relationships
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="cpd_transactions")
+    certificate = models.ForeignKey(
+        "certificates.Certificate",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cpd_transactions",
+        help_text="Associated certificate (for earned credits)",
+    )
+
+    # Transaction details
+    transaction_type = models.CharField(
+        max_length=30,
+        choices=TransactionType.choices,
+        default=TransactionType.EARNED,
+        help_text="Type of CPD credit transaction",
+    )
+    credits = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        help_text="Credit amount (positive for earned, negative for revoked/expired)",
+    )
+    balance_after = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        help_text="User's total CPD balance after this transaction",
+    )
+
+    # Metadata
+    notes = models.TextField(blank=True, help_text="Additional notes or reason for transaction")
+    cpd_type = models.CharField(max_length=100, blank=True, help_text="CPD type code (if applicable)")
+    metadata = models.JSONField(default=dict, blank=True, help_text="Additional transaction metadata")
+
+    # Audit trail
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cpd_transactions_created",
+        help_text="Admin user who created manual transaction",
+    )
+
+    class Meta:
+        db_table = "cpd_transactions"
+        verbose_name = "CPD Transaction"
+        verbose_name_plural = "CPD Transactions"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["transaction_type"]),
+            models.Index(fields=["certificate"]),
+        ]
+
+    def __str__(self):
+        sign = "+" if self.credits >= 0 else ""
+        return f"{self.user.email}: {sign}{self.credits} credits ({self.transaction_type})"
+
+
 class Notification(BaseModel):
     """
     In-app notification for a user.

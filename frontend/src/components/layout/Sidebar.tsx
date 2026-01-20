@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -20,11 +20,14 @@ import {
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ModeToggle } from "@/components/mode-toggle";
 import { OrganizationSwitcher } from "@/components/organizations/OrganizationSwitcher";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { Subscription } from "@/api/billing/types";
 import { getRoleFlags } from "@/lib/role-utils";
+import { getCPDTransactionSummary } from "@/api/cpd";
+import { CPDTransactionSummary } from "@/api/cpd/types";
 
 type NavItemConfig = {
     routeKey: string;
@@ -46,6 +49,7 @@ type NavItemConfig = {
 export const Sidebar = ({ subscription }: { subscription?: Subscription | null }) => {
     const { user, logout, hasRoute, hasFeature, manifest } = useAuth();
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [cpdBalance, setCpdBalance] = useState<number | null>(null);
     const { isOrganizer, isCourseManager, isAttendee } = getRoleFlags(user, subscription);
     const isLearner = isAttendee || isCourseManager;
     const isCreator = isOrganizer || isCourseManager;
@@ -62,6 +66,14 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
                 : isCourseManager
                     ? 'Course Manager Portal'
                     : 'Attendee Portal';
+
+    useEffect(() => {
+        if (isAttendee && !currentOrg) {
+            getCPDTransactionSummary()
+                .then(summary => setCpdBalance(summary.current_balance))
+                .catch(() => setCpdBalance(null));
+        }
+    }, [isAttendee, currentOrg]);
 
     // Define nav items with route keys matching backend ROUTE_REGISTRY
     const navItems: NavItemConfig[] = [
@@ -214,12 +226,21 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
             }
         >
             <item.icon size={20} className="shrink-0" />
-            {!isCollapsed && <span className="truncate">{item.label}</span>}
+            {!isCollapsed && (
+                <span className="truncate flex-1">{item.label}</span>
+            )}
+            {/* Show CPD balance badge next to CPD Tracking link */}
+            {!isCollapsed && item.routeKey === 'cpd_tracking' && cpdBalance !== null && (
+                <Badge variant="secondary" className="ml-auto text-xs font-semibold">
+                    {cpdBalance}
+                </Badge>
+            )}
 
             {/* Tooltip for collapsed state */}
             {isCollapsed && (
                 <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none border border-border">
                     {item.label}
+                    {item.routeKey === 'cpd_tracking' && cpdBalance !== null && ` (${cpdBalance} credits)`}
                 </div>
             )}
         </NavLink>

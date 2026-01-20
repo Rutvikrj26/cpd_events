@@ -52,3 +52,32 @@ export interface CPDExportParams {
     end_date?: string;
     cpd_type?: string;
 }
+
+export interface CPDTransaction {
+    uuid: string;
+    user_email: string;
+    user_full_name: string;
+    transaction_type: 'earned' | 'manual_adjustment' | 'expired' | 'revoked';
+    transaction_type_display: string;
+    credits: string;
+    balance_after: string;
+    notes: string;
+    cpd_type: string;
+    certificate: string | null;
+    certificate_short_code: string | null;
+    created_by: string | null;
+    created_by_email: string | null;
+    metadata: Record<string, any>;
+    created_at: string;
+}
+
+export interface CPDTransactionSummary {
+    current_balance: number;
+    total_earned: number;
+    total_adjusted: number;
+    total_revoked: number;
+    total_expired: number;
+    transaction_count: number;
+    first_transaction_date: string | null;
+    latest_transaction_date: string | null;
+}

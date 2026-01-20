@@ -49,6 +49,7 @@ THIRD_PARTY_APPS = [
     "django_filters",
     "drf_yasg",
     "corsheaders",
+    "django_ratelimit",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

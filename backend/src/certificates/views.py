@@ -335,12 +335,27 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
         """Revoke a certificate."""
         certificate = self.get_object()
         serializer = serializers.CertificateRevokeSerializer(data=request.data)
+
         if not serializer.is_valid():
-            print(f"DEBUG REVOKE SERIALIZER ERRORS: {serializer.errors}")
+            logger.warning(
+                "Certificate revoke validation failed",
+                extra={
+                    "certificate_uuid": str(certificate.uuid),
+                    "errors": serializer.errors,
+                    "user_uuid": str(request.user.uuid),
+                },
+            )
         serializer.is_valid(raise_exception=True)
 
         if certificate.status == "revoked":
-            print(f"DEBUG REFUSE REVOCATION: Status is {certificate.status}")
+            logger.info(
+                "Attempted to revoke already-revoked certificate",
+                extra={
+                    "certificate_uuid": str(certificate.uuid),
+                    "status": certificate.status,
+                    "user_uuid": str(request.user.uuid),
+                },
+            )
             return error_response("Certificate already revoked.", code="ALREADY_REVOKED")
 
         certificate.revoke(request.user, reason=serializer.validated_data["reason"])

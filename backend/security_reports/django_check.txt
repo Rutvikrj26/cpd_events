@@ -1,0 +1,8 @@
+SENTRY_DSN not configured - error tracking disabled
+SystemCheckError: System check identified some issues:
+
+ERRORS:
+?: (corsheaders.E013) Origin '' in CORS_ALLOWED_ORIGINS is missing scheme or netloc
+	HINT: Add a scheme (e.g. https://) or netloc (e.g. example.com).
+
+System check identified 1 issue (0 silenced).

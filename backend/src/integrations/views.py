@@ -7,7 +7,9 @@ import hmac
 
 from django.conf import settings
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django_filters import rest_framework as filters
+from django_ratelimit.decorators import ratelimit
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
@@ -34,7 +36,7 @@ class EventRecordingFilter(filters.FilterSet):
 
     class Meta:
         model = ZoomRecording
-        fields = ['status', 'access_level']
+        fields = ["status", "access_level"]
 
 
 class EventRecordingViewSet(viewsets.ModelViewSet):
@@ -46,21 +48,21 @@ class EventRecordingViewSet(viewsets.ModelViewSet):
 
     permission_classes = [IsAuthenticated, CanCreateEvents]
     filterset_class = EventRecordingFilter
-    ordering = ['-created_at']
-    lookup_field = 'uuid'
+    ordering = ["-created_at"]
+    lookup_field = "uuid"
 
     def get_queryset(self):
-        event_uuid = self.kwargs.get('event_uuid')
+        event_uuid = self.kwargs.get("event_uuid")
         return (
             ZoomRecording.objects.filter(event__uuid=event_uuid, event__owner=self.request.user)
-            .select_related('event')
-            .prefetch_related('files')
+            .select_related("event")
+            .prefetch_related("files")
         )
 
     def get_serializer_class(self):
-        if self.action in ['update', 'partial_update']:
+        if self.action in ["update", "partial_update"]:
             return serializers.ZoomRecordingUpdateSerializer
-        if self.action == 'list':
+        if self.action == "list":
             return serializers.ZoomRecordingListSerializer
         return serializers.ZoomRecordingDetailSerializer
 
@@ -68,7 +70,7 @@ class EventRecordingViewSet(viewsets.ModelViewSet):
         operation_summary="Recording analytics",
         operation_description="Get analytics for a specific recording.",
     )
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def analytics(self, request, event_uuid=None, uuid=None):
         """Get recording analytics."""
         recording = self.get_object()
@@ -88,11 +90,11 @@ class EventRecordingViewSet(viewsets.ModelViewSet):
 
         return Response(
             {
-                'total_views': recording.view_count,
-                'unique_viewers': recording.unique_viewers,
-                'total_watch_time_seconds': total_watch,
-                'average_watch_time_seconds': avg_watch,
-                'completion_rate': avg_completion,
+                "total_views": recording.view_count,
+                "unique_viewers": recording.unique_viewers,
+                "total_watch_time_seconds": total_watch,
+                "average_watch_time_seconds": avg_watch,
+                "completion_rate": avg_completion,
             }
         )
 
@@ -101,11 +103,11 @@ class EventRecordingViewSet(viewsets.ModelViewSet):
         operation_description="Get the view log for a recording.",
         responses={200: serializers.RecordingViewLogSerializer(many=True)},
     )
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def views(self, request, event_uuid=None, uuid=None):
         """Get view log for recording."""
         recording = self.get_object()
-        views = recording.views.all().order_by('-started_at')
+        views = recording.views.all().order_by("-started_at")
         serializer = serializers.RecordingViewLogSerializer(views, many=True)
         return Response(serializer.data)
 
@@ -132,16 +134,16 @@ class MyRecordingsViewSet(ReadOnlyModelViewSet):
         # Get recordings where user is a confirmed registrant
         from registrations.models import Registration
 
-        user_event_ids = Registration.objects.filter(user=user, status='confirmed', deleted_at__isnull=True).values_list(
-            'event_id', flat=True
+        user_event_ids = Registration.objects.filter(user=user, status="confirmed", deleted_at__isnull=True).values_list(
+            "event_id", flat=True
         )
 
         return (
             ZoomRecording.objects.filter(
-                event_id__in=user_event_ids, status='available', access_level__in=['registrants', 'attendees', 'public']
+                event_id__in=user_event_ids, status="available", access_level__in=["registrants", "attendees", "public"]
             )
-            .select_related('event')
-            .prefetch_related('files')
+            .select_related("event")
+            .prefetch_related("files")
         )
 
     @swagger_auto_schema(
@@ -149,39 +151,39 @@ class MyRecordingsViewSet(ReadOnlyModelViewSet):
         operation_description="Get a streaming URL for a recording file. Requires file_uuid in request body.",
         responses={200: '{"streaming_url": "..."}', 400: '{"error": {}}'},
     )
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def stream(self, request, uuid=None):
         """Get streaming URL for a recording file."""
         recording = self.get_object()
 
-        file_uuid = request.data.get('file_uuid')
+        file_uuid = request.data.get("file_uuid")
         if not file_uuid:
-            return error_response('file_uuid is required.', code='MISSING_FILE')
+            return error_response("file_uuid is required.", code="MISSING_FILE")
 
         try:
             recording_file = recording.files.get(uuid=file_uuid, is_enabled=True)
         except ZoomRecordingFile.DoesNotExist:
-            return error_response('Recording file not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+            return error_response("Recording file not found.", code="NOT_FOUND", status_code=status.HTTP_404_NOT_FOUND)
 
         # Track view
         RecordingView.objects.create(
             recording=recording,
             viewer=request.user,
             started_at=timezone.now(),
-            ip_address=request.META.get('REMOTE_ADDR'),
-            user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+            ip_address=request.META.get("REMOTE_ADDR"),
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
         )
 
         # Update counts
         recording.view_count = (recording.view_count or 0) + 1
-        recording.save(update_fields=['view_count'])
+        recording.save(update_fields=["view_count"])
 
         # Future Work: Generate signed streaming URL (e.g. CloudFront/GCP signed URLs)
         # to prevent direct access. For now, we rely on the play_url from Zoom.
         return Response(
             {
-                'streaming_url': recording_file.play_url,
-                'expires_at': (timezone.now() + timezone.timedelta(hours=1)).isoformat(),
+                "streaming_url": recording_file.play_url,
+                "expires_at": (timezone.now() + timezone.timedelta(hours=1)).isoformat(),
             }
         )
 
@@ -191,47 +193,56 @@ class MyRecordingsViewSet(ReadOnlyModelViewSet):
 # =============================================================================
 
 
+@method_decorator(ratelimit(key="ip", rate="200/m", method="POST"), name="post")
 class ZoomWebhookView(generics.GenericAPIView):
     """
     POST /api/v1/webhooks/zoom/
 
     Handle Zoom webhook events with proper signature verification (H8).
+
+    Rate limited to 200 requests per minute per IP to prevent webhook spam.
     """
 
     permission_classes = [AllowAny]
 
     def post(self, request):
+        # Check if rate limited
+        if getattr(request, "limited", False):
+            return error_response(
+                "Rate limit exceeded", code="RATE_LIMIT_EXCEEDED", status_code=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
         # Zoom URL validation challenge
-        event = request.data.get('event')
-        if event == 'endpoint.url_validation':
+        event = request.data.get("event")
+        if event == "endpoint.url_validation":
             return self._handle_url_validation(request)
 
         # Verify signature (H8)
         if not self._verify_signature(request):
             ZoomWebhookLog.objects.create(
                 webhook_id=f"invalid_{timezone.now().timestamp()}",
-                event_type='signature_failed',
-                zoom_meeting_id='',
+                event_type="signature_failed",
+                zoom_meeting_id="",
                 event_timestamp=timezone.now(),  # Added missing timestamp
                 payload=request.data,
-                processing_status='failed',
-                error_message='Invalid signature',
+                processing_status="failed",
+                error_message="Invalid signature",
             )
-            return error_response('Invalid signature', code='INVALID_SIGNATURE', status_code=status.HTTP_401_UNAUTHORIZED)
+            return error_response("Invalid signature", code="INVALID_SIGNATURE", status_code=status.HTTP_401_UNAUTHORIZED)
 
         # Log the webhook
-        event_type = request.data.get('event', 'unknown')
-        payload = request.data.get('payload', {})
-        meeting_id = payload.get('object', {}).get('id', '') or payload.get('meeting', {}).get('id', '')
+        event_type = request.data.get("event", "unknown")
+        payload = request.data.get("payload", {})
+        meeting_id = payload.get("object", {}).get("id", "") or payload.get("meeting", {}).get("id", "")
 
-        webhook_id = request.headers.get('x-zm-request-id', f"{event_type}_{timezone.now().timestamp()}")
+        webhook_id = request.headers.get("x-zm-request-id", f"{event_type}_{timezone.now().timestamp()}")
 
         # Deduplicate
         if ZoomWebhookLog.objects.filter(webhook_id=webhook_id).exists():
-            return Response({'status': 'duplicate'})
+            return Response({"status": "duplicate"})
 
         # Extract timestamp
-        event_ts = request.data.get('event_ts')
+        event_ts = request.data.get("event_ts")
         if event_ts:
             import datetime
 
@@ -246,43 +257,43 @@ class ZoomWebhookView(generics.GenericAPIView):
             zoom_meeting_id=str(meeting_id),
             event_timestamp=event_timestamp,
             payload=request.data,
-            processing_status='pending',
+            processing_status="pending",
         )
 
         # Process asynchronously (in production use Celery)
         process_zoom_webhook.delay(log.id)
 
-        return Response({'status': 'received'})
+        return Response({"status": "received"})
 
     def _handle_url_validation(self, request):
         """Handle Zoom URL validation challenge."""
-        plain_token = request.data.get('payload', {}).get('plainToken', '')
+        plain_token = request.data.get("payload", {}).get("plainToken", "")
 
         if not plain_token:
-            return error_response('Missing plainToken', code='MISSING_TOKEN')
+            return error_response("Missing plainToken", code="MISSING_TOKEN")
 
-        secret_token = getattr(settings, 'ZOOM_WEBHOOK_SECRET', '')
+        secret_token = getattr(settings, "ZOOM_WEBHOOK_SECRET", "")
 
         # Create hash
-        hash_obj = hmac.new(secret_token.encode('utf-8'), plain_token.encode('utf-8'), hashlib.sha256)
+        hash_obj = hmac.new(secret_token.encode("utf-8"), plain_token.encode("utf-8"), hashlib.sha256)
         encrypted_token = hash_obj.hexdigest()
 
         return Response(
             {
-                'plainToken': plain_token,
-                'encryptedToken': encrypted_token,
+                "plainToken": plain_token,
+                "encryptedToken": encrypted_token,
             }
         )
 
     def _verify_signature(self, request):
         """Verify Zoom webhook signature (H8)."""
-        signature = request.headers.get('x-zm-signature', '')
-        timestamp = request.headers.get('x-zm-request-timestamp', '')
+        signature = request.headers.get("x-zm-signature", "")
+        timestamp = request.headers.get("x-zm-request-timestamp", "")
 
         if not signature or not timestamp:
             return False
 
-        secret_token = getattr(settings, 'ZOOM_WEBHOOK_SECRET', '')
+        secret_token = getattr(settings, "ZOOM_WEBHOOK_SECRET", "")
 
         if not secret_token:
             return True  # Skip verification in dev mode
@@ -293,7 +304,7 @@ class ZoomWebhookView(generics.GenericAPIView):
         message = f"v0:{timestamp}:{json.dumps(request.data, separators=(',', ':'))}"
 
         # Create expected signature
-        hash_obj = hmac.new(secret_token.encode('utf-8'), message.encode('utf-8'), hashlib.sha256)
+        hash_obj = hmac.new(secret_token.encode("utf-8"), message.encode("utf-8"), hashlib.sha256)
         expected_signature = f"v0={hash_obj.hexdigest()}"
 
         return hmac.compare_digest(signature, expected_signature)
@@ -315,8 +326,8 @@ class EmailLogViewSet(ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated, CanCreateEvents]
 
     def get_queryset(self):
-        event_uuid = self.kwargs.get('event_uuid')
-        return EmailLog.objects.filter(event__uuid=event_uuid, event__owner=self.request.user).order_by('-created_at')
+        event_uuid = self.kwargs.get("event_uuid")
+        return EmailLog.objects.filter(event__uuid=event_uuid, event__owner=self.request.user).order_by("-created_at")
 
 
 # =============================================================================
@@ -338,10 +349,10 @@ class ZoomInitiateView(generics.GenericAPIView):
 
         result = zoom_service.initiate_oauth(request.user)
 
-        if result.get('success'):
-            return Response({'url': result.get('authorization_url')})
+        if result.get("success"):
+            return Response({"url": result.get("authorization_url")})
 
-        return error_response(result.get('error', 'Configuration error'), code='CONFIG_ERROR')
+        return error_response(result.get("error", "Configuration error"), code="CONFIG_ERROR")
 
 
 class ZoomCallbackView(generics.GenericAPIView):
@@ -354,23 +365,23 @@ class ZoomCallbackView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        code = request.query_params.get('code')
-        error = request.query_params.get('error')
+        code = request.query_params.get("code")
+        error = request.query_params.get("error")
 
         if error:
-            return error_response(f"Zoom authorization failed: {error}", code='AUTH_FAILED')
+            return error_response(f"Zoom authorization failed: {error}", code="AUTH_FAILED")
 
         if not code:
-            return error_response('Missing authorization code', code='MISSING_CODE')
+            return error_response("Missing authorization code", code="MISSING_CODE")
 
         from accounts.services import zoom_service
 
         result = zoom_service.complete_oauth(request.user, code)
 
-        if result.get('success'):
-            return Response({'status': 'connected'})
+        if result.get("success"):
+            return Response({"status": "connected"})
 
-        return error_response(result.get('error', 'Unknown error'), code='CONNECTION_FAILED')
+        return error_response(result.get("error", "Unknown error"), code="CONNECTION_FAILED")
 
 
 class ZoomStatusView(generics.RetrieveAPIView):
@@ -385,8 +396,8 @@ class ZoomStatusView(generics.RetrieveAPIView):
     def get(self, request):
         return Response(
             {
-                'is_connected': request.user.has_zoom_connected,
-                'zoom_email': request.user.zoom_connection.zoom_email if request.user.has_zoom_connected else None,
+                "is_connected": request.user.has_zoom_connected,
+                "zoom_email": request.user.zoom_connection.zoom_email if request.user.has_zoom_connected else None,
             }
         )
 
@@ -404,9 +415,9 @@ class ZoomDisconnectView(generics.GenericAPIView):
         from accounts.services import zoom_service
 
         if zoom_service.disconnect(request.user):
-            return Response({'status': 'disconnected'})
+            return Response({"status": "disconnected"})
 
-        return error_response('Failed to disconnect Zoom', code='DISCONNECT_FAILED')
+        return error_response("Failed to disconnect Zoom", code="DISCONNECT_FAILED")
 
 
 class ZoomMeetingsListView(generics.ListAPIView):
@@ -428,17 +439,17 @@ class ZoomMeetingsListView(generics.ListAPIView):
                 zoom_meeting_id__isnull=False,
                 deleted_at__isnull=True,
             )
-            .exclude(zoom_meeting_id='')
-            .order_by('-starts_at')
+            .exclude(zoom_meeting_id="")
+            .order_by("-starts_at")
             .values(
-                'uuid',
-                'title',
-                'status',
-                'starts_at',
-                'zoom_meeting_id',
-                'zoom_join_url',
-                'zoom_password',
-                'created_at',
+                "uuid",
+                "title",
+                "status",
+                "starts_at",
+                "zoom_meeting_id",
+                "zoom_join_url",
+                "zoom_password",
+                "created_at",
             )
         )
 
@@ -447,14 +458,14 @@ class ZoomMeetingsListView(generics.ListAPIView):
         # Transform to match serializer's expected field names
         data = [
             {
-                'event_uuid': item['uuid'],
-                'event_title': item['title'],
-                'event_status': item['status'],
-                'starts_at': item['starts_at'],
-                'zoom_meeting_id': item['zoom_meeting_id'],
-                'zoom_join_url': item['zoom_join_url'],
-                'zoom_password': item['zoom_password'],
-                'event_created_at': item['created_at'],
+                "event_uuid": item["uuid"],
+                "event_title": item["title"],
+                "event_status": item["status"],
+                "starts_at": item["starts_at"],
+                "zoom_meeting_id": item["zoom_meeting_id"],
+                "zoom_join_url": item["zoom_join_url"],
+                "zoom_password": item["zoom_password"],
+                "event_created_at": item["created_at"],
             }
             for item in queryset
         ]

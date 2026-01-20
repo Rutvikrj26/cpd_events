@@ -273,7 +273,17 @@ class AssignmentSubmission(BaseModel):
 
     # Content
     content = models.JSONField(default=dict)  # {text, notes, etc.}
-    file_url = models.URLField(max_length=500, blank=True)
+    file_url = models.URLField(
+        max_length=500, blank=True, help_text="External file URL (optional, for backwards compatibility)"
+    )
+    submission_file = models.FileField(
+        upload_to="assignments/submissions/%Y/%m/",
+        blank=True,
+        null=True,
+        help_text="Student submission file (PDF, DOC, DOCX, TXT, ZIP, images)",
+    )
+    file_size_bytes = models.BigIntegerField(null=True, blank=True, help_text="File size in bytes")
+    file_type = models.CharField(max_length=100, blank=True, help_text="File MIME type")
 
     # Grading
     score = models.PositiveIntegerField(null=True, blank=True)
@@ -449,6 +459,134 @@ class ContentProgress(BaseModel):
             self.complete()
         else:
             self.save()
+
+
+class QuizAttempt(BaseModel):
+    """
+    Individual quiz attempt by a user with server-side scoring.
+    """
+
+    class Status(models.TextChoices):
+        IN_PROGRESS = "in_progress", "In Progress"
+        SUBMITTED = "submitted", "Submitted"
+        GRADED = "graded", "Graded"
+
+    # Relationships
+    content = models.ForeignKey(
+        ModuleContent, on_delete=models.CASCADE, related_name="quiz_attempts", help_text="The quiz content being attempted"
+    )
+    registration = models.ForeignKey(
+        "registrations.Registration",
+        on_delete=models.CASCADE,
+        related_name="quiz_attempts",
+        null=True,
+        blank=True,
+        help_text="Registration (for event-based quizzes)",
+    )
+    course_enrollment = models.ForeignKey(
+        "learning.CourseEnrollment",
+        on_delete=models.CASCADE,
+        related_name="quiz_attempts",
+        null=True,
+        blank=True,
+        help_text="Course enrollment (for course-based quizzes)",
+    )
+
+    # Attempt tracking
+    attempt_number = models.PositiveIntegerField(help_text="Attempt number for this user on this quiz")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.IN_PROGRESS)
+
+    # Answers and scoring
+    submitted_answers = models.JSONField(
+        default=dict, help_text="User's submitted answers: {question_id: selected_option_id(s)}"
+    )
+    score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Score as percentage (0-100)")
+    passed = models.BooleanField(default=False, help_text="Whether the attempt passed")
+
+    # Timestamps
+    started_at = models.DateTimeField(auto_now_add=True, help_text="When attempt started")
+    submitted_at = models.DateTimeField(null=True, blank=True, help_text="When attempt submitted")
+    graded_at = models.DateTimeField(null=True, blank=True, help_text="When attempt was graded")
+
+    # Time tracking
+    time_spent_seconds = models.PositiveIntegerField(default=0, help_text="Time spent on quiz")
+
+    class Meta:
+        db_table = "quiz_attempts"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["content", "registration"]),
+            models.Index(fields=["content", "course_enrollment"]),
+            models.Index(fields=["status"]),
+        ]
+        verbose_name = "Quiz Attempt"
+        verbose_name_plural = "Quiz Attempts"
+
+    def clean(self):
+        super().clean()
+        if self.registration and self.course_enrollment:
+            raise ValidationError("Quiz attempt cannot belong to both Registration and Course Enrollment.")
+        if not self.registration and not self.course_enrollment:
+            raise ValidationError("Quiz attempt must belong to either Registration or Course Enrollment.")
+
+    def __str__(self):
+        user = self.registration.user if self.registration else self.course_enrollment.user
+        return f"{user.email} - {self.content.title} - Attempt #{self.attempt_number}"
+
+    def get_user(self):
+        """Get the user who made this attempt."""
+        return self.registration.user if self.registration else self.course_enrollment.user
+
+    def grade(self):
+        """
+        Grade the quiz attempt by comparing submitted answers against correct answers.
+        Returns the score percentage.
+        """
+        if self.status == self.Status.GRADED:
+            return self.score
+
+        quiz_data = self.content.content_data
+        if not quiz_data or "questions" not in quiz_data:
+            raise ValueError("Invalid quiz data in content")
+
+        questions = quiz_data["questions"]
+        if not questions:
+            return 0
+
+        total_questions = len(questions)
+        correct_count = 0
+
+        for question in questions:
+            question_id = str(question.get("id"))
+            correct_answer = question.get("correctAnswer")
+            user_answer = self.submitted_answers.get(question_id)
+
+            if correct_answer and user_answer:
+                # Handle both single and multiple choice
+                if isinstance(correct_answer, list):
+                    # Multiple choice - all must match
+                    if isinstance(user_answer, list) and set(user_answer) == set(correct_answer):
+                        correct_count += 1
+                else:
+                    # Single choice
+                    if str(user_answer) == str(correct_answer):
+                        correct_count += 1
+
+        # Calculate percentage
+        score = (correct_count / total_questions) * 100
+
+        # Get passing score from content or use default
+        passing_score = quiz_data.get("passingScore", 70)
+        passed = score >= passing_score
+
+        # Update attempt
+        self.score = score
+        self.passed = passed
+        self.status = self.Status.GRADED
+        self.graded_at = timezone.now()
+        self.save(update_fields=["score", "passed", "status", "graded_at", "updated_at"])
+
+        return score
 
 
 class ModuleProgress(BaseModel):

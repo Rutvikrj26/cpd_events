@@ -44,10 +44,10 @@ class GCSStorage:
                 from google.cloud import storage
 
                 # Use emulator if configured
-                if hasattr(settings, 'GCS_EMULATOR_HOST') and settings.GCS_EMULATOR_HOST:
+                if hasattr(settings, "GCS_EMULATOR_HOST") and settings.GCS_EMULATOR_HOST:
                     import os
 
-                    os.environ['STORAGE_EMULATOR_HOST'] = settings.GCS_EMULATOR_HOST
+                    os.environ["STORAGE_EMULATOR_HOST"] = settings.GCS_EMULATOR_HOST
                     self._client = storage.Client(project=settings.GCP_PROJECT_ID)
                 else:
                     self._client = storage.Client(project=settings.GCP_PROJECT_ID)
@@ -60,7 +60,7 @@ class GCSStorage:
     def bucket(self):
         """Get configured bucket."""
         if self._bucket is None:
-            bucket_name = getattr(settings, 'GCS_BUCKET_NAME', None)
+            bucket_name = getattr(settings, "GCS_BUCKET_NAME", None)
             if not bucket_name:
                 raise ValueError("GCS_BUCKET_NAME not configured in settings")
             self._bucket = self.client.bucket(bucket_name)
@@ -69,13 +69,13 @@ class GCSStorage:
     @property
     def is_configured(self) -> bool:
         """Check if GCS is properly configured."""
-        return bool(getattr(settings, 'GCS_BUCKET_NAME', None))
+        return bool(getattr(settings, "GCS_BUCKET_NAME", None))
 
     def upload(
         self,
         content: bytes,
         path: str,
-        content_type: str = 'application/octet-stream',
+        content_type: str = "application/octet-stream",
         public: bool = False,
         metadata: dict | None = None,
     ) -> str | None:
@@ -119,7 +119,7 @@ class GCSStorage:
             return self._save_local(content, path)
 
     def upload_file(
-        self, file_path: str, destination_path: str, content_type: str = 'application/octet-stream', public: bool = False
+        self, file_path: str, destination_path: str, content_type: str = "application/octet-stream", public: bool = False
     ) -> str | None:
         """
         Upload a local file to GCS.
@@ -149,7 +149,7 @@ class GCSStorage:
         except Exception as e:
             logger.error(f"GCS file upload failed: {e}. Falling back to local storage.")
             try:
-                with open(file_path, 'rb') as f:
+                with open(file_path, "rb") as f:
                     content = f.read()
                 return self._save_local(content, destination_path)
             except Exception as read_error:
@@ -209,7 +209,7 @@ class GCSStorage:
             logger.error(f"GCS exists check failed: {e}")
             return False
 
-    def get_signed_url(self, path: str, expiration_minutes: int = 60, method: str = 'GET') -> str | None:
+    def get_signed_url(self, path: str, expiration_minutes: int = 60, method: str = "GET") -> str | None:
         """
         Generate a signed URL for temporary access.
 
@@ -228,7 +228,7 @@ class GCSStorage:
             from datetime import timedelta
 
             blob = self.bucket.blob(path)
-            url = blob.generate_signed_url(version='v4', expiration=timedelta(minutes=expiration_minutes), method=method)
+            url = blob.generate_signed_url(version="v4", expiration=timedelta(minutes=expiration_minutes), method=method)
             return url
         except Exception as e:
             logger.error(f"GCS signed URL generation failed: {e}")
@@ -240,22 +240,26 @@ class GCSStorage:
 
         Note: File must be publicly accessible.
         """
-        bucket_name = getattr(settings, 'GCS_BUCKET_NAME', 'bucket')
+        bucket_name = getattr(settings, "GCS_BUCKET_NAME", "bucket")
         return f"https://storage.googleapis.com/{bucket_name}/{path}"
 
     def _save_local(self, content: bytes, path: str) -> str | None:
         """Fallback: save to local filesystem."""
         import os
+        import tempfile
 
-        media_root = getattr(settings, 'MEDIA_ROOT', '/tmp')
+        media_root = getattr(settings, "MEDIA_ROOT", None)
+        if not media_root:
+            # Use a secure temporary directory if MEDIA_ROOT is not set
+            media_root = os.path.join(tempfile.gettempdir(), "cpd_events_media")
         full_path = os.path.join(media_root, path)
 
         try:
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            with open(full_path, 'wb') as f:
+            with open(full_path, "wb") as f:
                 f.write(content)
 
-            media_url = getattr(settings, 'MEDIA_URL', '/media/')
+            media_url = getattr(settings, "MEDIA_URL", "/media/")
             return f"{media_url}{path}"
         except Exception as e:
             logger.error(f"Local save failed: {e}")

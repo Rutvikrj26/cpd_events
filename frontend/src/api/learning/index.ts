@@ -28,6 +28,41 @@ export const updateContentProgress = async (
     await client.post(`/learning/progress/content/${contentUuid}/`, payload);
 };
 
+// -- Quiz Submission --
+
+export interface QuizSubmission {
+    content_uuid: string;
+    submitted_answers: Record<string, string | string[]>;
+    time_spent_seconds?: number;
+}
+
+export interface QuizAttemptResult {
+    uuid: string;
+    score: number;
+    passed: boolean;
+    attempt_number: number;
+    submitted_answers: Record<string, string | string[]>;
+    time_spent_seconds: number;
+    created_at: string;
+}
+
+export interface QuizAttemptHistory {
+    attempts: QuizAttemptResult[];
+    total_attempts: number;
+    max_attempts: number | null;
+    remaining_attempts: number | null;
+}
+
+export const submitQuiz = async (data: QuizSubmission): Promise<QuizAttemptResult> => {
+    const response = await client.post<{ attempt: QuizAttemptResult }>('/learning/quiz/submit/', data);
+    return response.data.attempt;
+};
+
+export const getQuizAttempts = async (contentUuid: string): Promise<QuizAttemptHistory> => {
+    const response = await client.get<QuizAttemptHistory>(`/learning/quiz/${contentUuid}/attempts/`);
+    return response.data;
+};
+
 // -- Organizer Actions (Nested in Events) --
 // /events/<uuid:event_uuid>/modules/
 

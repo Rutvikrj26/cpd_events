@@ -1,0 +1,97 @@
+
+
++===========================================================================================================================================================================================+
+
+
+DEPRECATED: this command (`check`) has been DEPRECATED, and will be unsupported beyond 01 June 2024.
+
+
+We highly encourage switching to the new `scan` command which is easier to use, more powerful, and can be set up to mimic the deprecated command if required.
+
+
++===========================================================================================================================================================================================+
+
+
++==============================================================================+
+
+                                   /$$$$$$            /$$
+                                  /$$__  $$          | $$
+               /$$$$$$$  /$$$$$$ | $$  \__//$$$$$$  /$$$$$$   /$$   /$$
+              /$$_____/ |____  $$| $$$$   /$$__  $$|_  $$_/  | $$  | $$
+             |  $$$$$$   /$$$$$$$| $$_/  | $$$$$$$$  | $$    | $$  | $$
+              \____  $$ /$$__  $$| $$    | $$_____/  | $$ /$$| $$  | $$
+              /$$$$$$$/|  $$$$$$$| $$    |  $$$$$$$  |  $$$$/|  $$$$$$$
+             |_______/  \_______/|__/     \_______/   \___/   \____  $$
+                                                              /$$  | $$
+                                                             |  $$$$$$/
+      by safetycli.com                                        \______/
+
++==============================================================================+
+
+ REPORT 
+
+  Safety v3.7.0 is scanning for Vulnerabilities...
+  Scanning dependencies in your environment:
+
+  -> /home/beyonder/projects/cpd_events/backend/.venv/lib/python3.13/site-
+  packages
+
+  Using open-source vulnerability database
+  Found and scanned 127 packages
+  Timestamp 2026-01-19 22:04:22
+  2 vulnerabilities reported
+  0 vulnerabilities ignored
+
++==============================================================================+
+ VULNERABILITIES FOUND
++==============================================================================+
+
+-> Vulnerability found in django-stubs version 4.2.7
+   Vulnerability ID: 76910
+   Affected spec: <5.2.0
+   ADVISORY: Affected versions of django-stubs are potentially
+   vulnerable to Security Misconfiguration. The inclusion of type stubs...
+   PVE-2025-76910
+   For more information about this vulnerability, visit
+   https://data.safetycli.com/v/76910/97c
+   To ignore this vulnerability, use PyUp vulnerability id 76910 in safety’s
+   ignore command-line argument or add the ignore to your safety policy file.
+
+
+-> Vulnerability found in gunicorn version 22.0.0
+   Vulnerability ID: 72809
+   Affected spec: >=22.0.0,<23.0.0
+   ADVISORY: A vulnerability in Gunicorn allowed the
+   TolerateDangerousFraming setting to process conflicting headers...
+   PVE-2024-72809
+   For more information about this vulnerability, visit
+   https://data.safetycli.com/v/72809/97c
+   To ignore this vulnerability, use PyUp vulnerability id 72809 in safety’s
+   ignore command-line argument or add the ignore to your safety policy file.
+
+
++==============================================================================+
+   REMEDIATIONS
+
+  2 vulnerabilities were reported in 2 packages. For detailed remediation & 
+  fix recommendations, upgrade to a commercial license. 
+
++==============================================================================+
+
+ Scan was completed. 2 vulnerabilities were reported. 
+
++==============================================================================+
+
+
++===========================================================================================================================================================================================+
+
+
+DEPRECATED: this command (`check`) has been DEPRECATED, and will be unsupported beyond 01 June 2024.
+
+
+We highly encourage switching to the new `scan` command which is easier to use, more powerful, and can be set up to mimic the deprecated command if required.
+
+
++===========================================================================================================================================================================================+
+
+

@@ -11,7 +11,7 @@ import {
     getCourseSessions,
 } from '@/api/courses';
 import { getCourseModules, getModuleContents } from '@/api/courses/modules';
-import { updateContentProgress } from '@/api/learning';
+import { updateContentProgress, submitQuiz, getQuizAttempts } from '@/api/learning';
 import { Course, CourseModule, Assignment, AssignmentSubmission, CourseAnnouncement, CourseSession } from '@/api/courses/types';
 import { SessionsPanel } from '@/components/courses/SessionsPanel';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ import {
     File,
     Loader2,
     ChevronRight,
+    ChevronDown,
     Award,
     ExternalLink,
     ClipboardCheck,
@@ -86,6 +87,8 @@ export function CoursePlayerPage() {
         url: '',
         file_url: '',
     });
+    const [assignmentFile, setAssignmentFile] = useState<File | null>(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
     const [announcements, setAnnouncements] = useState<CourseAnnouncement[]>([]);
     const [showAnnouncements, setShowAnnouncements] = useState(false);
     const [sessions, setSessions] = useState<CourseSession[]>([]);
@@ -362,9 +365,43 @@ export function CoursePlayerPage() {
         }
     };
 
-    const buildSubmissionPayload = (assignment: Assignment) => {
-        const content: Record<string, any> = {};
+    const buildSubmissionPayload = (assignment: Assignment): FormData | { content?: Record<string, any>; file_url?: string } => {
         const submissionType = assignment.submission_type || 'text';
+        const hasFile = assignmentFile !== null;
+
+        // If there's a file, use FormData
+        if (hasFile || submissionType === 'file') {
+            const formData = new FormData();
+            formData.append('assignment', assignment.uuid);
+            
+            if (assignmentFile) {
+                formData.append('submission_file', assignmentFile);
+            }
+            
+            if (submissionType === 'text' || submissionType === 'mixed') {
+                if (assignmentDraft.text) {
+                    formData.append('content', JSON.stringify({ text: assignmentDraft.text }));
+                }
+            }
+            
+            if (submissionType === 'url' || submissionType === 'mixed') {
+                if (assignmentDraft.url) {
+                    const content = JSON.parse(formData.get('content') as string || '{}');
+                    content.url = assignmentDraft.url;
+                    formData.set('content', JSON.stringify(content));
+                }
+            }
+            
+            // Keep file_url for backwards compatibility
+            if (assignmentDraft.file_url) {
+                formData.append('file_url', assignmentDraft.file_url);
+            }
+            
+            return formData;
+        }
+
+        // Otherwise use JSON payload (no file)
+        const content: Record<string, any> = {};
 
         if (submissionType === 'text' || submissionType === 'mixed') {
             if (assignmentDraft.text) {
@@ -759,7 +796,9 @@ export function CoursePlayerPage() {
                                         badge={getSubmissionBadge(getLatestSubmission(activeAssignment.uuid)?.status)}
                                         isSubmitting={isSubmitting}
                                         draft={assignmentDraft}
+                                        file={assignmentFile}
                                         onDraftChange={setAssignmentDraft}
+                                        onFileChange={setAssignmentFile}
                                         onSaveDraft={() => handleSaveDraft(activeAssignment)}
                                         onSubmit={() => handleSubmitAssignment(activeAssignment)}
                                     />
@@ -829,20 +868,51 @@ const QuizContent = ({
     content: ContentWithProgress;
     onComplete: () => Promise<void>;
 }) => {
-    const [answers, setAnswers] = useState<Record<string, string[]>>({});
-    const [result, setResult] = useState<{ scorePercent: number; passed: boolean } | null>(null);
+    const { toast } = useToast();
+    const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+    const [result, setResult] = useState<{ score: number; passed: boolean; attempt_number: number } | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [startTime] = useState(Date.now());
+    const [attemptHistory, setAttemptHistory] = useState<any>(null);
+    const [showHistory, setShowHistory] = useState(false);
 
     const quizData = content.content_data || {};
     const questions = quizData.questions || [];
     const passingScore = quizData.passing_score ?? 70;
+    const maxAttempts = quizData.max_attempts ?? 3;
+
+    useEffect(() => {
+        loadAttemptHistory();
+    }, [content.uuid]);
+
+    const loadAttemptHistory = async () => {
+        try {
+            const history = await getQuizAttempts(content.uuid);
+            setAttemptHistory(history);
+            
+            // If there's a passed attempt, set result from the last attempt
+            if (history.attempts.length > 0) {
+                const lastAttempt = history.attempts[0];
+                if (lastAttempt.passed) {
+                    setResult({
+                        score: lastAttempt.score,
+                        passed: lastAttempt.passed,
+                        attempt_number: lastAttempt.attempt_number,
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load quiz attempt history:', error);
+        }
+    };
 
     const handleSingleSelect = (questionId: string, optionId: string) => {
-        setAnswers(prev => ({ ...prev, [questionId]: [optionId] }));
+        setAnswers(prev => ({ ...prev, [questionId]: optionId }));
     };
 
     const handleMultipleSelect = (questionId: string, optionId: string) => {
         setAnswers(prev => {
-            const existing = prev[questionId] || [];
+            const existing = Array.isArray(prev[questionId]) ? prev[questionId] as string[] : [];
             if (existing.includes(optionId)) {
                 return { ...prev, [questionId]: existing.filter(id => id !== optionId) };
             }
@@ -851,29 +921,63 @@ const QuizContent = ({
     };
 
     const handleSubmit = async () => {
-        let totalPoints = 0;
-        let earnedPoints = 0;
+        // Validate all questions are answered
+        const unansweredQuestions = questions.filter((q: any) => !answers[q.id] || 
+            (Array.isArray(answers[q.id]) && (answers[q.id] as string[]).length === 0)
+        );
+        
+        if (unansweredQuestions.length > 0) {
+            toast({
+                title: 'Incomplete Quiz',
+                description: `Please answer all questions before submitting. ${unansweredQuestions.length} question(s) remaining.`,
+                variant: 'destructive',
+            });
+            return;
+        }
 
-        questions.forEach((question: any) => {
-            const correctOptions = (question.options || []).filter((opt: any) => opt.isCorrect).map((opt: any) => opt.id);
-            const selected = answers[question.id] || [];
-            totalPoints += question.points || 0;
+        setIsSubmitting(true);
 
-            const isCorrect =
-                correctOptions.length === selected.length &&
-                correctOptions.every((id: string) => selected.includes(id));
+        try {
+            // Calculate time spent in seconds
+            const timeSpentSeconds = Math.floor((Date.now() - startTime) / 1000);
 
-            if (isCorrect) {
-                earnedPoints += question.points || 0;
+            // Submit quiz to backend API
+            const result = await submitQuiz({
+                content_uuid: content.uuid,
+                submitted_answers: answers,
+                time_spent_seconds: timeSpentSeconds,
+            });
+
+            setResult({
+                score: result.score,
+                passed: result.passed,
+                attempt_number: result.attempt_number,
+            });
+
+            toast({
+                title: result.passed ? 'Quiz Passed!' : 'Quiz Failed',
+                description: result.passed 
+                    ? `Congratulations! You scored ${result.score}% and passed the quiz.`
+                    : `You scored ${result.score}%. You need ${passingScore}% to pass. ${maxAttempts - result.attempt_number} attempt(s) remaining.`,
+                variant: result.passed ? 'default' : 'destructive',
+            });
+
+            // If passed, mark as complete and trigger onComplete
+            if (result.passed) {
+                await onComplete();
             }
-        });
 
-        const scorePercent = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
-        const passed = scorePercent >= passingScore;
-
-        setResult({ scorePercent, passed });
-        if (passed) {
-            await onComplete();
+            // Reload attempt history
+            await loadAttemptHistory();
+        } catch (error: any) {
+            console.error('Quiz submission error:', error);
+            toast({
+                title: 'Submission Failed',
+                description: error.response?.data?.error || 'Failed to submit quiz. Please try again.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -893,33 +997,109 @@ const QuizContent = ({
                             <p className="font-medium">{question.text}</p>
                         </div>
                         <div className="space-y-2">
-                            {(question.options || []).map((option: any) => (
-                                <label key={option.id} className="flex items-center gap-2 text-sm">
-                                    <input
-                                        type={question.type === 'multiple' ? 'checkbox' : 'radio'}
-                                        name={question.id}
-                                        checked={(answers[question.id] || []).includes(option.id)}
-                                        onChange={() =>
-                                            question.type === 'multiple'
-                                                ? handleMultipleSelect(question.id, option.id)
-                                                : handleSingleSelect(question.id, option.id)
-                                        }
-                                    />
-                                    <span>{option.text}</span>
-                                </label>
-                            ))}
+                            {(question.options || []).map((option: any) => {
+                                const isChecked = question.type === 'multiple'
+                                    ? Array.isArray(answers[question.id]) && (answers[question.id] as string[]).includes(option.id)
+                                    : answers[question.id] === option.id;
+                                
+                                return (
+                                    <label key={option.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input
+                                            type={question.type === 'multiple' ? 'checkbox' : 'radio'}
+                                            name={question.id}
+                                            checked={isChecked}
+                                            onChange={() =>
+                                                question.type === 'multiple'
+                                                    ? handleMultipleSelect(question.id, option.id)
+                                                    : handleSingleSelect(question.id, option.id)
+                                            }
+                                            disabled={isSubmitting || (result?.passed ?? false)}
+                                        />
+                                        <span>{option.text}</span>
+                                    </label>
+                                );
+                            })}
                         </div>
                     </div>
                 ))}
 
                 <div className="flex items-center justify-between">
-                    <Button onClick={handleSubmit}>Submit Quiz</Button>
+                    <Button 
+                        onClick={handleSubmit} 
+                        disabled={isSubmitting || (result?.passed ?? false)}
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Submitting...
+                            </>
+                        ) : (
+                            'Submit Quiz'
+                        )}
+                    </Button>
                     {result && (
-                        <Badge className={result.passed ? 'bg-success' : 'bg-warning'}>
-                            {result.scorePercent}% {result.passed ? 'Passed' : 'Try again'}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                            <Badge variant={result.passed ? 'default' : 'destructive'}>
+                                {result.score}% {result.passed ? 'Passed' : 'Failed'}
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                                Attempt {result.attempt_number}/{maxAttempts}
+                            </span>
+                        </div>
                     )}
                 </div>
+
+                {attemptHistory && attemptHistory.attempts.length > 0 && (
+                    <div className="border-t pt-4">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowHistory(!showHistory)}
+                            className="w-full justify-between"
+                        >
+                            <span className="text-sm font-medium">
+                                Attempt History ({attemptHistory.total_attempts})
+                            </span>
+                            <ChevronDown
+                                className={`h-4 w-4 transition-transform ${showHistory ? 'rotate-180' : ''}`}
+                            />
+                        </Button>
+
+                        {showHistory && (
+                            <div className="mt-4 space-y-2">
+                                {attemptHistory.attempts.map((attempt: any, index: number) => (
+                                    <div
+                                        key={attempt.uuid}
+                                        className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Badge variant={attempt.passed ? 'default' : 'secondary'}>
+                                                #{attempt.attempt_number}
+                                            </Badge>
+                                            <div>
+                                                <p className="text-sm font-medium">
+                                                    {attempt.score}% {attempt.passed ? '✓ Passed' : '✗ Failed'}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {new Date(attempt.created_at).toLocaleDateString()} at{' '}
+                                                    {new Date(attempt.created_at).toLocaleTimeString()}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right text-xs text-muted-foreground">
+                                            {Math.floor(attempt.time_spent_seconds / 60)}m {attempt.time_spent_seconds % 60}s
+                                        </div>
+                                    </div>
+                                ))}
+                                {attemptHistory.remaining_attempts !== null && (
+                                    <p className="text-xs text-muted-foreground text-center pt-2">
+                                        {attemptHistory.remaining_attempts} attempt(s) remaining
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
@@ -931,7 +1111,9 @@ const AssignmentContent = ({
     badge,
     isSubmitting,
     draft,
+    file,
     onDraftChange,
+    onFileChange,
     onSaveDraft,
     onSubmit,
 }: {
@@ -940,7 +1122,9 @@ const AssignmentContent = ({
     badge: React.ReactNode;
     isSubmitting: boolean;
     draft: { text: string; url: string; file_url: string };
+    file: File | null;
     onDraftChange: (draft: { text: string; url: string; file_url: string }) => void;
+    onFileChange: (file: File | null) => void;
     onSaveDraft: () => void;
     onSubmit: () => void;
 }) => {
@@ -1006,14 +1190,67 @@ const AssignmentContent = ({
 
                 {(assignment.submission_type === 'file' || assignment.submission_type === 'mixed') && (
                     <div className="space-y-2">
-                        <p className="text-sm font-medium">File URL</p>
-                        <input
-                            className="w-full border rounded-md p-2 text-sm"
-                            value={draft.file_url}
-                            disabled={!canEdit}
-                            onChange={(event) => onDraftChange({ ...draft, file_url: event.target.value })}
-                        />
-                        <p className="text-xs text-muted-foreground">Paste a shareable file link.</p>
+                        <p className="text-sm font-medium">Upload File</p>
+                        <div className="space-y-2">
+                            <input
+                                type="file"
+                                id="assignment-file-upload"
+                                className="hidden"
+                                disabled={!canEdit}
+                                accept=".pdf,.doc,.docx,.txt,.zip,.jpg,.jpeg,.png,.gif"
+                                onChange={(e) => {
+                                    const selectedFile = e.target.files?.[0] || null;
+                                    onFileChange(selectedFile);
+                                }}
+                            />
+                            <label
+                                htmlFor="assignment-file-upload"
+                                className={`flex items-center justify-center gap-2 w-full border-2 border-dashed rounded-md p-4 cursor-pointer hover:bg-muted/50 transition ${
+                                    !canEdit ? 'opacity-50 cursor-not-allowed' : ''
+                                }`}
+                            >
+                                <File className="h-5 w-5 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">
+                                    {file ? file.name : 'Click to select file or drag and drop'}
+                                </span>
+                            </label>
+                            {file && (
+                                <div className="flex items-center justify-between p-2 bg-muted rounded">
+                                    <div className="flex items-center gap-2">
+                                        <File className="h-4 w-4" />
+                                        <div>
+                                            <p className="text-sm font-medium">{file.name}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {(file.size / 1024 / 1024).toFixed(2)} MB
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => onFileChange(null)}
+                                        disabled={!canEdit}
+                                    >
+                                        Remove
+                                    </Button>
+                                </div>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                                Accepted: PDF, Word, Text, ZIP, Images. Max size: 50MB
+                            </p>
+                        </div>
+                        
+                        {/* Keep URL option for backwards compatibility */}
+                        <div className="pt-2">
+                            <p className="text-xs font-medium text-muted-foreground mb-1">Or paste a file URL (optional)</p>
+                            <input
+                                className="w-full border rounded-md p-2 text-sm"
+                                placeholder="https://drive.google.com/..."
+                                value={draft.file_url}
+                                disabled={!canEdit}
+                                onChange={(event) => onDraftChange({ ...draft, file_url: event.target.value })}
+                            />
+                        </div>
                     </div>
                 )}
 

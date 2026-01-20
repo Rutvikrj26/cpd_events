@@ -1,0 +1,569 @@
+Working... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
+Run started:2026-01-20 03:04:31.231422+00:00
+
+Test results:
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'https://oauth2.googleapis.com/token'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/accounts/google_oauth.py:66:16
+65	
+66	    token_url = "https://oauth2.googleapis.com/token"
+67	
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: ''
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/accounts/models.py:280:44
+279	            self.email_verified_at = timezone.now()
+280	            self.email_verification_token = ""
+281	            self.save(update_fields=["email_verified", "email_verified_at", "email_verification_token", "updated_at"])
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: ''
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/accounts/models.py:304:36
+303	        self.set_password(new_password)
+304	        self.password_reset_token = ""
+305	        self.save(update_fields=["password", "password_reset_token", "updated_at"])
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: ''
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/accounts/models.py:326:36
+325	        self.email_verified = False
+326	        self.password_reset_token = ""
+327	        self.password_reset_sent_at = None
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: ''
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/accounts/models.py:471:28
+470	        self.is_active = False
+471	        self.access_token = ""
+472	        self.refresh_token = ""
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: ''
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/accounts/models.py:472:29
+471	        self.access_token = ""
+472	        self.refresh_token = ""
+473	        self.save(update_fields=["is_active", "access_token", "refresh_token", "updated_at"])
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'https://zoom.us/oauth/token'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/accounts/oauth.py:44:16
+43	
+44	    token_url = "https://zoom.us/oauth/token"
+45	
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b113_request_without_timeout.html
+   Location: src/accounts/oauth.py:58:15
+57	
+58	    response = requests.post(token_url, auth=auth, data=data)
+59	
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b113_request_without_timeout.html
+   Location: src/accounts/oauth.py:74:15
+73	
+74	    response = requests.get(user_url, headers=headers)
+75	
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'Passwords don't match.'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/accounts/serializers.py:52:47
+51	        if attrs["password"] != attrs["password_confirm"]:
+52	            raise serializers.ValidationError({"password_confirm": "Passwords don't match."})
+53	        return attrs
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'Passwords don't match.'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/accounts/serializers.py:149:47
+148	        if attrs["new_password"] != attrs["new_password_confirm"]:
+149	            raise serializers.ValidationError({"new_password_confirm": "Passwords don't match."})
+150	        return attrs
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'Passwords don't match.'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/accounts/serializers.py:168:47
+167	        if attrs["new_password"] != attrs["new_password_confirm"]:
+168	            raise serializers.ValidationError({"new_password_confirm": "Passwords don't match."})
+169	        return attrs
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/accounts/services.py:223:16
+222	                    self._revoke_token(connection.access_token)
+223	                except Exception:
+224	                    pass  # Continue even if revoke fails
+225	
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/accounts/services.py:346:16
+345	                        error_msg = f"Zoom: {error_detail['message']}"
+346	                except Exception:
+347	                    pass
+348	                return {"success": False, "error": error_msg}
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/accounts/services.py:462:16
+461	                        error_msg = f"Zoom: {error_detail['message']}"
+462	                except Exception:
+463	                    pass
+464	                return {"success": False, "error": error_msg}
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/accounts/services.py:570:16
+569	                        error_msg = f"Zoom: {error_detail['message']}"
+570	                except Exception:
+571	                    pass
+572	                return {"success": False, "error": error_msg}
+
+--------------------------------------------------
+>> Issue: [B106:hardcoded_password_funcarg] Possible hardcoded password: ''
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b106_hardcoded_password_funcarg.html
+   Location: src/accounts/tasks.py:66:28
+65	    now = timezone.now()
+66	    expired_verifications = User.objects.filter(
+67	        email_verification_sent_at__isnull=False,
+68	        email_verification_sent_at__lt=now - timezone.timedelta(hours=24),
+69	    ).exclude(email_verification_token='')
+70	
+
+--------------------------------------------------
+>> Issue: [B106:hardcoded_password_funcarg] Possible hardcoded password: ''
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b106_hardcoded_password_funcarg.html
+   Location: src/accounts/tasks.py:71:30
+70	
+71	    expired_password_resets = User.objects.filter(
+72	        password_reset_sent_at__isnull=False,
+73	        password_reset_sent_at__lt=now - timezone.timedelta(hours=24),
+74	    ).exclude(password_reset_token='')
+75	
+
+--------------------------------------------------
+>> Issue: [B106:hardcoded_password_funcarg] Possible hardcoded password: ''
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b106_hardcoded_password_funcarg.html
+   Location: src/accounts/tasks.py:77:15
+76	    cleared = 0
+77	    cleared += expired_verifications.update(email_verification_token='', updated_at=now)
+78	    cleared += expired_password_resets.update(password_reset_token='', updated_at=now)
+
+--------------------------------------------------
+>> Issue: [B106:hardcoded_password_funcarg] Possible hardcoded password: ''
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b106_hardcoded_password_funcarg.html
+   Location: src/accounts/tasks.py:78:15
+77	    cleared += expired_verifications.update(email_verification_token='', updated_at=now)
+78	    cleared += expired_password_resets.update(password_reset_token='', updated_at=now)
+79	
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: ''
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/accounts/views.py:257:40
+256	        user.email_verified_at = timezone.now()
+257	        user.email_verification_token = ""
+258	        user.email_verification_sent_at = None
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: ''
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/accounts/views.py:353:36
+352	        user.set_password(password)
+353	        user.password_reset_token = ""
+354	        user.save(update_fields=["password", "password_reset_token", "updated_at"])
+
+--------------------------------------------------
+>> Issue: [B106:hardcoded_password_funcarg] Possible hardcoded password: 'password'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b106_hardcoded_password_funcarg.html
+   Location: src/badges/tests.py:18:20
+17	        # Create user
+18	        self.user = User.objects.create_user(email='test@example.com', password='password')
+19	
+
+--------------------------------------------------
+>> Issue: [B106:hardcoded_password_funcarg] Possible hardcoded password: 'pw'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b106_hardcoded_password_funcarg.html
+   Location: src/badges/tests.py:108:17
+107	        # Create 3 registrations
+108	        users = [User.objects.create_user(email=f'u{i}@test.com', password='pw') for i in range(3)]
+109	        for u in users:
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/models.py:791:16
+790	                    stripe_service.stripe.Price.modify(self.stripe_price_id, active=False)
+791	                except Exception:
+792	                    pass
+793	
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/services.py:802:12
+801	                    }
+802	            except Exception:
+803	                pass  # Subscription doesn't exist in Stripe, continue with checkout
+804	
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/services.py:1009:24
+1008	                                return {"success": False, "error": "User already has an active subscription"}
+1009	                        except Exception:
+1010	                            pass  # Existing subscription doesn't exist, continue with new one
+1011	
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/services.py:1037:28
+1036	                                    billing_interval = item.price.recurring.interval
+1037	                            except Exception:
+1038	                                pass
+1039	                    plan = plan or "organizer"  # Default to organizer if unknown
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/views.py:89:12
+88	                )
+89	            except Exception:
+90	                pass
+91	            return Response(SubscriptionSerializer(result["subscription"]).data, status=status.HTTP_201_CREATED)
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/views.py:129:12
+128	                )
+129	            except Exception:
+130	                pass
+131	            return Response(SubscriptionSerializer(subscription).data)
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/views.py:180:12
+179	                )
+180	            except Exception:
+181	                pass
+182	            return Response(SubscriptionSerializer(subscription).data)
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/views.py:212:12
+211	                )
+212	            except Exception:
+213	                pass
+214	            return Response(SubscriptionSerializer(subscription).data)
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/views.py:340:12
+339	                )
+340	            except Exception:
+341	                pass
+342	            return Response(PaymentMethodSerializer(result["payment_method"]).data, status=status.HTTP_201_CREATED)
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/views.py:367:12
+366	                )
+367	            except Exception:
+368	                pass
+369	            return Response(status=status.HTTP_204_NO_CONTENT)
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/views.py:392:8
+391	            )
+392	        except Exception:
+393	            pass
+394	        return Response(PaymentMethodSerializer(payment_method).data)
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/views.py:546:12
+545	                )
+546	            except Exception:
+547	                pass
+548	            return Response(RefundRecordSerializer(refund_record).data)
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/billing/views.py:686:12
+685	                )
+686	            except Exception:
+687	                pass
+688	
+
+--------------------------------------------------
+>> Issue: [B108:hardcoded_tmp_directory] Probable insecure usage of temp file/directory.
+   Severity: Medium   Confidence: Medium
+   CWE: CWE-377 (https://cwe.mitre.org/data/definitions/377.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b108_hardcoded_tmp_directory.html
+   Location: src/common/storage.py:250:53
+249	
+250	        media_root = getattr(settings, 'MEDIA_ROOT', '/tmp')
+251	        full_path = os.path.join(media_root, path)
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'test_client_secret'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/config/settings/test.py:35:21
+34	ZOOM_CLIENT_ID = 'test_client_id'
+35	ZOOM_CLIENT_SECRET = 'test_client_secret'
+36	ZOOM_REDIRECT_URI = 'http://testserver/zoom/callback'
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'test_webhook_token'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/config/settings/test.py:37:22
+36	ZOOM_REDIRECT_URI = 'http://testserver/zoom/callback'
+37	ZOOM_WEBHOOK_SECRET = 'test_webhook_token'
+
+--------------------------------------------------
+>> Issue: [B106:hardcoded_password_funcarg] Possible hardcoded password: 'adminpass123'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b106_hardcoded_password_funcarg.html
+   Location: src/conftest.py:169:11
+168	    """A Django superuser/admin."""
+169	    return User.objects.create_superuser(
+170	        email="admin@example.com",
+171	        password="adminpass123",
+172	        full_name="Admin User",
+173	    )
+174	
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'sk_test_mock'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/conftest.py:460:33
+459	    """Mock Stripe API for billing tests."""
+460	    settings.STRIPE_SECRET_KEY = "sk_test_mock"
+461	    with (
+
+--------------------------------------------------
+>> Issue: [B106:hardcoded_password_funcarg] Possible hardcoded password: 'password123'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b106_hardcoded_password_funcarg.html
+   Location: src/feedback/tests.py:17:20
+16	        # Create User
+17	        self.user = User.objects.create_user(email="test@example.com", password="password123", full_name="Test User")
+18	        self.organizer = User.objects.create_user(email="org@example.com", password="password123", full_name="Org User")
+
+--------------------------------------------------
+>> Issue: [B106:hardcoded_password_funcarg] Possible hardcoded password: 'password123'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b106_hardcoded_password_funcarg.html
+   Location: src/feedback/tests.py:18:25
+17	        self.user = User.objects.create_user(email="test@example.com", password="password123", full_name="Test User")
+18	        self.organizer = User.objects.create_user(email="org@example.com", password="password123", full_name="Org User")
+19	
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'emails/password_reset.html'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/integrations/services.py:29:8
+28	        "event_cancelled": "emails/event_cancelled.html",
+29	        "password_reset": "emails/password_reset.html",
+30	        "email_verification": "emails/email_verification.html",
+31	        "invitation": "emails/invitation.html",
+32	        "payment_failed": "emails/payment_failed.html",
+33	        "waitlist_promotion": "emails/waitlist_promotion.html",
+34	        "refund_processed": "emails/refund_processed.html",
+35	        "payment_method_expired": "emails/payment_method_expired.html",
+36	        "trial_ending": "emails/trial_ending.html",
+37	    }
+38	
+39	    # Subject lines
+40	    SUBJECTS = {
+41	        "registration_confirmation": "Registration Confirmed: {event_title}",
+42	        "event_reminder": "Reminder: {event_title} starts soon",
+43	        "certificate_issued": "Your Certificate: {event_title}",
+44	        "badge_issued": "You earned a badge: {badge_name}",
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'Password Reset Request'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html
+   Location: src/integrations/services.py:46:8
+45	        "event_cancelled": "Event Cancelled: {event_title}",
+46	        "password_reset": "Password Reset Request",
+47	        "email_verification": "Verify Your Email",
+48	        "invitation": "You're invited: {event_title}",
+49	        "payment_failed": "Payment Failed: Invoice #{invoice_number}",
+50	        "waitlist_promotion": "Spot Available: {event_title}",
+51	        "refund_processed": "Refund Processed: {event_title}",
+52	        "payment_method_expired": "Payment Method Expired",
+53	        "trial_ending": "Your Trial Is Ending Soon",
+54	    }
+55	
+56	    def send_email(self, template: str, recipient: str, context: dict[str, Any], subject: str | None = None) -> bool:
+57	        """
+58	        Send a templated email.
+59	
+60	        Args:
+61	            template: Template name
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/integrations/services.py:272:8
+271	            return True
+272	        except Exception:
+273	            pass
+274	
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/integrations/services.py:370:8
+369	            return True
+370	        except Exception:
+371	            pass
+372	
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html
+   Location: src/integrations/services.py:441:8
+440	            return True
+441	        except Exception:
+442	            pass
+443	
+
+--------------------------------------------------
+
+Code scanned:
+	Total lines of code: 29373
+	Total lines skipped (#nosec): 0
+	Total potential issues skipped due to specifically being disabled (e.g., #nosec BXXX): 0
+
+Run metrics:
+	Total issues (by severity):
+		Undefined: 0
+		Low: 46
+		Medium: 3
+		High: 0
+	Total issues (by confidence):
+		Undefined: 0
+		Low: 2
+		Medium: 27
+		High: 20
+Files skipped (0):

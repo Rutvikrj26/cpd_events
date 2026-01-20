@@ -7,6 +7,7 @@ from django.urls import include, path
 # from drf_yasg.views import get_schema_view
 from billing.webhooks import StripeWebhookView
 from registrations import views as registration_views
+from common.views import HealthCheckView, ReadinessCheckView
 
 # OpenAPI Schema configuration
 # schema_view = get_schema_view(
@@ -23,6 +24,9 @@ from registrations import views as registration_views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # Health checks
+    path("api/health/", HealthCheckView.as_view(), name="health_check"),
+    path("api/ready/", ReadinessCheckView.as_view(), name="readiness_check"),
     # API v1
     path("api/v1/", include("accounts.urls")),
     path("api/v1/", include("events.urls")),

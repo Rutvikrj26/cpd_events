@@ -4,7 +4,7 @@ import requests
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
-logger = __import__('logging').getLogger(__name__)
+logger = __import__("logging").getLogger(__name__)
 
 
 def get_zoom_credentials():
@@ -55,7 +55,7 @@ def exchange_code_for_token(code):
         "redirect_uri": redirect_uri,
     }
 
-    response = requests.post(token_url, auth=auth, data=data)
+    response = requests.post(token_url, auth=auth, data=data, timeout=30)
 
     if not response.ok:
         logger.error(f"Zoom token exchange failed: {response.text}")
@@ -71,7 +71,7 @@ def get_zoom_user_info(access_token):
     user_url = "https://api.zoom.us/v2/users/me"
     headers = {"Authorization": f"Bearer {access_token}"}
 
-    response = requests.get(user_url, headers=headers)
+    response = requests.get(user_url, headers=headers, timeout=30)
 
     if not response.ok:
         logger.error(f"Failed to fetch Zoom user info: {response.text}")
