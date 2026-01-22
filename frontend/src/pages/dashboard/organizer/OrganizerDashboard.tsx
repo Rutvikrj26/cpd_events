@@ -28,6 +28,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { DashboardStat } from "@/components/dashboard/DashboardStats";
 import { PageHeader } from "@/components/ui/page-header";
+import { DashboardSkeleton } from "@/components/ui/page-skeleton";
+import { ZoomIntegrationCard } from "@/components/dashboard/ZoomIntegrationCard";
+import { QuickActionsCard, QuickAction } from "@/components/dashboard/QuickActionsCard";
 import { getEvents } from "@/api/events";
 import { Event } from "@/api/events/types";
 import { getZoomStatus, initiateZoomOAuth, disconnectZoom } from "@/api/integrations";
@@ -90,7 +93,7 @@ export function OrganizerDashboard() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'published': return 'bg-primary/10 text-primary hover:bg-primary/20 border-primary/20';
-      case 'live': return 'bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20 animate-pulse';
+      case 'live': return 'bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20 animate-pulse shadow-lg shadow-destructive/20';
       case 'draft': return 'bg-muted text-muted-foreground hover:bg-muted/80 border-border';
       case 'completed': return 'bg-secondary text-secondary-foreground hover:bg-secondary/80 border-secondary-foreground/20';
       default: return 'bg-muted text-muted-foreground hover:bg-muted/80 border-border';
@@ -98,12 +101,7 @@ export function OrganizerDashboard() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[50vh]">
-      <div className="flex flex-col items-center gap-2">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Loading dashboard...</p>
-      </div>
-    </div>;
+    return <DashboardSkeleton />;
   }
 
   return (
@@ -224,7 +222,7 @@ export function OrganizerDashboard() {
                           <td className="px-6 py-4 text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label="Event actions">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
@@ -256,84 +254,29 @@ export function OrganizerDashboard() {
             <CardHeader className="pb-3">
               <CardTitle className="text-lg">Quick Actions</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-2">
-              <Button variant="outline" className="justify-start h-auto py-3 px-4 border-border hover:bg-muted/30 hover:text-primary transition-all group" asChild>
-                <Link to="/events/create">
-                  <div className="bg-primary/10 p-2 rounded-md mr-3 group-hover:bg-primary/20 transition-colors">
-                    <Plus className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="text-left">
-                    <span className="font-semibold block text-foreground group-hover:text-primary">Create Event</span>
-                    <span className="text-xs text-muted-foreground font-normal">Schedule a new webinar</span>
-                  </div>
-                </Link>
-              </Button>
-              <Button variant="outline" className="justify-start h-auto py-3 px-4 border-border hover:bg-muted/30 hover:text-primary transition-all group" asChild>
-                <Link to="/organizer/contacts">
-                  <div className="bg-primary/10 p-2 rounded-md mr-3 group-hover:bg-primary/20 transition-colors">
-                    <Users className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="text-left">
-                    <span className="font-semibold block text-foreground group-hover:text-primary">Attendees</span>
-                    <span className="text-xs text-muted-foreground font-normal">View registered users</span>
-                  </div>
-                </Link>
-              </Button>
+            <CardContent>
+              <QuickActionsCard actions={[
+                {
+                  to: "/events/create",
+                  icon: Plus,
+                  label: "Create Event",
+                  description: "Schedule a new webinar"
+                },
+                {
+                  to: "/organizer/contacts",
+                  icon: Users,
+                  label: "Attendees",
+                  description: "View registered users"
+                }
+              ]} />
             </CardContent>
           </Card>
 
-          {/* Zoom Status */}
-          <Card className={`border shadow-sm transition-all ${zoomStatus?.is_connected ? 'bg-card border-primary/20' : 'bg-card border-border'}`}>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center justify-between">
-                <span>Zoom Integration</span>
-                <span className={`relative flex h-2.5 w-2.5`}>
-                  {zoomStatus?.is_connected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/50 opacity-75"></span>}
-                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${zoomStatus?.is_connected ? 'bg-primary' : 'bg-muted-foreground'}`}></span>
-                </span>
-              </CardTitle>
-              <CardDescription className={zoomStatus?.is_connected ? "text-primary/80" : "text-muted-foreground"}>
-                {zoomStatus?.is_connected ? 'Automated meeting creation active' : 'Connect for auto-meetings'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {zoomStatus?.is_connected ? (
-                <>
-                  <div className="flex items-center gap-3 mb-6 p-3 rounded-lg bg-secondary/50 border border-border">
-                    <Video className="h-8 w-8 text-primary" />
-                    <div className="overflow-hidden">
-                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Connected Account</p>
-                      <p className="text-sm font-semibold truncate hover:text-clip" title={zoomStatus.zoom_email}>{zoomStatus.zoom_email}</p>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="w-full bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20"
-                    onClick={handleDisconnectZoom}
-                  >
-                    Disconnect Integration
-                  </Button>
-                </>
-              ) : (
-                <div className="text-center">
-                  <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Video className="h-6 w-6 text-primary" />
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Enable one-click Zoom meetings for your webinars and workshops.
-                  </p>
-                  <Button
-                    size="sm"
-                    className="w-full bg-primary hover:bg-primary/90"
-                    onClick={handleConnectZoom}
-                  >
-                    Connect Zoom Account
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <ZoomIntegrationCard
+            zoomStatus={zoomStatus}
+            onConnect={handleConnectZoom}
+            onDisconnect={handleDisconnectZoom}
+          />
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { DashboardStat } from "@/components/dashboard/DashboardStats";
 import { PageHeader } from "@/components/ui/page-header";
+import { DashboardSkeleton } from "@/components/ui/page-skeleton";
 import { getMyRegistrations } from "@/api/registrations";
 import { getEnrollments } from "@/api/courses";
 import { Registration } from "@/api/registrations/types";
@@ -55,12 +56,7 @@ export function AttendeeDashboard() {
     .slice(0, 3);
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[50vh]">
-      <div className="flex flex-col items-center gap-2">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Loading dashboard...</p>
-      </div>
-    </div>;
+    return <DashboardSkeleton />;
   }
 
   return (

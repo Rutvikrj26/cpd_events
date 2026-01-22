@@ -26,6 +26,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DashboardStat } from "@/components/dashboard/DashboardStats";
 import { PageHeader } from "@/components/ui/page-header";
+import { DashboardSkeleton } from "@/components/ui/page-skeleton";
+import { ZoomIntegrationCard } from "@/components/dashboard/ZoomIntegrationCard";
+import { QuickActionsCard, QuickAction } from "@/components/dashboard/QuickActionsCard";
 import { getEvents } from "@/api/events";
 import { Event } from "@/api/events/types";
 import { getOwnedCourses } from "@/api/courses";
@@ -96,8 +99,9 @@ export function ProDashboard() {
         courses.reduce((acc, c) => acc + (c.completion_count || 0), 0);
 
     if (loading) {
-        return <div className="p-8 flex items-center justify-center min-h-[50vh] text-muted-foreground animate-pulse">Loading dashboard...</div>;
+        return <DashboardSkeleton />;
     }
+
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -198,7 +202,7 @@ export function ProDashboard() {
                                                         <td className="px-6 py-3 w-[50px]">
                                                             <DropdownMenu>
                                                                 <DropdownMenuTrigger asChild>
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label="Event actions">
                                                                         <MoreHorizontal className="h-4 w-4" />
                                                                     </Button>
                                                                 </DropdownMenuTrigger>
@@ -265,7 +269,7 @@ export function ProDashboard() {
                                                         <td className="px-6 py-3 w-[50px]">
                                                             <DropdownMenu>
                                                                 <DropdownMenuTrigger asChild>
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label="Course actions">
                                                                         <MoreHorizontal className="h-4 w-4" />
                                                                     </Button>
                                                                 </DropdownMenuTrigger>
@@ -295,95 +299,35 @@ export function ProDashboard() {
                         <CardHeader className="pb-3">
                             <CardTitle className="text-lg">Quick Actions</CardTitle>
                         </CardHeader>
-                        <CardContent className="grid grid-cols-1 gap-2">
-                            <Button variant="outline" className="justify-start h-auto py-3 px-4" asChild>
-                                <Link to="/events/create">
-                                    <div className="bg-primary/10 p-2 rounded-md mr-3">
-                                        <Calendar className="h-4 w-4 text-primary" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="font-semibold block">Create Event</span>
-                                        <span className="text-xs text-muted-foreground">Schedule a webinar</span>
-                                    </div>
-                                </Link>
-                            </Button>
-                            <Button variant="outline" className="justify-start h-auto py-3 px-4" asChild>
-                                <Link to="/courses/manage/new">
-                                    <div className="bg-primary/10 p-2 rounded-md mr-3">
-                                        <BookOpen className="h-4 w-4 text-primary" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="font-semibold block">Create Course</span>
-                                        <span className="text-xs text-muted-foreground">Build a new course</span>
-                                    </div>
-                                </Link>
-                            </Button>
-                            <Button variant="outline" className="justify-start h-auto py-3 px-4" asChild>
-                                <Link to="/organizer/contacts">
-                                    <div className="bg-primary/10 p-2 rounded-md mr-3">
-                                        <Users className="h-4 w-4 text-primary" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="font-semibold block">Audience</span>
-                                        <span className="text-xs text-muted-foreground">Manage contacts</span>
-                                    </div>
-                                </Link>
-                            </Button>
+                        <CardContent>
+                            <QuickActionsCard actions={[
+                                {
+                                    to: "/events/create",
+                                    icon: Calendar,
+                                    label: "Create Event",
+                                    description: "Schedule a webinar"
+                                },
+                                {
+                                    to: "/courses/manage/new",
+                                    icon: BookOpen,
+                                    label: "Create Course",
+                                    description: "Build a new course"
+                                },
+                                {
+                                    to: "/organizer/contacts",
+                                    icon: Users,
+                                    label: "Audience",
+                                    description: "Manage contacts"
+                                }
+                            ]} />
                         </CardContent>
                     </Card>
 
-                    {/* Zoom Status */}
-                    <Card className={`border shadow-sm transition-all ${zoomStatus?.is_connected ? 'bg-card border-primary/20' : 'bg-card border-border'}`}>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-lg flex items-center justify-between">
-                                <span>Zoom Integration</span>
-                                <span className={`relative flex h-2.5 w-2.5`}>
-                                    {zoomStatus?.is_connected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/50 opacity-75"></span>}
-                                    <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${zoomStatus?.is_connected ? 'bg-primary' : 'bg-muted-foreground'}`}></span>
-                                </span>
-                            </CardTitle>
-                            <CardDescription className={zoomStatus?.is_connected ? "text-primary/80" : "text-muted-foreground"}>
-                                {zoomStatus?.is_connected ? 'Automated meeting creation active' : 'Connect for auto-meetings'}
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {zoomStatus?.is_connected ? (
-                                <>
-                                    <div className="flex items-center gap-3 mb-6 p-3 rounded-lg bg-secondary/50 border border-border">
-                                        <Video className="h-8 w-8 text-primary" />
-                                        <div className="overflow-hidden">
-                                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Connected Account</p>
-                                            <p className="text-sm font-semibold truncate hover:text-clip" title={zoomStatus.zoom_email}>{zoomStatus.zoom_email}</p>
-                                        </div>
-                                    </div>
-                                    <Button
-                                        size="sm"
-                                        variant="destructive"
-                                        className="w-full bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20"
-                                        onClick={handleDisconnectZoom}
-                                    >
-                                        Disconnect Integration
-                                    </Button>
-                                </>
-                            ) : (
-                                <div className="text-center">
-                                    <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                                        <Video className="h-6 w-6 text-primary" />
-                                    </div>
-                                    <p className="text-sm text-muted-foreground mb-4">
-                                        Enable one-click Zoom meetings for your webinars and workshops.
-                                    </p>
-                                    <Button
-                                        size="sm"
-                                        className="w-full bg-primary hover:bg-primary/90"
-                                        onClick={handleConnectZoom}
-                                    >
-                                        Connect Zoom Account
-                                    </Button>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                    <ZoomIntegrationCard
+                        zoomStatus={zoomStatus}
+                        onConnect={handleConnectZoom}
+                        onDisconnect={handleDisconnectZoom}
+                    />
                 </div>
             </div>
         </div>

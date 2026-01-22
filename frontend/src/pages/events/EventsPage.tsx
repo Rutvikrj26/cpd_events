@@ -7,6 +7,7 @@ import { Event } from '@/api/events/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { EventDiscovery } from '../public/EventDiscovery';
+import { ListSkeleton } from '@/components/ui/page-skeleton';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -105,7 +106,7 @@ export const EventsPage = () => {
         return <EventDiscovery />;
     }
 
-    if (loading) return <div className="p-8">Loading events...</div>;
+    if (loading) return <ListSkeleton items={6} />;
 
     return (
         <div className="space-y-6">
@@ -196,6 +197,7 @@ export const EventsPage = () => {
                                     size="icon"
                                     className="absolute top-4 right-4 h-8 w-8 bg-card/90 hover:bg-card shadow-sm"
                                     onClick={(e) => e.preventDefault()}
+                                    aria-label="Event actions"
                                 >
                                     {duplicating === event.uuid ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
