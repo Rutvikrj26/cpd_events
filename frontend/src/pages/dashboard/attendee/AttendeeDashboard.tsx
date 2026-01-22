@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Calendar, Award, Clock, Video, GraduationCap, ExternalLink, Users } from "lucide-react";
+import { ArrowRight, Calendar, Award, Clock, Video, GraduationCap, ExternalLink, Users, BookOpen, PlayCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DashboardStat } from "@/components/dashboard/DashboardStats";
 import { PageHeader } from "@/components/ui/page-header";
 import { getMyRegistrations } from "@/api/registrations";
+import { getEnrollments } from "@/api/courses";
 import { Registration } from "@/api/registrations/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { PendingInvitationsBanner } from "@/components/PendingInvitationsBanner";
@@ -14,27 +15,34 @@ import { PendingInvitationsBanner } from "@/components/PendingInvitationsBanner"
 export function AttendeeDashboard() {
   const { user } = useAuth();
   const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [enrollments, setEnrollments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchRegistrations() {
+    async function fetchData() {
       try {
-        const data = await getMyRegistrations();
-        setRegistrations(data.results);
+        const [registrationsData, enrollmentsData] = await Promise.all([
+          getMyRegistrations(),
+          getEnrollments().catch(() => [])
+        ]);
+        setRegistrations(registrationsData.results);
+        setEnrollments(enrollmentsData);
       } catch (error) {
-        console.error("Failed to fetch registrations", error);
+        console.error("Failed to fetch dashboard data", error);
       } finally {
         setLoading(false);
       }
     }
-    fetchRegistrations();
+    fetchData();
   }, []);
 
   const stats = {
-    totalCredits: registrations.reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
-    certificates: registrations.filter(r => r.certificate_issued).length,
+    totalCredits: registrations.reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0) +
+      enrollments.reduce((acc, e) => acc + (e.course?.cpd_credit_value || 0), 0),
+    certificates: registrations.filter(r => r.certificate_issued).length +
+      enrollments.filter(e => e.certificate_issued).length,
     upcomingEvents: registrations.filter(r => new Date(r.event.starts_at) > new Date()).length,
-    learningHours: registrations.reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
+    activeCourses: enrollments.filter(e => e.status !== 'completed').length,
   };
 
   const upcomingRegistrations = registrations
@@ -47,7 +55,12 @@ export function AttendeeDashboard() {
     .slice(0, 3);
 
   if (loading) {
-    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-muted-foreground animate-pulse">Loading dashboard...</div>;
+    return <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="flex flex-col items-center gap-2">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+      </div>
+    </div>;
   }
 
   return (
@@ -99,23 +112,97 @@ export function AttendeeDashboard() {
           description="Registered events"
         />
         <DashboardStat
-          title="Learning Hours"
-          value={stats.learningHours}
-          icon={Clock}
-          description="Total time invested"
+          title="Active Courses"
+          value={stats.activeCourses}
+          icon={BookOpen}
+          description="In progress"
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Column: Upcoming Events */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold tracking-tight text-foreground">Your Upcoming Events</h2>
-            {upcomingRegistrations.length > 0 && (
-              <Button variant="link" asChild className="text-primary p-0 h-auto font-medium">
-                <Link to="/registrations">View All</Link>
-              </Button>
+        {/* Main Column: Active Courses & Upcoming Events */}
+        <div className="lg:col-span-2 space-y-8">
+
+          {/* Active Courses Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-primary" />
+                Pick Up Where You Left Off
+              </h2>
+              {enrollments.length > 0 && (
+                <Button variant="ghost" size="sm" asChild className="text-primary">
+                  <Link to="/courses">View All <ArrowRight className="ml-1 h-4 w-4" /></Link>
+                </Button>
+              )}
+            </div>
+
+            {enrollments.filter(e => e.status !== 'completed').length === 0 ? (
+              <Card className="border-dashed border-2 bg-muted/30 shadow-none border-border">
+                <CardContent className="flex flex-col items-center justify-center p-8 text-center">
+                  <div className="p-3 bg-muted rounded-full mb-3">
+                    <BookOpen className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <p className="text-muted-foreground max-w-sm text-sm">
+                    You don't have any active courses. Start learning today!
+                  </p>
+                  <Button asChild size="sm" variant="outline" className="mt-4">
+                    <Link to="/courses">Browse Courses</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4">
+                {enrollments.filter(e => e.status !== 'completed').slice(0, 3).map(enrollment => (
+                  <div key={enrollment.uuid} className="group relative overflow-hidden rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:shadow-md hover:border-primary/20">
+                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                      <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <BookOpen className="h-6 w-6 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-semibold truncate pr-4">
+                          <Link to={`/courses/${enrollment.course?.slug}/learn`} className="hover:underline">
+                            {enrollment.course?.title}
+                          </Link>
+                        </h3>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {enrollment.progress_percent}% Complete
+                          </span>
+                          {enrollment.last_accessed && (
+                            <span>• Last active {new Date(enrollment.last_accessed).toLocaleDateString()}</span>
+                          )}
+                        </div>
+                        <div className="mt-2 h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full transition-all duration-500"
+                            style={{ width: `${enrollment.progress_percent}%` }}
+                          />
+                        </div>
+                      </div>
+                      <Button size="sm" className="shrink-0" asChild>
+                        <Link to={`/courses/${enrollment.course?.slug}/learn`}>
+                          <PlayCircle className="mr-2 h-3 w-3" />
+                          Resume
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
+          </div>
+
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold tracking-tight text-foreground">Your Upcoming Events</h2>
+              {upcomingRegistrations.length > 0 && (
+                <Button variant="link" asChild className="text-primary p-0 h-auto font-medium">
+                  <Link to="/registrations">View All</Link>
+                </Button>
+              )}
+            </div>
           </div>
 
           {upcomingRegistrations.length === 0 ? (

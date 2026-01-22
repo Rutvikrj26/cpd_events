@@ -59,8 +59,8 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
     const orgRole = currentOrg?.user_role || null;
     const portalLabel = orgRole === 'instructor'
         ? 'Instructor Portal'
-        : subscription?.plan === 'organization'
-            ? 'Organization Portal'
+        : subscription?.plan === 'pro'
+            ? 'Creator Portal'
             : isOrganizer
                 ? 'Organizer Portal'
                 : isCourseManager

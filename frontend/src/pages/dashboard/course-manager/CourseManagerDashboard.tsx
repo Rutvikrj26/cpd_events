@@ -1,6 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Award, BookOpen, CheckCircle, Users, ArrowRight, Plus, Video, RefreshCw, Link2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Award,
+  BookOpen,
+  CheckCircle,
+  Users,
+  ArrowRight,
+  Plus,
+  Video,
+  RefreshCw,
+  Link2,
+  MoreHorizontal,
+  Loader2
+} from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -78,7 +97,12 @@ export function CourseManagerDashboard() {
   };
 
   if (loading) {
-    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-muted-foreground animate-pulse">Loading dashboard...</div>;
+    return <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="flex flex-col items-center gap-2">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+      </div>
+    </div>;
   }
 
   return (
@@ -166,6 +190,7 @@ export function CourseManagerDashboard() {
                         <th className="px-6 py-4">Status</th>
                         <th className="px-6 py-4 text-right">Enrollments</th>
                         <th className="px-6 py-4 text-right">Completions</th>
+                        <th className="px-6 py-4 w-[50px]"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -186,6 +211,29 @@ export function CourseManagerDashboard() {
                           </td>
                           <td className="px-6 py-4 text-right">{course.enrollment_count}</td>
                           <td className="px-6 py-4 text-right">{course.completion_count}</td>
+                          <td className="px-6 py-4 text-right w-[50px]">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuItem asChild>
+                                  <Link to={`/courses/manage/${course.slug}`}>Manage Course</Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link to={`/courses/certificates?course=${course.uuid}`}>View Certificates</Link>
+                                </DropdownMenuItem>
+                                {course.status === 'draft' && (
+                                  <DropdownMenuItem asChild>
+                                    <Link to={`/courses/manage/${course.slug}/edit`}>Edit Course</Link>
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -198,6 +246,36 @@ export function CourseManagerDashboard() {
 
         {/* Sidebar Actions */}
         <div className="space-y-6">
+          <Card className="border-border/60 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-2">
+              <Button variant="outline" className="justify-start h-auto py-3 px-4" asChild>
+                <Link to="/courses/manage/new">
+                  <div className="bg-primary/10 p-2 rounded-md mr-3">
+                    <Plus className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="text-left">
+                    <span className="font-semibold block">Create Course</span>
+                    <span className="text-xs text-muted-foreground">Build a new course</span>
+                  </div>
+                </Link>
+              </Button>
+              <Button variant="outline" className="justify-start h-auto py-3 px-4" asChild>
+                <Link to="/courses/certificates">
+                  <div className="bg-primary/10 p-2 rounded-md mr-3">
+                    <Award className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="text-left">
+                    <span className="font-semibold block">Certificates</span>
+                    <span className="text-xs text-muted-foreground">Manage templates</span>
+                  </div>
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card className={`border shadow-sm transition-all ${zoomStatus?.is_connected ? 'bg-card border-primary/20' : 'bg-card border-border'}`}>
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center justify-between">

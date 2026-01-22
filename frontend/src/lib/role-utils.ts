@@ -15,7 +15,7 @@ export const getRoleFlags = (
     const roles = new Set<string>();
     const plan = subscription?.plan;
 
-    if (plan === "organization") {
+    if (plan === "pro") {
         roles.add("organizer");
         roles.add("course_manager");
     } else if (plan === "organizer") {

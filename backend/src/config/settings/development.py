@@ -38,3 +38,4 @@ LOGGING = {
 # Rate limiting (django-ratelimit)
 # Disable rate limiting in development for easier testing
 RATELIMIT_ENABLE = False
+SILENCED_SYSTEM_CHECKS = ["django_ratelimit.E003", "django_ratelimit.W001"]

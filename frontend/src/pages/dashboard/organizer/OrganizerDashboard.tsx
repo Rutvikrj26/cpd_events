@@ -10,7 +10,8 @@ import {
   Activity,
   Video,
   Settings,
-  Building2
+  Building2,
+  Loader2
 } from "lucide-react";
 import { OnboardingChecklist } from "@/components/onboarding";
 import { PendingInvitationsBanner } from "@/components/PendingInvitationsBanner";
@@ -97,7 +98,12 @@ export function OrganizerDashboard() {
   };
 
   if (loading) {
-    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-muted-foreground animate-pulse">Loading dashboard...</div>;
+    return <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="flex flex-col items-center gap-2">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+      </div>
+    </div>;
   }
 
   return (

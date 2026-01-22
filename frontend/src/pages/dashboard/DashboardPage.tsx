@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { OrganizerDashboard } from './organizer/OrganizerDashboard';
 import { CourseManagerDashboard } from './course-manager/CourseManagerDashboard';
 import { AttendeeDashboard } from './attendee/AttendeeDashboard';
+import { ProDashboard } from './pro/ProDashboard';
 import { Subscription } from '@/api/billing/types';
 import { getRoleFlags } from '@/lib/role-utils';
 
@@ -16,9 +17,14 @@ export const DashboardPage = () => {
     const outletContext = useOutletContext<DashboardOutletContext | undefined>();
     const subscription = outletContext?.subscription ?? null;
     const { isOrganizer, isCourseManager } = getRoleFlags(user, subscription);
+    const isPro = subscription?.plan === 'pro';
 
     if (!user) {
         return <div className="p-8 text-center text-muted-foreground">Loading profile...</div>;
+    }
+
+    if (isPro) {
+        return <ProDashboard />;
     }
 
     if (isOrganizer) {

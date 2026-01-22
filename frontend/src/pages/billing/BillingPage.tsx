@@ -53,17 +53,14 @@ const PLAN_FEATURES: Record<string, string[]> = {
         'Learner progress tracking',
         'Priority email support',
     ],
-    organization: [
+    pro: [
         'Unlimited events',
         'Unlimited courses',
         'Unlimited certificates',
-        'Multi-user team access',
+        'Priority email support',
         'White-label options',
         'API access',
-        'Priority support',
-        'Team collaboration',
-        'Shared templates',
-        'Dedicated account manager',
+        'Zoom integration',
     ],
 };
 
@@ -77,7 +74,7 @@ const convertProductToPlan = (product: PricingProduct, index: number) => {
     const iconMap: Record<string, any> = {
         organizer: Users,
         lms: FileText,
-        organization: Building2,
+        pro: Zap,
     };
 
     return {
@@ -324,8 +321,8 @@ export const BillingPage = () => {
     }
 
     const currentPlan = subscription?.plan || 'attendee';
-    const isOrganizerPlan = currentPlan === 'organizer' || currentPlan === 'organization';
-    const isLmsPlan = currentPlan === 'lms' || currentPlan === 'organization';
+    const isOrganizerPlan = currentPlan === 'organizer' || currentPlan === 'pro';
+    const isLmsPlan = currentPlan === 'lms' || currentPlan === 'pro';
     const showUsageMetrics = isOrganizerPlan || isLmsPlan;
     const gridColsClass = isOrganizerPlan && isLmsPlan ? "md:grid-cols-5" : "md:grid-cols-4";
     const currentPlanData = plans.find(p => p.id === currentPlan);

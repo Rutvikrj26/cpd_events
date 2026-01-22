@@ -1,6 +1,6 @@
 export interface Subscription {
     uuid: string;
-    plan: 'attendee' | 'organizer' | 'lms' | 'organization';
+    plan: 'attendee' | 'organizer' | 'lms' | 'pro';
     plan_display: string;
     status: 'active' | 'trialing' | 'canceled' | 'past_due' | 'unpaid' | 'incomplete' | 'paused';
     status_display: string;
@@ -20,7 +20,7 @@ export interface Subscription {
         max_attendees_per_event: number | null;
     };
     billing_interval: 'month' | 'year';
-    pending_plan?: 'attendee' | 'organizer' | 'lms' | 'organization' | null;
+    pending_plan?: 'attendee' | 'organizer' | 'lms' | 'pro' | null;
     pending_billing_interval?: 'month' | 'year' | null;
     pending_change_at?: string | null;
     current_period_start: string | null;
