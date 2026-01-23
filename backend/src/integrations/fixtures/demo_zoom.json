@@ -1,0 +1,79 @@
+[
+  {
+    "model": "integrations.zoomwebhooklog",
+    "pk": 1,
+    "fields": {
+      "uuid": "d0c933d7-7d30-57d1-8121-67654e62249c",
+      "webhook_id": "zoom_delivery_1",
+      "event_type": "meeting.participant_joined",
+      "event_timestamp": "2026-01-15T23:11:04.812506+00:00",
+      "zoom_meeting_id": "111222333",
+      "zoom_meeting_uuid": "uuid_fake_meeting",
+      "event": 2,
+      "payload": "{\"participant\": {\"email\": \"attendee.engaged@example.com\"}}",
+      "headers": "{}",
+      "processing_status": "completed",
+      "processed_at": "2026-01-16T00:11:04.812515+00:00",
+      "processing_attempts": 1,
+      "attendance_records_created": 1,
+      "created_at": "2026-01-15T23:11:04.812517+00:00",
+      "updated_at": "2026-01-16T00:11:04.812519+00:00"
+    }
+  },
+  {
+    "model": "integrations.zoomrecording",
+    "pk": 1,
+    "fields": {
+      "uuid": "78550f9b-d868-5d95-8919-96b369e01099",
+      "event": 2,
+      "zoom_meeting_id": "111222333",
+      "zoom_meeting_uuid": "uuid_fake_meeting",
+      "zoom_recording_id": "rec_fake_123",
+      "topic": "Weekly Health Webinar",
+      "recording_start": "2026-01-15T23:11:04.812526+00:00",
+      "recording_end": "2026-01-16T00:11:04.812540+00:00",
+      "duration_seconds": 3600,
+      "total_size_bytes": 524288000,
+      "status": "available",
+      "access_level": "registrants",
+      "is_published": true,
+      "published_at": "2026-01-16T23:11:04.812547+00:00",
+      "created_at": "2026-01-15T23:11:04.812550+00:00",
+      "updated_at": "2026-01-16T23:11:04.812552+00:00"
+    }
+  },
+  {
+    "model": "integrations.zoomrecordingfile",
+    "pk": 1,
+    "fields": {
+      "uuid": "b2cea3d1-ba97-5e71-a7db-ebeb21c79de5",
+      "recording": 1,
+      "zoom_file_id": "file_fake_1",
+      "file_type": "video",
+      "recording_type": "shared_screen_with_speaker_view",
+      "file_name": "webinar_recording.mp4",
+      "file_extension": "mp4",
+      "file_size_bytes": 524288000,
+      "download_url": "https://zoom.us/rec/download/fake",
+      "play_url": "https://zoom.us/rec/play/fake",
+      "processing_status": "completed",
+      "is_visible": true,
+      "created_at": "2026-01-15T23:11:04.812565+00:00",
+      "updated_at": "2026-01-15T23:11:04.812568+00:00"
+    }
+  },
+  {
+    "model": "integrations.recordingview",
+    "pk": 1,
+    "fields": {
+      "uuid": "89a771fb-4820-5cbd-b7b6-bc45d5ab6286",
+      "recording": 1,
+      "registration": 1,
+      "first_viewed_at": "2026-01-16T23:11:04.812576+00:00",
+      "last_viewed_at": "2026-01-17T00:11:04.812579+00:00",
+      "view_count": 1,
+      "created_at": "2026-01-16T23:11:04.812581+00:00",
+      "updated_at": "2026-01-17T00:11:04.812583+00:00"
+    }
+  }
+]

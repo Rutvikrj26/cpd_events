@@ -1,0 +1,74 @@
+[
+  {
+    "model": "contacts.contactlist",
+    "pk": 1,
+    "fields": {
+      "uuid": "c03c40fd-c756-5c58-a807-62a7c1bbc98d",
+      "owner": 2,
+      "name": "Newsletter Subscribers",
+      "contact_count": 5,
+      "created_at": "2025-10-14T23:09:45.076172+00:00",
+      "updated_at": "2026-01-22T23:09:45.076174+00:00"
+    }
+  },
+  {
+    "model": "contacts.contact",
+    "pk": 1,
+    "fields": {
+      "uuid": "be114703-c880-570e-ba30-cd039bc3dfd5",
+      "contact_list": 1,
+      "email": "contact0@example.com",
+      "full_name": "Contact 0",
+      "created_at": "2025-10-24T23:09:45.076179+00:00",
+      "updated_at": "2026-01-22T23:09:45.076181+00:00"
+    }
+  },
+  {
+    "model": "contacts.contact",
+    "pk": 2,
+    "fields": {
+      "uuid": "431ce429-9d78-5f7e-874c-0f2a1add69cc",
+      "contact_list": 1,
+      "email": "contact1@example.com",
+      "full_name": "Contact 1",
+      "created_at": "2025-10-24T23:09:45.076186+00:00",
+      "updated_at": "2026-01-22T23:09:45.076188+00:00"
+    }
+  },
+  {
+    "model": "contacts.contact",
+    "pk": 3,
+    "fields": {
+      "uuid": "8f3714c3-62d2-50a9-acbe-bc5fbe3c1e21",
+      "contact_list": 1,
+      "email": "contact2@example.com",
+      "full_name": "Contact 2",
+      "created_at": "2025-10-24T23:09:45.076193+00:00",
+      "updated_at": "2026-01-22T23:09:45.076195+00:00"
+    }
+  },
+  {
+    "model": "contacts.contact",
+    "pk": 4,
+    "fields": {
+      "uuid": "9e789509-2260-552a-bd49-045f2fc2491d",
+      "contact_list": 1,
+      "email": "contact3@example.com",
+      "full_name": "Contact 3",
+      "created_at": "2025-10-24T23:09:45.076200+00:00",
+      "updated_at": "2026-01-22T23:09:45.076201+00:00"
+    }
+  },
+  {
+    "model": "contacts.contact",
+    "pk": 5,
+    "fields": {
+      "uuid": "603bbeb7-342f-5ffc-be2e-db9d06c99225",
+      "contact_list": 1,
+      "email": "contact4@example.com",
+      "full_name": "Contact 4",
+      "created_at": "2025-10-24T23:09:45.076206+00:00",
+      "updated_at": "2026-01-22T23:09:45.076208+00:00"
+    }
+  }
+]

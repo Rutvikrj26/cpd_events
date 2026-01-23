@@ -1,0 +1,16 @@
+[
+  {
+    "model": "promo_codes.promocode",
+    "pk": 1,
+    "fields": {
+      "uuid": "95c77c31-26d9-5023-bf82-86beb0b65f6b",
+      "owner": 2,
+      "code": "EARLYBIRD25",
+      "discount_type": "percentage",
+      "discount_value": "25.00",
+      "is_active": true,
+      "created_at": "2025-11-23T23:09:45.076213+00:00",
+      "updated_at": "2026-01-22T23:09:45.076215+00:00"
+    }
+  }
+]

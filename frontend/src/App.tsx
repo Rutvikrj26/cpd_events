@@ -131,16 +131,21 @@ export default function App() {
                   </PublicLayout>
                 } />
 
+                {/* Browse Events and Courses - Attendee Only */}
                 <Route path="/events/browse" element={
-                  <PublicLayout>
-                    <EventDiscovery />
-                  </PublicLayout>
+                  <ProtectedRoute>
+                    <PublicLayout>
+                      <EventDiscovery />
+                    </PublicLayout>
+                  </ProtectedRoute>
                 } />
 
                 <Route path="/courses/browse" element={
-                  <PublicLayout>
-                    <CourseDiscoveryPage />
-                  </PublicLayout>
+                  <ProtectedRoute>
+                    <PublicLayout>
+                      <CourseDiscoveryPage />
+                    </PublicLayout>
+                  </ProtectedRoute>
                 } />
 
 

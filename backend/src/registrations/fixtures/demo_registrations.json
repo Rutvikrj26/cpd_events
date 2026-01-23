@@ -1,0 +1,66 @@
+[
+  {
+    "model": "registrations.registration",
+    "pk": 1,
+    "fields": {
+      "uuid": "f6148bdc-1d89-58da-b59e-6e7653338052",
+      "event": 2,
+      "user": 4,
+      "email": "attendee.engaged@example.com",
+      "full_name": "Alice Active",
+      "status": "confirmed",
+      "attended": true,
+      "total_attendance_minutes": 60,
+      "attendance_eligible": true,
+      "certificate_issued": true,
+      "certificate_issued_at": "2026-01-15T23:09:45.076367+00:00",
+      "created_at": "2026-01-12T23:09:45.076368+00:00",
+      "updated_at": "2026-01-15T23:09:45.076370+00:00"
+    }
+  },
+  {
+    "model": "registrations.registration",
+    "pk": 2,
+    "fields": {
+      "uuid": "cc64619f-804f-5cb6-abfb-aef6ffe5d50e",
+      "event": 2,
+      "user": 5,
+      "email": "attendee.casual@example.com",
+      "full_name": "Bob Basic",
+      "status": "confirmed",
+      "attended": false,
+      "created_at": "2026-01-12T23:09:45.076385+00:00",
+      "updated_at": "2026-01-12T23:09:45.076387+00:00"
+    }
+  },
+  {
+    "model": "registrations.registration",
+    "pk": 3,
+    "fields": {
+      "uuid": "be7d2fe3-1b2d-51a2-8edb-2bc18aa9621a",
+      "event": 1,
+      "user": 4,
+      "email": "attendee.engaged@example.com",
+      "full_name": "Alice Active",
+      "status": "confirmed",
+      "payment_status": "paid",
+      "amount_paid": "199.00",
+      "created_at": "2026-01-17T23:09:45.076392+00:00",
+      "updated_at": "2026-01-17T23:09:45.076394+00:00"
+    }
+  },
+  {
+    "model": "registrations.registration",
+    "pk": 4,
+    "fields": {
+      "uuid": "ca7fc1a8-6a9d-5f23-8cfa-e244523b4994",
+      "event": 1,
+      "user": 5,
+      "email": "attendee.casual@example.com",
+      "full_name": "Bob Basic",
+      "status": "waitlisted",
+      "created_at": "2026-01-17T23:09:45.076399+00:00",
+      "updated_at": "2026-01-17T23:09:45.076401+00:00"
+    }
+  }
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "model": "accounts.usersession",
+    "pk": 1,
+    "fields": {
+      "uuid": "78b17c92-0bfc-5150-bac2-9d9bc080b68a",
+      "user": 4,
+      "session_key": "fake_session_key_123",
+      "ip_address": "192.168.1.100",
+      "user_agent": "Mozilla/5.0",
+      "is_active": true,
+      "last_activity_at": "2026-01-22T23:11:04.813432+00:00",
+      "expires_at": "2026-01-29T23:11:04.813423+00:00",
+      "created_at": "2026-01-22T23:11:04.813430+00:00",
+      "updated_at": "2026-01-22T23:11:04.813432+00:00"
+    }
+  }
+]

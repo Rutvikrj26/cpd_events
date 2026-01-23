@@ -1,0 +1,14 @@
+[
+  {
+    "model": "events.sessionattendance",
+    "pk": 1,
+    "fields": {
+      "uuid": "a57d60f1-d132-5472-9fea-5a58e41b7a37",
+      "session": 1,
+      "registration": 3,
+      "is_eligible": false,
+      "created_at": "2026-01-17T23:11:04.811791+00:00",
+      "updated_at": "2026-01-17T23:11:04.811795+00:00"
+    }
+  }
+]

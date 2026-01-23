@@ -1,0 +1,137 @@
+[
+  {
+    "model": "learning.course",
+    "pk": 2,
+    "fields": {
+      "uuid": "1a05f158-75de-5b6b-8ab9-e1141b989350",
+      "owner": 2,
+      "title": "Advanced Surgery Techniques",
+      "slug": "advanced-surgery-techniques",
+      "format": "hybrid",
+      "status": "published",
+      "description": "Combines self-paced modules with live surgery demonstrations",
+      "price_cents": 49900,
+      "cpd_credits": "20.00",
+      "hybrid_completion_criteria": "both",
+      "min_sessions_required": 2,
+      "certificates_enabled": true,
+      "certificate_template": 1,
+      "is_public": true,
+      "enrollment_open": true,
+      "created_at": "2025-10-24T23:14:14.399762+00:00",
+      "updated_at": "2026-01-22T23:14:14.399768+00:00"
+    }
+  },
+  {
+    "model": "learning.coursesession",
+    "pk": 1,
+    "fields": {
+      "uuid": "a35051ae-095c-5e64-a474-8664a5d8109c",
+      "course": 2,
+      "title": "Live Surgery Demonstration: Laparoscopic Techniques",
+      "description": "Interactive session showing advanced laparoscopic procedures",
+      "order": 1,
+      "session_type": "live",
+      "starts_at": "2026-01-12T23:14:14.399783+00:00",
+      "duration_minutes": 180,
+      "timezone": "America/New_York",
+      "zoom_meeting_id": "999777555",
+      "zoom_join_url": "https://zoom.us/j/999777555",
+      "cpd_credits": "3.00",
+      "is_mandatory": true,
+      "minimum_attendance_percent": 80,
+      "is_published": true,
+      "created_at": "2025-10-24T23:14:14.399794+00:00",
+      "updated_at": "2026-01-12T23:14:14.399797+00:00"
+    }
+  },
+  {
+    "model": "learning.coursesession",
+    "pk": 2,
+    "fields": {
+      "uuid": "255eae80-7ab5-5297-a347-aba504dc1a3f",
+      "course": 2,
+      "title": "Live Q&A with Dr. Chen",
+      "description": "Interactive Q&A covering course material and real-world applications",
+      "order": 2,
+      "session_type": "live",
+      "starts_at": "2026-02-01T23:14:14.399805+00:00",
+      "duration_minutes": 90,
+      "timezone": "America/New_York",
+      "zoom_meeting_id": "888666444",
+      "zoom_join_url": "https://zoom.us/j/888666444",
+      "cpd_credits": "1.50",
+      "is_mandatory": true,
+      "minimum_attendance_percent": 80,
+      "is_published": true,
+      "created_at": "2025-10-24T23:14:14.399808+00:00",
+      "updated_at": "2026-01-22T23:14:14.399810+00:00"
+    }
+  },
+  {
+    "model": "learning.courseenrollment",
+    "pk": 2,
+    "fields": {
+      "uuid": "8afdc2b0-fdad-5116-8d3a-c587a8b0061f",
+      "course": 2,
+      "user": 4,
+      "status": "active",
+      "access_type": "lifetime",
+      "enrolled_at": "2026-01-07T23:14:14.399818+00:00",
+      "started_at": "2026-01-07T23:14:14.399821+00:00",
+      "progress_percent": 50,
+      "zoom_join_url": "https://zoom.us/j/personalized_alice",
+      "zoom_registrant_id": "reg_alice_123",
+      "created_at": "2026-01-07T23:14:14.399823+00:00",
+      "updated_at": "2026-01-22T23:14:14.399825+00:00"
+    }
+  },
+  {
+    "model": "learning.coursesessionattendance",
+    "pk": 1,
+    "fields": {
+      "uuid": "2db4a268-255b-5722-85e4-caa9e129a435",
+      "session": 1,
+      "enrollment": 2,
+      "attendance_minutes": 165,
+      "is_eligible": true,
+      "zoom_participant_id": "part_alice_456",
+      "zoom_user_email": "attendee.engaged@example.com",
+      "zoom_join_time": "2026-01-12T23:14:14.399832+00:00",
+      "zoom_leave_time": "2026-01-13T02:14:14.399834+00:00",
+      "is_manual_override": false,
+      "created_at": "2026-01-12T23:14:14.399836+00:00",
+      "updated_at": "2026-01-12T23:14:14.399838+00:00"
+    }
+  },
+  {
+    "model": "learning.courseenrollment",
+    "pk": 3,
+    "fields": {
+      "uuid": "b4ef67c8-d6c3-5906-bce5-793d3d533ab4",
+      "course": 2,
+      "user": 5,
+      "status": "active",
+      "access_type": "lifetime",
+      "enrolled_at": "2026-01-10T23:14:14.399860+00:00",
+      "started_at": "2026-01-10T23:14:14.399864+00:00",
+      "progress_percent": 20,
+      "created_at": "2026-01-10T23:14:14.399866+00:00",
+      "updated_at": "2026-01-22T23:14:14.399868+00:00"
+    }
+  },
+  {
+    "model": "learning.coursesessionattendance",
+    "pk": 2,
+    "fields": {
+      "uuid": "dd21b424-d517-5882-a886-5fba0bce0acf",
+      "session": 1,
+      "enrollment": 3,
+      "attendance_minutes": 0,
+      "is_eligible": false,
+      "is_manual_override": false,
+      "created_at": "2026-01-12T23:14:14.399892+00:00",
+      "updated_at": "2026-01-12T23:14:14.399895+00:00"
+    }
+  }
+]

@@ -1,0 +1,55 @@
+[
+  {
+    "model": "billing.refundrecord",
+    "pk": 1,
+    "fields": {
+      "uuid": "b773c011-5e86-53cc-8a57-6c22d4d55d84",
+      "registration": 5,
+      "processed_by": 2,
+      "stripe_refund_id": "re_fake_abc123",
+      "stripe_payment_intent_id": "pi_fake_xyz789",
+      "amount_cents": 14925,
+      "currency": "usd",
+      "platform_fee_reversed_cents": 1492,
+      "status": "succeeded",
+      "reason": "requested_by_customer",
+      "description": "Bob cancelled due to schedule conflict",
+      "created_at": "2026-01-14T23:14:14.398842+00:00",
+      "updated_at": "2026-01-14T23:14:14.399196+00:00"
+    }
+  },
+  {
+    "model": "billing.payoutrequest",
+    "pk": 1,
+    "fields": {
+      "uuid": "eb42380b-516f-5036-a3a0-b7b684960b7d",
+      "user": 2,
+      "stripe_connect_account_id": "acct_fake_connect_123",
+      "stripe_payout_id": "po_fake_456",
+      "amount_cents": 50000,
+      "currency": "usd",
+      "status": "paid",
+      "arrival_date": "2026-01-12",
+      "destination_bank_last4": "1234",
+      "created_at": "2026-01-07T23:14:14.399222+00:00",
+      "updated_at": "2026-01-12T23:14:14.399224+00:00"
+    }
+  },
+  {
+    "model": "billing.payoutrequest",
+    "pk": 2,
+    "fields": {
+      "uuid": "5e858409-3c8e-5be4-8c43-7016c3c2f2b8",
+      "user": 2,
+      "stripe_connect_account_id": "acct_fake_connect_123",
+      "stripe_payout_id": "po_fake_789",
+      "amount_cents": 25000,
+      "currency": "usd",
+      "status": "in_transit",
+      "arrival_date": "2026-01-24",
+      "destination_bank_last4": "1234",
+      "created_at": "2026-01-20T23:14:14.399235+00:00",
+      "updated_at": "2026-01-20T23:14:14.399237+00:00"
+    }
+  }
+]

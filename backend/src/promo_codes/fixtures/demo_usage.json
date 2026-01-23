@@ -1,0 +1,18 @@
+[
+  {
+    "model": "promo_codes.promocodeusage",
+    "pk": 1,
+    "fields": {
+      "uuid": "5c4c787e-49fb-5a7e-b07a-dba5b18e18e8",
+      "promo_code": 1,
+      "registration": 3,
+      "user_email": "attendee.engaged@example.com",
+      "user": 4,
+      "original_price": "199.00",
+      "discount_amount": "49.75",
+      "final_price": "149.25",
+      "created_at": "2026-01-17T23:11:04.813823+00:00",
+      "updated_at": "2026-01-17T23:11:04.813828+00:00"
+    }
+  }
+]

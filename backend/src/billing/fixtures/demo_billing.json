@@ -1,0 +1,150 @@
+[
+  {
+    "model": "billing.stripeproduct",
+    "pk": 1,
+    "fields": {
+      "uuid": "6a77a54e-a193-5ba7-abc7-20881e118c79",
+      "name": "Basic",
+      "plan": "attendee",
+      "is_active": true,
+      "events_per_month": 1,
+      "stripe_product_id": "prod_fake_1",
+      "created_at": "2025-01-22T23:09:45.076000+00:00",
+      "updated_at": "2026-01-22T23:09:45.076002+00:00"
+    }
+  },
+  {
+    "model": "billing.stripeproduct",
+    "pk": 2,
+    "fields": {
+      "uuid": "a5c4a02c-dad4-501c-b008-37e490e4f4c3",
+      "name": "Pro",
+      "plan": "pro",
+      "is_active": true,
+      "events_per_month": null,
+      "stripe_product_id": "prod_fake_2",
+      "created_at": "2025-01-22T23:09:45.076021+00:00",
+      "updated_at": "2026-01-22T23:09:45.076032+00:00"
+    }
+  },
+  {
+    "model": "billing.stripeprice",
+    "pk": 1,
+    "fields": {
+      "uuid": "130f1dbd-ce5f-5fb5-8d5f-f862f9a67f27",
+      "product": 1,
+      "amount_cents": 0,
+      "billing_interval": "month",
+      "stripe_price_id": "price_free",
+      "created_at": "2025-01-22T23:09:45.076045+00:00",
+      "updated_at": "2026-01-22T23:09:45.076048+00:00"
+    }
+  },
+  {
+    "model": "billing.stripeprice",
+    "pk": 2,
+    "fields": {
+      "uuid": "c2ab37be-ccc6-55ba-9e80-be8f8ad19822",
+      "product": 2,
+      "amount_cents": 9900,
+      "billing_interval": "month",
+      "stripe_price_id": "price_pro_month",
+      "created_at": "2025-01-22T23:09:45.076054+00:00",
+      "updated_at": "2026-01-22T23:09:45.076095+00:00"
+    }
+  },
+  {
+    "model": "billing.subscription",
+    "pk": 1,
+    "fields": {
+      "uuid": "16478fe6-339a-545a-a4d6-aefc503a9717",
+      "user": 2,
+      "plan": "pro",
+      "status": "active",
+      "current_period_start": "2026-01-07T23:09:45.076109+00:00",
+      "current_period_end": "2026-02-06T23:09:45.076113+00:00",
+      "stripe_subscription_id": "sub_fake_pro",
+      "created_at": "2025-12-23T23:09:45.076115+00:00",
+      "updated_at": "2026-01-22T23:09:45.076117+00:00"
+    }
+  },
+  {
+    "model": "billing.subscription",
+    "pk": 2,
+    "fields": {
+      "uuid": "3dc48199-e15a-5166-8673-cb83f07f464b",
+      "user": 3,
+      "plan": "attendee",
+      "status": "active",
+      "created_at": "2025-12-23T23:09:45.076123+00:00",
+      "updated_at": "2026-01-22T23:09:45.076125+00:00"
+    }
+  },
+  {
+    "model": "billing.paymentmethod",
+    "pk": 1,
+    "fields": {
+      "uuid": "1c219939-906c-55e0-8196-46a764a8de44",
+      "user": 2,
+      "stripe_payment_method_id": "pm_fake_visa",
+      "card_brand": "visa",
+      "card_last4": "4242",
+      "is_default": true,
+      "card_exp_month": 12,
+      "card_exp_year": 2030,
+      "created_at": "2025-12-23T23:09:45.076130+00:00",
+      "updated_at": "2026-01-22T23:09:45.076131+00:00"
+    }
+  },
+  {
+    "model": "billing.invoice",
+    "pk": 1,
+    "fields": {
+      "uuid": "df844f3f-5606-54c2-a41a-e77a77efde84",
+      "user": 2,
+      "subscription": 1,
+      "stripe_invoice_id": "in_fake_0",
+      "amount_cents": 9900,
+      "status": "paid",
+      "period_start": "2025-12-23T23:09:45.076134+00:00",
+      "period_end": "2026-01-22T23:09:45.076136+00:00",
+      "paid_at": "2025-12-23T23:09:45.076134+00:00",
+      "created_at": "2025-12-23T23:09:45.076134+00:00",
+      "updated_at": "2025-12-23T23:09:45.076134+00:00"
+    }
+  },
+  {
+    "model": "billing.invoice",
+    "pk": 2,
+    "fields": {
+      "uuid": "f28057d9-9563-5e39-b6d5-2ed2d8ae77cb",
+      "user": 2,
+      "subscription": 1,
+      "stripe_invoice_id": "in_fake_1",
+      "amount_cents": 9900,
+      "status": "paid",
+      "period_start": "2025-11-23T23:09:45.076142+00:00",
+      "period_end": "2025-12-23T23:09:45.076144+00:00",
+      "paid_at": "2025-11-23T23:09:45.076142+00:00",
+      "created_at": "2025-11-23T23:09:45.076142+00:00",
+      "updated_at": "2025-11-23T23:09:45.076142+00:00"
+    }
+  },
+  {
+    "model": "billing.invoice",
+    "pk": 3,
+    "fields": {
+      "uuid": "191997df-0d64-5e2c-b046-06aa6d014846",
+      "user": 2,
+      "subscription": 1,
+      "stripe_invoice_id": "in_fake_2",
+      "amount_cents": 9900,
+      "status": "paid",
+      "period_start": "2025-10-24T23:09:45.076149+00:00",
+      "period_end": "2025-11-23T23:09:45.076151+00:00",
+      "paid_at": "2025-10-24T23:09:45.076149+00:00",
+      "created_at": "2025-10-24T23:09:45.076149+00:00",
+      "updated_at": "2025-10-24T23:09:45.076149+00:00"
+    }
+  }
+]

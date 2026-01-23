@@ -1,0 +1,16 @@
+[
+  {
+    "model": "contacts.tag",
+    "pk": 1,
+    "fields": {
+      "uuid": "7e234370-ed05-5a32-9890-37fce799dc11",
+      "owner": 2,
+      "name": "VIP",
+      "color": "#FFD700",
+      "description": "High-value contacts",
+      "contact_count": 2,
+      "created_at": "2025-10-14T23:11:04.813641+00:00",
+      "updated_at": "2026-01-22T23:11:04.813660+00:00"
+    }
+  }
+]

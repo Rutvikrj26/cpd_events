@@ -656,7 +656,16 @@ class QuizSubmissionView(views.APIView):
 
 class CourseViewSet(viewsets.ModelViewSet):
     """
-    Course management for course owners.
+    Course management for course owners and authenticated users.
+    
+    GET /api/v1/courses/ - Requires authentication (shows public published courses and owned courses)
+    POST /api/v1/courses/ - Requires authentication and course creation capability
+    GET /api/v1/courses/{uuid}/ - Requires authentication (shows public published courses and owned courses)
+    PATCH /api/v1/courses/{uuid}/ - Requires authentication and ownership
+    DELETE /api/v1/courses/{uuid}/ - Requires authentication and ownership
+    
+    Note: All endpoints require authentication. Attendees can view published public courses,
+    while course owners can manage their own courses.
     """
 
     permission_classes = [permissions.IsAuthenticated]
@@ -666,7 +675,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         queryset = Course.objects.all()
         user = self.request.user
 
-        # Filter by slug (for public view)
+        # Filter by slug (for course detail lookup)
         slug = self.request.query_params.get("slug")
         if slug:
             queryset = queryset.filter(slug=slug)
@@ -674,10 +683,6 @@ class CourseViewSet(viewsets.ModelViewSet):
         owned = self.request.query_params.get("owned")
         if owned and user.is_authenticated:
             queryset = queryset.filter(owner=user)
-
-        # Public visibility logic for non-authenticated users
-        if not user.is_authenticated:
-            return queryset.filter(is_public=True, status=Course.Status.PUBLISHED)
 
         # Authenticated users can see public published courses or their own courses
         if self.action in ["list", "retrieve"]:
@@ -687,11 +692,8 @@ class CourseViewSet(viewsets.ModelViewSet):
         return queryset.filter(owner=user).distinct()
 
     def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
-            permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-        else:
-            permission_classes = [permissions.IsAuthenticated]
-        return [permission() for permission in permission_classes]
+        # All actions require authentication
+        return [permissions.IsAuthenticated()]
 
     def get_serializer_class(self):
         if self.action == "list":

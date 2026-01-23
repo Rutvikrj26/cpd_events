@@ -1,0 +1,136 @@
+[
+  {
+    "model": "learning.course",
+    "pk": 1,
+    "fields": {
+      "uuid": "77f7734f-c16b-5c32-b473-177e219e1b0b",
+      "owner": 2,
+      "title": "Medical Ethics 101",
+      "slug": "medical-ethics-101",
+      "status": "published",
+      "price_cents": 0,
+      "cpd_credits": "5.00",
+      "certificates_enabled": true,
+      "certificate_template": 1,
+      "badges_enabled": true,
+      "badge_template": 1,
+      "created_at": "2025-11-23T23:09:45.076267+00:00",
+      "updated_at": "2026-01-22T23:09:45.076269+00:00"
+    }
+  },
+  {
+    "model": "learning.eventmodule",
+    "pk": 1,
+    "fields": {
+      "uuid": "3798f980-7600-5696-980f-5dff3acb6027",
+      "title": "Introduction to Ethics",
+      "is_published": true,
+      "order": 0,
+      "created_at": "2025-11-23T23:09:45.076274+00:00",
+      "updated_at": "2026-01-22T23:09:45.076275+00:00"
+    }
+  },
+  {
+    "model": "learning.eventmodule",
+    "pk": 2,
+    "fields": {
+      "uuid": "d40e407a-c290-52be-912d-6ee0f77b3be0",
+      "title": "Assessment",
+      "is_published": true,
+      "order": 1,
+      "created_at": "2025-11-23T23:09:45.076289+00:00",
+      "updated_at": "2026-01-22T23:09:45.076291+00:00"
+    }
+  },
+  {
+    "model": "learning.coursemodule",
+    "pk": 1,
+    "fields": {
+      "uuid": "44ec0c1d-3b58-5f60-ae66-81aacbfd8b5a",
+      "course": 1,
+      "module": 1,
+      "order": 0,
+      "is_required": true,
+      "created_at": "2025-11-23T23:09:45.076297+00:00",
+      "updated_at": "2026-01-22T23:09:45.076307+00:00"
+    }
+  },
+  {
+    "model": "learning.coursemodule",
+    "pk": 2,
+    "fields": {
+      "uuid": "e6ac137f-71b7-592b-9fce-f6db8cfbd72b",
+      "course": 1,
+      "module": 2,
+      "order": 1,
+      "is_required": true,
+      "created_at": "2025-11-23T23:09:45.076317+00:00",
+      "updated_at": "2026-01-22T23:09:45.076319+00:00"
+    }
+  },
+  {
+    "model": "learning.modulecontent",
+    "pk": 1,
+    "fields": {
+      "uuid": "968f0d48-9e26-5298-9b22-ae9ecb3d8421",
+      "module": 1,
+      "title": "Welcome Video",
+      "content_type": "video",
+      "order": 0,
+      "content_data": {
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+      },
+      "created_at": "2025-11-23T23:09:45.076340+00:00",
+      "updated_at": "2026-01-22T23:09:45.076343+00:00"
+    }
+  },
+  {
+    "model": "learning.modulecontent",
+    "pk": 2,
+    "fields": {
+      "uuid": "6e00fc59-7d16-5e43-ab1e-d9bf15f91bde",
+      "module": 2,
+      "title": "Final Quiz",
+      "content_type": "quiz",
+      "order": 0,
+      "content_data": {
+        "passingScore": 70,
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Is ethics important?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Yes"
+              },
+              {
+                "id": "b",
+                "text": "No"
+              }
+            ],
+            "correctAnswer": "a"
+          }
+        ]
+      },
+      "created_at": "2025-11-23T23:09:45.076358+00:00",
+      "updated_at": "2026-01-22T23:09:45.076360+00:00"
+    }
+  },
+  {
+    "model": "learning.courseenrollment",
+    "pk": 1,
+    "fields": {
+      "uuid": "3a6dfda7-e8fd-54fb-8b97-c10621a7143f",
+      "course": 1,
+      "user": 4,
+      "status": "completed",
+      "progress_percent": 100,
+      "certificate_issued": true,
+      "certificate_issued_at": "2026-01-20T23:09:45.076412+00:00",
+      "enrolled_at": "2026-01-02T23:09:45.076414+00:00",
+      "created_at": "2026-01-02T23:09:45.076414+00:00",
+      "updated_at": "2026-01-20T23:09:45.076415+00:00"
+    }
+  }
+]

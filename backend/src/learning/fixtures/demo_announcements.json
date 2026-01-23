@@ -1,0 +1,58 @@
+[
+  {
+    "model": "learning.courseannouncement",
+    "pk": 1,
+    "fields": {
+      "uuid": "2178fc3f-7b1d-5213-864e-baa9d3e57467",
+      "course": 1,
+      "created_by": 2,
+      "title": "New Module Added!",
+      "body": "We've added a new case study to Module 2. Check it out and share your thoughts in the discussion forum!",
+      "is_published": true,
+      "created_at": "2026-01-17T23:14:14.400244+00:00",
+      "updated_at": "2026-01-17T23:14:14.400247+00:00"
+    }
+  },
+  {
+    "model": "learning.courseannouncement",
+    "pk": 2,
+    "fields": {
+      "uuid": "0f3a03a6-67a4-5611-a02d-6057833629ed",
+      "course": 2,
+      "created_by": 2,
+      "title": "Reminder: Live Session Tomorrow!",
+      "body": "Don't forget our live Q&A session with Dr. Chen tomorrow at 2pm EST. Come prepared with your questions!",
+      "is_published": true,
+      "created_at": "2026-01-21T23:14:14.400254+00:00",
+      "updated_at": "2026-01-21T23:14:14.400256+00:00"
+    }
+  },
+  {
+    "model": "learning.courseannouncement",
+    "pk": 3,
+    "fields": {
+      "uuid": "f3df4625-30b5-5737-8d50-68b5b8e05a19",
+      "course": 1,
+      "created_by": 2,
+      "title": "Welcome to Medical Ethics 101!",
+      "body": "Welcome everyone! We're excited to have you in this course. Please complete Module 1 by the end of the week.",
+      "is_published": true,
+      "created_at": "2025-11-23T23:14:14.400262+00:00",
+      "updated_at": "2025-11-23T23:14:14.400264+00:00"
+    }
+  },
+  {
+    "model": "learning.courseannouncement",
+    "pk": 4,
+    "fields": {
+      "uuid": "c3fa9347-582b-5a31-a706-f2ecb08ad265",
+      "course": 2,
+      "created_by": 2,
+      "title": "DRAFT: End of Course Survey",
+      "body": "Please take our end-of-course survey to help us improve...",
+      "is_published": false,
+      "created_at": "2026-01-22T23:14:14.400269+00:00",
+      "updated_at": "2026-01-22T23:14:14.400271+00:00"
+    }
+  }
+]

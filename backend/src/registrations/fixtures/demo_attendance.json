@@ -1,0 +1,19 @@
+[
+  {
+    "model": "registrations.attendancerecord",
+    "pk": 1,
+    "fields": {
+      "uuid": "575bb9b6-c450-508b-847e-546b4d793e54",
+      "registration": 1,
+      "event": 2,
+      "zoom_user_email": "attendee.engaged@example.com",
+      "zoom_user_name": "Alice Active",
+      "join_time": "2026-01-15T23:11:04.811571+00:00",
+      "leave_time": "2026-01-16T00:11:04.811595+00:00",
+      "duration_minutes": 60,
+      "is_matched": true,
+      "created_at": "2026-01-15T23:11:04.811576+00:00",
+      "updated_at": "2026-01-15T23:11:04.811600+00:00"
+    }
+  }
+]

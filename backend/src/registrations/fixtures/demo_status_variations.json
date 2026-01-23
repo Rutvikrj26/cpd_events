@@ -1,0 +1,18 @@
+[
+  {
+    "model": "registrations.registration",
+    "pk": 5,
+    "fields": {
+      "uuid": "4c91e911-2461-50b2-af43-d6feca546b4c",
+      "event": 2,
+      "user": null,
+      "email": "attendee.cancelled@example.com",
+      "full_name": "Bob Basic",
+      "status": "cancelled",
+      "cancellation_reason": "Schedule conflict",
+      "cancelled_at": "2026-01-14T23:11:04.813117+00:00",
+      "created_at": "2026-01-12T23:11:04.813120+00:00",
+      "updated_at": "2026-01-14T23:11:04.813122+00:00"
+    }
+  }
+]

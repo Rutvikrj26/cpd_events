@@ -1,0 +1,43 @@
+[
+  {
+    "model": "integrations.emaillog",
+    "pk": 1,
+    "fields": {
+      "uuid": "1506944a-a24a-50c5-83b7-9500a63d4fa2",
+      "recipient_email": "attendee.engaged@example.com",
+      "recipient_name": "Alice Active",
+      "recipient_user": 4,
+      "email_type": "registration_confirm",
+      "subject": "Registration Confirmed: Weekly Health Webinar",
+      "event": 2,
+      "registration": 1,
+      "status": "delivered",
+      "sent_at": "2026-01-12T23:11:04.812917+00:00",
+      "delivered_at": "2026-01-13T00:11:04.812920+00:00",
+      "provider_message_id": "msg_fake_123",
+      "created_at": "2026-01-12T23:11:04.812922+00:00",
+      "updated_at": "2026-01-13T00:11:04.812929+00:00"
+    }
+  },
+  {
+    "model": "integrations.emaillog",
+    "pk": 2,
+    "fields": {
+      "uuid": "081d6033-c541-589c-bb20-8265f001be41",
+      "recipient_email": "attendee.engaged@example.com",
+      "recipient_name": "Alice Active",
+      "recipient_user": 4,
+      "email_type": "certificate",
+      "subject": "Your Certificate is Ready!",
+      "event": 2,
+      "certificate": 1,
+      "status": "opened",
+      "sent_at": "2026-01-15T23:11:04.812936+00:00",
+      "delivered_at": "2026-01-16T00:11:04.812938+00:00",
+      "opened_at": "2026-01-16T01:11:04.812941+00:00",
+      "provider_message_id": "msg_fake_456",
+      "created_at": "2026-01-15T23:11:04.812942+00:00",
+      "updated_at": "2026-01-16T01:11:04.812944+00:00"
+    }
+  }
+]

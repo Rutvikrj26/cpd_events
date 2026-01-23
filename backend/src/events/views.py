@@ -85,11 +85,14 @@ class EventViewSet(SoftDeleteModelViewSet):
     """
     Organizer-level CRUD for events.
 
-    GET /api/v1/events/
-    POST /api/v1/events/
-    GET /api/v1/events/{uuid}/
-    PATCH /api/v1/events/{uuid}/
-    DELETE /api/v1/events/{uuid}/
+    GET /api/v1/events/ - Requires authentication (organizer/course manager)
+    POST /api/v1/events/ - Requires authentication and event creation capability
+    GET /api/v1/events/{uuid}/ - Requires authentication (organizer/course manager)
+    PATCH /api/v1/events/{uuid}/ - Requires authentication and ownership
+    DELETE /api/v1/events/{uuid}/ - Requires authentication and ownership
+    
+    Note: This endpoint is for event organizers only. Attendees should use 
+    the public event endpoints for discovery.
     """
 
     parser_classes = (MultiPartParser, FormParser, JSONParser)
@@ -107,6 +110,7 @@ class EventViewSet(SoftDeleteModelViewSet):
         )
 
     def get_permissions(self):
+        # All actions require authentication and organizer/course manager role
         if self.request.method in SAFE_METHODS:
             return [IsAuthenticated(), IsOrganizerOrCourseManager()]
         return [IsAuthenticated(), CanCreateEvents()]

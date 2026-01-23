@@ -1,0 +1,56 @@
+[
+  {
+    "model": "learning.assignment",
+    "pk": 1,
+    "fields": {
+      "uuid": "40e5fa7b-951b-53c1-9be1-d8f07bccf6e5",
+      "module": 2,
+      "title": "Ethics Case Study",
+      "description": "Analyze the provided ethical dilemma",
+      "instructions": "Submit a 500-word analysis",
+      "due_days_after_release": 7,
+      "max_score": 100,
+      "passing_score": 70,
+      "submission_type": "text",
+      "rubric": "{\"criteria\": [{\"name\": \"Analysis\", \"max_points\": 50}, {\"name\": \"Citations\", \"max_points\": 30}, {\"name\": \"Writing Quality\", \"max_points\": 20}]}",
+      "created_at": "2025-11-23T23:11:04.811942+00:00",
+      "updated_at": "2025-11-23T23:11:04.811945+00:00"
+    }
+  },
+  {
+    "model": "learning.assignmentsubmission",
+    "pk": 1,
+    "fields": {
+      "uuid": "ba3ab40e-9be3-5cac-8c8f-cc78f5f492d5",
+      "assignment": 1,
+      "course_enrollment": 1,
+      "graded_by": 2,
+      "status": "graded",
+      "attempt_number": 1,
+      "submitted_at": "2026-01-12T23:11:04.811990+00:00",
+      "content": "{\"text\": \"My analysis of the ethical dilemma...\"}",
+      "score": 85,
+      "feedback": "Excellent analysis! Well cited and clearly written.",
+      "graded_at": "2026-01-19T23:11:04.812014+00:00",
+      "created_at": "2026-01-12T23:11:04.812018+00:00",
+      "updated_at": "2026-01-19T23:11:04.812020+00:00"
+    }
+  },
+  {
+    "model": "learning.submissionreview",
+    "pk": 1,
+    "fields": {
+      "uuid": "4306652e-d190-5ab3-8755-49c34fb86828",
+      "submission": 1,
+      "reviewer": 2,
+      "action": "graded",
+      "from_status": "submitted",
+      "to_status": "graded",
+      "score": 85,
+      "feedback": "Excellent analysis!",
+      "rubric_scores": "{\"Analysis\": 45, \"Citations\": 25, \"Writing Quality\": 15}",
+      "created_at": "2026-01-19T23:11:04.812037+00:00",
+      "updated_at": "2026-01-19T23:11:04.812039+00:00"
+    }
+  }
+]

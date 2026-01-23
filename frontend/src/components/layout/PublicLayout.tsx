@@ -91,19 +91,21 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     </NavigationMenuContent>
                   </NavigationMenuItem>
 
-                  <NavigationMenuItem>
-                    <NavigationMenuTrigger>Browse</NavigationMenuTrigger>
-                    <NavigationMenuContent>
-                      <ul className="grid gap-3 p-4 w-[300px]">
-                        <ListItem href="/events/browse" title="Events">
-                          Webinars, workshops, and conferences
-                        </ListItem>
-                        <ListItem href="/courses/browse" title="Courses">
-                          Self-paced professional development
-                        </ListItem>
-                      </ul>
-                    </NavigationMenuContent>
-                  </NavigationMenuItem>
+                  {isAuthenticated && (
+                    <NavigationMenuItem>
+                      <NavigationMenuTrigger>Browse</NavigationMenuTrigger>
+                      <NavigationMenuContent>
+                        <ul className="grid gap-3 p-4 w-[300px]">
+                          <ListItem href="/events/browse" title="Events">
+                            Webinars, workshops, and conferences
+                          </ListItem>
+                          <ListItem href="/courses/browse" title="Courses">
+                            Self-paced professional development
+                          </ListItem>
+                        </ul>
+                      </NavigationMenuContent>
+                    </NavigationMenuItem>
+                  )}
 
                   <NavigationMenuItem>
                     <Link
@@ -254,26 +256,28 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </div>
 
-              {/* Browse Group */}
-              <div className="flex flex-col gap-1">
-                <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Browse
+              {/* Browse Group - Only for authenticated users */}
+              {isAuthenticated && (
+                <div className="flex flex-col gap-1">
+                  <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Browse
+                  </div>
+                  <Link
+                    to="/events/browse"
+                    className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Events
+                  </Link>
+                  <Link
+                    to="/courses/browse"
+                    className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Courses
+                  </Link>
                 </div>
-                <Link
-                  to="/events/browse"
-                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Events
-                </Link>
-                <Link
-                  to="/courses/browse"
-                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Courses
-                </Link>
-              </div>
+              )}
 
               {/* Resources Group */}
               <div className="flex flex-col gap-1">
