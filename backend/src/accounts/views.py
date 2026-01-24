@@ -18,7 +18,7 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from billing.capability_service import capability_service
-from common.permissions import CanCreateEvents, CanCreateCourses
+from common.permissions import CanCreateEvents, CanCreateCourses, IsOrganizerOrCourseManager
 from common.utils import error_response
 
 from . import cpd_serializers, serializers
@@ -38,56 +38,75 @@ def get_allowed_routes_for_user(user) -> list[str]:
     """
     Get list of allowed routes for a user based on their subscription.
 
-    Returns route identifiers that the frontend uses to show/hide navigation items.
+    Returns route identifiers (not paths) that match frontend routeKey values.
+    These are used by the frontend Sidebar component to determine which nav items to show.
     """
     from billing.capability_service import capability_service
 
     # Base routes available to all authenticated users
     routes = [
-        "/dashboard",
-        "/profile",
-        "/settings",
-        "/events",  # View events (attendee)
-        "/certificates",  # View earned certificates
-        "/cpd",  # CPD tracking
+        "dashboard",
+        "profile",
+        "settings",
     ]
 
-    # Check subscription-based capabilities
+    # Get user's access status to determine plan
+    access_status = capability_service.get_access_status(user)
+    plan = (access_status.plan or "").lower()
+
+    # Attendee routes (for attendee plan and users without active subscriptions)
+    # These allow browsing and viewing own content
+    if plan == "attendee" or not access_status.is_active:
+        routes.extend(
+            [
+                "browse_events",  # Browse events as attendee
+                "browse_courses",  # Browse courses
+                "my_courses",  # My enrolled courses
+                "registrations",  # My event registrations
+                "certificates",  # My earned certificates
+                "badges",  # My earned badges
+                "cpd_tracking",  # CPD tracking
+            ]
+        )
+
+    # Organizer routes - event creation and management
     if capability_service.can_create_events(user):
         routes.extend(
             [
-                "/events/create",
-                "/events/manage",
-                "/organizer",
-                "/organizer/analytics",
+                "my_events",  # My Events (organizer view)
+                "create_events",  # Create new events
+                "creator_certificates",  # Organizer certificates
+                "event_badges",  # Event badges
+                "zoom_meetings",  # Zoom integration
+                "contacts",  # Contact management
+                "subscriptions",  # Billing
             ]
         )
 
+    # Course Manager routes - course creation and management
     if capability_service.can_create_courses(user):
         routes.extend(
             [
-                "/courses/create",
-                "/courses/manage",
-                "/lms",
-                "/lms/analytics",
+                "browse_courses",  # Browse courses (as learner)
+                "my_courses",  # My enrolled courses (as learner)
+                "courses",  # Manage courses
+                "create_courses",  # Create new courses
+                "course_certificates",  # Course certificates
+                "subscriptions",  # Billing (if not already added)
             ]
         )
 
-    if capability_service.can_issue_certificates(user):
-        routes.extend(
-            [
-                "/certificates/issue",
-                "/certificates/templates",
-            ]
-        )
+    # Organization routes - available to all users who can create orgs
+    if plan in ["pro", "organizer", "lms"]:
+        routes.append("organizations")
 
     # Staff-only routes
     if user.is_staff:
         routes.extend(
             [
-                "/admin",
-                "/admin/users",
-                "/admin/subscriptions",
+                "admin",
+                "admin_users",
+                "admin_subscriptions",
             ]
         )
 
@@ -106,10 +125,18 @@ def get_features_for_user(user) -> dict:
     plan_key = (access_status.plan or "").lower()
 
     return {
-        # Core capabilities
-        "can_create_events": capability_service.can_create_events(user),
-        "can_create_courses": capability_service.can_create_courses(user),
-        "can_issue_certificates": capability_service.can_issue_certificates(user),
+        # Core creation capabilities
+        "create_events": capability_service.can_create_events(user),
+        "create_courses": capability_service.can_create_courses(user),
+        "issue_certificates": capability_service.can_issue_certificates(user),
+        # Attendee features - available to all users
+        "browse_events": True,
+        "browse_courses": True,
+        "view_own_certificates": True,
+        "view_badges": True,
+        "view_cpd": True,
+        # Billing access - available to creators
+        "view_billing": capability_service.can_create_events(user) or capability_service.can_create_courses(user),
         # Subscription status
         "has_active_subscription": access_status.is_active,
         "is_trialing": access_status.is_trialing,
@@ -124,6 +151,9 @@ def get_features_for_user(user) -> dict:
         "custom_branding": plan_key == "pro",
         "api_access": plan_key == "pro",
         "white_label": plan_key == "pro",
+        # Organization features
+        "can_create_organization": plan_key in ["pro", "organizer", "lms"],
+        "can_join_organization": True,
     }
 
 
@@ -1286,7 +1316,7 @@ class PayoutsConnectView(generics.GenericAPIView):
     Returns the Stripe hosted onboarding URL.
     """
 
-    permission_classes = [IsAuthenticated, CanCreateCourses]
+    permission_classes = [IsAuthenticated, IsOrganizerOrCourseManager]
 
     def post(self, request):
         from django.conf import settings
@@ -1332,7 +1362,7 @@ class PayoutsStatusView(generics.GenericAPIView):
     Checks and syncs the Stripe Connect status for the individual organizer.
     """
 
-    permission_classes = [IsAuthenticated, CanCreateCourses]
+    permission_classes = [IsAuthenticated, IsOrganizerOrCourseManager]
 
     def get(self, request):
         from billing.services import stripe_connect_service
@@ -1351,6 +1381,21 @@ class PayoutsStatusView(generics.GenericAPIView):
         status_info = stripe_connect_service.get_account_status(user.stripe_connect_id)
 
         if "error" in status_info:
+            if status_info["error"] == "account_invalid":
+                # The ID in our DB is invalid or revoked. Clear it and treat as disconnected.
+                logger.warning(f"Clearing invalid Stripe ID {user.stripe_connect_id} for user {user.uuid}")
+                user.stripe_connect_id = None
+                user.stripe_charges_enabled = False
+                user.stripe_account_status = "not_connected"
+                user.save(update_fields=["stripe_connect_id", "stripe_charges_enabled", "stripe_account_status", "updated_at"])
+                return Response(
+                    {
+                        "connected": False,
+                        "status": "not_connected",
+                        "charges_enabled": False,
+                    }
+                )
+
             return Response(
                 {"detail": "Failed to retrieve status from Stripe."},
                 status=status.HTTP_502_BAD_GATEWAY,

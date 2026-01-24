@@ -10,6 +10,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 from certificates.models import Certificate
 
@@ -19,23 +20,17 @@ logger = logging.getLogger(__name__)
 @receiver(post_save, sender=Certificate)
 def award_cpd_credits_on_certificate(sender, instance, created, **kwargs):
     """
-    Automatically award CPD credits when a certificate is created.
+    Automatically award CPD credits when a certificate is issued.
 
     This signal handler:
-    1. Checks if certificate is newly created and active
-    2. Extracts CPD credits from certificate_data
-    3. Creates CPDTransaction record
-    4. Updates User.total_cpd_credits balance
-    5. Logs all actions for audit trail
-
-    Args:
-        sender: Certificate model class
-        instance: Certificate instance that was saved
-        created: True if this is a new certificate
-        **kwargs: Additional signal arguments
+    1. Checks if certificate is active
+    2. Ensures credits haven't been awarded yet for this certificate
+    3. Extracts CPD credits from certificate_data
+    4. Creates CPDTransaction record
+    5. Updates User.total_cpd_credits balance
     """
-    # Only process new certificates with active status
-    if not created or instance.status != Certificate.Status.ACTIVE:
+    # Only process active certificates
+    if instance.status != Certificate.Status.ACTIVE:
         return
 
     # Get the user from either registration or course enrollment
@@ -46,41 +41,49 @@ def award_cpd_credits_on_certificate(sender, instance, created, **kwargs):
         user = instance.course_enrollment.user
 
     if not user:
-        logger.warning(f"Certificate {instance.uuid}: No user found, skipping CPD award")
+        # Silently fail if user not found (might be deleted or inconsistent state)
         return
 
     # Extract CPD credits from certificate data
-    cpd_credits = instance.certificate_data.get("cpd_credits", 0)
+    cpd_credits_val = instance.certificate_data.get("cpd_credits", 0)
 
     # Convert to Decimal for precision
     try:
-        credits = Decimal(str(cpd_credits))
-    except (TypeError, ValueError, ArithmeticError) as e:
-        logger.error(f"Certificate {instance.uuid}: Invalid CPD credit value '{cpd_credits}': {e}")
+        credits = Decimal(str(cpd_credits_val))
+    except (TypeError, ValueError, ArithmeticError):
         return
 
     # Only process if credits > 0
     if credits <= 0:
-        logger.info(f"Certificate {instance.uuid}: No CPD credits to award (credits={credits})")
         return
 
     # Import here to avoid circular dependency
     from accounts.models import CPDTransaction
+    from django.db.models import F
+
+    # Check if a transaction already exists for this certificate to avoid double-awarding
+    # This replaces the 'created' check to make the system more robust to multiple saves during issuance
+    if CPDTransaction.objects.filter(certificate=instance).exists():
+        return
 
     # Use database transaction to ensure atomicity
     try:
         with transaction.atomic():
-            # Calculate new balance
-            new_balance = user.total_cpd_credits + credits
+            # Refresh user with lock to prevent race conditions on balance update
+            from accounts.models import User
+
+            user_obj = User.objects.select_for_update().get(pk=user.pk)
+
+            new_balance = user_obj.total_cpd_credits + credits
 
             # Create transaction record
             cpd_transaction = CPDTransaction.objects.create(
-                user=user,
+                user=user_obj,
                 certificate=instance,
                 transaction_type=CPDTransaction.TransactionType.EARNED,
                 credits=credits,
                 balance_after=new_balance,
-                notes=f"Earned from certificate {instance.short_code}",
+                notes=f"Earned from {instance.context_title}",
                 cpd_type=instance.certificate_data.get("cpd_type", ""),
                 metadata={
                     "certificate_uuid": str(instance.uuid),
@@ -90,16 +93,11 @@ def award_cpd_credits_on_certificate(sender, instance, created, **kwargs):
                 },
             )
 
-            # Update user's total CPD credits
-            user.total_cpd_credits = new_balance
-            user.save(update_fields=["total_cpd_credits", "updated_at"])
+            # Update user's total CPD credits balance
+            user_obj.total_cpd_credits = new_balance
+            user_obj.save(update_fields=["total_cpd_credits", "updated_at"])
 
-            logger.info(
-                f"Certificate {instance.uuid}: Awarded {credits} CPD credits to {user.email}. "
-                f"New balance: {new_balance}. Transaction: {cpd_transaction.uuid}"
-            )
+            logger.info(f"Certificate {instance.uuid}: Awarded {credits} CPD credits to {user.email}")
 
     except Exception as e:
-        logger.error(f"Certificate {instance.uuid}: Failed to award CPD credits to {user.email}: {e}", exc_info=True)
-        # Don't re-raise - certificate issuance should succeed even if CPD award fails
-        # The transaction will be rolled back but certificate remains saved
+        logger.error(f"Certificate {instance.uuid}: Failed to award CPD credits: {e}")

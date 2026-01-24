@@ -9,7 +9,7 @@
       "slug": "future-medicine-2025",
       "event_type": "workshop",
       "status": "published",
-      "starts_at": "2026-02-05T23:09:45.076220+00:00",
+      "starts_at": "2026-02-06T16:55:45.280233+00:00",
       "duration_minutes": 480,
       "price": "199.00",
       "currency": "USD",
@@ -19,8 +19,8 @@
       "certificates_enabled": true,
       "certificate_template": 1,
       "zoom_meeting_id": "999888777",
-      "created_at": "2025-12-23T23:09:45.076223+00:00",
-      "updated_at": "2026-01-22T23:09:45.076224+00:00"
+      "created_at": "2025-12-24T16:55:45.280235+00:00",
+      "updated_at": "2026-01-23T16:55:45.280236+00:00"
     }
   },
   {
@@ -30,11 +30,11 @@
       "uuid": "78b17c92-0bfc-5150-bac2-9d9bc080b68a",
       "event": 1,
       "title": "Keynote: AI in Healthcare",
-      "starts_at": "2026-02-05T23:09:45.076229+00:00",
+      "starts_at": "2026-02-06T16:55:45.280239+00:00",
       "duration_minutes": 60,
       "is_mandatory": true,
-      "created_at": "2025-12-23T23:09:45.076231+00:00",
-      "updated_at": "2026-01-22T23:09:45.076232+00:00"
+      "created_at": "2025-12-24T16:55:45.280240+00:00",
+      "updated_at": "2026-01-23T16:55:45.280241+00:00"
     }
   },
   {
@@ -44,11 +44,11 @@
       "uuid": "d42b68fb-2bdc-5215-b05e-d9de8e0187c0",
       "event": 1,
       "title": "Ethics Workshop",
-      "starts_at": "2026-02-06T01:04:57.076237+00:00",
+      "starts_at": "2026-02-06T18:50:57.280244+00:00",
       "duration_minutes": 90,
       "is_mandatory": true,
-      "created_at": "2025-12-23T23:09:45.076240+00:00",
-      "updated_at": "2026-01-22T23:09:45.076241+00:00"
+      "created_at": "2025-12-24T16:55:45.280251+00:00",
+      "updated_at": "2026-01-23T16:55:45.280252+00:00"
     }
   },
   {
@@ -61,9 +61,9 @@
       "slug": "weekly-health-webinar",
       "event_type": "webinar",
       "status": "completed",
-      "starts_at": "2026-01-15T23:09:45.076247+00:00",
-      "actual_start_at": "2026-01-15T23:09:45.076248+00:00",
-      "actual_end_at": "2026-01-16T00:21:45.076250+00:00",
+      "starts_at": "2026-01-16T16:55:45.280255+00:00",
+      "actual_start_at": "2026-01-16T16:55:45.280257+00:00",
+      "actual_end_at": "2026-01-16T18:07:45.280257+00:00",
       "duration_minutes": 60,
       "price": "0.00",
       "cpd_enabled": true,
@@ -75,8 +75,8 @@
       "attendance_count": 1,
       "registration_count": 2,
       "certificate_count": 1,
-      "created_at": "2025-12-13T23:09:45.076253+00:00",
-      "updated_at": "2026-01-22T23:09:45.076254+00:00",
+      "created_at": "2025-12-14T16:55:45.280259+00:00",
+      "updated_at": "2026-01-23T16:55:45.280260+00:00",
       "speakers": [
         1
       ]
@@ -92,22 +92,8 @@
       "bio": "Paleontologist",
       "email": "speaker.guest@example.com",
       "is_active": true,
-      "created_at": "2025-12-13T23:09:45.076260+00:00",
-      "updated_at": "2026-01-22T23:09:45.076262+00:00"
-    }
-  },
-  {
-    "model": "events.eventcustomfield",
-    "pk": 1,
-    "fields": {
-      "uuid": "5187553a-1e1d-5cd3-887f-26070d53fb99",
-      "event": 1,
-      "label": "Dietary Restrictions",
-      "field_type": "text",
-      "required": false,
-      "order": 0,
-      "created_at": "2025-12-23T23:09:45.076231+00:00",
-      "updated_at": "2026-01-22T23:09:45.076232+00:00"
+      "created_at": "2025-12-14T16:55:45.280264+00:00",
+      "updated_at": "2026-01-23T16:55:45.280265+00:00"
     }
   }
 ]

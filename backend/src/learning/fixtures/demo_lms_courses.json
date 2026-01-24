@@ -1,0 +1,283 @@
+[
+  {
+    "model": "learning.course",
+    "pk": 2,
+    "fields": {
+      "uuid": "77f7734f-c16b-5c32-b473-177e219e1b0c",
+      "owner": 7,
+      "title": "Mastering Python for Data Science",
+      "slug": "mastering-python-data-science",
+      "status": "published",
+      "format": "online",
+      "price_cents": 49900,
+      "currency": "USD",
+      "cpd_credits": "10.00",
+      "estimated_hours": "20.0",
+      "description": "Comprehensive guide to using Python for data analysis and visualization.",
+      "short_description": "Learn Pandas, NumPy, and Matplotlib.",
+      "certificates_enabled": true,
+      "auto_issue_certificates": true,
+      "certificate_template": 2,
+      "badges_enabled": true,
+      "badge_template": 2,
+      "auto_issue_badges": true,
+      "created_at": "2026-01-10T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.course",
+    "pk": 3,
+    "fields": {
+      "uuid": "77f7734f-c16b-5c32-b473-177e219e1b0d",
+      "owner": 7,
+      "title": "Advanced Leadership Workshop",
+      "slug": "advanced-leadership-workshop",
+      "status": "published",
+      "format": "hybrid",
+      "price_cents": 99900,
+      "currency": "USD",
+      "cpd_credits": "15.00",
+      "estimated_hours": "12.0",
+      "description": "Interactive workshop for emerging leaders. Includes live sessions and self-paced study.",
+      "short_description": "Develop your leadership skills with live coaching.",
+      "hybrid_completion_criteria": "both",
+      "min_sessions_required": 2,
+      "certificates_enabled": true,
+      "auto_issue_certificates": true,
+      "certificate_template": 2,
+      "badges_enabled": true,
+      "badge_template": 2,
+      "auto_issue_badges": true,
+      "live_session_start": "2026-02-01T14:00:00.000000+00:00",
+      "live_session_end": "2026-02-15T16:00:00.000000+00:00",
+      "created_at": "2026-01-15T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.eventmodule",
+    "pk": 3,
+    "fields": {
+      "uuid": "3798f980-7600-5696-980f-5dff3acb6028",
+      "title": "Introduction to Pandas",
+      "is_published": true,
+      "order": 0,
+      "created_at": "2026-01-10T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.eventmodule",
+    "pk": 4,
+    "fields": {
+      "uuid": "3798f980-7600-5696-980f-5dff3acb6029",
+      "title": "Data Visualization with Matplotlib",
+      "is_published": true,
+      "order": 1,
+      "created_at": "2026-01-10T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.eventmodule",
+    "pk": 5,
+    "fields": {
+      "uuid": "3798f980-7600-5696-980f-5dff3acb6030",
+      "title": "Pre-work: Leadership Styles",
+      "is_published": true,
+      "order": 0,
+      "created_at": "2026-01-15T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.coursemodule",
+    "pk": 3,
+    "fields": {
+      "uuid": "44ec0c1d-3b58-5f60-ae66-81aacbfd8b5b",
+      "course": 2,
+      "module": 3,
+      "order": 0,
+      "is_required": true,
+      "created_at": "2026-01-10T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.coursemodule",
+    "pk": 4,
+    "fields": {
+      "uuid": "44ec0c1d-3b58-5f60-ae66-81aacbfd8b5c",
+      "course": 2,
+      "module": 4,
+      "order": 1,
+      "is_required": true,
+      "created_at": "2026-01-10T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.coursemodule",
+    "pk": 5,
+    "fields": {
+      "uuid": "44ec0c1d-3b58-5f60-ae66-81aacbfd8b5d",
+      "course": 3,
+      "module": 5,
+      "order": 0,
+      "is_required": true,
+      "created_at": "2026-01-15T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.modulecontent",
+    "pk": 3,
+    "fields": {
+      "uuid": "968f0d48-9e26-5298-9b22-ae9ecb3d8422",
+      "module": 3,
+      "title": "Pandas Basics (Video)",
+      "content_type": "video",
+      "order": 0,
+      "content_data": {
+        "video": {
+          "url": "https://www.youtube.com/watch?v=vmEHCJofslg",
+          "provider": "youtube"
+        }
+      },
+      "duration_minutes": 15,
+      "created_at": "2026-01-10T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.modulecontent",
+    "pk": 4,
+    "fields": {
+      "uuid": "968f0d48-9e26-5298-9b22-ae9ecb3d8423",
+      "module": 3,
+      "title": "DataFrame Operations",
+      "content_type": "text",
+      "order": 1,
+      "content_data": {
+        "text": {
+          "body": "<h3>DataFrame Operations</h3><p>Learn how to select, filter, and manipulate data.</p>"
+        }
+      },
+      "duration_minutes": 10,
+      "created_at": "2026-01-10T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.modulecontent",
+    "pk": 5,
+    "fields": {
+      "uuid": "968f0d48-9e26-5298-9b22-ae9ecb3d8424",
+      "module": 4,
+      "title": "Plotting Basics",
+      "content_type": "video",
+      "order": 0,
+      "content_data": {
+        "video": {
+          "url": "https://www.youtube.com/watch?v=DAQNHzOcO5A",
+          "provider": "youtube"
+        }
+      },
+      "duration_minutes": 20,
+      "created_at": "2026-01-10T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.modulecontent",
+    "pk": 6,
+    "fields": {
+      "uuid": "968f0d48-9e26-5298-9b22-ae9ecb3d8425",
+      "module": 4,
+      "title": "Advanced Visualization Quiz",
+      "content_type": "quiz",
+      "order": 1,
+      "content_data": {
+        "passing_score": 80,
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Which library is best for static plots?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Matplotlib"
+              },
+              {
+                "id": "b",
+                "text": "React"
+              }
+            ],
+            "correctAnswer": "a"
+          }
+        ]
+      },
+      "duration_minutes": 15,
+      "created_at": "2026-01-10T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.modulecontent",
+    "pk": 7,
+    "fields": {
+      "uuid": "968f0d48-9e26-5298-9b22-ae9ecb3d8426",
+      "module": 5,
+      "title": "Understanding Leadership Styles",
+      "content_type": "text",
+      "order": 0,
+      "content_data": {
+        "text": {
+          "body": "<h3>Leadership Styles</h3><p>Read about transformational vs transactional leadership.</p>"
+        }
+      },
+      "duration_minutes": 30,
+      "created_at": "2026-01-15T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.coursesession",
+    "pk": 1,
+    "fields": {
+      "uuid": "8c9575d6-8487-583e-bb39-9870576cf58e",
+      "course": 3,
+      "title": "Leadership Fundamentals Live",
+      "description": "Kickoff session covering core concepts.",
+      "order": 0,
+      "session_type": "live",
+      "starts_at": "2026-02-01T14:00:00.000000+00:00",
+      "duration_minutes": 120,
+      "timezone": "UTC",
+      "is_mandatory": true,
+      "is_published": true,
+      "created_at": "2026-01-15T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  },
+  {
+    "model": "learning.coursesession",
+    "pk": 2,
+    "fields": {
+      "uuid": "8c9575d6-8487-583e-bb39-9870576cf58f",
+      "course": 3,
+      "title": "Conflict Resolution Workshop",
+      "description": "Interactive role-playing session.",
+      "order": 1,
+      "session_type": "live",
+      "starts_at": "2026-02-08T14:00:00.000000+00:00",
+      "duration_minutes": 120,
+      "timezone": "UTC",
+      "is_mandatory": true,
+      "is_published": true,
+      "created_at": "2026-01-15T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
+    }
+  }
+]

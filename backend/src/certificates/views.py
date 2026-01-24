@@ -397,7 +397,12 @@ class CertificateVerificationView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return Certificate.objects.filter(deleted_at__isnull=True).select_related(
-            "registration", "registration__event", "registration__event__owner"
+            "registration",
+            "registration__event",
+            "registration__event__owner",
+            "course_enrollment",
+            "course_enrollment__course",
+            "course_enrollment__course__owner",
         )
 
     def get_object(self):
@@ -431,22 +436,28 @@ class CertificateVerificationView(generics.RetrieveAPIView):
         instance = self.get_object()
 
         # Check if this is the certificate owner trying to access
-        is_owner = request.user.is_authenticated and instance.registration.user == request.user
+        is_owner = False
+        if request.user.is_authenticated:
+            if instance.registration:
+                is_owner = instance.registration.user == request.user
+            elif instance.course_enrollment:
+                is_owner = instance.course_enrollment.user == request.user
 
         # If feedback is required and the owner is trying to view, check feedback
-        event = instance.registration.event
-        if is_owner and event.require_feedback_for_certificate:
-            from feedback.models import EventFeedback
+        if is_owner and instance.registration:
+            event = instance.registration.event
+            if event.require_feedback_for_certificate:
+                from feedback.models import EventFeedback
 
-            # Check if user has submitted feedback for this event
-            feedback_exists = EventFeedback.objects.filter(event=event, registration=instance.registration).exists()
+                # Check if user has submitted feedback for this event
+                feedback_exists = EventFeedback.objects.filter(event=event, registration=instance.registration).exists()
 
-            if not feedback_exists:
-                return error_response(
-                    "Please submit feedback for this event before accessing your certificate.",
-                    code="FEEDBACK_REQUIRED",
-                    status_code=status.HTTP_403_FORBIDDEN,
-                )
+                if not feedback_exists:
+                    return error_response(
+                        "Please submit feedback for this event before accessing your certificate.",
+                        code="FEEDBACK_REQUIRED",
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
 
         # Track view - only set first_viewed_at on first view
         instance.view_count = (instance.view_count or 0) + 1
@@ -495,20 +506,21 @@ class MyCertificateViewSet(ReadOnlyModelViewSet):
         if certificate.status != "active":
             return error_response("Certificate not available.", code="NOT_AVAILABLE")
 
-        # Check if feedback is required
-        event = certificate.registration.event
-        if event.require_feedback_for_certificate:
-            from feedback.models import EventFeedback
+        # Check if feedback is required (only for event certificates)
+        if certificate.registration:
+            event = certificate.registration.event
+            if event.require_feedback_for_certificate:
+                from feedback.models import EventFeedback
 
-            # Check if user has submitted feedback for this event
-            feedback_exists = EventFeedback.objects.filter(event=event, registration=certificate.registration).exists()
+                # Check if user has submitted feedback for this event
+                feedback_exists = EventFeedback.objects.filter(event=event, registration=certificate.registration).exists()
 
-            if not feedback_exists:
-                return error_response(
-                    "Please submit feedback for this event before downloading your certificate.",
-                    code="FEEDBACK_REQUIRED",
-                    status_code=status.HTTP_403_FORBIDDEN,
-                )
+                if not feedback_exists:
+                    return error_response(
+                        "Please submit feedback for this event before downloading your certificate.",
+                        code="FEEDBACK_REQUIRED",
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
 
         # Track download
         certificate.download_count = (certificate.download_count or 0) + 1

@@ -209,6 +209,7 @@ class EventModuleCreateSerializer(serializers.ModelSerializer):
 class AssignmentSubmissionSerializer(serializers.ModelSerializer):
     """Full submission details."""
 
+    assignment = serializers.SlugRelatedField(slug_field="uuid", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     is_passing = serializers.BooleanField(read_only=True)
     assignment_title = serializers.CharField(source="assignment.title", read_only=True)
@@ -349,6 +350,7 @@ class SubmissionReviewSerializer(serializers.ModelSerializer):
 class ContentProgressSerializer(serializers.ModelSerializer):
     """Content progress tracking."""
 
+    content = serializers.SlugRelatedField(slug_field="uuid", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     content_title = serializers.CharField(source="content.title", read_only=True)
 
@@ -381,6 +383,7 @@ class ContentProgressUpdateSerializer(serializers.Serializer):
 class QuizAttemptSerializer(serializers.ModelSerializer):
     """Quiz attempt with scoring details."""
 
+    content = serializers.SlugRelatedField(slug_field="uuid", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     content_title = serializers.CharField(source="content.title", read_only=True)
     user_email = serializers.SerializerMethodField()
@@ -429,6 +432,7 @@ class QuizSubmissionSerializer(serializers.Serializer):
 class ModuleProgressSerializer(serializers.ModelSerializer):
     """Module progress tracking."""
 
+    module = serializers.SlugRelatedField(slug_field="uuid", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     module_title = serializers.CharField(source="module.title", read_only=True)
     progress_percent = serializers.IntegerField(read_only=True)

@@ -90,8 +90,8 @@ class EventViewSet(SoftDeleteModelViewSet):
     GET /api/v1/events/{uuid}/ - Requires authentication (organizer/course manager)
     PATCH /api/v1/events/{uuid}/ - Requires authentication and ownership
     DELETE /api/v1/events/{uuid}/ - Requires authentication and ownership
-    
-    Note: This endpoint is for event organizers only. Attendees should use 
+
+    Note: This endpoint is for event organizers only. Attendees should use
     the public event endpoints for discovery.
     """
 
@@ -358,7 +358,7 @@ class EventViewSet(SoftDeleteModelViewSet):
             # Fallback: fetch participants from Zoom and filter out matched emails
             from accounts.services import zoom_service
 
-            zoom_result = zoom_service.get_past_meeting_participants(event)
+            zoom_result = zoom_service.get_past_meeting_participants(event.owner, event.zoom_meeting_id)
             if not zoom_result.get("success"):
                 return Response([])
 
@@ -602,13 +602,12 @@ class PublicEventListView(generics.ListAPIView):
     filterset_class = PublicEventFilter
     search_fields = ["title", "description", "owner__first_name", "owner__last_name", "owner__organization_name"]
     ordering_fields = ["starts_at", "registration_count"]
-    ordering = ["starts_at"]
+    ordering = ["-starts_at"]
 
     def get_queryset(self):
         return Event.objects.filter(
-            status="published",
+            status__in=["published", "live", "completed"],
             is_public=True,
-            starts_at__gte=timezone.now(),
             deleted_at__isnull=True,
         ).select_related("owner")
 
@@ -655,15 +654,15 @@ class PublicEventDetailView(generics.RetrieveAPIView):
         queryset = Event.objects.select_related("owner").prefetch_related("custom_fields")
 
         if user.is_authenticated:
-            # If user is authenticated, they can see published/live public events OR any event they own
+            # If user is authenticated, they can see published/live/completed public events OR any event they own
             return queryset.filter(
-                Q(status__in=["published", "live"], is_public=True, deleted_at__isnull=True)
+                Q(status__in=["published", "live", "completed"], is_public=True, deleted_at__isnull=True)
                 | Q(owner=user, deleted_at__isnull=True)
             ).distinct()
 
-        # Public users only see published/live public events
+        # Public users only see published/live/completed public events
         return queryset.filter(
-            status__in=["published", "live"],
+            status__in=["published", "live", "completed"],
             is_public=True,
             deleted_at__isnull=True,
         )

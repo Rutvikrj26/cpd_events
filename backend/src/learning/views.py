@@ -519,18 +519,26 @@ class ContentProgressView(views.APIView):
             progress.start()
 
         if data.get("completed"):
-            progress.complete()
+            # Idempotency check: only update if not already completed
+            if progress.status != ContentProgress.Status.COMPLETED:
+                progress.complete()
+
+                # Update module progress
+                module_prog.update_from_content()
+                module_prog.save()
+
+                if course_enrollment:
+                    course_enrollment.update_progress()
         else:
             progress.update_progress(
                 percent=data["progress_percent"], time_spent=data.get("time_spent", 0), position=data.get("position")
             )
+            # Update module progress for non-completion updates too
+            module_prog.update_from_content()
+            module_prog.save()  # Ensure save
 
-        # Update module progress
-        module_prog.update_from_content()
-        module_prog.save()  # Ensure save
-
-        if course_enrollment:
-            course_enrollment.update_progress()
+            if course_enrollment:
+                course_enrollment.update_progress()
 
         return Response(ContentProgressSerializer(progress).data)
 
@@ -657,13 +665,13 @@ class QuizSubmissionView(views.APIView):
 class CourseViewSet(viewsets.ModelViewSet):
     """
     Course management for course owners and authenticated users.
-    
+
     GET /api/v1/courses/ - Requires authentication (shows public published courses and owned courses)
     POST /api/v1/courses/ - Requires authentication and course creation capability
     GET /api/v1/courses/{uuid}/ - Requires authentication (shows public published courses and owned courses)
     PATCH /api/v1/courses/{uuid}/ - Requires authentication and ownership
     DELETE /api/v1/courses/{uuid}/ - Requires authentication and ownership
-    
+
     Note: All endpoints require authentication. Attendees can view published public courses,
     while course owners can manage their own courses.
     """
@@ -685,7 +693,7 @@ class CourseViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(owner=user)
 
         # Authenticated users can see public published courses or their own courses
-        if self.action in ["list", "retrieve"]:
+        if self.action in ["list", "retrieve", "progress", "enrollments", "attendance_stats"]:
             return queryset.filter(models.Q(is_public=True, status=Course.Status.PUBLISHED) | models.Q(owner=user)).distinct()
 
         # For other actions (create, update, delete), only show user's own courses
@@ -757,6 +765,10 @@ class CourseViewSet(viewsets.ModelViewSet):
                 module=module,
                 defaults={"contents_total": module.contents.filter(is_required=True).count()},
             )
+
+            # Self-healing: Ensure module progress is accurate against current content
+            module_prog.update_from_content()
+
             content_prog = ContentProgress.objects.filter(course_enrollment=enrollment, content__module=module)
 
             module_data.append(
@@ -767,6 +779,9 @@ class CourseViewSet(viewsets.ModelViewSet):
                     "content_progress": ContentProgressSerializer(content_prog, many=True).data,
                 }
             )
+
+        # Self-healing: Ensure enrollment progress is accurate against current modules
+        enrollment.update_progress()
 
         return Response(
             {

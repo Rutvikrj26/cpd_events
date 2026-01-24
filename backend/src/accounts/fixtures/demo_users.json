@@ -5,7 +5,7 @@
     "fields": {
       "uuid": "adf3796a-f736-572d-a593-33a9a7f89e46",
       "password": "pbkdf2_sha256$1200000$oluUd8pakoVBuUVJdxQf72$/H2PRGoIh8w/F7+8mD35yIP6C7U83nTWIa9KLPI3Ly8=",
-      "last_login": "2026-01-22T23:09:45.075657+00:00",
+      "last_login": "2026-01-23T16:55:45.280058+00:00",
       "is_superuser": true,
       "email": "admin@cpdevents.com",
       "first_name": "Super",
@@ -16,8 +16,8 @@
       "organization_name": "",
       "professional_title": "",
       "stripe_charges_enabled": false,
-      "created_at": "2025-01-22T23:09:45.075852+00:00",
-      "updated_at": "2026-01-22T23:09:45.075854+00:00"
+      "created_at": "2025-01-23T16:55:45.280072+00:00",
+      "updated_at": "2026-01-23T16:55:45.280075+00:00"
     }
   },
   {
@@ -26,7 +26,7 @@
     "fields": {
       "uuid": "46b8acc3-e95f-51c2-be5a-e5b6f8cfd16a",
       "password": "pbkdf2_sha256$1200000$oluUd8pakoVBuUVJdxQf72$/H2PRGoIh8w/F7+8mD35yIP6C7U83nTWIa9KLPI3Ly8=",
-      "last_login": "2026-01-22T23:09:45.075871+00:00",
+      "last_login": "2026-01-23T16:55:45.280085+00:00",
       "is_superuser": false,
       "email": "organizer.pro@example.com",
       "first_name": "Sarah",
@@ -37,8 +37,8 @@
       "organization_name": "HealthTech Solutions",
       "professional_title": "Dr.",
       "stripe_charges_enabled": true,
-      "created_at": "2025-01-22T23:09:45.075877+00:00",
-      "updated_at": "2026-01-22T23:09:45.075879+00:00"
+      "created_at": "2025-01-23T16:55:45.280087+00:00",
+      "updated_at": "2026-01-23T16:55:45.280088+00:00"
     }
   },
   {
@@ -47,7 +47,7 @@
     "fields": {
       "uuid": "698e2806-4c25-5cd2-b573-65e465e9fd58",
       "password": "pbkdf2_sha256$1200000$oluUd8pakoVBuUVJdxQf72$/H2PRGoIh8w/F7+8mD35yIP6C7U83nTWIa9KLPI3Ly8=",
-      "last_login": "2026-01-22T23:09:45.075887+00:00",
+      "last_login": "2026-01-23T16:55:45.280094+00:00",
       "is_superuser": false,
       "email": "organizer.basic@example.com",
       "first_name": "John",
@@ -58,8 +58,8 @@
       "organization_name": "Local Meetups",
       "professional_title": "",
       "stripe_charges_enabled": false,
-      "created_at": "2025-01-22T23:09:45.075891+00:00",
-      "updated_at": "2026-01-22T23:09:45.075893+00:00"
+      "created_at": "2025-01-23T16:55:45.280096+00:00",
+      "updated_at": "2026-01-23T16:55:45.280097+00:00"
     }
   },
   {
@@ -68,7 +68,7 @@
     "fields": {
       "uuid": "99c8e67b-f53c-5e13-85ed-a14e4349e441",
       "password": "pbkdf2_sha256$1200000$oluUd8pakoVBuUVJdxQf72$/H2PRGoIh8w/F7+8mD35yIP6C7U83nTWIa9KLPI3Ly8=",
-      "last_login": "2026-01-22T23:09:45.075898+00:00",
+      "last_login": "2026-01-23T16:55:45.280100+00:00",
       "is_superuser": false,
       "email": "attendee.engaged@example.com",
       "first_name": "Alice",
@@ -79,8 +79,8 @@
       "organization_name": "General Hospital",
       "professional_title": "Dr.",
       "stripe_charges_enabled": false,
-      "created_at": "2025-01-22T23:09:45.075902+00:00",
-      "updated_at": "2026-01-22T23:09:45.075903+00:00"
+      "created_at": "2025-01-23T16:55:45.280101+00:00",
+      "updated_at": "2026-01-23T16:55:45.280102+00:00"
     }
   },
   {
@@ -89,7 +89,7 @@
     "fields": {
       "uuid": "8e8dca41-982b-53a3-b298-7d6a2b0ed7ee",
       "password": "pbkdf2_sha256$1200000$oluUd8pakoVBuUVJdxQf72$/H2PRGoIh8w/F7+8mD35yIP6C7U83nTWIa9KLPI3Ly8=",
-      "last_login": "2026-01-22T23:09:45.075928+00:00",
+      "last_login": "2026-01-23T16:55:45.280108+00:00",
       "is_superuser": false,
       "email": "attendee.casual@example.com",
       "first_name": "Bob",
@@ -100,8 +100,8 @@
       "organization_name": "",
       "professional_title": "",
       "stripe_charges_enabled": false,
-      "created_at": "2025-01-22T23:09:45.075938+00:00",
-      "updated_at": "2026-01-22T23:09:45.075940+00:00"
+      "created_at": "2025-01-23T16:55:45.280109+00:00",
+      "updated_at": "2026-01-23T16:55:45.280110+00:00"
     }
   },
   {
@@ -110,7 +110,7 @@
     "fields": {
       "uuid": "1ee911ff-d7ab-54f2-b680-6bfd592a6f3e",
       "password": "pbkdf2_sha256$1200000$oluUd8pakoVBuUVJdxQf72$/H2PRGoIh8w/F7+8mD35yIP6C7U83nTWIa9KLPI3Ly8=",
-      "last_login": "2026-01-22T23:09:45.075949+00:00",
+      "last_login": "2026-01-23T16:55:45.280113+00:00",
       "is_superuser": false,
       "email": "speaker.guest@example.com",
       "first_name": "Alan",
@@ -121,8 +121,8 @@
       "organization_name": "Paleontology Dept",
       "professional_title": "Dr.",
       "stripe_charges_enabled": false,
-      "created_at": "2025-01-22T23:09:45.075976+00:00",
-      "updated_at": "2026-01-22T23:09:45.075978+00:00"
+      "created_at": "2025-01-23T16:55:45.280114+00:00",
+      "updated_at": "2026-01-23T16:55:45.280115+00:00"
     }
   },
   {
@@ -133,12 +133,12 @@
       "user": 2,
       "access_token": "encrypted_fake_token",
       "refresh_token": "encrypted_fake_refresh",
-      "token_expires_at": "2026-02-21T23:09:45.075987+00:00",
+      "token_expires_at": "2026-02-22T16:55:45.280119+00:00",
       "zoom_user_id": "zoom_user_pro",
       "zoom_email": "organizer.pro@example.com",
       "is_active": true,
-      "created_at": "2025-12-23T23:09:45.075990+00:00",
-      "updated_at": "2026-01-22T23:09:45.075992+00:00"
+      "created_at": "2025-12-24T16:55:45.280121+00:00",
+      "updated_at": "2026-01-23T16:55:45.280122+00:00"
     }
   }
 ]

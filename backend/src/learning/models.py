@@ -1108,7 +1108,7 @@ class CourseEnrollment(BaseModel):
 
                 # Check for existing cert first (avoid duplicates)
                 if not Certificate.objects.filter(course_enrollment=self).exists():
-                    cert = Certificate.objects.create(
+                    cert = Certificate(
                         course_enrollment=self,
                         template=self.course.certificate_template,
                         status=Certificate.Status.ACTIVE,

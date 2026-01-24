@@ -303,17 +303,32 @@ class CertificateService:
             path = f"certificates/{certificate.uuid}.pdf"
 
             # Upload with metadata
+            metadata = {
+                "certificate_id": str(certificate.uuid),
+                "issued_at": timezone.now().isoformat(),
+            }
+
+            if certificate.registration:
+                metadata.update(
+                    {
+                        "registration_id": str(certificate.registration.uuid),
+                        "event_id": str(certificate.registration.event.uuid),
+                    }
+                )
+            elif certificate.course_enrollment:
+                metadata.update(
+                    {
+                        "course_enrollment_id": str(certificate.course_enrollment.uuid),
+                        "course_id": str(certificate.course_enrollment.course.uuid),
+                    }
+                )
+
             url = gcs_storage.upload(
                 content=pdf_bytes,
                 path=path,
                 content_type="application/pdf",
                 public=False,  # Use signed URLs for access
-                metadata={
-                    "certificate_id": str(certificate.uuid),
-                    "registration_id": str(certificate.registration.uuid),
-                    "event_id": str(certificate.registration.event.uuid),
-                    "issued_at": timezone.now().isoformat(),
-                },
+                metadata=metadata,
             )
 
             if url:
@@ -430,31 +445,25 @@ class CertificateService:
                         "limit_exceeded": True,
                     }
 
-                # Create certificate
-                certificate = Certificate.objects.create(
+                # Instantiate certificate but don't save yet to ensure single post_save trigger with all data
+                certificate = Certificate(
                     registration=registration,
                     template=template,
-                    status="pending",
+                    status=Certificate.Status.ACTIVE,
                     issued_by=issued_by,
+                    issued_at=timezone.now(),
                 )
 
-                # Build and save certificate data snapshot
-                cert_data = certificate.build_certificate_data()
-                certificate.certificate_data = cert_data
+                # Snapshot data BEFORE save so signals see the credits
+                certificate.build_certificate_data()
                 certificate.save()
 
-                # Generate PDF
+                # Generate and upload PDF
                 pdf_bytes = self.generate_pdf(certificate)
-                if not pdf_bytes:
-                    raise Exception("PDF generation failed")
-
-                self.upload_pdf(certificate, pdf_bytes)
-
-                # Mark as issued
-                certificate.status = "active"
-                certificate.issued_at = timezone.now()
-                certificate.issued_by = issued_by
-                certificate.save()
+                if pdf_bytes:
+                    self.upload_pdf(certificate, pdf_bytes)
+                else:
+                    logger.error(f"PDF generation failed for certificate {certificate.uuid}")
 
                 # Update registration
                 registration.certificate_issued = True
@@ -512,15 +521,26 @@ class CertificateService:
         try:
             from integrations.services import email_service
 
-            user = certificate.registration.user
-            event = certificate.registration.event
+            user = None
+            context_title = "your learning"
+
+            if certificate.registration:
+                user = certificate.registration.user
+                context_title = certificate.registration.event.title
+            elif certificate.course_enrollment:
+                user = certificate.course_enrollment.user
+                context_title = certificate.course_enrollment.course.title
+
+            if not user:
+                logger.error(f"Cannot send email for certificate {certificate.uuid}: No user found")
+                return False
 
             return email_service.send_email(
                 template="certificate_issued",
                 recipient=user.email,
                 context={
-                    "user_name": user.full_name,
-                    "event_title": event.title,
+                    "user_name": user.full_name or user.email,
+                    "event_title": context_title,
                     "certificate_url": certificate.pdf_url,
                     "verification_url": certificate.verification_url,
                     "cpd_credits": str(certificate.cpd_credits),
@@ -529,7 +549,7 @@ class CertificateService:
             )
 
         except Exception as e:
-            logger.error(f"Certificate email failed: {e}")
+            logger.error(f"Certificate email failed for {certificate.uuid}: {e}")
             return False
 
 

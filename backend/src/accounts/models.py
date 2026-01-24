@@ -621,28 +621,26 @@ class CPDRequirement(BaseModel):
         """
         from decimal import Decimal
 
-        from certificates.models import Certificate
+        from django.db.models import Sum
 
         start, end = self.get_current_period_bounds()
 
-        certificates = Certificate.objects.filter(
-            registration__user=self.user,
-            certificate_data__cpd_type=self.cpd_type,
-            status="issued",
+        # Query transactions instead of certificates for accuracy and performance
+        queryset = self.user.cpd_transactions.filter(
             created_at__date__gte=start,
             created_at__date__lte=end,
         )
 
-        total = Decimal("0")
-        for cert in certificates:
-            try:
-                # Value stored as string/number in JSON
-                val = cert.certificate_data.get("cpd_credits", 0)
-                total += Decimal(str(val))
-            except (TypeError, ValueError):
-                continue
+        # Logic for matching credit types
+        if self.cpd_type == "general":
+            # "General" requirements usually accept all types of credits
+            pass
+        else:
+            # Specific requirements only accept matching types
+            queryset = queryset.filter(cpd_type=self.cpd_type)
 
-        return total
+        total = queryset.aggregate(Sum("credits"))["credits__sum"]
+        return Decimal(str(total or "0"))
 
     @property
     def completion_percent(self):

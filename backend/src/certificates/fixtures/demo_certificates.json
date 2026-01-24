@@ -10,8 +10,23 @@
       "is_default": true,
       "width_px": 1056,
       "height_px": 816,
-      "created_at": "2025-10-14T23:09:45.076159+00:00",
-      "updated_at": "2026-01-22T23:09:45.076161+00:00"
+      "created_at": "2025-10-15T16:55:45.280194+00:00",
+      "updated_at": "2026-01-23T16:55:45.280194+00:00"
+    }
+  },
+  {
+    "model": "certificates.certificatetemplate",
+    "pk": 2,
+    "fields": {
+      "uuid": "c836e521-f8ba-58c5-a0bb-37ec002beb73",
+      "owner": 7,
+      "name": "Tech Academy Certified",
+      "is_active": true,
+      "is_default": true,
+      "width_px": 1056,
+      "height_px": 816,
+      "created_at": "2026-01-10T12:00:00.000000+00:00",
+      "updated_at": "2026-01-23T12:00:00.000000+00:00"
     }
   },
   {
@@ -23,12 +38,9 @@
       "template": 1,
       "issued_by": 2,
       "status": "active",
-      "certificate_data": {
-        "attendee_name": "Alice Active",
-        "event_title": "Weekly Health Webinar"
-      },
-      "created_at": "2026-01-15T23:09:45.076379+00:00",
-      "updated_at": "2026-01-15T23:09:45.076380+00:00"
+      "certificate_data": "{\"attendee_name\": \"Alice Active\", \"event_title\": \"Weekly Health Webinar\"}",
+      "created_at": "2026-01-16T16:55:45.280324+00:00",
+      "updated_at": "2026-01-16T16:55:45.280325+00:00"
     }
   }
 ]

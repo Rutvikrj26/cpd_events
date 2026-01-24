@@ -1379,6 +1379,17 @@ class StripeConnectService:
         if not self.is_configured:
             return {"charges_enabled": False, "details_submitted": False}
 
+        # Handle development/placeholder IDs gracefully
+        if account_id.startswith("acct_fake"):
+            logger.info(f"Using fake Stripe account status for {account_id}")
+            return {
+                "charges_enabled": True,
+                "details_submitted": True,
+                "payouts_enabled": True,
+                "requirements": {"currently_due": [], "eventually_due": [], "past_due": []},
+                "is_mock": True,
+            }
+
         try:
             account = self._stripe.Account.retrieve(account_id)
             return {
@@ -1388,7 +1399,18 @@ class StripeConnectService:
                 "requirements": account.requirements,
             }
         except Exception as e:
-            logger.error(f"Failed to get account status: {e}")
+            # Check for invalid account error specifically
+            error_msg = str(e)
+            if "account_invalid" in error_msg or "does not have access to account" in error_msg:
+                logger.warning(f"Stripe account {account_id} is invalid or access was revoked: {e}")
+                return {
+                    "error": "account_invalid",
+                    "charges_enabled": False,
+                    "details_submitted": False,
+                    "payouts_enabled": False,
+                }
+
+            logger.error(f"Failed to get account status for {account_id}: {e}")
             return {"error": str(e)}
 
     def create_payout(self, user, amount_cents: int, currency: str = "usd") -> dict[str, Any]:

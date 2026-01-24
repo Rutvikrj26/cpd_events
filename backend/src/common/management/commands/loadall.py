@@ -38,25 +38,41 @@ class Command(BaseCommand):
         self.stdout.write("")
         
         User = get_user_model()
-        
-        # Disconnect signal to prevent auto-creation of subscriptions during fixture loading
-        # This prevents unique constraint errors when loading demo_billing.json
-        self.stdout.write("Disconnecting subscription creation signal...")
+
+        # Disconnect signals to prevent issues during fixture loading
+        self.stdout.write("Disconnecting signals...")
+
+        # Subscription creation signal
         post_save.disconnect(create_subscription_for_new_user, sender=User)
-        
+
+        # Certificate CPD award signal
+        try:
+            from certificates.models import Certificate
+            from certificates.signals import award_cpd_credits_on_certificate
+            post_save.disconnect(award_cpd_credits_on_certificate, sender=Certificate)
+            certificate_signal_disconnected = True
+        except ImportError:
+            certificate_signal_disconnected = False
+            self.stdout.write(self.style.WARNING("  - Certificate signals not found (skipping)"))
+
         try:
             # Call the standard loaddata command with our list of fixtures
             call_command('loaddata', *fixture_labels)
-            
+
             self.stdout.write(
                 self.style.SUCCESS(
                     "\n✅ Successfully loaded all fixtures!"
                 )
             )
         finally:
-            # Reconnect signal
-            self.stdout.write("Reconnecting subscription creation signal...")
+            # Reconnect signals
+            self.stdout.write("Reconnecting signals...")
             post_save.connect(create_subscription_for_new_user, sender=User)
+
+            if certificate_signal_disconnected:
+                from certificates.models import Certificate
+                from certificates.signals import award_cpd_credits_on_certificate
+                post_save.connect(award_cpd_credits_on_certificate, sender=Certificate)
 
     def _discover_all_fixtures(self):
         """Discover all fixture files in the project."""

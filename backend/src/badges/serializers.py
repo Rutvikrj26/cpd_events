@@ -9,23 +9,30 @@ class BadgeTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = BadgeTemplate
         fields = [
-            'uuid', 'name', 'description',
-            'start_image', 'width_px', 'height_px',
-            'field_positions', 'is_active', 'is_shared',
-            'created_at', 'updated_at'
+            "uuid",
+            "name",
+            "description",
+            "start_image",
+            "width_px",
+            "height_px",
+            "field_positions",
+            "is_active",
+            "created_at",
+            "updated_at",
         ]
-        read_only_fields = ['uuid', 'created_at', 'updated_at']
+        read_only_fields = ["uuid", "created_at", "updated_at"]
 
     def create(self, validated_data):
         # Set owner from context
-        validated_data['owner'] = self.context['request'].user
+        validated_data["owner"] = self.context["request"].user
         return super().create(validated_data)
 
 
 class IssuedBadgeSerializer(serializers.ModelSerializer):
     """Serializer for issued badges."""
-    template_name = serializers.CharField(source='template.name', read_only=True)
-    recipient_name = serializers.CharField(source='recipient.display_name', read_only=True)
+
+    template_name = serializers.CharField(source="template.name", read_only=True)
+    recipient_name = serializers.CharField(source="recipient.display_name", read_only=True)
     image_url = serializers.CharField(read_only=True)
 
     # Event/Course details
@@ -35,12 +42,18 @@ class IssuedBadgeSerializer(serializers.ModelSerializer):
     class Meta:
         model = IssuedBadge
         fields = [
-            'uuid', 'template', 'template_name',
-            'recipient_name', 'image_url',
-            'verification_code', 'short_code',
-            'status', 'issued_at',
-            'event_title', 'course_title',
-            'badge_data'
+            "uuid",
+            "template",
+            "template_name",
+            "recipient_name",
+            "image_url",
+            "verification_code",
+            "short_code",
+            "status",
+            "issued_at",
+            "event_title",
+            "course_title",
+            "badge_data",
         ]
         read_only_fields = fields
 
