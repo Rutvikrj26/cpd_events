@@ -268,7 +268,10 @@ export function SubmissionsTab({ courseUuid }: SubmissionsTabProps) {
                                     {submissionContent?.text && (
                                         <div>
                                             <p className="font-medium mb-1">Response</p>
-                                            <p className="text-muted-foreground whitespace-pre-wrap">{submissionContent.text}</p>
+                                            <div 
+                                                className="text-muted-foreground prose prose-sm dark:prose-invert max-w-none"
+                                                dangerouslySetInnerHTML={{ __html: submissionContent.text }}
+                                            />
                                         </div>
                                     )}
                                     {submissionContent?.url && (

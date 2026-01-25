@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { getCourseModules, createCourseModule, deleteCourseModule, updateCourseModule, createModuleContent, updateModuleContent } from "@/api/courses/modules";
 import { createCourseAssignment, deleteCourseAssignment, updateCourseAssignment } from "@/api/courses";
 import { Assignment, CourseModule } from "@/api/courses/types";
@@ -247,6 +248,53 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
             }
             if (notebookImportMethod === 'url' && !notebookUrl.trim()) {
                 toast.error('Please provide a notebook URL');
+                return;
+            }
+        }
+
+        // Validate quiz before saving
+        if (contentType === 'quiz') {
+            // Check if quiz has at least one question
+            if (quizData.questions.length === 0) {
+                toast.error('Quiz must have at least one question');
+                return;
+            }
+
+            // Validate each question
+            for (let i = 0; i < quizData.questions.length; i++) {
+                const question = quizData.questions[i];
+                const questionNumber = i + 1;
+
+                // Check question has text
+                if (!question.text || !question.text.trim()) {
+                    toast.error(`Question ${questionNumber}: Question text cannot be empty`);
+                    return;
+                }
+
+                // Check question has at least 2 options
+                if (!question.options || question.options.length < 2) {
+                    toast.error(`Question ${questionNumber}: Must have at least 2 options`);
+                    return;
+                }
+
+                // Check all options have text
+                const emptyOption = question.options.find(opt => !opt.text || !opt.text.trim());
+                if (emptyOption) {
+                    toast.error(`Question ${questionNumber}: All options must have text`);
+                    return;
+                }
+
+                // Check at least one correct answer is marked
+                const hasCorrectAnswer = question.options.some(opt => opt.isCorrect);
+                if (!hasCorrectAnswer) {
+                    toast.error(`Question ${questionNumber}: No correct answer selected. Click the radio button (single choice) or checkbox (multiple choice) to mark the correct answer(s).`);
+                    return;
+                }
+            }
+
+            // Validate passing score
+            if (quizData.passing_score < 0 || quizData.passing_score > 100) {
+                toast.error('Passing score must be between 0 and 100');
                 return;
             }
         }
@@ -668,36 +716,24 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                     {/* Import Method Selector */}
                                     <div className="space-y-2">
                                         <Label>Import Method</Label>
-                                        <div className="flex gap-4">
+                                        <RadioGroup
+                                            value={notebookImportMethod}
+                                            onValueChange={(value: 'upload' | 'url') => setNotebookImportMethod(value)}
+                                            className="flex gap-4"
+                                        >
                                             <div className="flex items-center space-x-2">
-                                                <input
-                                                    type="radio"
-                                                    id="import-upload"
-                                                    name="import-method"
-                                                    value="upload"
-                                                    checked={notebookImportMethod === 'upload'}
-                                                    onChange={(e) => setNotebookImportMethod(e.target.value as 'upload' | 'url')}
-                                                    className="h-4 w-4"
-                                                />
+                                                <RadioGroupItem value="upload" id="import-upload" />
                                                 <Label htmlFor="import-upload" className="cursor-pointer font-normal">
                                                     Upload File
                                                 </Label>
                                             </div>
                                             <div className="flex items-center space-x-2">
-                                                <input
-                                                    type="radio"
-                                                    id="import-url"
-                                                    name="import-method"
-                                                    value="url"
-                                                    checked={notebookImportMethod === 'url'}
-                                                    onChange={(e) => setNotebookImportMethod(e.target.value as 'upload' | 'url')}
-                                                    className="h-4 w-4"
-                                                />
+                                                <RadioGroupItem value="url" id="import-url" />
                                                 <Label htmlFor="import-url" className="cursor-pointer font-normal">
                                                     Import from URL
                                                 </Label>
                                             </div>
-                                        </div>
+                                        </RadioGroup>
                                     </div>
 
                                     {/* Notebook Upload or URL */}

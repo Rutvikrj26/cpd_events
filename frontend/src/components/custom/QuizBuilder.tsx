@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Check, X, GripVertical } from 'lucide-react';
+import { Plus, Trash2, Check, X, GripVertical, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -110,6 +110,18 @@ export function QuizBuilder({ initialData, onChange }: QuizBuilderProps) {
 
     return (
         <div className="space-y-6">
+            {/* Helpful instruction banner */}
+            <div className="flex items-start gap-3 p-4 border rounded-lg bg-info-subtle border-info-muted">
+                <Info className="h-5 w-5 text-info flex-shrink-0 mt-0.5" />
+                <div className="flex-1 text-sm">
+                    <p className="font-medium text-info mb-1">Mark Correct Answers</p>
+                    <p className="text-info-muted">
+                        Click the <strong>radio button</strong> (○) for single-choice questions or the <strong>checkbox</strong> (☐) for multiple-choice questions to mark the correct answer(s). 
+                        Correct answers will be highlighted with a green background.
+                    </p>
+                </div>
+            </div>
+
             <div className="flex items-center gap-4 p-4 border rounded-lg bg-muted/30">
                 <div className="flex-1">
                     <Label htmlFor="passing-score">Passing Score (%)</Label>
@@ -171,16 +183,16 @@ export function QuizBuilder({ initialData, onChange }: QuizBuilderProps) {
                             </div>
 
                             <div className="space-y-2">
-                                <Label className="text-xs text-muted-foreground">Options</Label>
+                                <Label className="text-xs text-muted-foreground">Options (click ○/☐ to mark correct answer)</Label>
                                 {question.options.map((option) => (
-                                    <div key={option.id} className="flex items-center gap-2">
+                                    <div key={option.id} className={`flex items-center gap-2 ${option.isCorrect ? 'p-2 -m-2 rounded-md bg-success-subtle border border-success/20' : ''}`}>
                                         <div className="pt-1">
                                             {question.type === 'single' ? (
                                                 <div
-                                                    className={`h-4 w-4 rounded-full border flex items-center justify-center cursor-pointer ${option.isCorrect ? 'border-success bg-success-subtle' : 'border-border'}`}
+                                                    className={`h-4 w-4 rounded-full border flex items-center justify-center cursor-pointer ${option.isCorrect ? 'border-success bg-success' : 'border-border'}`}
                                                     onClick={() => updateOption(question.id, option.id, { isCorrect: true })}
                                                 >
-                                                    {option.isCorrect && <div className="h-2 w-2 rounded-full bg-success" />}
+                                                    {option.isCorrect && <div className="h-2 w-2 rounded-full bg-background" />}
                                                 </div>
                                             ) : (
                                                 <Checkbox
@@ -193,7 +205,7 @@ export function QuizBuilder({ initialData, onChange }: QuizBuilderProps) {
                                             value={option.text}
                                             onChange={(e) => updateOption(question.id, option.id, { text: e.target.value })}
                                             placeholder={`Option text`}
-                                            className={`flex-1 ${option.isCorrect ? 'border-success bg-success-subtle/20' : ''}`}
+                                            className="flex-1"
                                         />
                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeOption(question.id, option.id)}>
                                             <X className="h-3 w-3" />

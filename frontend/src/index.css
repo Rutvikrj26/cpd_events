@@ -549,6 +549,33 @@
   .animate-pulse-subtle {
     animation: pulse-subtle 2.5s ease-in-out infinite;
   }
+
+  /* ===================================
+   * NATIVE INPUT DARK MODE SUPPORT
+   * Radio buttons and checkboxes
+   * =================================== */
+  
+  /* Style native radio buttons for dark mode */
+  input[type="radio"],
+  input[type="checkbox"] {
+    @apply border-input bg-background accent-primary;
+    cursor: pointer;
+  }
+
+  input[type="radio"]:hover:not(:disabled),
+  input[type="checkbox"]:hover:not(:disabled) {
+    @apply border-primary;
+  }
+
+  input[type="radio"]:focus,
+  input[type="checkbox"]:focus {
+    @apply ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  input[type="radio"]:disabled,
+  input[type="checkbox"]:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
 }
 
 /* Smooth page transitions */

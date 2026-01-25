@@ -16,6 +16,7 @@ import { updateContentProgress, submitQuiz, getQuizAttempts } from '@/api/learni
 import { Course, CourseModule, Assignment, AssignmentSubmission, CourseAnnouncement, CourseSession } from '@/api/courses/types';
 import { SessionsPanel } from '@/components/courses/SessionsPanel';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,6 +28,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import {
     ArrowLeft,
     CheckCircle2,
@@ -40,9 +43,13 @@ import {
     ChevronDown,
     Award,
     ExternalLink,
+    Link as LinkIcon,
     ClipboardCheck,
     Info,
-    BookOpen
+    BookOpen,
+    Calendar,
+    Clock,
+    AlertCircle,
 } from 'lucide-react';
 import { NotebookRenderer } from '@/components/courses/NotebookRenderer';
 
@@ -68,7 +75,8 @@ interface ModuleWithContents extends CourseModule {
 
 type CourseItem =
     | { type: 'content'; item: ContentWithProgress; moduleUuid: string }
-    | { type: 'assignment'; item: Assignment; moduleUuid: string };
+    | { type: 'assignment'; item: Assignment; moduleUuid: string }
+    | { type: 'session'; item: CourseSession; moduleUuid: null };
 
 export function CoursePlayerPage() {
     const { courseUuid, courseSlug } = useParams<{ courseUuid?: string; courseSlug?: string }>();
@@ -267,6 +275,11 @@ export function CoursePlayerPage() {
             url: (latest?.content as any)?.url || '',
             file_url: latest?.file_url || '',
         });
+    };
+
+    const selectSession = (session: CourseSession) => {
+        setCurrentItem({ type: 'session', item: session, moduleUuid: null });
+        setCurrentModuleUuid(null);
     };
 
     // Mark content as complete
@@ -504,6 +517,7 @@ export function CoursePlayerPage() {
 
     const activeContent = currentItem?.type === 'content' ? currentItem.item : null;
     const activeAssignment = currentItem?.type === 'assignment' ? currentItem.item : null;
+    const activeSession = currentItem?.type === 'session' ? currentItem.item : null;
     const videoUrl = activeContent?.content_data?.video?.url || 
                      activeContent?.content_data?.video_url || 
                      activeContent?.content_data?.youtube_url || 
@@ -565,6 +579,114 @@ export function CoursePlayerPage() {
                 {/* Module List */}
                 <div className="flex-1 overflow-y-auto">
                     <div className="p-2">
+                        {/* Live Sessions Section - Only for hybrid courses */}
+                        {course.format === 'hybrid' && sessions.length > 0 && (() => {
+                            // Sort sessions: live first, then upcoming, then past
+                            const now = new Date();
+                            const sortedSessions = [...sessions].sort((a, b) => {
+                                const startA = new Date(a.starts_at);
+                                const startB = new Date(b.starts_at);
+                                const endA = new Date(startA.getTime() + a.duration_minutes * 60000);
+                                const endB = new Date(startB.getTime() + b.duration_minutes * 60000);
+                                
+                                const isLiveA = now >= startA && now <= endA;
+                                const isLiveB = now >= startB && now <= endB;
+                                const isPastA = now > endA;
+                                const isPastB = now > endB;
+                                
+                                // Live first
+                                if (isLiveA && !isLiveB) return -1;
+                                if (!isLiveA && isLiveB) return 1;
+                                
+                                // Then upcoming (sort by start time)
+                                if (!isPastA && !isPastB) return startA.getTime() - startB.getTime();
+                                
+                                // Then past (sort by most recent first)
+                                if (isPastA && isPastB) return startB.getTime() - startA.getTime();
+                                
+                                // Upcoming before past
+                                if (!isPastA && isPastB) return -1;
+                                if (isPastA && !isPastB) return 1;
+                                
+                                return 0;
+                            });
+
+                            // Find index where past sessions start
+                            const firstPastIndex = sortedSessions.findIndex(session => {
+                                const start = new Date(session.starts_at);
+                                const end = new Date(start.getTime() + session.duration_minutes * 60000);
+                                return now > end;
+                            });
+
+                            return (
+                                <div className="mb-4">
+                                    <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Live Sessions
+                                    </div>
+                                    <div className="space-y-1">
+                                        {sortedSessions.map((session, index) => {
+                                            const isActive = currentItem?.type === 'session' && currentItem.item.uuid === session.uuid;
+                                            const start = new Date(session.starts_at);
+                                            const end = new Date(start.getTime() + session.duration_minutes * 60000);
+                                            const isLive = now >= start && now <= end;
+                                            const isPast = now > end;
+                                            const showDivider = index === firstPastIndex && firstPastIndex > 0;
+
+                                            return (
+                                                <React.Fragment key={session.uuid}>
+                                                    {showDivider && (
+                                                        <div className="flex items-center gap-2 py-2 px-1">
+                                                            <Separator className="flex-1" />
+                                                            <span className="text-xs text-muted-foreground">Past</span>
+                                                            <Separator className="flex-1" />
+                                                        </div>
+                                                    )}
+                                                    <button
+                                                        onClick={() => selectSession(session)}
+                                                        className={`w-full flex items-center gap-2 p-3 rounded-lg text-left transition-colors ${
+                                                            isActive
+                                                                ? 'bg-primary/10 text-primary'
+                                                                : isPast
+                                                                ? 'hover:bg-muted/50 opacity-75'
+                                                                : 'hover:bg-muted'
+                                                        }`}
+                                                    >
+                                                        <Video className={`h-4 w-4 shrink-0 ${
+                                                            isLive ? 'text-red-500' : isPast ? 'text-muted-foreground' : 'text-blue-500'
+                                                        }`} />
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="font-medium text-sm truncate">{session.title}</div>
+                                                            <div className="text-xs text-muted-foreground">
+                                                                {start.toLocaleDateString(undefined, {
+                                                                    month: 'short',
+                                                                    day: 'numeric',
+                                                                })}
+                                                                {' • '}
+                                                                {session.duration_minutes} min
+                                                            </div>
+                                                        </div>
+                                                        {isLive && (
+                                                            <span className="flex items-center gap-1 text-xs text-red-500 shrink-0">
+                                                                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                                                Live
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </div>
+                                    <Separator className="my-4" />
+                                </div>
+                            );
+                        })()}
+
+                        {/* Course Modules */}
+                        {modules.length > 0 && (
+                            <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Course Content
+                            </div>
+                        )}
                         {modules.map((mod, modIdx) => {
                             const moduleUuid = mod.module?.uuid || mod.uuid;
                             const moduleTitle = mod.module?.title || `Module ${modIdx + 1}`;
@@ -648,13 +770,13 @@ export function CoursePlayerPage() {
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col overflow-hidden">
-                {activeContent || activeAssignment ? (
+                {activeContent || activeAssignment || activeSession ? (
                     <>
                         {/* Content Header */}
                         <div className="p-4 border-b flex items-center justify-between bg-background">
                             <div>
                                 <h2 className="text-xl font-semibold">
-                                    {activeContent ? activeContent.title : activeAssignment?.title}
+                                    {activeContent ? activeContent.title : activeAssignment ? activeAssignment.title : activeSession?.title}
                                 </h2>
                                 <div className="flex items-center gap-2 mt-1">
                                     {activeContent && (
@@ -663,8 +785,14 @@ export function CoursePlayerPage() {
                                     {activeAssignment && (
                                         <Badge variant="outline" className="capitalize">Assignment</Badge>
                                     )}
+                                    {activeSession && (
+                                        <Badge variant="outline" className="capitalize">Live Session</Badge>
+                                    )}
                                     {activeContent?.duration_minutes && (
                                         <span className="text-sm text-muted-foreground">{activeContent.duration_minutes} min</span>
+                                    )}
+                                    {activeSession?.duration_minutes && (
+                                        <span className="text-sm text-muted-foreground">{activeSession.duration_minutes} min</span>
                                     )}
                                 </div>
                             </div>
@@ -842,27 +970,55 @@ export function CoursePlayerPage() {
                                         onSubmit={() => handleSubmitAssignment(activeAssignment)}
                                     />
                                 )}
+
+                                {activeSession && (
+                                    <SessionViewer session={activeSession} />
+                                )}
                             </div>
                         </div>
                     </>
                 ) : (
                     <div className="flex-1 overflow-y-auto p-6">
                         <div className="max-w-4xl mx-auto">
-                            {/* Show sessions for hybrid courses */}
-                            {course.format === 'hybrid' && sessions.length > 0 && (
-                                <SessionsPanel sessions={sessions} courseTitle={course.title} />
-                            )}
-
                             <div className="text-center py-12">
                                 <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                                <h3 className="text-lg font-medium mb-2">
-                                    {sessions.length > 0 ? 'Continue Learning' : 'No content selected'}
-                                </h3>
-                                <p className="text-muted-foreground">
-                                    {sessions.length > 0
-                                        ? 'Join a live session above or select a lesson from the sidebar.'
+                                <h3 className="text-lg font-medium mb-2">Welcome to {course.title}</h3>
+                                <p className="text-muted-foreground mb-6">
+                                    {course.format === 'hybrid' 
+                                        ? 'Select a live session or lesson from the sidebar to begin your learning journey.'
                                         : 'Select a lesson from the sidebar to begin.'}
                                 </p>
+                                
+                                {course.format === 'hybrid' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8 text-left">
+                                        <Card>
+                                            <CardHeader>
+                                                <CardTitle className="text-base flex items-center gap-2">
+                                                    <Video className="h-5 w-5 text-blue-500" />
+                                                    Live Sessions
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {sessions.length} interactive live session{sessions.length !== 1 ? 's' : ''} with real-time Q&A and collaboration.
+                                                </p>
+                                            </CardContent>
+                                        </Card>
+                                        <Card>
+                                            <CardHeader>
+                                                <CardTitle className="text-base flex items-center gap-2">
+                                                    <BookOpen className="h-5 w-5 text-green-500" />
+                                                    Self-Paced Content
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {totalContents} lesson{totalContents !== 1 ? 's' : ''} you can complete at your own pace, anytime.
+                                                </p>
+                                            </CardContent>
+                                        </Card>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -918,7 +1074,12 @@ const QuizContent = ({
     const quizData = content.content_data || {};
     const questions = quizData.questions || [];
     const passingScore = quizData.passing_score ?? 70;
-    const maxAttempts = quizData.max_attempts ?? 3;
+    const maxAttempts = quizData.max_attempts != null ? quizData.max_attempts : 3;
+
+    // Check if quiz can be submitted
+    const hasRemainingAttempts = attemptHistory?.remaining_attempts == null || attemptHistory.remaining_attempts > 0;
+    const hasNotUsedAllAttempts = !result || result.passed || (maxAttempts != null && result.attempt_number < maxAttempts);
+    const canSubmitQuiz = hasRemainingAttempts && hasNotUsedAllAttempts;
 
     useEffect(() => {
         loadAttemptHistory();
@@ -1053,6 +1214,7 @@ const QuizContent = ({
                                                     : handleSingleSelect(question.id, option.id)
                                             }
                                             disabled={isSubmitting || (result?.passed ?? false)}
+                                            className="h-4 w-4 border-input bg-background text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50"
                                         />
                                         <span>{option.text}</span>
                                     </label>
@@ -1065,13 +1227,15 @@ const QuizContent = ({
                 <div className="flex items-center justify-between">
                     <Button 
                         onClick={handleSubmit} 
-                        disabled={isSubmitting || (result?.passed ?? false)}
+                        disabled={isSubmitting || (result?.passed ?? false) || !canSubmitQuiz}
                     >
                         {isSubmitting ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 Submitting...
                             </>
+                        ) : !canSubmitQuiz ? (
+                            'No Attempts Remaining'
                         ) : (
                             'Submit Quiz'
                         )}
@@ -1144,6 +1308,23 @@ const QuizContent = ({
     );
 };
 
+// Quill editor configuration for assignment rich text
+const quillModules = {
+    toolbar: [
+        [{ 'header': [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+        ['link', 'clean']
+    ],
+};
+
+const quillFormats = [
+    'header',
+    'bold', 'italic', 'underline', 'strike', 'blockquote',
+    'list', 'bullet',
+    'link'
+];
+
 const AssignmentContent = ({
     assignment,
     submission,
@@ -1188,29 +1369,45 @@ const AssignmentContent = ({
                     <div className="text-sm whitespace-pre-wrap">{assignment.instructions}</div>
                 )}
 
-                {submission?.feedback && (
-                    <Card className="border-warning bg-warning-subtle">
-                        <CardContent className="pt-4 text-sm">
-                            <p className="font-medium text-warning mb-1">Instructor Feedback</p>
-                            <p className="text-warning">{submission.feedback}</p>
-                        </CardContent>
-                    </Card>
+                {submission?.score !== undefined && submission?.score !== null && (
+                    <div className="flex items-center gap-2 text-sm">
+                        <Badge variant="outline" className="text-base">
+                            Score: {submission.score}
+                        </Badge>
+                        {submission.status && (
+                            <Badge variant={
+                                submission.status === 'graded' ? 'default' : 
+                                submission.status === 'needs_revision' ? 'destructive' : 
+                                'secondary'
+                            }>
+                                {submission.status === 'graded' ? 'Graded' : 
+                                 submission.status === 'needs_revision' ? 'Needs Revision' : 
+                                 submission.status === 'submitted' ? 'Submitted' : 'Draft'}
+                            </Badge>
+                        )}
+                    </div>
                 )}
 
-                {submission?.score !== undefined && submission?.score !== null && (
-                    <div className="text-sm text-muted-foreground">
-                        Score: <span className="font-medium">{submission.score}</span>
-                    </div>
+                {submission?.feedback && submission.feedback.trim() && (
+                    <Card className="border-info bg-info-subtle">
+                        <CardContent className="pt-4 text-sm">
+                            <p className="font-medium text-info mb-2">Instructor Feedback</p>
+                            <div className="text-foreground whitespace-pre-wrap">{submission.feedback}</div>
+                        </CardContent>
+                    </Card>
                 )}
 
                 {(assignment.submission_type === 'text' || assignment.submission_type === 'mixed' || !assignment.submission_type) && (
                     <div className="space-y-2">
                         <p className="text-sm font-medium">Response</p>
-                        <textarea
-                            className="w-full min-h-[140px] border rounded-md p-3 text-sm"
+                        <ReactQuill
+                            theme="snow"
                             value={draft.text}
-                            disabled={!canEdit}
-                            onChange={(event) => onDraftChange({ ...draft, text: event.target.value })}
+                            onChange={(value) => onDraftChange({ ...draft, text: value })}
+                            modules={quillModules}
+                            formats={quillFormats}
+                            readOnly={!canEdit}
+                            className="bg-background"
                         />
                     </div>
                 )}
@@ -1218,12 +1415,17 @@ const AssignmentContent = ({
                 {(assignment.submission_type === 'url' || assignment.submission_type === 'mixed') && (
                     <div className="space-y-2">
                         <p className="text-sm font-medium">Reference URL</p>
-                        <input
-                            className="w-full border rounded-md p-2 text-sm"
-                            value={draft.url}
-                            disabled={!canEdit}
-                            onChange={(event) => onDraftChange({ ...draft, url: event.target.value })}
-                        />
+                        <div className="relative">
+                            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                type="url"
+                                placeholder="https://example.com"
+                                className="pl-9"
+                                value={draft.url}
+                                disabled={!canEdit}
+                                onChange={(event) => onDraftChange({ ...draft, url: event.target.value })}
+                            />
+                        </div>
                     </div>
                 )}
 
@@ -1282,8 +1484,8 @@ const AssignmentContent = ({
                         {/* Keep URL option for backwards compatibility */}
                         <div className="pt-2">
                             <p className="text-xs font-medium text-muted-foreground mb-1">Or paste a file URL (optional)</p>
-                            <input
-                                className="w-full border rounded-md p-2 text-sm"
+                            <Input
+                                type="url"
                                 placeholder="https://drive.google.com/..."
                                 value={draft.file_url}
                                 disabled={!canEdit}
@@ -1301,6 +1503,189 @@ const AssignmentContent = ({
                         Submit Assignment
                     </Button>
                 </div>
+            </CardContent>
+        </Card>
+    );
+};
+
+const SessionViewer = ({ session }: { session: CourseSession }) => {
+    const formatDate = (dateString: string) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString(undefined, {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+        });
+    };
+
+    const formatTime = (dateString: string) => {
+        const date = new Date(dateString);
+        return date.toLocaleTimeString(undefined, {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZoneName: 'short',
+        });
+    };
+
+    const getSessionStatus = () => {
+        const now = new Date();
+        const start = new Date(session.starts_at);
+        const end = session.ends_at 
+            ? new Date(session.ends_at) 
+            : new Date(start.getTime() + (session.duration_minutes || 60) * 60000);
+
+        if (now < start) {
+            const diffMs = start.getTime() - now.getTime();
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffDays = Math.floor(diffHours / 24);
+
+            if (diffDays > 0) {
+                return { status: 'upcoming', label: `Starts in ${diffDays} day${diffDays > 1 ? 's' : ''}`, color: 'blue' };
+            } else if (diffHours > 0) {
+                return { status: 'upcoming', label: `Starts in ${diffHours} hour${diffHours > 1 ? 's' : ''}`, color: 'blue' };
+            } else {
+                const diffMins = Math.floor(diffMs / (1000 * 60));
+                return { status: 'upcoming', label: `Starting in ${diffMins} minute${diffMins > 1 ? 's' : ''}`, color: 'orange' };
+            }
+        } else if (now >= start && now <= end) {
+            return { status: 'live', label: 'Live Now', color: 'red' };
+        } else {
+            return { status: 'past', label: 'Session Ended', color: 'gray' };
+        }
+    };
+
+    const { status, label, color } = getSessionStatus();
+    const canJoin = (status === 'live' || status === 'upcoming') && session.zoom_join_url;
+
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                        <CardTitle className="text-2xl">{session.title}</CardTitle>
+                        <div className="flex items-center gap-2">
+                            <Badge 
+                                variant={status === 'live' ? 'default' : 'outline'}
+                                className={
+                                    status === 'live' 
+                                        ? 'bg-red-500 text-white animate-pulse' 
+                                        : status === 'upcoming'
+                                        ? 'text-blue-600 border-blue-300'
+                                        : 'text-muted-foreground'
+                                }
+                            >
+                                {status === 'live' && <span className="mr-1">●</span>}
+                                {label}
+                            </Badge>
+                            {session.is_mandatory && (
+                                <Badge variant="outline" className="text-orange-600 border-orange-300">
+                                    Required
+                                </Badge>
+                            )}
+                        </div>
+                    </div>
+                    {canJoin && (
+                        <Button 
+                            size="lg"
+                            variant={status === 'live' ? 'default' : 'outline'}
+                            asChild
+                        >
+                            <a
+                                href={session.zoom_join_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <ExternalLink className="mr-2 h-5 w-5" />
+                                {status === 'live' ? 'Join Now' : 'Join Session'}
+                            </a>
+                        </Button>
+                    )}
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                {session.description && (
+                    <div>
+                        <h3 className="font-medium mb-2">About This Session</h3>
+                        <p className="text-muted-foreground whitespace-pre-wrap">{session.description}</p>
+                    </div>
+                )}
+
+                <Separator />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                        <div className="flex items-start gap-3">
+                            <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
+                            <div>
+                                <p className="text-sm font-medium">Date</p>
+                                <p className="text-sm text-muted-foreground">{formatDate(session.starts_at)}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                            <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
+                            <div>
+                                <p className="text-sm font-medium">Time</p>
+                                <p className="text-sm text-muted-foreground">
+                                    {formatTime(session.starts_at)}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <div className="flex items-start gap-3">
+                            <Video className="h-5 w-5 text-muted-foreground mt-0.5" />
+                            <div>
+                                <p className="text-sm font-medium">Duration</p>
+                                <p className="text-sm text-muted-foreground">{session.duration_minutes} minutes</p>
+                            </div>
+                        </div>
+                        {session.cpd_credits && Number(session.cpd_credits) > 0 && (
+                            <div className="flex items-start gap-3">
+                                <CheckCircle2 className="h-5 w-5 text-muted-foreground mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-medium">CPD Credits</p>
+                                    <p className="text-sm text-muted-foreground">{session.cpd_credits} credits</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {session.minimum_attendance_percent > 0 && (
+                    <>
+                        <Separator />
+                        <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg">
+                            <Info className="h-5 w-5 text-blue-600 mt-0.5" />
+                            <div>
+                                <p className="text-sm font-medium">Attendance Requirement</p>
+                                <p className="text-sm text-muted-foreground">
+                                    You must attend at least {session.minimum_attendance_percent}% of this session to receive credit.
+                                </p>
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {session.zoom_error && (
+                    <>
+                        <Separator />
+                        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                            <div>
+                                <p className="text-sm font-medium text-red-900">Zoom Meeting Error</p>
+                                <p className="text-sm text-red-700">{session.zoom_error}</p>
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {status === 'past' && !session.zoom_error && (
+                    <div className="text-center py-8 text-muted-foreground">
+                        <p>This session has ended. Check back later for recordings or materials.</p>
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
