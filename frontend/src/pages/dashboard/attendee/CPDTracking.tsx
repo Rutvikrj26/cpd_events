@@ -54,6 +54,14 @@ import {
 } from "@/api/cpd";
 import { CPDProgress, CPDRequirement, CPDRequirementCreate, CPDTransaction, CPDTransactionSummary } from "@/api/cpd/types";
 import { toast } from "sonner";
+import {
+    calculateTotalCredits,
+    calculateTotalRequired,
+    calculateProgressPercentage,
+    parseRequirementForDisplay,
+    parseTransactionForDisplay,
+    formatCredits,
+} from "@/utils/cpdUtils";
 
 export function CPDTracking() {
    const [progress, setProgress] = useState<CPDProgress | null>(null);
@@ -203,18 +211,18 @@ export function CPDTracking() {
       }
    };
 
-   if (loading) {
-      return (
-         <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-         </div>
-      );
-   }
+    if (loading) {
+       return (
+          <div className="flex items-center justify-center py-20">
+             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+       );
+    }
 
-   const requirements = progress?.requirements || [];
-   const totalCredits = progress?.total_credits_earned || 0;
-   const totalRequired = requirements.reduce((sum, r) => sum + r.annual_requirement, 0);
-   const overallProgress = totalRequired > 0 ? Math.min((totalCredits / totalRequired) * 100, 100) : 0;
+    const requirements = progress?.requirements || [];
+    const totalCredits = calculateTotalCredits(progress, transactionSummary);
+    const totalRequired = calculateTotalRequired(requirements);
+    const overallProgress = calculateProgressPercentage(totalCredits, totalRequired);
 
    return (
       <div className="space-y-8">
@@ -251,17 +259,17 @@ export function CPDTracking() {
 
          {/* Hero Stats */}
          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="bg-gradient-to-br from-blue-600 to-blue-700 text-white border-none shadow-lg">
-               <CardHeader className="pb-2">
-                  <CardTitle className="text-blue-100 text-sm font-medium">
-                     Total Credits Earned
-                  </CardTitle>
-               </CardHeader>
-               <CardContent>
-                  <div className="text-4xl font-bold">{totalCredits}</div>
-                  <p className="text-blue-200 text-xs mt-1">This period</p>
-               </CardContent>
-            </Card>
+              <Card className="bg-gradient-to-br from-blue-600 to-blue-700 text-white border-none shadow-lg">
+                 <CardHeader className="pb-2">
+                    <CardTitle className="text-blue-100 text-sm font-medium">
+                       Total Credits Earned
+                    </CardTitle>
+                 </CardHeader>
+                 <CardContent>
+                    <div className="text-4xl font-bold">{formatCredits(totalCredits)}</div>
+                    <p className="text-blue-200 text-xs mt-1">This period</p>
+                 </CardContent>
+              </Card>
 
             <Card>
                <CardHeader className="pb-2">
@@ -269,17 +277,17 @@ export function CPDTracking() {
                      Overall Progress
                   </CardTitle>
                </CardHeader>
-               <CardContent>
-                  <div className="flex justify-between items-end mb-2">
-                     <div className="text-4xl font-bold text-foreground">
-                        {Math.round(overallProgress)}%
-                     </div>
-                     <div className="text-sm text-muted-foreground mb-1">
-                        {totalCredits} / {totalRequired} Credits
-                     </div>
-                  </div>
-                  <Progress value={overallProgress} className="h-2" />
-               </CardContent>
+                 <CardContent>
+                    <div className="flex justify-between items-end mb-2">
+                       <div className="text-4xl font-bold text-foreground">
+                          {Math.round(overallProgress)}%
+                       </div>
+                       <div className="text-sm text-muted-foreground mb-1">
+                          {formatCredits(totalCredits)} / {formatCredits(totalRequired)} Credits
+                       </div>
+                    </div>
+                    <Progress value={overallProgress} className="h-2" />
+                 </CardContent>
             </Card>
 
             <Card>
@@ -594,8 +602,7 @@ export function CPDTracking() {
 }
 
 function TransactionRow({ transaction }: { transaction: CPDTransaction }) {
-   const credits = parseFloat(transaction.credits);
-   const isPositive = credits >= 0;
+   const { credits, isPositive, balanceAfter } = parseTransactionForDisplay(transaction);
    
    const getIcon = () => {
       switch (transaction.transaction_type) {
@@ -629,7 +636,7 @@ function TransactionRow({ transaction }: { transaction: CPDTransaction }) {
                <div className="flex items-center gap-2">
                   <p className="text-sm font-medium">{transaction.transaction_type_display}</p>
                   <Badge variant={getVariant()} className="text-xs">
-                     {isPositive ? '+' : ''}{credits}
+                     {isPositive ? '+' : ''}{formatCredits(credits)}
                   </Badge>
                </div>
                <p className="text-xs text-muted-foreground">
@@ -643,7 +650,7 @@ function TransactionRow({ transaction }: { transaction: CPDTransaction }) {
                {new Date(transaction.created_at).toLocaleDateString()}
             </p>
             <p className="text-xs font-medium">
-               Balance: {transaction.balance_after}
+               Balance: {formatCredits(balanceAfter)}
             </p>
          </div>
       </div>
@@ -657,10 +664,7 @@ function RequirementCard({
    requirement: CPDRequirement;
    onDelete: () => void;
 }) {
-   const earned = parseFloat(requirement.earned_credits);
-   const required = requirement.annual_requirement;
-   const percent = requirement.completion_percent;
-   const isComplete = percent >= 100;
+   const { earned, required, percent, isComplete, remaining } = parseRequirementForDisplay(requirement);
 
    return (
       <div className="p-4 rounded-lg border bg-card">
@@ -679,7 +683,7 @@ function RequirementCard({
             <div className="flex items-center gap-3">
                <div className="text-right">
                   <div className="text-lg font-semibold">
-                     {earned} / {required}
+                     {formatCredits(earned)} / {formatCredits(required)}
                   </div>
                   <div className="text-xs text-muted-foreground">credits</div>
                </div>
@@ -699,7 +703,7 @@ function RequirementCard({
          />
          <div className="flex justify-between mt-2 text-xs text-muted-foreground">
             <span>{percent}% complete</span>
-            {!isComplete && <span>{requirement.credits_remaining} remaining</span>}
+            {!isComplete && <span>{formatCredits(remaining)} remaining</span>}
             {isComplete && <span className="text-green-600 font-medium">Complete ✓</span>}
          </div>
       </div>

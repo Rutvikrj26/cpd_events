@@ -6,7 +6,7 @@ export interface CPDRequirement {
     uuid: string;
     cpd_type: string;
     cpd_type_display: string;
-    annual_requirement: number;
+    annual_requirement: number | string;
     period_type: 'calendar_year' | 'fiscal_year' | 'rolling_12';
     period_type_display: string;
     fiscal_year_start_month: number;
@@ -30,7 +30,7 @@ export interface CPDProgress {
     total_requirements: number;
     completed_requirements: number;
     in_progress_requirements: number;
-    total_credits_earned: number;
+    total_credits_earned: number | string;
     requirements: CPDRequirement[];
 }
 
