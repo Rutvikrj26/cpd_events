@@ -167,10 +167,23 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
 
     const handleOpenEdit = (session: CourseSession) => {
         setEditingSession(session);
+        
+        // Convert ISO datetime to datetime-local format (YYYY-MM-DDTHH:mm)
+        let datetimeLocalValue = '';
+        if (session.starts_at) {
+            try {
+                const date = new Date(session.starts_at);
+                // Format to YYYY-MM-DDTHH:mm (required for datetime-local input)
+                datetimeLocalValue = date.toISOString().slice(0, 16);
+            } catch (e) {
+                console.error('Failed to parse session start time:', e);
+            }
+        }
+        
         setFormData({
             title: session.title,
             description: session.description || '',
-            starts_at: session.starts_at,
+            starts_at: datetimeLocalValue,
             duration_minutes: session.duration_minutes,
             session_type: session.session_type,
             // If ID exists OR error exists, we assume it was meant to be enabled
