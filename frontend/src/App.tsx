@@ -16,6 +16,8 @@ import ScrollToTop from './components/layout/ScrollToTop';
 // Public Pages
 import { LandingPage } from './pages/public/LandingPage';
 import { EventDetail } from './pages/public/EventDetail';
+import { EventDiscovery } from './pages/public/EventDiscovery';
+import { CourseDiscoveryPage } from './pages/public/CourseDiscoveryPage';
 import { EventRegistration } from './pages/public/EventRegistration';
 import { PricingPage } from './pages/public/PricingPage';
 import { ContactPage } from './pages/public/ContactPage';
@@ -267,6 +269,10 @@ export default function App() {
                      <Route path="/certificates" element={<CertificatesPage />} />
                      <Route path="/my-events" element={<MyEvents />} />
                      <Route path="/my-courses" element={<MyCoursesPage />} />
+
+                    {/* Browse/Discovery pages for attendees */}
+                    <Route path="/events/browse" element={<EventDiscovery />} />
+                    <Route path="/courses/browse" element={<CourseDiscoveryPage />} />
 
                     <Route path="/courses/certificates" element={<CourseCertificatesPage />} />
                     <Route path="/courses/manage" element={

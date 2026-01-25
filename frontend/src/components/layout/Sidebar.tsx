@@ -67,14 +67,20 @@ export const Sidebar = ({ subscription }: { subscription?: Subscription | null }
     // Define nav items with route keys matching backend ROUTE_REGISTRY
     const navItems: NavItemConfig[] = [
         { routeKey: 'dashboard', to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+        
+        // Browse/Discovery pages for attendees
+        { routeKey: 'browse_events', to: '/events/browse', icon: Search, label: 'Browse Events', attendeeOnly: true, eventOnly: true },
+        { routeKey: 'browse_courses', to: '/courses/browse', icon: Search, label: 'Browse Courses', attendeeOnly: true },
+        
+        // My Content pages
+        { routeKey: 'registrations', to: '/registrations', icon: Calendar, label: 'My Events', attendeeOnly: true, eventOnly: true },
         { routeKey: 'my_courses', to: '/my-courses', icon: BookOpen, label: 'My Courses', attendeeOnly: true },
-        { routeKey: 'my_events', to: '/events', icon: Calendar, label: 'My Events', organizerOnly: true, eventOnly: true },
-        { routeKey: 'registrations', to: '/registrations', icon: BookOpen, label: 'My Registrations', attendeeOnly: true, eventOnly: true },
         { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'My Certificates', attendeeOnly: true },
         { routeKey: 'badges', to: '/badges', icon: Award, label: 'My Badges', attendeeOnly: true },
         { routeKey: 'cpd_tracking', to: '/cpd', icon: TrendingUp, label: 'CPD Tracking', attendeeOnly: true },
 
-        // Organizer Specific
+        // Organizer Pages
+        { routeKey: 'my_events', to: '/events', icon: Calendar, label: 'My Events', organizerOnly: true, eventOnly: true },
         { routeKey: 'creator_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', creatorOnly: true },
         { routeKey: 'event_badges', to: '/organizer/badges', icon: Award, label: 'Badges', creatorOnly: true },
         { routeKey: 'zoom_meetings', to: '/organizer/zoom', icon: Video, label: 'Zoom Meetings', organizerOnly: true, eventOnly: true },

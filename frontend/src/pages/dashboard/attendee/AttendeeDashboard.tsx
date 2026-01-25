@@ -70,7 +70,7 @@ export function AttendeeDashboard() {
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button asChild variant="secondary" className="font-semibold shadow-sm">
-              <Link to="/my-events">My Events</Link>
+              <Link to="/events/browse">Browse Events</Link>
             </Button>
             <Button asChild variant="outline" className="bg-transparent text-white border-white/30 hover:bg-card/10 hover:text-white hover:border-white/50">
               <Link to="/settings">View Profile</Link>
