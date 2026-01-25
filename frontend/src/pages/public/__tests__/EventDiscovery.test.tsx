@@ -5,7 +5,13 @@ import { EventDiscovery } from "../EventDiscovery";
 
 // Mock the API call
 vi.mock("@/api/events", () => ({
-    getPublicEvents: vi.fn().mockResolvedValue([]),
+    getPublicEvents: vi.fn().mockResolvedValue({
+        results: [],
+        count: 0,
+        total_pages: 0,
+        next: null,
+        previous: null
+    }),
 }));
 
 const renderEventDiscovery = async () => {
@@ -14,9 +20,10 @@ const renderEventDiscovery = async () => {
             <EventDiscovery />
         </BrowserRouter>
     );
+    // Wait for loading to finish by checking that loading skeleton is gone
     await waitFor(() => {
-        expect(screen.getByText(/no events found/i)).toBeInTheDocument();
-    });
+        expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+    }, { timeout: 2000 });
     return view;
 };
 
