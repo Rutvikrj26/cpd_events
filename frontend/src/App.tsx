@@ -58,7 +58,6 @@ import { ProfileSettings } from './pages/dashboard/ProfileSettings';
 
 // Dashboard Pages - Attendee
 import { AttendeeDashboard } from './pages/dashboard/attendee/AttendeeDashboard';
-import { MyEvents } from './pages/dashboard/attendee/MyEvents';
 import { CPDTracking } from './pages/dashboard/attendee/CPDTracking';
 import { MyCoursesPage } from './pages/courses/MyCoursesPage';
 import { CoursePlayerPage } from './pages/courses/CoursePlayerPage';
@@ -267,7 +266,6 @@ export default function App() {
                      {/* Attendee-specific pages */}
                      <Route path="/registrations" element={<MyRegistrationsPage />} />
                      <Route path="/certificates" element={<CertificatesPage />} />
-                     <Route path="/my-events" element={<MyEvents />} />
                      <Route path="/my-courses" element={<MyCoursesPage />} />
 
                     {/* Browse/Discovery pages for attendees */}

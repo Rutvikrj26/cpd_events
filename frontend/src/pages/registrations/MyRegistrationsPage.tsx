@@ -149,7 +149,7 @@ export const MyRegistrationsPage = () => {
             <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
                 {registrations.length === 0 ? (
                     <div className="p-12 text-center text-muted-foreground">
-                        You have not registered for any events yet. <Link to="/events" className="text-primary hover:underline">Browse Events</Link>
+                        You have not registered for any events yet. <Link to="/events/browse" className="text-primary hover:underline">Browse Events</Link>
                     </div>
                 ) : (
                     <table className="w-full text-left text-sm">
