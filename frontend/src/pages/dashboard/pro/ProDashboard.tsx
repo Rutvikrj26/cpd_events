@@ -12,7 +12,6 @@ import {
     BookOpen,
 } from "lucide-react";
 import { OnboardingChecklist } from "@/components/onboarding";
-import { PendingInvitationsBanner } from "@/components/PendingInvitationsBanner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -126,7 +125,6 @@ export function ProDashboard() {
                 }
             />
 
-            <PendingInvitationsBanner />
             <OnboardingChecklist />
 
             {/* Stats Grid */}

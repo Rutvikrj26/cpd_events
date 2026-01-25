@@ -7,6 +7,7 @@ export interface Course {
     organization_logo_url?: string;
     title: string;
     slug: string;
+    owner_uuid?: string;
     description: string;
     short_description: string;
     featured_image?: string;
@@ -164,6 +165,7 @@ export interface EventModule {
     uuid: string;
     title: string;
     description: string;
+    is_published: boolean;
     content_count: number;
     assignment_count: number;
     cpd_credits: string | number;

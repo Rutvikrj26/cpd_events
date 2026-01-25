@@ -9,20 +9,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { useOrganization } from '@/contexts/OrganizationContext';
 import { Building2, User } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export const StepBasicInfo = () => {
     const { formData, updateFormData, isEditMode } = useEventWizard();
-    const { organizations, currentOrg } = useOrganization();
-
-    // Auto-select current organization on mount (only for new events, not edits)
-    React.useEffect(() => {
-        if (!isEditMode && currentOrg && !formData.organization) {
-            updateFormData({ organization: currentOrg.uuid });
-        }
-    }, [currentOrg, formData.organization, updateFormData, isEditMode]);
+    // Organization context removed - organization features disabled
+    const organizations: any[] = [];
+    const currentOrg = null;
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">

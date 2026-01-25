@@ -12,15 +12,8 @@ import { PaginatedResponse, PaginationParams } from '../types';
 export * from './types';
 
 // ============================================
-// Organization Courses (Admin/Course Manager)
+// Organization Courses - REMOVED
 // ============================================
-
-export const getOrganizationCourses = async (orgSlug: string): Promise<Course[]> => {
-    const response = await client.get<any>('/courses/', {
-        params: { org: orgSlug }
-    });
-    return Array.isArray(response.data) ? response.data : response.data.results || [];
-};
 
 export const getOwnedCourses = async (): Promise<Course[]> => {
     const response = await client.get<any>('/courses/', {
@@ -55,7 +48,7 @@ export const publishCourse = async (uuid: string): Promise<Course> => {
 
 export const getCourseBySlug = async (
     slug: string,
-    filters?: { org?: string; owned?: boolean }
+    filters?: { owned?: boolean }
 ): Promise<Course | null> => {
     const response = await client.get<any>('/courses/', {
         params: { slug, ...filters }
@@ -268,7 +261,6 @@ export const gradeCourseSubmission = async (
 
 export interface PublicCourseListParams extends PaginationParams {
     search?: string;
-    org?: string;
 }
 
 export const getPublicCourses = async (params?: PublicCourseListParams): Promise<PaginatedResponse<Course>> => {

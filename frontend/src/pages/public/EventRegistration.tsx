@@ -335,8 +335,8 @@ export function EventRegistration() {
                 <div className="text-center">
                     <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
                     <h2 className="text-xl font-semibold text-foreground">{error}</h2>
-                    <Link to="/events/browse">
-                        <Button className="mt-4">Browse Events</Button>
+                    <Link to="/">
+                        <Button className="mt-4">Back to Home</Button>
                     </Link>
                 </div>
             </div>
@@ -360,8 +360,8 @@ export function EventRegistration() {
                             <Link to={`/events/${event?.slug || id}`}>
                                 <Button className="w-full">View Event Details</Button>
                             </Link>
-                            <Link to="/events/browse">
-                                <Button variant="outline" className="w-full">Browse More Events</Button>
+                            <Link to="/dashboard">
+                                <Button variant="outline" className="w-full">Go to Dashboard</Button>
                             </Link>
                         </div>
                     </CardContent>

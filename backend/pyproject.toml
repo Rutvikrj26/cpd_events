@@ -37,15 +37,16 @@ dependencies = [
     # PDF Generation
     "reportlab (>=4.1.0,<5.0.0)",
     "Pillow (>=10.2.0,<11.0.0)",
-    
+
     # HTTP Requests
     "requests (>=2.31.0,<3.0.0)",
-    
+
     # Utilities
     "pytz (>=2025.2,<2026.0)",
     "python-dateutil (>=2.8.0,<3.0.0)",
     "python-dotenv (>=1.2.1,<2.0.0)",
     "pdf2image (>=1.17.0,<2.0.0)",
+    "nbformat (>=5.9.0,<6.0.0)",
 
     # Production server
     "gunicorn (>=23.0.0,<24.0.0)",

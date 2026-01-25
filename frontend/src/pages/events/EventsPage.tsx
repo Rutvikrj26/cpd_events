@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
-import { Plus, Calendar, MapPin, Users, MoreVertical, Copy, Edit, Eye, Trash2, Loader2, Building2 } from 'lucide-react';
+import { Plus, Calendar, MapPin, Users, MoreVertical, Copy, Edit, Eye, Trash2, Loader2 } from 'lucide-react';
 import { getEvents, getPublicEvents, deleteEvent } from '@/api/events';
 import { duplicateEvent } from '@/api/events/actions';
 import { Event } from '@/api/events/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { EventDiscovery } from '../public/EventDiscovery';
 import { ListSkeleton } from '@/components/ui/page-skeleton';
 import {
     DropdownMenu,
@@ -102,30 +101,20 @@ export const EventsPage = () => {
         }
     };
 
-    if (!isOrganizer) {
-        return <EventDiscovery />;
-    }
-
     if (loading) return <ListSkeleton items={6} />;
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-foreground">
-                        {isOrganizer ? 'My Events' : 'Browse Events'}
-                    </h1>
-                    <p className="text-muted-foreground">
-                        {isOrganizer ? 'Manage your CPD events' : 'Discover upcoming CPD events'}
-                    </p>
+                    <h1 className="text-3xl font-bold text-foreground">My Events</h1>
+                    <p className="text-muted-foreground">Manage your CPD events</p>
                 </div>
-                {isOrganizer && (
-                    <Link to="/events/create">
-                        <Button className="flex items-center gap-2">
-                            <Plus size={16} /> Create Event
-                        </Button>
-                    </Link>
-                )}
+                <Link to="/events/create">
+                    <Button className="flex items-center gap-2">
+                        <Plus size={16} /> Create Event
+                    </Button>
+                </Link>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -161,15 +150,6 @@ export const EventsPage = () => {
                                     >
                                         {event.status}
                                     </Badge>
-                                    {event.organization_info && (
-                                        <Badge
-                                            variant="outline"
-                                            className="absolute top-4 right-16 bg-primary/10 text-primary border-primary/20 flex items-center gap-1"
-                                        >
-                                            <Building2 className="h-3 w-3" />
-                                            {event.organization_info.name}
-                                        </Badge>
-                                    )}
                                 </div>
                                 <div className="p-5">
                                     <h3 className="font-bold text-lg text-foreground group-hover:text-blue-600 transition-colors pr-8">
@@ -240,10 +220,7 @@ export const EventsPage = () => {
                 ))}
                 {events.length === 0 && (
                     <div className="col-span-full py-12 text-center text-muted-foreground bg-card rounded-xl border border-dashed border-slate-300">
-                        {isOrganizer
-                            ? "No events found. Create your first one!"
-                            : "No upcoming events available. Check back later!"
-                        }
+                        No events found. Create your first one!
                     </div>
                 )}
             </div>

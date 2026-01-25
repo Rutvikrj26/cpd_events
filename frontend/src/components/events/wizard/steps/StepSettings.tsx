@@ -10,7 +10,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
 import { getBadgeTemplates, BadgeTemplate } from '@/api/badges';
-import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getPayoutsStatus, PayoutsStatus } from '@/api/payouts';
 import { toast } from 'sonner';
@@ -18,7 +17,6 @@ import { Link } from 'react-router-dom';
 
 export const StepSettings = () => {
     const { formData, updateFormData } = useEventWizard();
-    const { currentOrg } = useOrganization();
     const { user } = useAuth();
     const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
     const [badgeTemplates, setBadgeTemplates] = useState<BadgeTemplate[]>([]);
@@ -29,9 +27,8 @@ export const StepSettings = () => {
     const [userPayoutsEnabled, setUserPayoutsEnabled] = useState(false);
     const [loadingUserPayouts, setLoadingUserPayouts] = useState(true);
 
-    // Check if Stripe is connected (org OR individual user)
-    const orgStripeConnected = currentOrg?.stripe_charges_enabled || false;
-    const stripeConnected = orgStripeConnected || userPayoutsEnabled;
+    // Check if Stripe is connected
+    const stripeConnected = userPayoutsEnabled;
     const isPaidEvent = !formData.is_free;
     const attendanceMinutes = formData.minimum_attendance_minutes ?? 0;
     const durationMinutes = formData.duration_minutes ?? 0;
@@ -78,11 +75,11 @@ export const StepSettings = () => {
         fetchBadgeTemplates();
     }, [formData.badges_enabled]);
 
-    // Fetch individual user payouts status if not using an org
+    // Fetch individual user payouts status
     useEffect(() => {
         const fetchUserPayouts = async () => {
-            // Only fetch if user is an organizer and not using an org with stripe enabled
-            if (user?.account_type !== 'organizer' || orgStripeConnected) {
+            // Only fetch if user is an organizer
+            if (user?.account_type !== 'organizer') {
                 setLoadingUserPayouts(false);
                 return;
             }
@@ -96,7 +93,7 @@ export const StepSettings = () => {
             }
         };
         fetchUserPayouts();
-    }, [user?.account_type, orgStripeConnected]);
+    }, [user?.account_type]);
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -170,14 +167,12 @@ export const StepSettings = () => {
                                 <AlertTriangle className="h-4 w-4" />
                                 <AlertDescription className="flex items-center justify-between">
                                     <span>
-                                        {currentOrg
-                                            ? 'Connect your organization\'s Stripe account to accept payments.'
-                                            : 'Link your bank account to accept payments for this event.'}
+                                        Link your bank account to accept payments for this event.
                                     </span>
-                                    <Link to={currentOrg ? `/organizations/${currentOrg.slug}/settings` : '/settings?tab=payouts'}>
+                                    <Link to='/settings?tab=payouts'>
                                         <Button size="sm" variant="outline" className="ml-4">
                                             <ExternalLink className="h-3 w-3 mr-1" />
-                                            {currentOrg ? 'Setup Stripe' : 'Link Payouts'}
+                                            Link Payouts
                                         </Button>
                                     </Link>
                                 </AlertDescription>
@@ -290,7 +285,6 @@ export const StepSettings = () => {
                                     {templates.map((tpl) => (
                                         <SelectItem key={tpl.uuid} value={tpl.uuid}>
                                             {tpl.name}
-                                            {tpl.is_org_template && ` (${tpl.organization_name || 'Shared'})`}
                                         </SelectItem>
                                     ))}
                                     {templates.length === 0 && !loadingTemplates && (

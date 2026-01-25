@@ -11,7 +11,6 @@ import {
     Shield,
     Clock,
     Globe,
-    Building2,
     Settings,
     FileCheck,
     Zap,
@@ -91,12 +90,6 @@ export function FeaturesPage() {
                                     <Users className="h-5 w-5" />
                                 </div>
                                 <h3 className="font-semibold text-sm">CRM</h3>
-                            </a>
-                            <a href="#organizations" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
-                                <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
-                                    <Building2 className="h-5 w-5" />
-                                </div>
-                                <h3 className="font-semibold text-sm">Teams</h3>
                             </a>
                         </div>
                     </div>
@@ -196,25 +189,6 @@ export function FeaturesPage() {
                 reversed={false}
                 ctaLink="/signup?role=organizer"
                 ctaText="Start Managing Contacts"
-            />
-
-            {/* Feature Highlight 6: Standalone Branded Deployment */}
-            <FeatureSection
-                id="organizations"
-                badge="Standalone Deployment"
-                title="Your Own Branded Training Platform"
-                description="For large organizations and agencies, we offer standalone instances of Accredit with full white-labeling and dedicated infrastructure."
-                features={[
-                    "Complete brand ownership with custom CSS and assets",
-                    "Dedicated infrastructure for isolated data and performance",
-                    "Custom domains (e.g., training.yourcompany.com)",
-                    "Unlimited team members and custom RBAC roles",
-                    "Enterprise-grade security and custom billing structures"
-                ]}
-                visual={<TeamManagementVisual />}
-                reversed={true}
-                ctaLink="/products/organizations"
-                ctaText="View Standalone Options"
             />
 
             {/* All Features Grid */}
@@ -469,59 +443,6 @@ function CertificatesVisual() {
             <div className="absolute -right-4 -bottom-4 bg-card p-3 rounded-xl shadow-elevated border border-border flex items-center gap-2">
                 <Shield className="h-5 w-5 text-success" />
                 <span className="text-sm font-medium text-foreground">Verified</span>
-            </div>
-        </div>
-    );
-}
-
-function TeamManagementVisual() {
-    return (
-        <div className="bg-card rounded-2xl border border-border shadow-elevated p-6">
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Building2 className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                        <h3 className="font-semibold text-foreground">Acme Training Co.</h3>
-                        <p className="text-xs text-muted-foreground">5 team members</p>
-                    </div>
-                </div>
-                <Badge className="bg-primary/10 text-primary border-0">Pro Plan</Badge>
-            </div>
-
-            <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg">
-                    <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-xs font-medium text-white">AD</div>
-                        <div>
-                            <p className="text-sm font-medium text-foreground">Alex Davis</p>
-                            <p className="text-xs text-muted-foreground">alex@acme.com</p>
-                        </div>
-                    </div>
-                    <Badge variant="secondary" className="text-xs">Admin</Badge>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg">
-                    <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-accent/80 flex items-center justify-center text-xs font-medium text-white">JW</div>
-                        <div>
-                            <p className="text-sm font-medium text-foreground">Jane Wilson</p>
-                            <p className="text-xs text-muted-foreground">jane@acme.com</p>
-                        </div>
-                    </div>
-                    <Badge variant="secondary" className="text-xs">Admin</Badge>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg">
-                    <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">+3</div>
-                        <div>
-                            <p className="text-sm font-medium text-foreground">3 more members</p>
-                            <p className="text-xs text-muted-foreground">View all →</p>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     );

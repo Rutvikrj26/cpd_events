@@ -682,17 +682,7 @@ class StripeProduct(BaseModel):
                 ]
             )
         elif self.plan == "pro":
-            features.extend(
-                [
-                    "Multi-user team access",
-                    "White-label options",
-                    "API access",
-                    "Priority support",
-                    "Team collaboration",
-                    "Shared templates",
-                    "Dedicated account manager",
-                ]
-            )
+            features.extend([])
 
         return features
 

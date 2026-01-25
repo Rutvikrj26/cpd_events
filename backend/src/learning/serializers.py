@@ -50,6 +50,8 @@ class ModuleContentSerializer(serializers.ModelSerializer):
 class ModuleContentCreateSerializer(serializers.ModelSerializer):
     """Create/update content."""
 
+    notebook_url = serializers.URLField(required=False, write_only=True, help_text="URL to fetch notebook from")
+
     class Meta:
         model = ModuleContent
         fields = [
@@ -60,6 +62,7 @@ class ModuleContentCreateSerializer(serializers.ModelSerializer):
             "duration_minutes",
             "content_data",
             "file",
+            "notebook_url",
             "is_published",
             "module",
         ]
@@ -67,6 +70,180 @@ class ModuleContentCreateSerializer(serializers.ModelSerializer):
         # We manually handle uniqueness in create/update to avoid DRF implicit lookup errors
         # triggered by unique_together when module is read-only or inferred
         validators = []
+
+    def validate(self, attrs):
+        """Validate content based on content_type."""
+        content_type = attrs.get("content_type")
+        file_obj = attrs.get("file")
+        notebook_url = attrs.pop("notebook_url", None)
+        content_data = attrs.get("content_data", {})
+
+        # Validate notebook files
+        if content_type == "notebook":
+            # If notebook_url is provided, fetch the file from the URL
+            if notebook_url and not file_obj:
+                try:
+                    import requests
+                    from django.core.files.base import ContentFile
+
+                    # Use a session to handle cookies (important for Google Drive "confirm" tokens)
+                    session = requests.Session()
+                    session.headers.update(
+                        {
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                        }
+                    )
+
+                    # Initial attempt to fetch the notebook
+                    response = session.get(notebook_url, timeout=30, stream=True)
+                    response.raise_for_status()
+
+                    # Check if this is a Google Drive "Large File Virus Scan" warning page
+                    # These pages are HTML and contain a 'confirm' token in the URL or cookies
+                    is_html = "text/html" in response.headers.get("Content-Type", "").lower()
+                    confirm_token = None
+                    content_prefix = b""
+
+                    if is_html:
+                        # Try to find a confirmation token in the cookies
+                        for key, value in response.cookies.items():
+                            if key.startswith("download_warning"):
+                                confirm_token = value
+                                break
+
+                        if confirm_token:
+                            # Re-fetch with the confirmation token
+                            url_with_confirm = notebook_url
+                            if "?" in url_with_confirm:
+                                url_with_confirm += f"&confirm={confirm_token}"
+                            else:
+                                url_with_confirm += f"?confirm={confirm_token}"
+
+                            response = session.get(url_with_confirm, timeout=30, stream=True)
+                            response.raise_for_status()
+                            is_html = "text/html" in response.headers.get("Content-Type", "").lower()
+                        else:
+                            # Sometimes the token is in the page body (for large files)
+                            # Let's check the first part of the content
+                            content_prefix = response.raw.read(10240)
+                            content_preview = content_prefix.decode("utf-8", errors="ignore")
+                            import re
+
+                            confirm_match = re.search(r"confirm=([a-zA-Z0-9_]+)", content_preview)
+                            if confirm_match:
+                                confirm_token = confirm_match.group(1)
+                                url_with_confirm = notebook_url
+                                if "?" in url_with_confirm:
+                                    url_with_confirm += f"&confirm={confirm_token}"
+                                else:
+                                    url_with_confirm += f"?confirm={confirm_token}"
+
+                                response = session.get(url_with_confirm, timeout=30, stream=True)
+                                response.raise_for_status()
+                                is_html = "text/html" in response.headers.get("Content-Type", "").lower()
+                                content_prefix = b""  # Reset prefix for the new response
+                            else:
+                                # Not a confirm page, just keep the prefix we read
+                                pass
+
+                    # Read a bit more to check for HTML if we haven't already read a prefix
+                    if not content_prefix:
+                        content_prefix = response.raw.read(1024)
+
+                    if (
+                        is_html
+                        or content_prefix.strip().startswith(b"<!doctype")
+                        or content_prefix.strip().startswith(b"<!DOCTYPE")
+                    ):
+                        raise serializers.ValidationError(
+                            {
+                                "notebook_url": "The URL returned a webpage instead of a notebook file. "
+                                "If using Google Drive/Colab, ensure the file is shared as 'Anyone with the link can view'."
+                            }
+                        )
+
+                    # Extract filename from URL or content-disposition header
+                    filename = "notebook.ipynb"
+                    content_disposition = response.headers.get("content-disposition")
+                    if content_disposition:
+                        import re
+
+                        # Better regex to handle both quoted and unquoted filenames
+                        match = re.search(r'filename=(?:"([^"]+)"|([^;]+))', content_disposition)
+                        if match:
+                            filename = match.group(1) or match.group(2)
+                            filename = filename.strip()
+                    else:
+                        # Try to extract from URL
+                        from urllib.parse import urlparse
+
+                        path = urlparse(notebook_url).path
+                        if path and path.endswith(".ipynb"):
+                            filename = path.split("/")[-1]
+
+                    # Ensure the filename ends with .ipynb
+                    if not filename.lower().endswith(".ipynb"):
+                        filename += ".ipynb"
+
+                    # Combine the prefix we read with the rest of the stream
+                    full_content = content_prefix + response.raw.read()
+
+                    # Create a file object from the response content
+                    file_obj = ContentFile(full_content, name=filename)
+                    attrs["file"] = file_obj
+
+                except requests.RequestException as e:
+                    raise serializers.ValidationError({"notebook_url": f"Failed to fetch notebook from URL: {str(e)}"})
+                except Exception as e:
+                    raise serializers.ValidationError({"notebook_url": f"Error processing notebook URL: {str(e)}"})
+
+            if not file_obj:
+                raise serializers.ValidationError({"file": "Notebook file is required for notebook content type."})
+
+            # Check file extension
+            filename = file_obj.name
+            if not filename.lower().endswith(".ipynb"):
+                raise serializers.ValidationError({"file": "File must be a Jupyter Notebook (.ipynb)"})
+
+            # Validate notebook structure using nbformat
+            try:
+                import nbformat
+
+                # Read the file content
+                file_obj.seek(0)
+                notebook_content = file_obj.read()
+                file_obj.seek(0)  # Reset for later processing
+
+                # Parse notebook
+                notebook = nbformat.reads(notebook_content.decode("utf-8"), as_version=4)
+
+                # Extract metadata
+                cell_count = len(notebook.cells)
+                language = notebook.metadata.get("language_info", {}).get("name", "unknown")
+                kernel = notebook.metadata.get("kernelspec", {}).get("display_name", "Unknown")
+
+                # Check if notebook has outputs
+                has_outputs = any(hasattr(cell, "outputs") and len(cell.outputs) > 0 for cell in notebook.cells)
+
+                # Update content_data with metadata
+                attrs["content_data"] = {
+                    **content_data,
+                    "filename": filename,
+                    "cell_count": cell_count,
+                    "language": language,
+                    "kernel": kernel,
+                    "has_outputs": has_outputs,
+                    "colab_enabled": content_data.get("colab_enabled", True),  # Default to enabled
+                }
+
+            except ImportError:
+                raise serializers.ValidationError({"file": "nbformat library not installed. Cannot validate notebook files."})
+            except nbformat.reader.NotJSONError:
+                raise serializers.ValidationError({"file": "Invalid JSON in notebook file."})
+            except Exception as e:
+                raise serializers.ValidationError({"file": f"Invalid notebook file: {str(e)}"})
+
+        return attrs
 
 
 class AssignmentSerializer(serializers.ModelSerializer):
@@ -483,6 +660,9 @@ class CourseSerializer(serializers.ModelSerializer):
     """Full course details."""
 
     modules = CourseModuleSerializer(many=True, read_only=True)
+    organization_name = serializers.CharField(source="owner.organization_name", read_only=True)
+    organization_logo_url = serializers.URLField(source="owner.organizer_logo_url", read_only=True)
+    owner_uuid = serializers.UUIDField(source="owner.uuid", read_only=True)
 
     class Meta:
         model = Course
@@ -501,6 +681,9 @@ class CourseSerializer(serializers.ModelSerializer):
             "is_free",
             "price_cents",
             "currency",
+            "organization_name",
+            "organization_logo_url",
+            "owner_uuid",
             # Stripe integration
             "stripe_product_id",
             "stripe_price_id",
@@ -555,6 +738,10 @@ class CourseSerializer(serializers.ModelSerializer):
 class CourseListSerializer(serializers.ModelSerializer):
     """List view for courses."""
 
+    organization_name = serializers.CharField(source="owner.organization_name", read_only=True)
+    organization_logo_url = serializers.URLField(source="owner.organizer_logo_url", read_only=True)
+    owner_uuid = serializers.UUIDField(source="owner.uuid", read_only=True)
+
     class Meta:
         model = Course
         fields = [
@@ -575,6 +762,11 @@ class CourseListSerializer(serializers.ModelSerializer):
             "enrollment_count",
             "module_count",
             "estimated_hours",
+            "enrollment_open",
+            "max_enrollments",
+            "organization_name",
+            "organization_logo_url",
+            "owner_uuid",
             "created_at",
         ]
 

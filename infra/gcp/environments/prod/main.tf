@@ -286,10 +286,11 @@ resource "google_cloud_run_service" "backend" {
         ports {
           container_port = 8080
         }
+
         resources {
           limits = {
-            cpu    = var.cloud_run_cpu
-            memory = var.cloud_run_memory
+            cpu    = "1"
+            memory = "1Gi"
           }
         }
 
@@ -365,7 +366,7 @@ resource "google_cloud_run_service" "backend" {
 
         env {
           name  = "WEB_CONCURRENCY"
-          value = "1"
+          value = "3"
         }
 
         # =================================================================
@@ -584,6 +585,22 @@ resource "google_cloud_run_service" "backend" {
           value = "${var.frontend_url}/integrations/zoom/callback"
         }
 
+        # Sentry configuration
+        env {
+          name = "SENTRY_DSN"
+          value_from {
+            secret_key_ref {
+              name = "${local.secret_prefix}_SENTRY_DSN"
+              key  = "latest"
+            }
+          }
+        }
+
+        env {
+          name  = "SENTRY_ENVIRONMENT"
+          value = "production"
+        }
+
       }
 
       # Cloud SQL connection
@@ -723,7 +740,7 @@ output "deployment_state_bucket" {
 output "frontend_env" {
   description = "Frontend build-time environment variables"
   value = {
-    VITE_GOOGLE_MAPS_API_KEY       = var.frontend_google_maps_api_key
-    VITE_STRIPE_PUBLISHABLE_KEY    = var.frontend_stripe_publishable_key
+    VITE_GOOGLE_MAPS_API_KEY    = var.frontend_google_maps_api_key
+    VITE_STRIPE_PUBLISHABLE_KEY = var.frontend_stripe_publishable_key
   }
 }

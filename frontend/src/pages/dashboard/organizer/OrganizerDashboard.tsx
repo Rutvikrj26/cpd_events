@@ -10,11 +10,9 @@ import {
   Activity,
   Video,
   Settings,
-  Building2,
   Loader2
 } from "lucide-react";
 import { OnboardingChecklist } from "@/components/onboarding";
-import { PendingInvitationsBanner } from "@/components/PendingInvitationsBanner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -119,9 +117,6 @@ export function OrganizerDashboard() {
         }
       />
 
-      {/* Pending Invitations Banner */}
-      <PendingInvitationsBanner />
-
       {/* Onboarding Checklist */}
       <OnboardingChecklist />
 
@@ -197,17 +192,12 @@ export function OrganizerDashboard() {
                         <tr key={event.uuid} className="group hover:bg-muted/50 transition-colors">
                           <td className="px-6 py-4 font-medium text-foreground">
                             <div className="flex flex-col gap-1">
-                              <Link to={`/organizer/events/${event.uuid}/manage`} className="hover:text-primary transition-colors block truncate max-w-[200px] sm:max-w-xs">
+                                <Link to={`/organizer/events/${event.uuid}/manage`} className="hover:text-primary transition-colors block truncate max-w-[200px] sm:max-w-xs">
                                 {event.title}
                               </Link>
-                              {event.organization_info && (
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                  <Building2 className="h-3 w-3" />
-                                  <span>{event.organization_info.name}</span>
-                                </div>
-                              )}
                             </div>
                           </td>
+
                           <td className="px-6 py-4 text-muted-foreground">
                             {new Date(event.starts_at).toLocaleDateString()}
                           </td>

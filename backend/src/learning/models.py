@@ -148,6 +148,7 @@ class ModuleContent(BaseModel):
         QUIZ = "quiz", "Quiz"
         EXTERNAL = "external", "External Link"
         LESSON = "lesson", "Mixed Lesson"
+        NOTEBOOK = "notebook", "Jupyter Notebook"
 
     # Relationships
     module = models.ForeignKey(EventModule, on_delete=models.CASCADE, related_name="contents")
@@ -167,6 +168,7 @@ class ModuleContent(BaseModel):
     # text: {html_content}
     # quiz: {questions: [...], passing_score}
     # external: {url, open_in_new_tab}
+    # notebook: {filename, cell_count, language, colab_enabled, has_outputs, kernel}
     content_data = models.JSONField(default=dict)
     file = models.FileField(
         upload_to="learning/modules/", blank=True, null=True, help_text="Uploaded file (for document/video)"

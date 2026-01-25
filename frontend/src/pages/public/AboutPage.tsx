@@ -30,7 +30,7 @@ export function AboutPage() {
                             <span className="gradient-text">Development</span>
                         </h1>
                         <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-                            We're on a mission to make CPD event management effortless for individual providers and large organizations alike.
+                            We're on a mission to make CPD event management effortless for individual providers and teams alike.
                         </p>
                     </div>
                 </div>
@@ -105,7 +105,7 @@ export function AboutPage() {
 
                         <div className="space-y-6 text-lg text-muted-foreground">
                             <p>
-                                We saw organizations spending countless hours on manual attendance tracking, creating certificates one by one, and managing spreadsheets of CPD records. It was clear there had to be a better way.
+                                We saw event hosts spending countless hours on manual attendance tracking, creating certificates one by one, and managing spreadsheets of CPD records. It was clear there had to be a better way.
                             </p>
                             <p>
                                 Accredit was born from the frustration of organizing professional development events and dealing with the administrative overhead. We asked: what if attendance could be tracked automatically? What if certificates could be generated with one click? What if verification was instant?
@@ -134,7 +134,7 @@ export function AboutPage() {
                             Ready to Get Started?
                         </h2>
                         <p className="text-white/80 max-w-2xl mx-auto mb-10 text-lg">
-                            Join organizations worldwide using Accredit to streamline their professional development programs.
+                            Join professionals worldwide using Accredit to streamline their professional development programs.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
                             <Link to="/signup">

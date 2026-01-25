@@ -80,11 +80,6 @@ export function MyEvents() {
       <PageHeader
         title="My Events"
         description="View your upcoming schedule and past event history."
-        actions={
-          <Link to="/events/browse">
-            <Button>Browse New Events</Button>
-          </Link>
-        }
       />
 
       <Tabs defaultValue="upcoming" className="w-full">
@@ -241,11 +236,6 @@ function EmptyState({ tab }: { tab: string }) {
           ? "You haven't registered for any upcoming events yet."
           : "You haven't attended any events yet."}
       </p>
-      {tab === "upcoming" && (
-        <Link to="/events/browse">
-          <Button>Browse Events</Button>
-        </Link>
-      )}
     </div>
   );
 }

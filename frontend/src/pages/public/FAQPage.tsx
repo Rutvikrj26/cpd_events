@@ -30,7 +30,7 @@ const faqCategories = [
             },
             {
                 q: "Who is Accredit for?",
-                a: "Accredit is designed for professional associations, training providers, corporate L&D teams, and any organization that hosts educational events and needs to track attendance and issue CPD certificates."
+                a: "Accredit is designed for professional associations, training providers, corporate L&D teams, and anyone who hosts educational events and needs to track attendance and issue CPD certificates."
             },
             {
                 q: "Is there a free plan?",
@@ -103,7 +103,7 @@ const faqCategories = [
             },
             {
                 q: "Can I customize certificate templates?",
-                a: "Yes! You can upload custom certificate templates and position fields (name, date, event title, etc.) exactly where you want them. This allows you to maintain your organization's branding on all certificates."
+                a: "Yes! You can upload custom certificate templates and position fields (name, date, event title, etc.) exactly where you want them. This allows you to maintain your branding on all certificates."
             },
             {
                 q: "How does certificate verification work?",
@@ -116,25 +116,6 @@ const faqCategories = [
             {
                 q: "Can I issue certificates in bulk?",
                 a: "Yes! From your event management page, you can issue certificates to all eligible attendees at once. The system will generate and send certificates to everyone who met your attendance requirements."
-            }
-        ]
-    },
-    {
-        id: "teams",
-        name: "Teams & Organizations",
-        icon: Users,
-        questions: [
-            {
-                q: "What are organizations?",
-                a: "Organizations allow you to manage events and courses as a team. You can invite team members, assign roles (Admin, Organizer, Course Manager, Instructor), and share resources like certificate templates across your organization."
-            },
-            {
-                q: "What roles are available?",
-                a: "There are four roles: Admin (org settings, members, templates), Organizer (events and contacts), Course Manager (courses and instructors), and Instructor (assigned courses). Each role has permissions tailored to their responsibilities."
-            },
-            {
-                q: "Can I have multiple organizations?",
-                a: "Yes, you can create multiple organizations or be a member of several organizations. This is useful if you work with different teams or manage events for multiple groups."
             }
         ]
     },

@@ -61,7 +61,6 @@ for pk, email, first, last, is_staff, is_superuser, org in user_list:
             "last_name": last,
             "is_staff": is_staff,
             "is_active": True,
-            "date_joined": get_date(-365),
             "email_verified": True,
             "organization_name": org or "",
             "professional_title": "Dr." if pk in [2, 4, 6] else "",
@@ -156,19 +155,35 @@ billing.append({
         "updated_at": get_date()
     }
 })
-# Basic Org
+# Basic Org - Fixed: should be "organizer" plan
 billing.append({
     "model": "billing.subscription",
     "pk": 2,
     "fields": {
         "uuid": get_uuid("sub_2"),
         "user": 3,
-        "plan": "attendee",
+        "plan": "organizer",  # Fixed: was "attendee"
         "status": "active",
         "created_at": get_date(-30),
         "updated_at": get_date()
     }
 })
+
+# Attendee subscriptions (users 4, 5, 6)
+for user_pk in [4, 5, 6]:
+    pk = user_pk - 1  # subscription pks 3, 4, 5
+    billing.append({
+        "model": "billing.subscription",
+        "pk": pk,
+        "fields": {
+            "uuid": get_uuid(f"sub_{pk}"),
+            "user": user_pk,
+            "plan": "attendee",
+            "status": "active",
+            "created_at": get_date(-30),
+            "updated_at": get_date()
+        }
+    })
 
 # Payment Method
 billing.append({

@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, FileText, Loader2, MoreVertical, Search, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
-import { Badge } from '@/components/ui/badge';
+import { Plus, Search, BookOpen, Users, MoreVertical, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Table,
     TableBody,
@@ -19,46 +19,61 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getOrganizationCoursesOverview } from '@/api/organizations';
-import { Course } from '@/api/courses';
+} from "@/components/ui/table";
+import { Skeleton } from '@/components/ui/skeleton';
+import { getOwnedCourses, deleteCourse, Course } from '@/api/courses';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-interface OrgCoursesOverviewProps {
-    orgUuid: string;
-    orgSlug: string;
-    canCreateCourses?: boolean;
-}
-
-const OrgCoursesOverview: React.FC<OrgCoursesOverviewProps> = ({
-    orgUuid,
-    orgSlug,
-    canCreateCourses = false,
-}) => {
+const CourseManagerPage = () => {
     const navigate = useNavigate();
+
     const [courses, setCourses] = useState<Course[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('all');
+    const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
 
     useEffect(() => {
-        const loadCourses = async () => {
-            if (!orgUuid) return;
-            setIsLoading(true);
-            try {
-                const data = await getOrganizationCoursesOverview(orgUuid);
-                setCourses(data);
-            } catch (error) {
-                console.error('Failed to load organization courses', error);
-                toast.error('Failed to load organization courses');
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
         loadCourses();
-    }, [orgUuid]);
+    }, []);
+
+    const loadCourses = async () => {
+        setIsLoading(true);
+        try {
+            const data = await getOwnedCourses();
+            setCourses(data);
+        } catch (error) {
+            console.error('Failed to load courses', error);
+            toast.error('Failed to load courses');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDeleteCourse = async () => {
+        if (!courseToDelete) return;
+
+        try {
+            await deleteCourse(courseToDelete.uuid);
+            toast.success('Course deleted successfully');
+            setCourses(courses.filter(c => c.uuid !== courseToDelete.uuid));
+            setCourseToDelete(null);
+        } catch (error) {
+            console.error('Failed to delete course', error);
+            toast.error('Failed to delete course');
+        }
+    };
 
     const filteredCourses = courses.filter(course => {
         const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -68,68 +83,72 @@ const OrgCoursesOverview: React.FC<OrgCoursesOverviewProps> = ({
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'published':
-                return 'bg-green-100 text-green-800';
-            case 'draft':
-                return 'bg-yellow-100 text-yellow-800';
-            case 'archived':
-                return 'bg-gray-100 text-gray-800';
-            default:
-                return 'bg-slate-100 text-slate-800';
+            case 'published': return 'bg-green-100 text-green-800';
+            case 'draft': return 'bg-yellow-100 text-yellow-800';
+            case 'archived': return 'bg-gray-100 text-gray-800';
+            default: return 'bg-slate-100 text-slate-800';
         }
     };
 
+    if (isLoading) {
+        return (
+            <div className="container mx-auto py-8 px-4 space-y-6">
+                <div className="flex justify-between items-center">
+                    <Skeleton className="h-8 w-64" />
+                    <Skeleton className="h-10 w-32" />
+                </div>
+                <div className="space-y-4">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full" />)}
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <Card>
-            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="container mx-auto py-8 px-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div>
-                    <CardTitle>Organization Courses</CardTitle>
-                    <CardDescription>All courses across course managers in this organization.</CardDescription>
+                    <h1 className="text-3xl font-bold tracking-tight">My Courses</h1>
+                    <p className="text-muted-foreground">
+                        Manage your course catalog and content.
+                    </p>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <Button variant="outline" onClick={() => navigate(`/org/${orgSlug}/courses`)}>
-                        Manage Courses
-                    </Button>
-                    {canCreateCourses && (
-                        <Button onClick={() => navigate(`/org/${orgSlug}/courses/new`)}>
-                            Create Course
-                        </Button>
-                    )}
-                </div>
-            </CardHeader>
-            <CardContent>
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <TabsList>
-                            <TabsTrigger value="all">All</TabsTrigger>
-                            <TabsTrigger value="published">Published</TabsTrigger>
-                            <TabsTrigger value="draft">Drafts</TabsTrigger>
-                            <TabsTrigger value="archived">Archived</TabsTrigger>
-                        </TabsList>
 
-                        <div className="relative w-full sm:w-64">
-                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search courses..."
-                                className="pl-8"
-                                value={searchQuery}
-                                onChange={(event) => setSearchQuery(event.target.value)}
-                            />
-                        </div>
+                <Button onClick={() => navigate(`/courses/manage/new`)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Course
+                </Button>
+            </div>
+
+            <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <TabsList>
+                        <TabsTrigger value="all">All</TabsTrigger>
+                        <TabsTrigger value="published">Published</TabsTrigger>
+                        <TabsTrigger value="draft">Drafts</TabsTrigger>
+                        <TabsTrigger value="archived">Archived</TabsTrigger>
+                    </TabsList>
+
+                    <div className="relative w-full sm:w-64">
+                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search courses..."
+                            className="pl-8"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
                     </div>
+                </div>
 
-                    <TabsContent value={activeTab} className="m-0">
-                        {isLoading ? (
-                            <div className="flex items-center justify-center py-12">
-                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                            </div>
-                        ) : (
+                <TabsContent value={activeTab} className="m-0">
+                    <Card>
+                        <CardContent className="p-0">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead className="w-[360px]">Course</TableHead>
+                                        <TableHead className="w-[400px]">Course</TableHead>
                                         <TableHead>Status</TableHead>
-                                        <TableHead>Enrollments</TableHead>
+                                        <TableHead>Waitlist / Enrolled</TableHead>
                                         <TableHead>Modules</TableHead>
                                         <TableHead>Created</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>
@@ -138,7 +157,7 @@ const OrgCoursesOverview: React.FC<OrgCoursesOverviewProps> = ({
                                 <TableBody>
                                     {filteredCourses.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                            <TableCell colSpan={6} className="h-24 text-center">
                                                 No courses found.
                                             </TableCell>
                                         </TableRow>
@@ -158,7 +177,7 @@ const OrgCoursesOverview: React.FC<OrgCoursesOverviewProps> = ({
                                                         </div>
                                                         <div>
                                                             <div className="font-medium">{course.title}</div>
-                                                            <div className="text-xs text-muted-foreground truncate max-w-[220px]">
+                                                            <div className="text-xs text-muted-foreground truncate max-w-[250px]">
                                                                 {course.short_description || 'No description'}
                                                             </div>
                                                         </div>
@@ -173,6 +192,11 @@ const OrgCoursesOverview: React.FC<OrgCoursesOverviewProps> = ({
                                                     <div className="flex items-center gap-2">
                                                         <Users className="h-4 w-4 text-muted-foreground" />
                                                         <span>{course.enrollment_count}</span>
+                                                        {course.max_enrollments && (
+                                                            <span className="text-muted-foreground text-xs">
+                                                                / {course.max_enrollments}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
@@ -195,12 +219,20 @@ const OrgCoursesOverview: React.FC<OrgCoursesOverviewProps> = ({
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onClick={() => navigate(`/org/${orgSlug}/courses/${course.slug}`)}>
+                                                            <DropdownMenuItem onClick={() => navigate(`/courses/manage/${course.slug}`)}>
                                                                 Manage Course
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => navigate(`/courses/${course.slug}`)}>
                                                                 View Public Page
                                                             </DropdownMenuItem>
+                                                            {course.status === 'draft' && (
+                                                                <DropdownMenuItem
+                                                                    className="text-destructive focus:text-destructive"
+                                                                    onClick={() => setCourseToDelete(course)}
+                                                                >
+                                                                    Delete
+                                                                </DropdownMenuItem>
+                                                            )}
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </TableCell>
@@ -209,12 +241,33 @@ const OrgCoursesOverview: React.FC<OrgCoursesOverviewProps> = ({
                                     )}
                                 </TableBody>
                             </Table>
-                        )}
-                    </TabsContent>
-                </Tabs>
-            </CardContent>
-        </Card>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
+
+
+            <AlertDialog open={!!courseToDelete} onOpenChange={(open) => !open && setCourseToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Course</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete "{courseToDelete?.title}"? This action cannot be undone and will remove all associated modules, lessons, and enrollment data.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setCourseToDelete(null)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteCourse}
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </div >
     );
 };
 
-export default OrgCoursesOverview;
+export default CourseManagerPage;

@@ -55,12 +55,12 @@ export function LandingPage() {
                 <h2 className="text-2xl font-bold text-foreground">For Learners</h2>
               </div>
               <p className="text-muted-foreground mb-6">
-                Discover events and courses from trusted providers
+                Manage your professional development journey
               </p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                  <span className="text-sm text-foreground">Browse live events and self-paced courses</span>
+                  <span className="text-sm text-foreground">Access your events and self-paced courses</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
@@ -71,10 +71,10 @@ export function LandingPage() {
                   <span className="text-sm text-foreground">Earn verified, shareable certificates</span>
                 </li>
               </ul>
-              <Link to="/events/browse">
+              <Link to="/signup?role=attendee">
                 <Button variant="outline" size="lg" className="w-full h-12 text-base">
-                  Browse Training
-                  <Search className="ml-2 h-4 w-4" />
+                  Get Started
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
               <div className="mt-4 text-center">
@@ -138,14 +138,14 @@ export function LandingPage() {
               </div>
 
               <p className="text-muted-foreground leading-relaxed">
-                Browse thousands of CPD events and courses, filter by topic or date, and register in seconds with no complicated forms. All your certificates and credits are tracked automatically in one secure dashboard, giving you instantly shareable credentials that employers and regulators can verify online. Never lose track of your professional development again.
+                All your certificates and credits are tracked automatically in one secure dashboard, giving you instantly shareable credentials that employers and regulators can verify online. Never lose track of your professional development again.
               </p>
 
               <div className="pt-4">
-                <Link to="/events/browse">
+                <Link to="/signup?role=attendee">
                   <Button size="lg" variant="outline" className="h-12 px-8">
-                    Browse Training
-                    <Search className="ml-2 h-4 w-4" />
+                    Start Learning
+                    <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </Link>
               </div>
@@ -256,10 +256,10 @@ export function LandingPage() {
             Join the professionals already using Accredit
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/events/browse">
+            <Link to="/signup?role=attendee">
               <Button size="lg" variant="outline" className="h-14 px-10 text-lg w-full sm:w-auto">
-                Browse Training
-                <Search className="ml-2 h-5 w-5" />
+                Join as Learner
+                <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
             <Link to="/pricing">

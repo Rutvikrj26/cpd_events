@@ -39,7 +39,6 @@ import { useToast } from '@/components/ui/use-toast';
 import { createCourse } from '@/api/courses';
 import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
 import { getBadgeTemplates, BadgeTemplate } from '@/api/badges';
-import { useOrganization } from '@/contexts/OrganizationContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { SessionScheduler, SessionDraft } from '@/components/courses/SessionScheduler';
 
@@ -80,11 +79,8 @@ const courseSchema = z.object({
 type CourseFormValues = z.infer<typeof courseSchema>;
 
 const CreateCoursePage = () => {
-    const { slug } = useParams<{ slug?: string }>();
     const navigate = useNavigate();
     const { toast } = useToast();
-    const { currentOrg } = useOrganization();
-    const isPersonal = !slug;
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -180,7 +176,6 @@ const CreateCoursePage = () => {
 
         try {
             const course = await createCourse({
-                ...(isPersonal ? {} : { organization_slug: slug }),
                 ...cleanValues,
                 // Backend computes is_free from price_cents
             });
@@ -221,7 +216,7 @@ const CreateCoursePage = () => {
             });
 
             // Navigate to course management/builder
-            navigate(isPersonal ? `/courses/manage/${course.slug}` : `/org/${slug}/courses/${course.slug}`);
+            navigate(`/courses/manage/${course.slug}`);
 
         } catch (error: any) {
             console.error('Failed to create course:', error);
@@ -237,7 +232,7 @@ const CreateCoursePage = () => {
                 <Button
                     variant="ghost"
                     className="pl-0 mb-4"
-                    onClick={() => navigate(isPersonal ? `/courses/manage` : `/org/${slug}/courses`)}
+                    onClick={() => navigate(`/courses/manage`)}
                 >
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to Courses
@@ -408,7 +403,7 @@ const CreateCoursePage = () => {
                                         <div className="space-y-0.5">
                                             <FormLabel className="text-base">Public Visibility</FormLabel>
                                             <FormDescription>
-                                                Make this course visible in your organization's public catalog.
+                                                Make this course visible in the public catalog.
                                             </FormDescription>
                                         </div>
                                         <FormControl>
@@ -740,7 +735,7 @@ const CreateCoursePage = () => {
                     </Card>
 
                     <div className="flex justify-end gap-4">
-                        <Button type="button" variant="outline" onClick={() => navigate(`/org/${slug}/courses`)}>
+                        <Button type="button" variant="outline" onClick={() => navigate(`/courses/manage`)}>
                             Cancel
                         </Button>
                         <Button type="submit" disabled={isSubmitting}>

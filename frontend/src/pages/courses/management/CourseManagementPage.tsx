@@ -13,15 +13,12 @@ import { SettingsTab } from "./manage/SettingsTab";
 import { getCourseBySlug } from '@/api/courses';
 import { Course } from '@/api/courses/types';
 import { Loader2 } from 'lucide-react';
-import { useOrganization } from '@/contexts/OrganizationContext';
 
 export function CourseManagementPage() {
-    const { slug, courseSlug } = useParams<{ slug?: string; courseSlug?: string }>();
+    const { courseSlug } = useParams<{ courseSlug?: string }>();
     const [searchParams] = useSearchParams();
-    const { currentOrg } = useOrganization();
     const [course, setCourse] = useState<Course | null>(null);
     const [loading, setLoading] = useState(true);
-    const isInstructor = Boolean(slug && currentOrg?.user_role === 'instructor');
 
     // Determine if sessions tab should be shown
     const showSessions = course?.format === 'hybrid';
@@ -33,7 +30,7 @@ export function CourseManagementPage() {
         'announcements',
         'submissions',
         ...(showSessions ? ['sessions'] : []),
-        ...(isInstructor ? [] : ['curriculum', 'settings']),
+        'curriculum', 'settings',
     ];
     const defaultTab = availableTabs.includes(requestedTab) ? requestedTab : 'overview';
 
@@ -41,7 +38,7 @@ export function CourseManagementPage() {
         async function fetchCourse() {
             if (!courseSlug) return;
             try {
-                const data = await getCourseBySlug(courseSlug, slug ? { org: slug } : { owned: true });
+                const data = await getCourseBySlug(courseSlug, { owned: true });
                 setCourse(data);
             } catch (error) {
                 console.error(error);
@@ -50,7 +47,7 @@ export function CourseManagementPage() {
             }
         }
         fetchCourse();
-    }, [courseSlug, slug]);
+    }, [courseSlug]);
 
     const handleCourseUpdated = (updatedCourse: Course) => {
         setCourse(updatedCourse);
@@ -74,14 +71,7 @@ export function CourseManagementPage() {
                 title={course.title}
                 description={`Manage course content and settings.`}
                 breadcrumbs={[
-                    ...(slug
-                        ? [
-                            { label: "Organization", href: `/org/${slug}` },
-                            { label: "Courses", href: `/org/${slug}/courses` },
-                        ]
-                        : [
-                            { label: "My Courses", href: `/courses/manage` },
-                        ]),
+                    { label: "My Courses", href: `/courses/manage` },
                     { label: course.title },
                 ]}
                 actions={
@@ -95,11 +85,11 @@ export function CourseManagementPage() {
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     {showSessions && <TabsTrigger value="sessions">Sessions</TabsTrigger>}
-                    {!isInstructor && <TabsTrigger value="curriculum">Curriculum</TabsTrigger>}
+                    <TabsTrigger value="curriculum">Curriculum</TabsTrigger>
                     <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
                     <TabsTrigger value="announcements">Announcements</TabsTrigger>
                     <TabsTrigger value="submissions">Submissions</TabsTrigger>
-                    {!isInstructor && <TabsTrigger value="settings">Settings</TabsTrigger>}
+                    <TabsTrigger value="settings">Settings</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-4 mt-6">
@@ -112,11 +102,9 @@ export function CourseManagementPage() {
                     </TabsContent>
                 )}
 
-                {!isInstructor && (
-                    <TabsContent value="curriculum" className="mt-6">
-                        <CurriculumTab courseUuid={course.uuid} />
-                    </TabsContent>
-                )}
+                <TabsContent value="curriculum" className="mt-6">
+                    <CurriculumTab courseUuid={course.uuid} />
+                </TabsContent>
 
                 <TabsContent value="enrollments" className="mt-6">
                     <EnrollmentsTab courseUuid={course.uuid} />
@@ -130,15 +118,12 @@ export function CourseManagementPage() {
                     <SubmissionsTab courseUuid={course.uuid} />
                 </TabsContent>
 
-                {!isInstructor && (
-                    <TabsContent value="settings" className="mt-6">
-                        <SettingsTab
-                            course={course}
-                            onCourseUpdated={handleCourseUpdated}
-                            organizationSlug={slug}
-                        />
-                    </TabsContent>
-                )}
+                <TabsContent value="settings" className="mt-6">
+                    <SettingsTab
+                        course={course}
+                        onCourseUpdated={handleCourseUpdated}
+                    />
+                </TabsContent>
             </Tabs>
         </div>
     );

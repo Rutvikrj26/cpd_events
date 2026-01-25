@@ -11,10 +11,10 @@ import {
   AlertCircle,
   Video,
   Loader2,
-  Building2,
   Globe,
   Mail,
-  ArrowRight
+  ArrowRight,
+  Building2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -126,8 +126,8 @@ export function EventDetail() {
           <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-foreground">Event Not Found</h2>
           <p className="text-muted-foreground mt-2">{error || "The event you're looking for doesn't exist."}</p>
-          <Link to="/events/browse">
-            <Button className="mt-4">Browse Events</Button>
+          <Link to="/">
+            <Button className="mt-4">Back to Home</Button>
           </Link>
         </div>
       </div>
@@ -618,14 +618,6 @@ export function EventDetail() {
                         <div className="text-xs text-muted-foreground">Organization</div>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Link to={`/organizations/${event.organization_info.slug}/public`}>
-                        <Button variant="outline" className="w-full text-xs h-8">
-                          <Building2 className="h-3 w-3 mr-1" />
-                          View Profile
-                        </Button>
-                      </Link>
-                    </div>
                   </>
                 ) : (
                   <>
@@ -765,12 +757,6 @@ export function EventDetail() {
                   Explore other events from this organization
                 </p>
               </div>
-              <Link to={`/organizations/${event.organization_info.slug}/public`}>
-                <Button variant="outline">
-                  View All
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

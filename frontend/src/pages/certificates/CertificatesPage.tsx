@@ -251,11 +251,6 @@ export const CertificatesPage = () => {
                                 : "Complete events to earn certificates. They will appear here once issued by the organizer."
                             }
                         </p>
-                        {!searchTerm && (
-                            <Link to="/events/browse" className="mt-4">
-                                <Button variant="outline">Browse Events</Button>
-                            </Link>
-                        )}
                     </div>
                 )
             }

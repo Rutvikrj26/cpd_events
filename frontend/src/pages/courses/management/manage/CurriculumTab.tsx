@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, GripVertical, Trash2, Edit2, FileText, File, ChevronRight, ChevronDown, HelpCircle, ClipboardCheck } from "lucide-react";
+import { Plus, GripVertical, Trash2, Edit2, FileText, File, ChevronRight, ChevronDown, HelpCircle, ClipboardCheck, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,10 +10,11 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { getCourseModules, createCourseModule, deleteCourseModule, createModuleContent, updateModuleContent } from "@/api/courses/modules";
+import { getCourseModules, createCourseModule, deleteCourseModule, updateCourseModule, createModuleContent, updateModuleContent } from "@/api/courses/modules";
 import { createCourseAssignment, deleteCourseAssignment, updateCourseAssignment } from "@/api/courses";
 import { Assignment, CourseModule } from "@/api/courses/types";
 import { QuizBuilder, QuizData } from "@/components/custom/QuizBuilder";
+import { NotebookRenderer } from "@/components/courses/NotebookRenderer";
 
 import client from "@/api/client";
 import {
@@ -64,7 +65,7 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
     });
 
     // Joint state
-    const [contentType, setContentType] = useState<'lesson' | 'quiz'>('lesson');
+    const [contentType, setContentType] = useState<'lesson' | 'quiz' | 'notebook'>('lesson');
     const [newContentTitle, setNewContentTitle] = useState("");
 
     // Lesson state
@@ -76,6 +77,81 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
 
     // Quiz state
     const [quizData, setQuizData] = useState<QuizData>({ questions: [], passing_score: 70 });
+
+    // Notebook state
+    const [colabEnabled, setColabEnabled] = useState(true);
+    const [notebookImportMethod, setNotebookImportMethod] = useState<'upload' | 'url'>('upload');
+    const [notebookUrl, setNotebookUrl] = useState("");
+    const [urlSource, setUrlSource] = useState<'github' | 'drive' | 'gist' | 'direct' | 'colab' | null>(null);
+
+    // Helper function to detect URL source
+    const detectUrlSource = (url: string): 'github' | 'drive' | 'gist' | 'direct' | 'colab' | null => {
+        if (!url) return null;
+        if (url.includes('colab.research.google.com/drive/')) return 'colab';
+        if (url.includes('drive.google.com')) return 'drive';
+        if (url.includes('github.com') || url.includes('raw.githubusercontent.com')) return 'github';
+        if (url.includes('gist.github.com') || url.includes('gist.githubusercontent.com')) return 'gist';
+        if (url.endsWith('.ipynb')) return 'direct';
+        return null;
+    };
+
+    // Helper function to convert various URL formats to direct download links
+    const convertToDirectUrl = (url: string): string => {
+        // Google Colab URLs with Drive file ID
+        // Pattern: https://colab.research.google.com/drive/FILE_ID
+        const colabPattern = /colab\.research\.google\.com\/drive\/([^/?#]+)/;
+        const colabMatch = url.match(colabPattern);
+        if (colabMatch) {
+            return `https://drive.google.com/uc?export=download&id=${colabMatch[1]}`;
+        }
+
+        // Google Drive URLs
+        // Pattern 1: https://drive.google.com/file/d/FILE_ID/view
+        const drivePattern1 = /drive\.google\.com\/file\/d\/([^/]+)/;
+        const driveMatch1 = url.match(drivePattern1);
+        if (driveMatch1) {
+            return `https://drive.google.com/uc?export=download&id=${driveMatch1[1]}`;
+        }
+
+        // Pattern 2: https://drive.google.com/open?id=FILE_ID
+        const drivePattern2 = /drive\.google\.com\/open\?id=([^&]+)/;
+        const driveMatch2 = url.match(drivePattern2);
+        if (driveMatch2) {
+            return `https://drive.google.com/uc?export=download&id=${driveMatch2[1]}`;
+        }
+
+        // Pattern 3: Already a direct download link
+        if (url.includes('drive.google.com/uc?')) {
+            return url;
+        }
+
+        // GitHub Gist URLs
+        // Pattern: https://gist.github.com/username/gist_id
+        const gistPattern = /gist\.github\.com\/([^/]+)\/([^/#?]+)/;
+        const gistMatch = url.match(gistPattern);
+        if (gistMatch) {
+            // For gists, we need to find the raw URL
+            // Format: https://gist.githubusercontent.com/username/gist_id/raw/notebook.ipynb
+            // Note: This might not work perfectly for all gists, user may need to use the raw URL directly
+            return url; // Return as is for now, user should use raw URL from gist
+        }
+
+        // GitHub raw URLs - already direct, just return
+        if (url.includes('raw.githubusercontent.com')) {
+            return url;
+        }
+
+        // GitHub regular file URLs - convert to raw
+        const githubPattern = /github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)/;
+        const githubMatch = url.match(githubPattern);
+        if (githubMatch) {
+            const [, owner, repo, branch, path] = githubMatch;
+            return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+        }
+
+        // Not a recognized URL pattern, return as is
+        return url;
+    };
 
     // Deletion state
     const [itemToDelete, setItemToDelete] = useState<{ type: 'module' | 'content' | 'assignment', uuid: string, moduleUuid?: string } | null>(null);
@@ -111,6 +187,26 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
         }
     };
 
+    const handleUpdateModule = async (moduleUuid: string, data: any) => {
+        try {
+            await updateCourseModule(courseUuid, moduleUuid, data);
+            toast.success("Module updated");
+            fetchModules();
+        } catch (error) {
+            toast.error("Failed to update module");
+        }
+    };
+
+    const handleUpdateContent = async (moduleUuid: string, contentUuid: string, data: any) => {
+        try {
+            await updateModuleContent(courseUuid, moduleUuid, contentUuid, data);
+            toast.success("Content updated");
+            fetchModules();
+        } catch (error) {
+            toast.error("Failed to update content");
+        }
+    };
+
     const handleDeleteModule = async (moduleUuid: string) => {
         try {
             await deleteCourseModule(courseUuid, moduleUuid);
@@ -143,10 +239,23 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
     const handleSaveContent = async () => {
         if (!selectedModuleUuid || !newContentTitle) return;
 
+        // Validate notebook import
+        if (contentType === 'notebook' && !editingContentUuid) {
+            if (notebookImportMethod === 'upload' && !newFile) {
+                toast.error('Please upload a notebook file');
+                return;
+            }
+            if (notebookImportMethod === 'url' && !notebookUrl.trim()) {
+                toast.error('Please provide a notebook URL');
+                return;
+            }
+        }
+
         try {
             const formData = new FormData();
             formData.append('title', newContentTitle);
             formData.append('content_type', contentType);
+            formData.append('is_published', 'true');
 
             if (!editingContentUuid) {
                 formData.append('order', '0'); // Backend should handle auto-ordering ideally
@@ -165,6 +274,10 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                     questions: quizData.questions,
                     passing_score: quizData.passing_score
                 };
+            } else if (contentType === 'notebook') {
+                contentData = {
+                    colab_enabled: colabEnabled
+                };
             }
 
             formData.append('content_data', JSON.stringify(contentData));
@@ -175,22 +288,38 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                 } else if (removeFile) {
                     formData.append('remove_file', 'true');
                 }
+            } else if (contentType === 'notebook') {
+                if (notebookImportMethod === 'upload' && newFile) {
+                    formData.append('file', newFile);
+                } else if (notebookImportMethod === 'url' && notebookUrl) {
+                    // Send the URL to the backend - let it handle the fetching
+                    // This avoids CORS issues with Google Drive and other sources
+                    const fetchUrl = convertToDirectUrl(notebookUrl);
+                    formData.append('notebook_url', fetchUrl);
+
+                    toast.loading('Backend is fetching notebook from URL...', { id: 'fetch-notebook' });
+                }
             }
 
             if (editingContentUuid) {
                 await updateModuleContent(courseUuid, selectedModuleUuid, editingContentUuid, formData);
-                toast.success(`${contentType === 'quiz' ? 'Quiz' : 'Lesson'} updated`);
+                toast.dismiss('fetch-notebook');
+                toast.success(`${contentType === 'quiz' ? 'Quiz' : contentType === 'notebook' ? 'Notebook' : 'Lesson'} updated`);
             } else {
                 await createModuleContent(courseUuid, selectedModuleUuid, formData);
-                toast.success(`${contentType === 'quiz' ? 'Quiz' : 'Lesson'} added`);
+                toast.dismiss('fetch-notebook');
+                toast.success(`${contentType === 'quiz' ? 'Quiz' : contentType === 'notebook' ? 'Notebook' : 'Lesson'} added`);
             }
 
             // Reset form
             resetContentForm();
             setIsAddContentOpen(false);
             fetchModules();
-        } catch (error) {
-            toast.error(editingContentUuid ? "Failed to update content" : "Failed to add content");
+        } catch (error: any) {
+            toast.dismiss('fetch-notebook');
+            // Try to extract error message from response
+            const errorMessage = error?.response?.data?.notebook_url?.[0] || error?.response?.data?.file?.[0] || (editingContentUuid ? "Failed to update content" : "Failed to add content");
+            toast.error(errorMessage);
             console.error(error);
         }
     };
@@ -204,6 +333,10 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
         setExistingFile(null);
         setRemoveFile(false);
         setQuizData({ questions: [], passing_score: 70 });
+        setColabEnabled(true);
+        setNotebookImportMethod('upload');
+        setNotebookUrl("");
+        setUrlSource(null);
         setEditingContentUuid(null);
     };
 
@@ -323,7 +456,8 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
         setNewContentTitle(content.title);
 
         // Determine type
-        const type = content.content_type === 'quiz' ? 'quiz' : 'lesson';
+        const type = content.content_type === 'quiz' ? 'quiz' : 
+                     content.content_type === 'notebook' ? 'notebook' : 'lesson';
         setContentType(type);
 
         // Parse content_data safely
@@ -342,6 +476,12 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
             setExistingFile(content.file);
             setNewFile(null);
             setRemoveFile(false);
+        } else if (type === 'notebook') {
+            setColabEnabled(data.colab_enabled ?? true);
+            setExistingFile(content.file);
+            setNewFile(null);
+            setRemoveFile(false);
+            setNotebookImportMethod('upload'); // Default to upload when editing
         } else {
             setQuizData({
                 questions: data.questions || [],
@@ -417,11 +557,11 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                 }}>
                     <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
-                            <DialogTitle>{editingContentUuid ? `Edit ${contentType === 'quiz' ? 'Quiz' : 'Lesson'}` : "Add Content"}</DialogTitle>
+                            <DialogTitle>{editingContentUuid ? `Edit ${contentType === 'quiz' ? 'Quiz' : contentType === 'notebook' ? 'Notebook' : 'Lesson'}` : "Add Content"}</DialogTitle>
                             <DialogDescription>
                                 {editingContentUuid
                                     ? `Update the ${contentType} content.`
-                                    : "Create a new lesson or quiz for this module."}
+                                    : "Create a new lesson, quiz, or notebook for this module."}
                             </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-6 py-4">
@@ -430,7 +570,7 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                     <Label htmlFor="content-type">Content Type</Label>
                                     <Select
                                         value={contentType}
-                                        onValueChange={(val: 'lesson' | 'quiz') => setContentType(val)}
+                                        onValueChange={(val: 'lesson' | 'quiz' | 'notebook') => setContentType(val)}
                                         disabled={!!editingContentUuid} // Cannot change type when editing
                                     >
                                         <SelectTrigger>
@@ -439,6 +579,7 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                         <SelectContent>
                                             <SelectItem value="lesson">Lesson (Video/Text)</SelectItem>
                                             <SelectItem value="quiz">Quiz</SelectItem>
+                                            <SelectItem value="notebook">Jupyter Notebook</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -446,7 +587,7 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                     <Label htmlFor="content-title">Title</Label>
                                     <Input
                                         id="content-title"
-                                        placeholder={`e.g., ${contentType === 'quiz' ? 'Module 1 Quiz' : 'Introduction Lesson'}`}
+                                        placeholder={`e.g., ${contentType === 'quiz' ? 'Module 1 Quiz' : contentType === 'notebook' ? 'Data Analysis with Python' : 'Introduction Lesson'}`}
                                         value={newContentTitle}
                                         onChange={(e) => setNewContentTitle(e.target.value)}
                                     />
@@ -517,11 +658,179 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                                         )}
                                     </div>
                                 </>
-                            ) : (
+                            ) : contentType === 'quiz' ? (
                                 <QuizBuilder
                                     initialData={quizData}
                                     onChange={setQuizData}
                                 />
+                            ) : (
+                                <>
+                                    {/* Import Method Selector */}
+                                    <div className="space-y-2">
+                                        <Label>Import Method</Label>
+                                        <div className="flex gap-4">
+                                            <div className="flex items-center space-x-2">
+                                                <input
+                                                    type="radio"
+                                                    id="import-upload"
+                                                    name="import-method"
+                                                    value="upload"
+                                                    checked={notebookImportMethod === 'upload'}
+                                                    onChange={(e) => setNotebookImportMethod(e.target.value as 'upload' | 'url')}
+                                                    className="h-4 w-4"
+                                                />
+                                                <Label htmlFor="import-upload" className="cursor-pointer font-normal">
+                                                    Upload File
+                                                </Label>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <input
+                                                    type="radio"
+                                                    id="import-url"
+                                                    name="import-method"
+                                                    value="url"
+                                                    checked={notebookImportMethod === 'url'}
+                                                    onChange={(e) => setNotebookImportMethod(e.target.value as 'upload' | 'url')}
+                                                    className="h-4 w-4"
+                                                />
+                                                <Label htmlFor="import-url" className="cursor-pointer font-normal">
+                                                    Import from URL
+                                                </Label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Notebook Upload or URL */}
+                                    {notebookImportMethod === 'upload' ? (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="notebook-upload">Jupyter Notebook File (.ipynb)</Label>
+                                            <Input
+                                                id="notebook-upload"
+                                                type="file"
+                                                accept=".ipynb"
+                                                onChange={(e) => {
+                                                    setNewFile(e.target.files ? e.target.files[0] : null);
+                                                }}
+                                                required={!editingContentUuid}
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Upload a Jupyter Notebook file. The notebook will be rendered with syntax highlighting for code and markdown cells.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="notebook-url">Notebook URL</Label>
+                                            <Input
+                                                id="notebook-url"
+                                                type="url"
+                                                placeholder="Paste GitHub, Google Drive, or direct URL here..."
+                                                value={notebookUrl}
+                                                onChange={(e) => {
+                                                    const url = e.target.value;
+                                                    setNotebookUrl(url);
+                                                    setUrlSource(detectUrlSource(url));
+                                                }}
+                                                required={!editingContentUuid}
+                                            />
+                                            {urlSource && (
+                                                <div className="flex items-center gap-2 text-xs">
+                                                    {urlSource === 'colab' && (
+                                                        <span className="text-orange-600 font-medium">✓ Google Colab link detected - extracting Drive file ID automatically</span>
+                                                    )}
+                                                    {urlSource === 'drive' && (
+                                                        <span className="text-blue-600 font-medium">✓ Google Drive link detected - will be converted automatically</span>
+                                                    )}
+                                                    {urlSource === 'github' && (
+                                                        <span className="text-green-600 font-medium">✓ GitHub link detected - will be converted to raw URL</span>
+                                                    )}
+                                                    {urlSource === 'gist' && (
+                                                        <span className="text-purple-600 font-medium">✓ GitHub Gist detected</span>
+                                                    )}
+                                                    {urlSource === 'direct' && (
+                                                        <span className="text-gray-600 font-medium">✓ Direct notebook URL</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                            <p className="text-xs text-muted-foreground">
+                                                Paste a URL to a publicly accessible notebook. Google Drive and GitHub URLs are automatically converted.
+                                            </p>
+                                            <div className="space-y-2">
+                                                <div className="flex items-start space-x-2 p-3 bg-orange-50 border border-orange-200 rounded-md">
+                                                    <span className="text-orange-600 text-lg font-semibold mt-0.5">⚡</span>
+                                                    <div className="text-xs text-orange-900">
+                                                        <p className="font-semibold mb-1">FASTEST: Direct Colab URL!</p>
+                                                        <ol className="list-decimal list-inside space-y-0.5 ml-1">
+                                                            <li>Open your notebook in Colab</li>
+                                                            <li>Make sure it's saved (File → Save)</li>
+                                                            <li>Copy the URL from your browser address bar</li>
+                                                            <li>Paste it above (e.g., <code className="text-xs bg-orange-100 px-1">colab.research.google.com/drive/1abc...</code>)</li>
+                                                        </ol>
+                                                        <p className="mt-2 text-orange-700 font-medium">
+                                                            ⚡ Just copy-paste the Colab URL - we'll extract the file ID automatically!
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-start space-x-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                                    <span className="text-blue-600 text-lg font-semibold mt-0.5">🔗</span>
+                                                    <div className="text-xs text-blue-900">
+                                                        <p className="font-semibold mb-1">Alternative: Google Drive Sharing Link</p>
+                                                        <ol className="list-decimal list-inside space-y-0.5 ml-1">
+                                                            <li>File → <strong>Locate in Drive</strong></li>
+                                                            <li>Right-click the .ipynb file → <strong>Get link</strong></li>
+                                                            <li>Set to <strong>"Anyone with the link"</strong> can view</li>
+                                                            <li>Copy and paste the link above</li>
+                                                        </ol>
+                                                        <p className="mt-2 text-blue-700 font-medium">
+                                                            ✨ Drive sharing links work too!
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-start space-x-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                                                    <span className="text-green-600 text-xs font-semibold mt-0.5">✓</span>
+                                                    <div className="text-xs text-green-900">
+                                                        <p className="font-medium mb-1">Also Supported:</p>
+                                                        <ul className="list-disc list-inside space-y-0.5">
+                                                            <li><strong>GitHub:</strong> Use the "Raw" button to get the URL</li>
+                                                            <li><strong>Public cloud storage:</strong> GCS, S3, etc.</li>
+                                                            <li><strong>Direct links:</strong> Any public .ipynb file URL</li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Google Colab Integration */}
+                                    <div className="flex items-center justify-between space-x-2 p-4 border rounded-lg bg-muted/20">
+                                        <div className="space-y-1 flex-1">
+                                            <Label htmlFor="colab-toggle" className="cursor-pointer">
+                                                Enable "Open in Google Colab" Button
+                                            </Label>
+                                            <p className="text-xs text-muted-foreground">
+                                                Allow students to open this notebook in Google Colab for interactive editing and execution.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            id="colab-toggle"
+                                            checked={colabEnabled}
+                                            onCheckedChange={setColabEnabled}
+                                        />
+                                    </div>
+
+                                    {/* Info Box */}
+                                    <div className="flex items-start space-x-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                        <HelpCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                                        <div className="text-sm text-blue-900">
+                                            <p className="font-medium mb-1">Notebook Features:</p>
+                                            <ul className="list-disc list-inside space-y-1 text-xs">
+                                                <li>Displays code cells, markdown cells, and outputs</li>
+                                                <li>Syntax highlighting for code</li>
+                                                <li>Students can download the notebook</li>
+                                                <li>Students can open in Colab for interactive execution (if enabled)</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </>
                             )}
                         </div>
                         <DialogFooter>
@@ -688,79 +997,93 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                         <DialogHeader>
                             <DialogTitle>{previewContent?.title}</DialogTitle>
                             <Badge variant="outline" className="w-fit mt-1">
-                                {previewContent?.content_type === 'quiz' ? 'Quiz' : 'Lesson'}
+                                {previewContent?.content_type === 'quiz' ? 'Quiz' : 
+                                 previewContent?.content_type === 'notebook' ? 'Notebook' : `Lesson (${previewContent?.content_type})`}
                             </Badge>
                         </DialogHeader>
                         <div className="space-y-6 py-4">
                             {/* Parse content data safely */}
                             {(() => {
                                 if (!previewContent) return null;
+                                
+                                console.log("Previewing content:", previewContent);
+                                
                                 const data = typeof previewContent.content_data === 'string'
                                     ? JSON.parse(previewContent.content_data)
                                     : previewContent.content_data || {};
 
-                                if (previewContent.content_type === 'quiz') {
-                                    return (
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between items-center p-3 bg-muted/30 rounded-md">
-                                                <span className="font-medium">Passing Score: {data.passing_score}%</span>
-                                                <span className="text-muted-foreground">{data.questions?.length || 0} Questions</span>
-                                            </div>
+                                switch (previewContent.content_type) {
+                                    case 'quiz':
+                                        return (
                                             <div className="space-y-4">
-                                                {data.questions?.map((q: any, idx: number) => (
-                                                    <div key={idx} className="border p-4 rounded-md">
-                                                        <div className="flex gap-2">
-                                                            <span className="font-bold text-muted-foreground">{idx + 1}.</span>
-                                                            <div className="flex-1">
-                                                                <p className="font-medium mb-2">{q.text}</p>
-                                                                <div className="space-y-1 pl-2">
-                                                                    {q.options?.map((opt: any, oIdx: number) => (
-                                                                        <div key={oIdx} className="flex items-center gap-2 text-sm">
-                                                                            <div className={`h-2 w-2 rounded-full ${opt.isCorrect ? 'bg-success' : 'bg-muted'}`} />
-                                                                            <span className={opt.isCorrect ? 'font-medium text-success' : ''}>{opt.text}</span>
-                                                                        </div>
-                                                                    ))}
+                                                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-md">
+                                                    <span className="font-medium">Passing Score: {data.passing_score}%</span>
+                                                    <span className="text-muted-foreground">{data.questions?.length || 0} Questions</span>
+                                                </div>
+                                                <div className="space-y-4">
+                                                    {data.questions?.map((q: any, idx: number) => (
+                                                        <div key={idx} className="border p-4 rounded-md">
+                                                            <div className="flex gap-2">
+                                                                <span className="font-bold text-muted-foreground">{idx + 1}.</span>
+                                                                <div className="flex-1">
+                                                                    <p className="font-medium mb-2">{q.text}</p>
+                                                                    <div className="space-y-1 pl-2">
+                                                                        {q.options?.map((opt: any, oIdx: number) => (
+                                                                            <div key={oIdx} className="flex items-center gap-2 text-sm">
+                                                                                <div className={`h-2 w-2 rounded-full ${opt.isCorrect ? 'bg-success' : 'bg-muted'}`} />
+                                                                                <span className={opt.isCorrect ? 'font-medium text-success' : ''}>{opt.text}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
                                                                 </div>
+                                                                <Badge variant="secondary" className="h-fit">
+                                                                    {q.type}
+                                                                </Badge>
                                                             </div>
-                                                            <Badge variant="secondary" className="h-fit">
-                                                                {q.type}
-                                                            </Badge>
                                                         </div>
-                                                    </div>
-                                                ))}
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                }
-
-                                return (
-                                    <>
-                                        {data.video?.url && (
-                                            <div className="aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center">
-                                                <iframe
-                                                    src={data.video.url.replace("watch?v=", "embed/")}
-                                                    className="w-full h-full"
-                                                    allowFullScreen
-                                                    title="Video Preview"
-                                                />
-                                            </div>
-                                        )}
-
-                                        {data.text?.body && (
-                                            <div
-                                                className="prose prose-sm max-w-none p-4 bg-muted/30 rounded-lg"
-                                                dangerouslySetInnerHTML={{ __html: data.text.body }}
+                                        );
+                                    
+                                    case 'notebook':
+                                        return (
+                                            <NotebookRenderer 
+                                                fileUrl={previewContent.file || ''} 
+                                                metadata={data} 
                                             />
-                                        )}
+                                        );
+                                    
+                                    default:
+                                        return (
+                                            <>
+                                                {data.video?.url && (
+                                                    <div className="aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center">
+                                                        <iframe
+                                                            src={data.video.url.replace("watch?v=", "embed/")}
+                                                            className="w-full h-full"
+                                                            allowFullScreen
+                                                            title="Video Preview"
+                                                        />
+                                                    </div>
+                                                )}
 
-                                        {previewContent.file && (
-                                            <div className="flex items-center gap-2 p-3 border rounded-md bg-muted/30">
-                                                <File className="h-4 w-4 text-primary" />
-                                                <span className="text-sm font-medium">Attached File (Available for download)</span>
-                                            </div>
-                                        )}
-                                    </>
-                                );
+                                                {data.text?.body && (
+                                                    <div
+                                                        className="prose prose-sm max-w-none p-4 bg-muted/30 rounded-lg"
+                                                        dangerouslySetInnerHTML={{ __html: data.text.body }}
+                                                    />
+                                                )}
+
+                                                {previewContent.file && (
+                                                    <div className="flex items-center gap-2 p-3 border rounded-md bg-muted/30">
+                                                        <File className="h-4 w-4 text-primary" />
+                                                        <span className="text-sm font-medium">Attached File (Available for download)</span>
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                }
                             })()}
                         </div>
                         <DialogFooter>
@@ -834,6 +1157,8 @@ export function CurriculumTab({ courseUuid }: CurriculumTabProps) {
                             onDeleteAssignment={(moduleUuid, assignmentUuid) =>
                                 setItemToDelete({ type: 'assignment', uuid: assignmentUuid, moduleUuid })
                             }
+                            onUpdateModule={handleUpdateModule}
+                            onUpdateContent={handleUpdateContent}
                         />
                     ))
                 )}
@@ -852,7 +1177,9 @@ function ModuleItem({
     onDeleteContent,
     onAddAssignment,
     onEditAssignment,
-    onDeleteAssignment
+    onDeleteAssignment,
+    onUpdateModule,
+    onUpdateContent
 }: {
     module: CourseModule,
     onDelete: () => void,
@@ -863,12 +1190,34 @@ function ModuleItem({
     onDeleteContent: (uuid: string) => void,
     onAddAssignment: (moduleUuid: string) => void,
     onEditAssignment: (moduleUuid: string, assignment: Assignment) => void,
-    onDeleteAssignment: (moduleUuid: string, assignmentUuid: string) => void
+    onDeleteAssignment: (moduleUuid: string, assignmentUuid: string) => void,
+    onUpdateModule: (moduleUuid: string, data: any) => Promise<void>,
+    onUpdateContent: (moduleUuid: string, contentUuid: string, data: any) => Promise<void>
 }) {
 
     const [isExpanded, setIsExpanded] = useState(false);
+    const [isPublishing, setIsPublishing] = useState(false);
+    const [publishingContentUuid, setPublishingContentUuid] = useState<string | null>(null);
     const contents = module.module?.contents || [];
     const assignments = module.module?.assignments || [];
+
+    const handlePublishToggle = async (checked: boolean) => {
+        setIsPublishing(true);
+        try {
+            await onUpdateModule(module.uuid, { is_published: checked });
+        } finally {
+            setIsPublishing(false);
+        }
+    };
+
+    const handleContentPublishToggle = async (contentUuid: string, checked: boolean) => {
+        setPublishingContentUuid(contentUuid);
+        try {
+            await onUpdateContent(module.module.uuid, contentUuid, { is_published: checked });
+        } finally {
+            setPublishingContentUuid(null);
+        }
+    };
 
     return (
         <Card className="overflow-hidden">
@@ -880,6 +1229,28 @@ function ModuleItem({
                     <div className="flex items-center gap-2">
                         <h3 className="font-medium">{module.module?.title || "Untitled Module"}</h3>
                         {module.is_required && <Badge variant="secondary" className="text-[10px] h-5">Required</Badge>}
+                        <div 
+                            className="flex items-center gap-2 bg-background/50 border rounded-full px-2 py-1 ml-2 shadow-sm"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <Badge 
+                                variant={module.module?.is_published ? "default" : "outline"} 
+                                className={`text-[10px] h-5 cursor-pointer hover:opacity-80 transition-opacity ${!module.module?.is_published ? 'text-muted-foreground border-dashed' : 'bg-success hover:bg-success/90'}`}
+                            >
+                                {isPublishing ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                    module.module?.is_published ? "Published" : "Draft"
+                                )}
+                            </Badge>
+                            <Switch 
+                                id={`publish-${module.uuid}`}
+                                checked={module.module?.is_published || false} 
+                                onCheckedChange={handlePublishToggle}
+                                disabled={isPublishing}
+                            />
+                            {isPublishing && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                        </div>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                         {contents.length} items • {module.module?.cpd_credits || 0} credits
@@ -911,9 +1282,34 @@ function ModuleItem({
                             contents.map((content: any) => (
                                 <div key={content.uuid} className="flex items-center p-3 pl-12 hover:bg-muted/30 group cursor-pointer" onClick={() => onPreviewContent(content)}>
                                     <div className="mr-3 text-muted-foreground">
-                                        {content.content_type === 'quiz' ? <HelpCircle className="h-4 w-4 text-primary" /> : <FileText className="h-4 w-4" />}
+                                        {content.content_type === 'quiz' ? (
+                                            <HelpCircle className="h-4 w-4 text-primary" />
+                                        ) : content.content_type === 'notebook' ? (
+                                            <BookOpen className="h-4 w-4 text-purple-600" />
+                                        ) : (
+                                            <FileText className="h-4 w-4" />
+                                        )}
                                     </div>
-                                    <span className="text-sm flex-1">{content.title} <span className="text-xs text-muted-foreground ml-2">({content.content_type})</span></span>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-medium truncate">{content.title}</span>
+                                            <span className="text-[10px] text-muted-foreground uppercase">({content.content_type})</span>
+                                            
+                                            <div 
+                                                className="flex items-center gap-1.5 ml-2 scale-75 origin-left"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <Switch 
+                                                    checked={content.is_published} 
+                                                    onCheckedChange={(checked) => handleContentPublishToggle(content.uuid, checked)}
+                                                    disabled={publishingContentUuid === content.uuid}
+                                                />
+                                                <span className={`text-[10px] font-bold uppercase tracking-tight ${content.is_published ? 'text-success' : 'text-muted-foreground'}`}>
+                                                    {publishingContentUuid === content.uuid ? '...' : content.is_published ? 'Published' : 'Draft'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                                         <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); onPreviewContent(content); }}>
                                             Preview

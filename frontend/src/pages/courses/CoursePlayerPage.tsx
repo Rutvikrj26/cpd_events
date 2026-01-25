@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
     getCourse,
+    getCourseBySlug,
     getCourseProgress,
     getMySubmissions,
     createSubmission,
@@ -40,13 +41,15 @@ import {
     Award,
     ExternalLink,
     ClipboardCheck,
-    Info
+    Info,
+    BookOpen
 } from 'lucide-react';
+import { NotebookRenderer } from '@/components/courses/NotebookRenderer';
 
 interface ModuleContent {
     uuid: string;
     title: string;
-    content_type: 'text' | 'video' | 'document' | 'quiz' | 'lesson' | 'external';
+    content_type: 'text' | 'video' | 'document' | 'quiz' | 'lesson' | 'external' | 'notebook';
     content_data?: any;
     file?: string;
     duration_minutes?: number;
@@ -68,7 +71,7 @@ type CourseItem =
     | { type: 'assignment'; item: Assignment; moduleUuid: string };
 
 export function CoursePlayerPage() {
-    const { courseUuid } = useParams<{ courseUuid: string }>();
+    const { courseUuid, courseSlug } = useParams<{ courseUuid?: string; courseSlug?: string }>();
     const navigate = useNavigate();
     const { toast } = useToast();
 
@@ -96,26 +99,41 @@ export function CoursePlayerPage() {
     // Fetch course and modules on mount
     useEffect(() => {
         const fetchCourseData = async () => {
-            if (!courseUuid) return;
+            if (!courseUuid && !courseSlug) return;
 
             setIsEnrollmentBlocked(false);
             setCompletedContents(new Set());
             setSubmissions([]);
             setAnnouncements([]);
             try {
-                // Fetch course details
-                const courseData = await getCourse(courseUuid);
+                let courseData: Course;
+                let effectiveUuid = courseUuid;
+
+                // Fetch course details by UUID or Slug
+                if (courseUuid) {
+                    courseData = await getCourse(courseUuid);
+                } else if (courseSlug) {
+                    const resolvedCourse = await getCourseBySlug(courseSlug);
+                    if (!resolvedCourse) throw new Error('Course not found');
+                    courseData = resolvedCourse;
+                    effectiveUuid = resolvedCourse.uuid;
+                } else {
+                    return;
+                }
+
+                if (!effectiveUuid) throw new Error('Invalid course data');
+
                 setCourse(courseData);
 
                 // Fetch modules
-                const modulesData = await getCourseModules(courseUuid);
+                const modulesData = await getCourseModules(effectiveUuid);
 
                 // Fetch contents for each module
                 const modulesWithContents = await Promise.all(
                     modulesData.map(async (mod) => {
                         const moduleUuid = mod.module?.uuid || mod.uuid;
                         try {
-                            const contents = await getModuleContents(courseUuid, moduleUuid);
+                            const contents = await getModuleContents(effectiveUuid!, moduleUuid);
                             return {
                                 ...mod,
                                 contents: contents.sort((a: any, b: any) => a.order - b.order),
@@ -134,7 +152,7 @@ export function CoursePlayerPage() {
 
                 // Load announcements (staff see all, learners see published)
                 try {
-                    const courseAnnouncements = await getCourseAnnouncements(courseUuid);
+                    const courseAnnouncements = await getCourseAnnouncements(effectiveUuid);
                     setAnnouncements(courseAnnouncements);
                 } catch (error) {
                     console.error('Failed to load announcements:', error);
@@ -143,7 +161,7 @@ export function CoursePlayerPage() {
                 // Load sessions for hybrid courses
                 if (courseData.format === 'hybrid') {
                     try {
-                        const courseSessions = await getCourseSessions(courseUuid);
+                        const courseSessions = await getCourseSessions(effectiveUuid);
                         setSessions(courseSessions.filter((s: CourseSession) => s.is_published));
                     } catch (error) {
                         console.error('Failed to load sessions:', error);
@@ -152,7 +170,7 @@ export function CoursePlayerPage() {
 
                 // Pull progress to restore completed items
                 try {
-                    const progress = await getCourseProgress(courseUuid);
+                    const progress = await getCourseProgress(effectiveUuid);
                     const completed = new Set<string>();
                     progress.modules.forEach(module => {
                         module.content_progress.forEach(progressItem => {
@@ -224,7 +242,7 @@ export function CoursePlayerPage() {
         };
 
         fetchCourseData();
-    }, [courseUuid, toast]);
+    }, [courseUuid, courseSlug, toast]);
 
     // Toggle module expansion
     const toggleModule = (moduleUuid: string) => {
@@ -253,13 +271,15 @@ export function CoursePlayerPage() {
 
     // Mark content as complete
     const markComplete = async () => {
-        if (!courseUuid || !currentItem || currentItem.type !== 'content') return;
+        if (!course || !currentItem || currentItem.type !== 'content' || isSubmitting) return;
 
+        setIsSubmitting(true);
         try {
             await updateContentProgress(currentItem.item.uuid, { progress_percent: 100, completed: true });
 
-            // Update local state
-            setCompletedContents(prev => new Set([...prev, currentItem.item.uuid]));
+            // Update local state immediately
+            const newItemUuid = currentItem.item.uuid;
+            setCompletedContents(prev => new Set([...prev, newItemUuid]));
 
             toast({
                 title: 'Progress saved!',
@@ -275,6 +295,8 @@ export function CoursePlayerPage() {
                 title: 'Error',
                 description: 'Failed to save progress.',
             });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -320,6 +342,7 @@ export function CoursePlayerPage() {
             case 'document': return <File className="h-4 w-4 text-primary" />;
             case 'lesson': return <FileText className="h-4 w-4 text-success" />;
             case 'external': return <ExternalLink className="h-4 w-4 text-info" />;
+            case 'notebook': return <BookOpen className="h-4 w-4 text-purple-600" />;
             default: return <Circle className="h-4 w-4 text-muted-foreground" />;
         }
     };
@@ -481,7 +504,10 @@ export function CoursePlayerPage() {
 
     const activeContent = currentItem?.type === 'content' ? currentItem.item : null;
     const activeAssignment = currentItem?.type === 'assignment' ? currentItem.item : null;
-    const lessonVideoUrl = activeContent?.content_data?.video?.url || activeContent?.content_data?.video_url;
+    const videoUrl = activeContent?.content_data?.video?.url || 
+                     activeContent?.content_data?.video_url || 
+                     activeContent?.content_data?.youtube_url || 
+                     activeContent?.content_data?.url;
 
     if (loading) {
         return (
@@ -650,8 +676,12 @@ export function CoursePlayerPage() {
                                     </Button>
                                 )}
                                 {activeContent && !completedContents.has(activeContent.uuid) && activeContent.content_type !== 'quiz' && (
-                                    <Button onClick={markComplete}>
-                                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                                    <Button onClick={markComplete} disabled={isSubmitting}>
+                                        {isSubmitting ? (
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                                        )}
                                         Mark Complete
                                     </Button>
                                 )}
@@ -669,19 +699,21 @@ export function CoursePlayerPage() {
                             <div className="max-w-4xl mx-auto">
                                 {activeContent && activeContent.content_type === 'video' && (
                                     <div className="aspect-video bg-black rounded-lg overflow-hidden">
-                                        {activeContent.content_data?.video_url ? (
-                                            <video
-                                                src={activeContent.content_data.video_url}
-                                                controls
-                                                className="w-full h-full"
-                                            />
-                                        ) : activeContent.content_data?.youtube_url ? (
-                                            <iframe
-                                                src={activeContent.content_data.youtube_url.replace('watch?v=', 'embed/')}
-                                                className="w-full h-full"
-                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                                allowFullScreen
-                                            />
+                                        {videoUrl ? (
+                                            (videoUrl.includes('youtube') || videoUrl.includes('vimeo')) ? (
+                                                <iframe
+                                                    src={videoUrl.replace('watch?v=', 'embed/')}
+                                                    className="w-full h-full"
+                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                    allowFullScreen
+                                                />
+                                            ) : (
+                                                <video
+                                                    src={videoUrl}
+                                                    controls
+                                                    className="w-full h-full"
+                                                />
+                                            )
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-white">
                                                 <PlayCircle className="h-16 w-16 opacity-50" />
@@ -693,8 +725,8 @@ export function CoursePlayerPage() {
                                 {activeContent && activeContent.content_type === 'text' && (
                                     <Card>
                                         <CardContent className="pt-6 prose max-w-none">
-                                            {activeContent.content_data?.text ? (
-                                                <div dangerouslySetInnerHTML={{ __html: activeContent.content_data.text }} />
+                                            {(activeContent.content_data?.text?.body || activeContent.content_data?.text) ? (
+                                                <div dangerouslySetInnerHTML={{ __html: activeContent.content_data?.text?.body || activeContent.content_data?.text }} />
                                             ) : (
                                                 <p className="text-muted-foreground">No content available.</p>
                                             )}
@@ -728,18 +760,18 @@ export function CoursePlayerPage() {
                                 {activeContent && activeContent.content_type === 'lesson' && (
                                     <Card>
                                         <CardContent className="pt-6 space-y-6">
-                                            {lessonVideoUrl && (
+                                            {activeContent.content_data?.video?.url && (
                                                 <div className="aspect-video bg-black rounded-lg overflow-hidden">
-                                                    {lessonVideoUrl.includes('youtube') ? (
+                                                    {activeContent.content_data.video.url.includes('youtube') ? (
                                                         <iframe
-                                                            src={lessonVideoUrl.replace('watch?v=', 'embed/')}
+                                                            src={activeContent.content_data.video.url.replace('watch?v=', 'embed/')}
                                                             className="w-full h-full"
                                                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                                             allowFullScreen
                                                         />
                                                     ) : (
                                                         <video
-                                                            src={lessonVideoUrl}
+                                                            src={activeContent.content_data.video.url}
                                                             controls
                                                             className="w-full h-full"
                                                         />
@@ -776,6 +808,13 @@ export function CoursePlayerPage() {
                                             </Button>
                                         </CardContent>
                                     </Card>
+                                )}
+
+                                {activeContent && activeContent.content_type === 'notebook' && (
+                                    <NotebookRenderer
+                                        fileUrl={activeContent.file || ''}
+                                        metadata={activeContent.content_data || {}}
+                                    />
                                 )}
 
                                 {activeContent && activeContent.content_type === 'quiz' && (

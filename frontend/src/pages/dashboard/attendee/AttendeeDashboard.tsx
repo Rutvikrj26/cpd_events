@@ -11,7 +11,6 @@ import { getMyRegistrations } from "@/api/registrations";
 import { getEnrollments } from "@/api/courses";
 import { Registration } from "@/api/registrations/types";
 import { useAuth } from "@/contexts/AuthContext";
-import { PendingInvitationsBanner } from "@/components/PendingInvitationsBanner";
 
 export function AttendeeDashboard() {
   const { user } = useAuth();
@@ -62,9 +61,6 @@ export function AttendeeDashboard() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-      {/* Pending Invitations Banner */}
-      <PendingInvitationsBanner />
-
       {/* Welcome Header */}
       <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary to-primary/80 p-8 text-white shadow-lg">
         <div className="relative z-10">
@@ -74,7 +70,7 @@ export function AttendeeDashboard() {
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button asChild variant="secondary" className="font-semibold shadow-sm">
-              <Link to="/events">Browse Events</Link>
+              <Link to="/my-events">My Events</Link>
             </Button>
             <Button asChild variant="outline" className="bg-transparent text-white border-white/30 hover:bg-card/10 hover:text-white hover:border-white/50">
               <Link to="/settings">View Profile</Link>
@@ -115,9 +111,9 @@ export function AttendeeDashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="space-y-8">
         {/* Main Column: Active Courses & Upcoming Events */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="space-y-8">
 
           {/* Active Courses Section */}
           <div className="space-y-4">
@@ -128,7 +124,7 @@ export function AttendeeDashboard() {
               </h2>
               {enrollments.length > 0 && (
                 <Button variant="ghost" size="sm" asChild className="text-primary">
-                  <Link to="/courses">View All <ArrowRight className="ml-1 h-4 w-4" /></Link>
+                  <Link to="/my-courses">View All <ArrowRight className="ml-1 h-4 w-4" /></Link>
                 </Button>
               )}
             </div>
@@ -140,49 +136,47 @@ export function AttendeeDashboard() {
                     <BookOpen className="h-6 w-6 text-muted-foreground" />
                   </div>
                   <p className="text-muted-foreground max-w-sm text-sm">
-                    You don't have any active courses. Start learning today!
+                    You don't have any active courses.
                   </p>
-                  <Button asChild size="sm" variant="outline" className="mt-4">
-                    <Link to="/courses">Browse Courses</Link>
-                  </Button>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {enrollments.filter(e => e.status !== 'completed').slice(0, 3).map(enrollment => (
                   <div key={enrollment.uuid} className="group relative overflow-hidden rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:shadow-md hover:border-primary/20">
-                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                      <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                        <BookOpen className="h-6 w-6 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-semibold truncate pr-4">
-                          <Link to={`/courses/${enrollment.course?.slug}/learn`} className="hover:underline">
-                            {enrollment.course?.title}
-                          </Link>
-                        </h3>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {enrollment.progress_percent}% Complete
-                          </span>
-                          {enrollment.last_accessed && (
-                            <span>• Last active {new Date(enrollment.last_accessed).toLocaleDateString()}</span>
-                          )}
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-start gap-4">
+                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <BookOpen className="h-5 w-5 text-primary" />
                         </div>
-                        <div className="mt-2 h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-semibold truncate pr-2">
+                            <Link to={`/courses/${enrollment.course?.slug}/learn`} className="hover:underline">
+                              {enrollment.course?.title}
+                            </Link>
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {enrollment.progress_percent}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
                           <div
                             className="h-full bg-primary rounded-full transition-all duration-500"
                             style={{ width: `${enrollment.progress_percent}%` }}
                           />
                         </div>
+                        <Button size="sm" className="w-full h-8 text-xs" asChild>
+                          <Link to={`/courses/${enrollment.course?.slug}/learn`}>
+                            <PlayCircle className="mr-2 h-3 w-3" />
+                            Resume
+                          </Link>
+                        </Button>
                       </div>
-                      <Button size="sm" className="shrink-0" asChild>
-                        <Link to={`/courses/${enrollment.course?.slug}/learn`}>
-                          <PlayCircle className="mr-2 h-3 w-3" />
-                          Resume
-                        </Link>
-                      </Button>
                     </div>
                   </div>
                 ))}
@@ -209,15 +203,12 @@ export function AttendeeDashboard() {
                 </div>
                 <h3 className="text-lg font-medium text-foreground">No upcoming events</h3>
                 <p className="text-muted-foreground mt-2 max-w-sm">
-                  You haven't registered for any upcoming events yet. Explore our catalog to find your next learning opportunity.
+                  You haven't registered for any upcoming events yet.
                 </p>
-                <Button asChild className="mt-6">
-                  <Link to="/events">Browse Events Catalog</Link>
-                </Button>
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
               {upcomingRegistrations.map((reg) => (
                 <div key={reg.uuid} className="group relative overflow-hidden rounded-xl border border-border/60 bg-card p-5 shadow-sm transition-all hover:shadow-md hover:border-primary/20">
                   <div className="flex flex-col sm:flex-row gap-5">
@@ -280,32 +271,6 @@ export function AttendeeDashboard() {
               ))}
             </div>
           )}
-        </div>
-
-        {/* Side Column: Certificates & Upsell */}
-        <div className="space-y-6">
-
-
-          {/* Organizer Upsell */}
-          <Card className="bg-foreground text-background border-none overflow-hidden relative shadow-lg">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-              <Users size={100} />
-            </div>
-            <CardHeader className="relative z-10">
-              <CardTitle className="text-lg">Host Your Own Events</CardTitle>
-              <CardDescription className="text-muted">
-                Ready to share your knowledge?
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="relative z-10">
-              <p className="text-sm text-muted mb-4 font-medium">
-                Upgrade to an Organizer account to create events, issue certificates, and track attendance automatically.
-              </p>
-              <Button asChild className="w-full bg-card text-foreground hover:bg-muted font-bold border-0" size="sm">
-                <Link to="/billing">Become an Organizer</Link>
-              </Button>
-            </CardContent>
-          </Card>
         </div>
       </div>
 

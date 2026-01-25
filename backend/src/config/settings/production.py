@@ -11,7 +11,6 @@ from .base import *
 
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
-from sentry_sdk.integrations.redis import RedisIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 SENTRY_DSN = os.environ.get("SENTRY_DSN")
@@ -47,7 +46,6 @@ if SENTRY_DSN:
         dsn=SENTRY_DSN,
         integrations=[
             DjangoIntegration(),
-            RedisIntegration(),
             LoggingIntegration(
                 level=logging.INFO,  # Capture info and above as breadcrumbs
                 event_level=logging.ERROR,  # Send errors as events
@@ -75,6 +73,14 @@ else:
 
 
 DEBUG = False
+
+# Silence django-ratelimit cache backend warnings
+# We use locmem cache which is per-process but acceptable for current scale
+# For distributed rate limiting across multiple instances, Redis would be needed
+SILENCED_SYSTEM_CHECKS = [
+    "django_ratelimit.E003",  # Cache backend not shared
+    "django_ratelimit.W001",  # Cache backend not officially supported
+]
 
 # Security settings
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
@@ -106,20 +112,20 @@ DATABASES = {
     }
 }
 
-# Cache configuration (Redis)
-# Django 4.0+ has built-in Redis cache backend
+# Cache configuration (Local memory cache - supports atomic operations for rate limiting)
+# Note: This is per-process, so rate limits are per-instance. For distributed rate limiting,
+# Redis would be needed. For current scale, this is sufficient.
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/1"),
-        "KEY_PREFIX": "cpd_events",
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake",
         "TIMEOUT": 300,  # 5 minutes default timeout
+        "OPTIONS": {"MAX_ENTRIES": 1000},
     }
 }
 
-# Session configuration (use cache for sessions)
-SESSION_ENGINE = "django.contrib.sessions.backends.cache"
-SESSION_CACHE_ALIAS = "default"
+# Session configuration (use database for sessions)
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
 
 # =============================================================================
 # Email Configuration (SMTP provider)
@@ -282,7 +288,7 @@ MANAGERS = ADMINS
 # Rate limits are also enforced at the DRF throttle level (see base.py REST_FRAMEWORK settings)
 # django-ratelimit provides additional granular control for specific endpoints
 
-# Cache backend for rate limiting (uses default Redis cache)
+# Cache backend for rate limiting (uses database cache)
 RATELIMIT_USE_CACHE = "default"
 
 # Enable rate limiting in production

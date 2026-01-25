@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { ProtectedRoute } from "@/features/auth";
 import { AuthenticatedRoot } from "@/components/auth/AuthenticatedRoot";
 
@@ -11,21 +10,16 @@ import { AuthenticatedRoot } from "@/components/auth/AuthenticatedRoot";
 // Layouts
 import { PublicLayout } from './components/layout/PublicLayout';
 import { DashboardLayout } from './components/layout/DashboardLayout';
-import { OrganizationLayout } from './components/layout/OrganizationLayout';
 import { AuthLayout } from './components/layout/AuthLayout';
 import ScrollToTop from './components/layout/ScrollToTop';
 
 // Public Pages
 import { LandingPage } from './pages/public/LandingPage';
-import { EventDiscovery } from './pages/public/EventDiscovery';
-import { CourseDiscoveryPage } from './pages/public/CourseDiscoveryPage';
 import { EventDetail } from './pages/public/EventDetail';
 import { EventRegistration } from './pages/public/EventRegistration';
 import { PricingPage } from './pages/public/PricingPage';
 import { ContactPage } from './pages/public/ContactPage';
 import { NotFoundPage } from './pages/public/NotFoundPage';
-import { OrganizationPublicProfilePage } from './pages/public/OrganizationPublicProfilePage';
-import { OrganizationsDirectoryPage } from './pages/public/OrganizationsDirectoryPage';
 import { PublicCourseDetailPage } from './pages/courses/PublicCourseDetailPage';
 import { FeaturesPage } from './pages/public/FeaturesPage';
 import { FAQPage } from './pages/public/FAQPage';
@@ -37,7 +31,6 @@ import { CookiePolicyPage } from './pages/public/CookiePolicyPage';
 // Product Pages
 import EventsProductPage from './pages/public/products/EventsProductPage';
 import LMSProductPage from './pages/public/products/LMSProductPage';
-import OrganizationsProductPage from './pages/public/products/OrganizationsProductPage';
 
 // Auth Pages
 import { LoginPage } from "@/pages/auth/LoginPage";
@@ -79,12 +72,12 @@ import { OrganizerBadgesPage } from './pages/dashboard/organizer/OrganizerBadges
 import { PublicBadgePage } from './pages/badges/PublicBadgePage';
 import { MyBadgesPage } from './pages/badges/MyBadgesPage';
 
-// Organization Pages
-import { OrganizationsListPage, CreateOrganizationPage, OrganizationDashboard, InstructorDashboard, OrgEventsPage, TeamManagementPage, OrganizationSettingsPage, OrgCoursesPage, CreateCoursePage, AcceptInvitationPage, OrganizationBillingPage, OrganizationOnboardingWizard } from './pages/organizations';
-import { CourseManagementPage } from './pages/organizations/courses/CourseManagementPage';
+// Organization Pages - REMOVED
 
 // Course Pages
-import { CourseCatalogPage } from './pages/courses';
+import { CourseManagementPage } from './pages/courses/management/CourseManagementPage';
+import CourseManagerPage from './pages/courses/management/CourseManagerPage';
+import CreateCoursePage from './pages/courses/management/CreateCoursePage';
 
 // Integrations
 import { ZoomCallbackPage } from './pages/integrations/ZoomCallbackPage';
@@ -103,7 +96,6 @@ export default function App() {
         <BrowserRouter>
           <ScrollToTop />
           <AuthProvider>
-            <OrganizationProvider>
               <Routes>
                 {/* Public Routes */}
                 <Route path="/" element={
@@ -122,43 +114,6 @@ export default function App() {
                 <Route path="/products/lms" element={
                   <PublicLayout>
                     <LMSProductPage />
-                  </PublicLayout>
-                } />
-
-                <Route path="/products/organizations" element={
-                  <PublicLayout>
-                    <OrganizationsProductPage />
-                  </PublicLayout>
-                } />
-
-                {/* Browse Events and Courses - Attendee Only */}
-                <Route path="/events/browse" element={
-                  <ProtectedRoute>
-                    <PublicLayout>
-                      <EventDiscovery />
-                    </PublicLayout>
-                  </ProtectedRoute>
-                } />
-
-                <Route path="/courses/browse" element={
-                  <ProtectedRoute>
-                    <PublicLayout>
-                      <CourseDiscoveryPage />
-                    </PublicLayout>
-                  </ProtectedRoute>
-                } />
-
-
-
-                <Route path="/organizations/:slug/public" element={
-                  <PublicLayout>
-                    <OrganizationPublicProfilePage />
-                  </PublicLayout>
-                } />
-
-                <Route path="/organizations/browse" element={
-                  <PublicLayout>
-                    <OrganizationsDirectoryPage />
                   </PublicLayout>
                 } />
 
@@ -259,9 +214,6 @@ export default function App() {
                 <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
                 <Route path="/auth/check-email" element={<CheckEmailPage />} />
 
-                {/* Accept Organization Invitation - Public but requires auth */}
-                <Route path="/accept-invite/:token" element={<AcceptInvitationPage />} />
-
                 <Route path="/forgot-password" element={
                   <AuthLayout>
                     <ForgotPasswordPage />
@@ -292,35 +244,48 @@ export default function App() {
                     {/* Dashboard - shows role-appropriate content */}
                     <Route path="/dashboard" element={<DashboardPage />} />
 
-                    {/* Events - unified routes for both roles */}
-                    <Route path="/events" element={<EventsPage />} />
-                    <Route path="/events/create" element={
-                      <ProtectedRoute requiredFeature="create_events">
-                        <EventCreatePage />
-                      </ProtectedRoute>
-                    } />
-                    <Route path="/events/:uuid" element={<EventDetailPage />} />
-                    <Route path="/events/:uuid/edit" element={
-                      <ProtectedRoute requiredFeature="create_events">
-                        <EventCreatePage />
-                      </ProtectedRoute>
-                    } />
+                     {/* Events - organizer only for management */}
+                     <Route path="/events" element={
+                       <ProtectedRoute requiredFeature="create_events">
+                         <EventsPage />
+                       </ProtectedRoute>
+                     } />
+                     <Route path="/events/create" element={
+                       <ProtectedRoute requiredFeature="create_events">
+                         <EventCreatePage />
+                       </ProtectedRoute>
+                     } />
+                     <Route path="/events/:uuid" element={<EventDetailPage />} />
+                     <Route path="/events/:uuid/edit" element={
+                       <ProtectedRoute requiredFeature="create_events">
+                         <EventCreatePage />
+                       </ProtectedRoute>
+                     } />
 
-                    {/* Attendee-specific pages */}
-                    <Route path="/registrations" element={<MyRegistrationsPage />} />
-                    <Route path="/certificates" element={<CertificatesPage />} />
-                    <Route path="/my-events" element={<MyEvents />} />
-                    <Route path="/courses" element={<CourseCatalogPage />} />
-                    <Route path="/my-courses" element={<MyCoursesPage />} />
+                     {/* Attendee-specific pages */}
+                     <Route path="/registrations" element={<MyRegistrationsPage />} />
+                     <Route path="/certificates" element={<CertificatesPage />} />
+                     <Route path="/my-events" element={<MyEvents />} />
+                     <Route path="/my-courses" element={<MyCoursesPage />} />
+
                     <Route path="/courses/certificates" element={<CourseCertificatesPage />} />
-                    <Route path="/courses/manage" element={<OrgCoursesPage />} />
+                    <Route path="/courses/manage" element={
+                      <ProtectedRoute requiredFeature="create_courses">
+                        <CourseManagerPage />
+                      </ProtectedRoute>
+                    } />
                     <Route path="/courses/manage/new" element={
                       <ProtectedRoute requiredFeature="create_courses">
                         <CreateCoursePage />
                       </ProtectedRoute>
                     } />
-                    <Route path="/courses/manage/:courseSlug" element={<CourseManagementPage />} />
+                    <Route path="/courses/manage/:courseSlug" element={
+                      <ProtectedRoute requiredFeature="create_courses">
+                        <CourseManagementPage />
+                      </ProtectedRoute>
+                    } />
                     <Route path="/learn/:courseUuid" element={<CoursePlayerPage />} />
+                    <Route path="/courses/:courseSlug/learn" element={<CoursePlayerPage />} />
                     <Route path="/my-certificates" element={<Navigate to="/certificates" replace />} />
                     <Route path="/my-certificates/:id" element={<Navigate to="/certificates" replace />} />
                     <Route path="/badges" element={<MyBadgesPage />} />
@@ -339,53 +304,52 @@ export default function App() {
                     <Route path="/settings" element={<ProfileSettings />} />
 
                     {/* Organizer-specific pages (non-event) */}
-                    <Route path="/organizer/dashboard" element={<OrganizerDashboard />} />
-                    <Route path="/organizer/contacts" element={<ContactsPage />} />
-                    <Route path="/organizer/reports" element={<ReportsPage />} />
-
-                    <Route path="/organizer/certificates" element={<OrganizerCertificatesPage />} />
-                    <Route path="/organizer/events/:uuid/manage" element={<EventManagement />} />
-                    <Route path="/organizer/badges" element={<OrganizerBadgesPage />} />
-                    <Route path="/organizer/zoom" element={<ZoomManagement />} />
-
-                    {/* Organization Routes */}
-                    <Route path="/organizations" element={<OrganizationsListPage />} />
-                    <Route path="/organizations/new" element={
-                      <ProtectedRoute requiredFeature="can_create_organization">
-                        <CreateOrganizationPage />
+                    <Route path="/organizer/dashboard" element={
+                      <ProtectedRoute requiredFeature="create_events">
+                        <OrganizerDashboard />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/organizer/contacts" element={
+                      <ProtectedRoute requiredFeature="create_events">
+                        <ContactsPage />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/organizer/reports" element={
+                      <ProtectedRoute requiredFeature="create_events">
+                        <ReportsPage />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/organizer/certificates" element={
+                      <ProtectedRoute requiredFeature="create_events">
+                        <OrganizerCertificatesPage />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/organizer/events/:uuid/manage" element={
+                      <ProtectedRoute requiredFeature="create_events">
+                        <EventManagement />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/organizer/badges" element={
+                      <ProtectedRoute requiredFeature="create_events">
+                        <OrganizerBadgesPage />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/organizer/zoom" element={
+                      <ProtectedRoute requiredFeature="create_events">
+                        <ZoomManagement />
                       </ProtectedRoute>
                     } />
 
-                    {/* Organization Onboarding - OUTSIDE OrganizationLayout */}
-                    <Route path="/org/:slug/onboarding" element={<OrganizationOnboardingWizard />} />
+                    {/* Redirects for old organizer event routes */}
+                    <Route path="/organizer/events" element={<Navigate to="/events" replace />} />
+                    <Route path="/organizer/events/new" element={<Navigate to="/events/create" replace />} />
+                    <Route path="/organizer/events/:id" element={<Navigate to="/events/:id" replace />} />
+                    <Route path="/organizer/events/:id/edit" element={<Navigate to="/events/:id/edit" replace />} />
+                    <Route path="/organizer/settings" element={<Navigate to="/settings" replace />} />
+                    <Route path="/organizer/notifications" element={<Navigate to="/notifications" replace />} />
+                    <Route path="/profile" element={<Navigate to="/settings" replace />} />
 
-                    <Route element={<OrganizationLayout />}>
-                      <Route path="/org/:slug" element={<OrganizationDashboard />} />
-                      <Route path="/org/:slug/instructor" element={<InstructorDashboard />} />
-                      <Route path="/org/:slug/events" element={<OrgEventsPage />} />
-                      <Route path="/org/:slug/team" element={<TeamManagementPage />} />
-                      <Route path="/org/:slug/settings" element={<OrganizationSettingsPage />} />
-                      <Route path="/org/:slug/billing" element={<OrganizationBillingPage />} />
-                      <Route path="/org/:slug/courses" element={<OrgCoursesPage />} />
-                      <Route path="/org/:slug/courses/new" element={
-                        <ProtectedRoute requiredFeature="create_courses">
-                          <CreateCoursePage />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="/org/:slug/courses/:courseSlug" element={<CourseManagementPage />} />
-                      <Route path="/org/:slug/badges" element={<OrganizerBadgesPage />} />
-                      <Route path="/org/:slug/certificates" element={<CourseCertificatesPage />} />
-                    </Route>
                   </Route>
-
-                  {/* Redirects for old organizer event routes */}
-                  <Route path="/organizer/events" element={<Navigate to="/events" replace />} />
-                  <Route path="/organizer/events/new" element={<Navigate to="/events/create" replace />} />
-                  <Route path="/organizer/events/:id" element={<Navigate to="/events/:id" replace />} />
-                  <Route path="/organizer/events/:id/edit" element={<Navigate to="/events/:id/edit" replace />} />
-                  <Route path="/organizer/settings" element={<Navigate to="/settings" replace />} />
-                  <Route path="/organizer/notifications" element={<Navigate to="/notifications" replace />} />
-                  <Route path="/profile" element={<Navigate to="/settings" replace />} />
 
                 </Route>
 
@@ -396,7 +360,6 @@ export default function App() {
                   </PublicLayout>
                 } />
               </Routes>
-            </OrganizationProvider>
           </AuthProvider>
           <Toaster />
           <SonnerToaster position="top-right" richColors closeButton />

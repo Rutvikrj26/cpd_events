@@ -17,7 +17,6 @@ const PLAN_ICONS = {
     attendee: User,
     organizer: Users,
     lms: BookOpen,
-    organization: Building2,
 };
 
 export function PricingPage() {
@@ -81,10 +80,6 @@ export function PricingPage() {
             question: "Do you offer discounts for nonprofits or educational institutions?",
             answer: "Yes! We offer special pricing for verified nonprofits and educational institutions. Contact our sales team to learn more about our discounted plans.",
         },
-        {
-            question: "Do you offer standalone branded deployments?",
-            answer: "Yes! For large training agencies and enterprise teams, we offer fully branded, standalone instances of the platform. This includes custom domains, full white-labeling, and dedicated infrastructure. Contact our sales team for a custom quote.",
-        },
     ];
 
     const hasAnnualPricing = products.some(product =>
@@ -115,7 +110,6 @@ export function PricingPage() {
             case 'attendee': return 'For Learners';
             case 'organizer': return 'For Event Hosts';
             case 'lms': return 'For Course Creators';
-            case 'organization': return 'For Teams';
             default: return 'Plan';
         }
     };
@@ -179,7 +173,7 @@ export function PricingPage() {
                             Plans for Every Stage
                         </h1>
                         <p className="text-xl text-muted-foreground mb-8">
-                            Whether you're dealing with live events, self-paced courses, or managing a large organization,
+                            Whether you're dealing with live events or self-paced courses,
                             we have a plan that fits your needs.
                         </p>
                         {hasAnnualPricing && (
@@ -208,7 +202,7 @@ export function PricingPage() {
             <section className="py-16 bg-background">
                 <div className="container mx-auto px-4">
                     <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto">
-                        {allPlans.filter(plan => plan.plan !== 'organization').map((plan) => {
+                        {allPlans.map((plan) => {
                             const Icon = plan.icon;
                             const planInterval = billingInterval === 'year' && plan.annualPrice != null ? 'year' : 'month';
                             const displayPrice = planInterval === 'year' ? plan.annualPrice : plan.monthlyPrice;
@@ -286,54 +280,28 @@ export function PricingPage() {
                 </div>
             </section>
 
-            {/* Organization Plans Banner */}
-            <section className="py-16 bg-gradient-to-br from-primary/5 via-background to-primary/5">
+            {/* Organizations & Enterprise Banner */}
+            <section className="pb-16 bg-background">
                 <div className="container mx-auto px-4">
-                    <div className="max-w-4xl mx-auto">
-                        <Card className="border-primary/20 bg-card shadow-lg">
-                            <CardHeader className="text-center pb-4">
-                                <div className="flex items-center justify-center gap-3 mb-4">
-                                    <div className="h-12 w-12 bg-primary/10 rounded-xl flex items-center justify-center">
-                                        <Building2 className="h-6 w-6 text-primary" />
-                                    </div>
-                                </div>
-                                <CardTitle className="text-2xl">Standalone Branded Deployments</CardTitle>
-                                <CardDescription className="text-base max-w-2xl mx-auto">
-                                    For training agencies, enterprise L&D teams, and professional associations 
-                                    requiring a dedicated, fully-branded instance of Accredit.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="text-center">
-                                <div className="mb-8">
-                                    <p className="text-lg mb-2">
-                                        Custom Infrastructure & White-labeling
-                                    </p>
-                                    <p className="text-sm text-muted-foreground">
-                                        Our standalone deployments are quoted based on your specific requirements, team size, and volume.
-                                    </p>
-                                </div>
-                                <div className="grid sm:grid-cols-3 gap-6 mb-8">
-                                    <div className="p-4 bg-secondary/30 rounded-lg">
-                                        <p className="font-semibold text-foreground">Custom Domains</p>
-                                        <p className="text-sm text-muted-foreground">Your brand, your URL</p>
-                                    </div>
-                                    <div className="p-4 bg-secondary/30 rounded-lg">
-                                        <p className="font-semibold text-foreground">Total White-label</p>
-                                        <p className="text-sm text-muted-foreground">Full UI customization</p>
-                                    </div>
-                                    <div className="p-4 bg-secondary/30 rounded-lg">
-                                        <p className="font-semibold text-foreground">Isolated Data</p>
-                                        <p className="text-sm text-muted-foreground">Dedicated infrastructure</p>
-                                    </div>
-                                </div>
-                                <Button asChild size="lg" className="glow-primary">
-                                    <Link to="/contact">
-                                        Request Custom Quote
-                                        <ArrowRight className="ml-2 h-4 w-4" />
-                                    </Link>
-                                </Button>
-                            </CardContent>
-                        </Card>
+                    <div className="max-w-6xl mx-auto rounded-xl border bg-card p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
+                        <div className="flex items-start gap-6">
+                            <div className="p-3 bg-primary/10 rounded-lg shrink-0 hidden sm:block">
+                                <Building2 className="h-8 w-8 text-primary" />
+                            </div>
+                            <div className="space-y-2">
+                                <h3 className="text-2xl font-semibold tracking-tight">For Organizations</h3>
+                                <p className="text-muted-foreground text-lg max-w-2xl">
+                                    Need a custom fully branded and managed deployment? We offer dedicated 
+                                    solutions tailored to your organization's specific requirements.
+                                </p>
+                            </div>
+                        </div>
+                        <Button asChild size="lg" className="shrink-0 min-w-[140px]">
+                            <Link to="/contact">
+                                Contact Sales
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                            </Link>
+                        </Button>
                     </div>
                 </div>
             </section>

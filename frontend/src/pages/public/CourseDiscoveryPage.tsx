@@ -197,7 +197,7 @@ export function CourseDiscoveryPage() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <PageHeader
           title="Browse Courses"
-          description="Discover self-paced professional development courses from leading organizations."
+          description="Discover self-paced professional development courses."
           className="mb-8"
         />
 
@@ -237,7 +237,7 @@ export function CourseDiscoveryPage() {
                   <Search className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <Input
-                  placeholder="Search courses by title or organization..."
+                  placeholder="Search courses by title..."
                   className="pl-10 h-11 bg-muted/30 border-border shadow-none focus:bg-card transition-colors"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}

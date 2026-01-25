@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Loader2, CheckCircle, Clock, BookOpen, Award, Users, Building2, ArrowRight } from 'lucide-react';
+import { Loader2, CheckCircle, Clock, BookOpen, Award, Users, ArrowRight } from 'lucide-react';
 
 export const PublicCourseDetailPage = () => {
     const { slug } = useParams<{ slug: string }>();
@@ -49,28 +49,10 @@ export const PublicCourseDetailPage = () => {
         fetchCourse();
     }, [slug, navigate, toast]);
 
-    // Fetch related courses from same organization
+    // Fetch related courses - disabled (organization features removed)
     useEffect(() => {
-        const fetchRelatedCourses = async () => {
-            if (!course?.organization_slug) return;
-
-            try {
-                const allCourses = await getPublicCourses({ org: course.organization_slug });
-                // Filter published and public courses, exclude current course
-                const orgCourses = allCourses.results
-                    .filter(c =>
-                        c.status === 'published' &&
-                        c.is_public &&
-                        c.uuid !== course.uuid
-                    )
-                    .slice(0, 3); // Show up to 3 related courses
-                setRelatedCourses(orgCourses);
-            } catch (error) {
-                console.error('Failed to fetch related courses:', error);
-            }
-        };
-
-        fetchRelatedCourses();
+        // TODO: Re-implement related courses without organization dependency
+        setRelatedCourses([]);
     }, [course]);
 
     useEffect(() => {
@@ -168,9 +150,7 @@ export const PublicCourseDetailPage = () => {
                             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                                 <Link to="/courses" className="hover:underline">Browse</Link>
                                 <span>/</span>
-                                <Link to={`/organizations/${course.organization_slug}/public`} className="hover:underline text-foreground font-medium">
-                                    {course.organization_name}
-                                </Link>
+                                <span className="text-foreground font-medium">{course.organization_name}</span>
                                 <span>/</span>
                                 <span>{course.title}</span>
                             </div>
@@ -209,22 +189,38 @@ export const PublicCourseDetailPage = () => {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <Button
-                                    size="lg"
-                                    className="w-full text-lg"
-                                    onClick={handleEnroll}
-                                    disabled={isEnrolling || (!course.enrollment_open && !isEnrolled)}
-                                >
-                                    {isEnrolling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                    {!course.enrollment_open
-                                        ? 'Enrollment Closed'
-                                        : isEnrolled
+                                {isAuthenticated && user?.uuid === course.owner_uuid ? (
+                                    <Button
+                                        size="lg"
+                                        className="w-full text-lg"
+                                        onClick={() => navigate(`/courses/manage/${course.slug}`)}
+                                    >
+                                        Manage Course
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        size="lg"
+                                        className="w-full text-lg"
+                                        onClick={handleEnroll}
+                                        disabled={
+                                            isEnrolling || 
+                                            (!course.enrollment_open && !isEnrolled) || 
+                                            (!!course.max_enrollments && course.enrollment_count >= course.max_enrollments && !isEnrolled)
+                                        }
+                                    >
+                                        {isEnrolling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                        {isEnrolled
                                             ? 'Continue Course'
-                                            : 'Enroll Now'}
-                                </Button>
-
+                                            : !course.enrollment_open
+                                                ? 'Enrollment Closed'
+                                                : (!!course.max_enrollments && course.enrollment_count >= course.max_enrollments)
+                                                    ? 'Course Full'
+                                                    : 'Enroll Now'}
+                                    </Button>
+                                )}
                             </CardContent>
                         </Card>
+
                     </div>
                 </div>
             </div>
@@ -304,14 +300,6 @@ export const PublicCourseDetailPage = () => {
                                         <div className="text-xs text-muted-foreground">Organization</div>
                                     </div>
                                 </div>
-                                {course.organization_slug && (
-                                    <Link to={`/organizations/${course.organization_slug}/public`}>
-                                        <Button variant="outline" className="w-full text-xs h-8">
-                                            <Building2 className="h-3 w-3 mr-1" />
-                                            View Profile
-                                        </Button>
-                                    </Link>
-                                )}
                             </CardContent>
                         </Card>
                     )}
@@ -359,14 +347,6 @@ export const PublicCourseDetailPage = () => {
                                 Explore other courses from this organization
                             </p>
                         </div>
-                        {course.organization_slug && (
-                            <Link to={`/organizations/${course.organization_slug}/public`}>
-                                <Button variant="outline">
-                                    View All
-                                    <ArrowRight className="ml-2 h-4 w-4" />
-                                </Button>
-                            </Link>
-                        )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

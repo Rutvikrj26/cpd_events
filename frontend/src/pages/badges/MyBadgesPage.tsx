@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getMyBadges } from "@/api/badges";
 import { IssuedBadge } from "@/api/badges/types";
 import { toast } from "sonner";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 
 export function MyBadgesPage() {
     const [badges, setBadges] = useState<IssuedBadge[]>([]);
@@ -34,17 +33,14 @@ export function MyBadgesPage() {
 
     if (loading) {
         return (
-            <DashboardLayout>
-                <div className="flex items-center justify-center min-h-[50vh]">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                </div>
-            </DashboardLayout>
+            <div className="flex items-center justify-center min-h-[50vh]">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
         );
     }
 
     return (
-        <DashboardLayout>
-            <div className="space-y-6">
+        <div className="space-y-6">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">My Badges</h1>
                     <p className="text-muted-foreground">
@@ -113,6 +109,5 @@ export function MyBadgesPage() {
                     </div>
                 )}
             </div>
-        </DashboardLayout>
     );
 }

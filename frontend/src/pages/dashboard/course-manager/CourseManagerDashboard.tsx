@@ -25,7 +25,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DashboardStat } from '@/components/dashboard/DashboardStats';
-import { PendingInvitationsBanner } from '@/components/PendingInvitationsBanner';
 import { OnboardingChecklist } from '@/components/onboarding';
 import { getOwnedCourses } from '@/api/courses';
 import { Course } from '@/api/courses/types';
@@ -125,7 +124,6 @@ export function CourseManagerDashboard() {
         )}
       />
 
-      <PendingInvitationsBanner />
       <OnboardingChecklist />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

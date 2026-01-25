@@ -72,7 +72,7 @@ export function TermsPage() {
                         In no event shall Accredit, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from (i) your access to or use of or inability to access or use the Service; (ii) any conduct or content of any third party on the Service; (iii) any content obtained from the Service; and (iv) unauthorized access, use or alteration of your transmissions or content.
                     </p>
                     <p className="mt-4">
-                        Accredit operates solely as a marketplace and technology platform. We do not issue, validate, or endorse the content of any certificates generated through our Service. These certificates are issued directly by event organizers, content creators, and organizations using our platform. Consequently, Accredit assumes no liability for the legitimacy, accuracy, or acceptance of such certificates.
+                        Accredit operates solely as a marketplace and technology platform. We do not issue, validate, or endorse the content of any certificates generated through our Service. These certificates are issued directly by event organizers and content creators using our platform. Consequently, Accredit assumes no liability for the legitimacy, accuracy, or acceptance of such certificates.
                     </p>
                 </section>
 

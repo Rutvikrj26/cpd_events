@@ -54,8 +54,8 @@ export const CourseCatalogPage: React.FC = () => {
         setPage(1);
     }, [searchQuery]);
 
-    const handleEnroll = (courseUuid: string) => {
-        navigate(`/courses/${courseUuid}`);
+    const handleEnroll = (course: Course) => {
+        navigate(`/courses/${course.slug || course.uuid}`);
     };
 
     if (loading && page === 1) {
@@ -92,7 +92,7 @@ export const CourseCatalogPage: React.FC = () => {
                         <h1 className="text-4xl font-bold">Course Catalog</h1>
                     </div>
                     <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                        Discover self-paced professional development courses from leading organizations
+                        Discover self-paced professional development courses
                     </p>
                 </div>
 
@@ -102,7 +102,7 @@ export const CourseCatalogPage: React.FC = () => {
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                         <Input
                             type="text"
-                            placeholder="Search courses by title, description, or organization..."
+                            placeholder="Search courses by title or description..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="pl-12 h-14 text-base"
@@ -230,7 +230,7 @@ export const CourseCatalogPage: React.FC = () => {
                                     <CardFooter className="pt-4 border-t">
                                         <Button
                                             className="w-full group/btn"
-                                            onClick={() => handleEnroll(course.uuid)}
+                                            onClick={() => handleEnroll(course)}
                                         >
                                             View Course
                                             <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
@@ -254,23 +254,6 @@ export const CourseCatalogPage: React.FC = () => {
                     </>
                 )}
 
-                {/* Call to Action */}
-                {courses.length > 0 && (
-                    <div className="mt-16 text-center bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg p-8">
-                        <h2 className="text-2xl font-bold mb-2">Looking to create your own courses?</h2>
-                        <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-                            Join organizations creating professional development content for their communities
-                        </p>
-                        <div className="flex gap-4 justify-center">
-                            <Button variant="outline" asChild>
-                                <Link to="/organizations/new">Create Organization</Link>
-                            </Button>
-                            <Button asChild>
-                                <Link to="/pricing">View Plans</Link>
-                            </Button>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );

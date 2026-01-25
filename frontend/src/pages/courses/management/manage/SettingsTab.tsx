@@ -36,10 +36,9 @@ import {
 interface SettingsTabProps {
     course: Course;
     onCourseUpdated: (course: Course) => void;
-    organizationSlug?: string;
 }
 
-export function SettingsTab({ course, onCourseUpdated, organizationSlug }: SettingsTabProps) {
+export function SettingsTab({ course, onCourseUpdated }: SettingsTabProps) {
     const navigate = useNavigate();
     const { toast } = useToast();
     const [saving, setSaving] = useState(false);
@@ -151,7 +150,7 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
                 title: 'Course deleted',
                 description: 'The course has been deleted.',
             });
-            navigate(organizationSlug ? `/org/${organizationSlug}/courses` : '/courses/manage');
+            navigate('/courses/manage');
         } catch (error: any) {
             console.error('Failed to delete:', error);
             toast({

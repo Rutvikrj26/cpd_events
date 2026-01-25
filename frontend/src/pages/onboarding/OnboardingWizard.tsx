@@ -14,7 +14,8 @@ import {
     Loader2,
     ExternalLink,
     Building2,
-    CreditCard
+    CreditCard,
+    LayoutDashboard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -622,30 +623,12 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                         className="w-full h-auto py-4"
                                                         onClick={() => {
                                                             handleComplete();
-                                                            navigate('/events/browse');
                                                         }}
                                                     >
-                                                        <Calendar className="mr-3 h-5 w-5" />
+                                                        <LayoutDashboard className="mr-3 h-5 w-5" />
                                                         <div className="text-left">
-                                                            <div className="font-medium">Browse Events</div>
-                                                            <div className="text-xs opacity-80">Find CPD opportunities</div>
-                                                        </div>
-                                                        <ArrowRight className="ml-auto h-5 w-5" />
-                                                    </Button>
-
-                                                    <Button
-                                                        variant="outline"
-                                                        size="lg"
-                                                        className="w-full h-auto py-4"
-                                                        onClick={() => {
-                                                            handleComplete();
-                                                            navigate('/courses');
-                                                        }}
-                                                    >
-                                                        <BookOpen className="mr-3 h-5 w-5 text-muted-foreground" />
-                                                        <div className="text-left">
-                                                            <div className="font-medium">Explore Courses</div>
-                                                            <div className="text-xs text-muted-foreground">Learn at your own pace</div>
+                                                            <div className="font-medium">Go to Dashboard</div>
+                                                            <div className="text-xs opacity-80">Track your CPD progress</div>
                                                         </div>
                                                         <ArrowRight className="ml-auto h-5 w-5" />
                                                     </Button>
