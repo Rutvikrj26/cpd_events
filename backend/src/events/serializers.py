@@ -587,9 +587,6 @@ class EventUpdateSerializer(serializers.ModelSerializer):
     certificate_template = serializers.SlugRelatedField(
         slug_field="uuid", queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
-    certificate_template = serializers.SlugRelatedField(
-        slug_field="uuid", queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
-    )
     badge_template = serializers.SlugRelatedField(
         slug_field="uuid", queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
     )
