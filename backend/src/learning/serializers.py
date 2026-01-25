@@ -4,6 +4,8 @@ Serializers for learning API.
 
 from rest_framework import serializers
 
+from certificates.models import CertificateTemplate
+from badges.models import BadgeTemplate
 from .models import (
     Assignment,
     AssignmentSubmission,
@@ -807,6 +809,14 @@ def _validate_badge_settings(attrs, instance=None):
 
 class CourseCreateSerializer(serializers.ModelSerializer):
     """Create/update course."""
+
+    # Accept UUID strings for template foreign keys
+    certificate_template = serializers.SlugRelatedField(
+        slug_field="uuid", queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
+    )
+    badge_template = serializers.SlugRelatedField(
+        slug_field="uuid", queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
+    )
 
     class Meta:
         model = Course

@@ -8,7 +8,6 @@ import {
   parseRequirementForDisplay,
   parseTransactionForDisplay,
 } from '../cpdUtils';
-import type { CPDProgress, CPDRequirement, CPDTransaction } from '../../api/cpd/types';
 
 describe('cpdUtils', () => {
   describe('safeParseNumber', () => {
@@ -47,60 +46,59 @@ describe('cpdUtils', () => {
 
   describe('calculateTotalCredits', () => {
     it('should prioritize progress.total_credits_earned', () => {
-      const progress: CPDProgress = {
+      const progress: any = {
         total_credits_earned: '15.75',
         requirements: [
-          { id: 1, earned_credits: '5.00' } as CPDRequirement,
+          { earned_credits: '5.00' },
         ],
-      } as CPDProgress;
+      };
 
       expect(calculateTotalCredits(progress)).toBe(15.75);
     });
 
     it('should fall back to transactionSummary.current_balance', () => {
-      const progress: CPDProgress = {
+      const progress: any = {
         total_credits_earned: '0.00',
         requirements: [],
-      } as CPDProgress;
+      };
 
-      const transactionSummary = {
+      const transactionSummary: any = {
         current_balance: '12.50',
-      } as any;
+      };
 
       expect(calculateTotalCredits(progress, transactionSummary)).toBe(12.5);
     });
 
     it('should calculate from requirements when progress is zero', () => {
-      const progress: CPDProgress = {
+      const progress: any = {
         total_credits_earned: '0.00',
         requirements: [
-          { id: 1, earned_credits: '5.50' } as CPDRequirement,
-          { id: 2, earned_credits: '3.25' } as CPDRequirement,
-          { id: 3, earned_credits: '2.25' } as CPDRequirement,
+          { earned_credits: '5.50' },
+          { earned_credits: '3.25' },
+          { earned_credits: '2.25' },
         ],
-      } as CPDProgress;
+      };
 
-      // Sum: 5.50 + 3.25 + 2.25 = 11.00
       expect(calculateTotalCredits(progress)).toBe(11.0);
     });
 
     it('should return 0 when all sources are zero', () => {
-      const progress: CPDProgress = {
+      const progress: any = {
         total_credits_earned: '0.00',
         requirements: [],
-      } as CPDProgress;
+      };
 
       expect(calculateTotalCredits(progress)).toBe(0);
     });
 
     it('should handle null/undefined inputs gracefully', () => {
-      const progress: CPDProgress = {
+      const progress: any = {
         total_credits_earned: null,
         requirements: [
-          { id: 1, earned_credits: '5.00' } as CPDRequirement,
-          { id: 2, earned_credits: '6.00' } as CPDRequirement,
+          { earned_credits: '5.00' },
+          { earned_credits: '6.00' },
         ],
-      } as any;
+      };
 
       expect(calculateTotalCredits(progress)).toBe(11.0);
     });
@@ -108,19 +106,19 @@ describe('cpdUtils', () => {
 
   describe('calculateTotalRequired', () => {
     it('should sum annual requirements correctly', () => {
-      const requirements: CPDRequirement[] = [
-        { id: 1, annual_requirement: '10.00' } as CPDRequirement,
-        { id: 2, annual_requirement: '15.50' } as CPDRequirement,
-        { id: 3, annual_requirement: '24.50' } as CPDRequirement,
+      const requirements: any[] = [
+        { annual_requirement: '10.00' },
+        { annual_requirement: '15.50' },
+        { annual_requirement: '24.50' },
       ];
 
       expect(calculateTotalRequired(requirements)).toBe(50.0);
     });
 
     it('should handle string and number types', () => {
-      const requirements: CPDRequirement[] = [
-        { id: 1, annual_requirement: '10.00' } as CPDRequirement,
-        { id: 2, annual_requirement: 15 } as CPDRequirement,
+      const requirements: any[] = [
+        { annual_requirement: '10.00' },
+        { annual_requirement: 15 },
       ];
 
       expect(calculateTotalRequired(requirements)).toBe(25.0);
@@ -131,10 +129,10 @@ describe('cpdUtils', () => {
     });
 
     it('should handle null/undefined values', () => {
-      const requirements: CPDRequirement[] = [
-        { id: 1, annual_requirement: '10.00' } as CPDRequirement,
-        { id: 2, annual_requirement: null } as any,
-        { id: 3, annual_requirement: undefined } as any,
+      const requirements: any[] = [
+        { annual_requirement: '10.00' },
+        { annual_requirement: null },
+        { annual_requirement: undefined },
       ];
 
       expect(calculateTotalRequired(requirements)).toBe(10.0);
@@ -178,14 +176,12 @@ describe('cpdUtils', () => {
 
   describe('parseRequirementForDisplay', () => {
     it('should parse requirement data correctly', () => {
-      const requirement: CPDRequirement = {
-        id: 1,
-        requirement_type: 'Category A',
+      const requirement: any = {
         earned_credits: '8.50',
         annual_requirement: '10.00',
         completion_percent: 85,
         credits_remaining: '1.50',
-      } as CPDRequirement;
+      };
 
       const result = parseRequirementForDisplay(requirement);
 
@@ -197,14 +193,12 @@ describe('cpdUtils', () => {
     });
 
     it('should handle null/undefined values', () => {
-      const requirement: CPDRequirement = {
-        id: 1,
-        requirement_type: 'Category B',
+      const requirement: any = {
         earned_credits: null,
         annual_requirement: undefined,
         completion_percent: 0,
         credits_remaining: null,
-      } as any;
+      };
 
       const result = parseRequirementForDisplay(requirement);
 
@@ -216,14 +210,12 @@ describe('cpdUtils', () => {
     });
 
     it('should mark as complete when 100%', () => {
-      const requirement: CPDRequirement = {
-        id: 1,
-        requirement_type: 'Category C',
+      const requirement: any = {
         earned_credits: '15.00',
         annual_requirement: '10.00',
         completion_percent: 100,
         credits_remaining: '0.00',
-      } as CPDRequirement;
+      };
 
       const result = parseRequirementForDisplay(requirement);
 
@@ -234,12 +226,10 @@ describe('cpdUtils', () => {
 
   describe('parseTransactionForDisplay', () => {
     it('should parse transaction data correctly', () => {
-      const transaction: CPDTransaction = {
-        id: 1,
-        activity_name: 'Workshop',
+      const transaction: any = {
         credits: '3.50',
         balance_after: '15.50',
-      } as CPDTransaction;
+      };
 
       const result = parseTransactionForDisplay(transaction);
 
@@ -249,12 +239,10 @@ describe('cpdUtils', () => {
     });
 
     it('should handle null/undefined values', () => {
-      const transaction: CPDTransaction = {
-        id: 1,
-        activity_name: 'Seminar',
+      const transaction: any = {
         credits: null,
         balance_after: undefined,
-      } as any;
+      };
 
       const result = parseTransactionForDisplay(transaction);
 
@@ -264,11 +252,10 @@ describe('cpdUtils', () => {
     });
 
     it('should handle negative credits', () => {
-      const transaction: CPDTransaction = {
-        id: 1,
+      const transaction: any = {
         credits: '-2.00',
         balance_after: '8.00',
-      } as any;
+      };
 
       const result = parseTransactionForDisplay(transaction);
 

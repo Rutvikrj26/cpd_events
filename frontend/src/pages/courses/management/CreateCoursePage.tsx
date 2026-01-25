@@ -67,13 +67,31 @@ const courseSchema = z.object({
     live_session_start: z.string().optional(),
     live_session_end: z.string().optional(),
     live_session_timezone: z.string().default('UTC'),
-    // Certificate & Badge settings
+    // Certificate & Badge settings - allow empty string and convert to null
     certificates_enabled: z.boolean().default(false),
-    certificate_template: z.string().uuid().optional().nullable(),
+    certificate_template: z.string().uuid().optional().nullable().or(z.literal('')).transform(val => val || null),
     auto_issue_certificates: z.boolean().default(true),
     badges_enabled: z.boolean().default(false),
-    badge_template: z.string().uuid().optional().nullable(),
+    badge_template: z.string().uuid().optional().nullable().or(z.literal('')).transform(val => val || null),
     auto_issue_badges: z.boolean().default(true),
+}).refine(data => {
+    // If certificates enabled, must have a template
+    if (data.certificates_enabled && !data.certificate_template) {
+        return false;
+    }
+    return true;
+}, {
+    message: "Certificate template is required when certificates are enabled",
+    path: ["certificate_template"],
+}).refine(data => {
+    // If badges enabled, must have a template
+    if (data.badges_enabled && !data.badge_template) {
+        return false;
+    }
+    return true;
+}, {
+    message: "Badge template is required when badges are enabled",
+    path: ["badge_template"],
 });
 
 type CourseFormValues = z.infer<typeof courseSchema>;
@@ -169,16 +187,23 @@ const CreateCoursePage = () => {
         setIsSubmitting(true);
         setSubmitError(null);
 
-        // Sanitize date fields: remove empty strings to avoid backend validation error
-        const cleanValues = { ...values };
-        if (!cleanValues.live_session_start) delete (cleanValues as any).live_session_start;
-        if (!cleanValues.live_session_end) delete (cleanValues as any).live_session_end;
+        // Sanitize data before sending to backend
+        const cleanValues: any = { ...values };
+        
+        // Remove empty strings for date/time fields
+        if (!cleanValues.live_session_start) delete cleanValues.live_session_start;
+        if (!cleanValues.live_session_end) delete cleanValues.live_session_end;
+        
+        // Remove empty/null template UUIDs if certificates/badges are disabled
+        if (!cleanValues.certificates_enabled || !cleanValues.certificate_template) {
+            delete cleanValues.certificate_template;
+        }
+        if (!cleanValues.badges_enabled || !cleanValues.badge_template) {
+            delete cleanValues.badge_template;
+        }
 
         try {
-            const course = await createCourse({
-                ...cleanValues,
-                // Backend computes is_free from price_cents
-            });
+            const course = await createCourse(cleanValues);
 
             // For hybrid courses, create the scheduled sessions
             if (values.format === 'hybrid' && scheduledSessions.length > 0) {
@@ -220,7 +245,30 @@ const CreateCoursePage = () => {
 
         } catch (error: any) {
             console.error('Failed to create course:', error);
-            setSubmitError(error.response?.data?.message || 'Failed to create course. Please try again.');
+            
+            // Parse backend validation errors
+            let errorMessage = 'Failed to create course. Please try again.';
+            
+            if (error.response?.data) {
+                const data = error.response.data;
+                
+                // Handle field-specific errors
+                if (typeof data === 'object' && !data.message) {
+                    const fieldErrors = Object.entries(data)
+                        .map(([field, errors]: [string, any]) => {
+                            const errorList = Array.isArray(errors) ? errors : [errors];
+                            return `${field}: ${errorList.join(', ')}`;
+                        })
+                        .join('; ');
+                    errorMessage = fieldErrors || errorMessage;
+                } else if (data.message) {
+                    errorMessage = data.message;
+                } else if (data.detail) {
+                    errorMessage = data.detail;
+                }
+            }
+            
+            setSubmitError(errorMessage);
         } finally {
             setIsSubmitting(false);
         }
@@ -606,17 +654,22 @@ const CreateCoursePage = () => {
                                             name="certificate_template"
                                             render={({ field }) => (
                                                 <FormItem>
-                                                    <FormLabel>Certificate Template</FormLabel>
+                                                    <FormLabel>Certificate Template <span className="text-destructive">*</span></FormLabel>
                                                     <Select
                                                         value={field.value || ''}
                                                         onValueChange={field.onChange}
                                                     >
                                                         <FormControl>
-                                                            <SelectTrigger>
+                                                            <SelectTrigger className={!field.value ? 'border-destructive' : ''}>
                                                                 <SelectValue placeholder={loadingCerts ? "Loading..." : "Select a template"} />
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
+                                                            {certTemplates.length === 0 && !loadingCerts && (
+                                                                <div className="p-2 text-sm text-muted-foreground">
+                                                                    No templates available. Create one first.
+                                                                </div>
+                                                            )}
                                                             {certTemplates.map(t => (
                                                                 <SelectItem key={t.uuid} value={t.uuid}>
                                                                     {t.name}
@@ -624,6 +677,9 @@ const CreateCoursePage = () => {
                                                             ))}
                                                         </SelectContent>
                                                     </Select>
+                                                    <FormDescription>
+                                                        Required when certificates are enabled.
+                                                    </FormDescription>
                                                     <FormMessage />
                                                 </FormItem>
                                             )}
@@ -685,17 +741,22 @@ const CreateCoursePage = () => {
                                             name="badge_template"
                                             render={({ field }) => (
                                                 <FormItem>
-                                                    <FormLabel>Badge Template</FormLabel>
+                                                    <FormLabel>Badge Template <span className="text-destructive">*</span></FormLabel>
                                                     <Select
                                                         value={field.value || ''}
                                                         onValueChange={field.onChange}
                                                     >
                                                         <FormControl>
-                                                            <SelectTrigger>
+                                                            <SelectTrigger className={!field.value ? 'border-destructive' : ''}>
                                                                 <SelectValue placeholder={loadingBadges ? "Loading..." : "Select a template"} />
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
+                                                            {badgeTemplates.length === 0 && !loadingBadges && (
+                                                                <div className="p-2 text-sm text-muted-foreground">
+                                                                    No templates available. Create one first.
+                                                                </div>
+                                                            )}
                                                             {badgeTemplates.map(t => (
                                                                 <SelectItem key={t.uuid} value={t.uuid}>
                                                                     {t.name}
@@ -703,6 +764,9 @@ const CreateCoursePage = () => {
                                                             ))}
                                                         </SelectContent>
                                                     </Select>
+                                                    <FormDescription>
+                                                        Required when badges are enabled.
+                                                    </FormDescription>
                                                     <FormMessage />
                                                 </FormItem>
                                             )}
