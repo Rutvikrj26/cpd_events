@@ -15,52 +15,44 @@ describe("LandingPage", () => {
     it("renders hero section with main headline", () => {
         renderLandingPage();
 
-        // Hero contains "Host Events." and multiple instances of "Issue Certificates"
-        expect(screen.getByText(/host events/i)).toBeInTheDocument();
-        // Use getAllBy since there are multiple matches
-        const certificatesText = screen.getAllByText(/issue certificates/i);
-        expect(certificatesText.length).toBeGreaterThan(0);
+        // New hero text
+        expect(screen.getByText(/professional development/i)).toBeInTheDocument();
+        expect(screen.getByText(/unified/i)).toBeInTheDocument();
     });
 
-    it("has Start for Free CTA button linking to signup", () => {
+    it("has Get Started CTA button for learners linking to signup", () => {
         renderLandingPage();
 
-        const ctaButton = screen.getByRole("link", { name: /start for free/i });
-        expect(ctaButton).toHaveAttribute("href", "/signup?role=organizer");
+        const ctaButtons = screen.getAllByRole("link", { name: /get started/i });
+        // Should have at least one "Get Started" button (for learners)
+        expect(ctaButtons.length).toBeGreaterThan(0);
+        expect(ctaButtons[0]).toHaveAttribute("href", "/signup?role=attendee");
     });
 
-    it("has Contact Us button linking to contact", () => {
+    it("has Start Creating button for providers", () => {
         renderLandingPage();
 
-        const contactButton = screen.getByRole("link", { name: /contact us/i });
-        expect(contactButton).toHaveAttribute("href", "/contact");
+        const providerButton = screen.getByRole("link", { name: /start creating/i });
+        expect(providerButton).toHaveAttribute("href", "/pricing");
     });
 
-    it("renders How It Works section", () => {
+    it("renders For Learners section", () => {
         renderLandingPage();
 
-        expect(screen.getByText("How It Works")).toBeInTheDocument();
-        expect(screen.getByText("Create Your Event")).toBeInTheDocument();
+        expect(screen.getByText("For Learners")).toBeInTheDocument();
+        expect(screen.getByText(/manage your professional development/i)).toBeInTheDocument();
     });
 
-    it("renders Core Features section", () => {
+    it("renders For Providers section", () => {
         renderLandingPage();
 
-        expect(screen.getByText("Zoom Integration")).toBeInTheDocument();
-        expect(screen.getByText("Automated Certificates")).toBeInTheDocument();
-        expect(screen.getByText("Attendance Tracking")).toBeInTheDocument();
+        expect(screen.getByText("For Providers")).toBeInTheDocument();
+        expect(screen.getByText(/deliver professional development at scale/i)).toBeInTheDocument();
     });
 
-    it("renders Use Cases section", () => {
+    it("renders platform tagline", () => {
         renderLandingPage();
 
-        expect(screen.getByText("Professional Associations")).toBeInTheDocument();
-        expect(screen.getByText("Training Providers")).toBeInTheDocument();
-    });
-
-    it("renders CTA section at the bottom", () => {
-        renderLandingPage();
-
-        expect(screen.getByText(/ready to streamline/i)).toBeInTheDocument();
+        expect(screen.getByText(/the accredit platform/i)).toBeInTheDocument();
     });
 });
