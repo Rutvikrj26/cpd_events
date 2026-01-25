@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { getMyRegistrations, linkRegistrations } from '@/api/registrations';
 import { Registration } from '@/api/registrations/types';
-import { Calendar, CheckCircle, XCircle, Clock, Link2, RefreshCw, CreditCard, AlertCircle, DollarSign, MessageSquare, Star } from 'lucide-react';
+import { Calendar, CheckCircle, XCircle, Clock, Link2, RefreshCw, CreditCard, AlertCircle, DollarSign, MessageSquare, Star, Search } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { FeedbackModal } from '@/components/feedback';
 import { getRegistrationFeedback } from '@/api/feedback';
@@ -16,6 +18,7 @@ export const MyRegistrationsPage = () => {
     const [registrations, setRegistrations] = useState<Registration[]>([]);
     const [loading, setLoading] = useState(true);
     const [linking, setLinking] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
     const navigate = useNavigate();
 
     // Feedback state
@@ -140,103 +143,179 @@ export const MyRegistrationsPage = () => {
         navigate(`/events/${reg.event.uuid}/register?resume=${reg.uuid}`);
     };
 
+    // Filter by upcoming vs past based on event start date
+    const now = new Date();
+    const upcomingRegistrations = registrations.filter(r =>
+        new Date(r.event.starts_at) >= now && r.status !== 'cancelled'
+    );
+    const pastRegistrations = registrations.filter(r =>
+        new Date(r.event.starts_at) < now || r.status === 'cancelled'
+    );
+
+    // Filter by search term
+    const filterRegistrations = (regs: Registration[]) => {
+        if (!searchTerm) return regs;
+        return regs.filter(r =>
+            r.event.title.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    };
+
     if (loading) return <div className="p-8">Loading registrations...</div>;
+
+    const RegistrationTable = ({ registrations }: { registrations: Registration[] }) => {
+        if (registrations.length === 0) {
+            return (
+                <div className="p-12 text-center text-muted-foreground">
+                    {searchTerm ? (
+                        <>No events found matching "{searchTerm}"</>
+                    ) : (
+                        <>You have not registered for any events yet. <Link to="/events/browse" className="text-primary hover:underline">Browse Events</Link></>
+                    )}
+                </div>
+            );
+        }
+
+        return (
+            <table className="w-full text-left text-sm">
+                <thead className="bg-muted/30 border-b">
+                    <tr>
+                        <th className="px-6 py-4 font-medium text-muted-foreground">Event</th>
+                        <th className="px-6 py-4 font-medium text-muted-foreground">Date Registered</th>
+                        <th className="px-6 py-4 font-medium text-muted-foreground">Status</th>
+                        <th className="px-6 py-4 font-medium text-muted-foreground">Payment</th>
+                        <th className="px-6 py-4 font-medium text-muted-foreground">Actions</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                    {registrations.map(reg => (
+                        <tr key={reg.uuid} className="hover:bg-muted/30 transition-colors">
+                            <td className="px-6 py-4">
+                                <div className="font-semibold text-foreground">
+                                    {reg.event.title}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                    {reg.event.starts_at && new Date(reg.event.starts_at).toLocaleDateString()}
+                                </div>
+                            </td>
+                            <td className="px-6 py-4 text-muted-foreground">
+                                {new Date(reg.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4">
+                                {getStatusBadge(reg.status)}
+                            </td>
+                            <td className="px-6 py-4">
+                                {getPaymentBadge(reg.payment_status)}
+                            </td>
+                            <td className="px-6 py-4">
+                                <div className="flex items-center gap-2">
+                                    <Link to={`/events/${reg.event.slug || reg.event.uuid}`} className="text-primary hover:text-primary/80 font-medium text-xs">
+                                        View Event
+                                    </Link>
+                                    {reg.status === 'pending' && (reg.payment_status === 'pending' || reg.payment_status === 'refunded') && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="text-xs h-7"
+                                            onClick={() => handleCompletePayment(reg)}
+                                        >
+                                            <CreditCard size={12} className="mr-1" />
+                                            Pay Now
+                                        </Button>
+                                    )}
+                                    {reg.status === 'pending' && reg.payment_status === 'failed' && (
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            className="text-xs h-7"
+                                            onClick={() => handleCompletePayment(reg)}
+                                        >
+                                            <AlertCircle size={12} className="mr-1" />
+                                            Retry Payment
+                                        </Button>
+                                    )}
+                                    {canLeaveFeedback(reg) && (
+                                        <Button
+                                            size="sm"
+                                            variant={feedbackMap[reg.uuid] ? "ghost" : "outline"}
+                                            className="text-xs h-7"
+                                            onClick={() => handleOpenFeedback(reg)}
+                                        >
+                                            {feedbackMap[reg.uuid] ? (
+                                                <>
+                                                    <Star size={12} className="mr-1 fill-yellow-400 text-yellow-400" />
+                                                    Edit Feedback
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <MessageSquare size={12} className="mr-1" />
+                                                    Leave Feedback
+                                                </>
+                                            )}
+                                        </Button>
+                                    )}
+                                </div>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        );
+    };
 
     return (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-foreground">My Registrations</h1>
+            <div className="flex items-center justify-between">
+                <h1 className="text-3xl font-bold text-foreground">My Events</h1>
+                <div className="relative w-full sm:w-64">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search events..."
+                        className="pl-9"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+            </div>
 
-            <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-                {registrations.length === 0 ? (
+            {registrations.length === 0 ? (
+                <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
                     <div className="p-12 text-center text-muted-foreground">
                         You have not registered for any events yet. <Link to="/events/browse" className="text-primary hover:underline">Browse Events</Link>
                     </div>
-                ) : (
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-muted/30 border-b">
-                            <tr>
-                                <th className="px-6 py-4 font-medium text-muted-foreground">Event</th>
-                                <th className="px-6 py-4 font-medium text-muted-foreground">Date Registered</th>
-                                <th className="px-6 py-4 font-medium text-muted-foreground">Status</th>
-                                <th className="px-6 py-4 font-medium text-muted-foreground">Payment</th>
-                                <th className="px-6 py-4 font-medium text-muted-foreground">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                            {registrations.map(reg => (
-                                <tr key={reg.uuid} className="hover:bg-muted/30 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="font-semibold text-foreground">
-                                            {reg.event.title}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground mt-1">
-                                            {reg.event.starts_at && new Date(reg.event.starts_at).toLocaleDateString()}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 text-muted-foreground">
-                                        {new Date(reg.created_at).toLocaleDateString()}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        {getStatusBadge(reg.status)}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        {getPaymentBadge(reg.payment_status)}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <Link to={`/events/${reg.event.slug || reg.event.uuid}`} className="text-primary hover:text-primary/80 font-medium text-xs">
-                                                View Event
-                                            </Link>
-                                            {reg.status === 'pending' && (reg.payment_status === 'pending' || reg.payment_status === 'refunded') && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="text-xs h-7"
-                                                    onClick={() => handleCompletePayment(reg)}
-                                                >
-                                                    <CreditCard size={12} className="mr-1" />
-                                                    Pay Now
-                                                </Button>
-                                            )}
-                                            {reg.status === 'pending' && reg.payment_status === 'failed' && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="destructive"
-                                                    className="text-xs h-7"
-                                                    onClick={() => handleCompletePayment(reg)}
-                                                >
-                                                    <AlertCircle size={12} className="mr-1" />
-                                                    Retry Payment
-                                                </Button>
-                                            )}
-                                            {canLeaveFeedback(reg) && (
-                                                <Button
-                                                    size="sm"
-                                                    variant={feedbackMap[reg.uuid] ? "ghost" : "outline"}
-                                                    className="text-xs h-7"
-                                                    onClick={() => handleOpenFeedback(reg)}
-                                                >
-                                                    {feedbackMap[reg.uuid] ? (
-                                                        <>
-                                                            <Star size={12} className="mr-1 fill-yellow-400 text-yellow-400" />
-                                                            Edit Feedback
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <MessageSquare size={12} className="mr-1" />
-                                                            Leave Feedback
-                                                        </>
-                                                    )}
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
+                </div>
+            ) : (
+                <Tabs defaultValue="upcoming" className="w-full">
+                    <TabsList className="mb-4">
+                        <TabsTrigger value="upcoming">
+                            Upcoming ({filterRegistrations(upcomingRegistrations).length})
+                        </TabsTrigger>
+                        <TabsTrigger value="past">
+                            Past ({filterRegistrations(pastRegistrations).length})
+                        </TabsTrigger>
+                        <TabsTrigger value="all">
+                            All ({filterRegistrations(registrations).length})
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="upcoming" className="mt-0">
+                        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+                            <RegistrationTable registrations={filterRegistrations(upcomingRegistrations)} />
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="past" className="mt-0">
+                        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+                            <RegistrationTable registrations={filterRegistrations(pastRegistrations)} />
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="all" className="mt-0">
+                        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+                            <RegistrationTable registrations={filterRegistrations(registrations)} />
+                        </div>
+                    </TabsContent>
+                </Tabs>
+            )}
 
             {/* Link Events Section */}
             <Separator className="my-6" />
