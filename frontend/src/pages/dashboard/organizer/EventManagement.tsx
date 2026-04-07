@@ -347,6 +347,33 @@ export function EventManagement() {
       }
    };
 
+   const handleExportCsv = () => {
+      if (attendees.length === 0) {
+         toast.error("No attendees to export");
+         return;
+      }
+      const headers = ['Full Name', 'Email', 'Status', 'Payment Status', 'Attended', 'Registered At'];
+      const rows = attendees.map(a => [
+         `"${(a.full_name || '').replace(/"/g, '""')}"`,
+         `"${(a.email || '').replace(/"/g, '""')}"`,
+         a.status || '',
+         a.payment_status || '',
+         a.attended ? 'Yes' : 'No',
+         a.created_at ? new Date(a.created_at).toISOString() : '',
+      ].join(','));
+      const csvContent = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${event?.title || 'event'}-attendees.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("CSV exported");
+   };
+
    const filteredAttendees = attendees.filter(a =>
       (a.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (a.email || '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -530,7 +557,7 @@ export function EventManagement() {
                   <Button variant="outline" size="sm" className="w-full sm:w-auto">
                      <Filter className="mr-2 h-4 w-4" /> Filter
                   </Button>
-                  <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleExportCsv}>
                      <Download className="mr-2 h-4 w-4" /> Export CSV
                   </Button>
                </div>

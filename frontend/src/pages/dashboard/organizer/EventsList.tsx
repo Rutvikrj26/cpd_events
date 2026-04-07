@@ -27,15 +27,18 @@ import {
 } from "@/components/ui/select";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { StatusBadge } from "@/components/custom/StatusBadge";
-import { getEvents } from "@/api/events";
+import { getEvents, deleteEvent, duplicateEvent } from "@/api/events";
 import { Event } from "@/api/events/types";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export function EventsList() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");
+  const [deleteTarget, setDeleteTarget] = useState<Event | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     async function fetchEvents() {
@@ -52,6 +55,42 @@ export function EventsList() {
     fetchEvents();
   }, []);
 
+  const refetchEvents = async () => {
+    try {
+      const data = await getEvents();
+      setEvents(data.results);
+    } catch (error) {
+      console.error("Failed to load events", error);
+    }
+  };
+
+  const handleDuplicate = async (eventUuid: string) => {
+    try {
+      await duplicateEvent(eventUuid);
+      toast.success("Event duplicated");
+      await refetchEvents();
+    } catch (error) {
+      console.error("Failed to duplicate event", error);
+      toast.error("Failed to duplicate event");
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      await deleteEvent(deleteTarget.uuid);
+      toast.success("Event deleted");
+      setDeleteTarget(null);
+      await refetchEvents();
+    } catch (error) {
+      console.error("Failed to delete event", error);
+      toast.error("Failed to delete event");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const filteredEvents = events.filter(event => {
     const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || event.status === statusFilter;
@@ -64,7 +103,7 @@ export function EventsList() {
         title="My Events"
         description="Manage your events, registrations, and certificates."
         actions={
-          <Link to="/organizer/events/new">
+          <Link to="/events/create">
             <Button className="bg-primary hover:bg-primary/90">
               <Plus className="mr-2 h-4 w-4" /> Create Event
             </Button>
@@ -177,10 +216,10 @@ export function EventsList() {
                                 <Edit className="mr-2 h-4 w-4" /> Edit Event
                               </DropdownMenuItem>
                             </Link>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDuplicate(event.uuid)}>
                               <Copy className="mr-2 h-4 w-4" /> Duplicate
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">
+                            <DropdownMenuItem className="text-red-600" onClick={() => setDeleteTarget(event)}>
                               <Trash2 className="mr-2 h-4 w-4" /> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -207,6 +246,16 @@ export function EventsList() {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete Event"
+        description={`Are you sure you want to delete "${deleteTarget?.title}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        isLoading={deleteLoading}
+        onConfirm={handleDeleteConfirm}
+        variant="destructive"
+      />
     </div>
   );
 }
