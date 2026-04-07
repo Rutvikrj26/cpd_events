@@ -16,6 +16,9 @@ import {
     TrendingUp,
     Video,
     Shield,
+    Tag,
+    Mic,
+    BarChart3,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -65,6 +68,9 @@ export const Sidebar = () => {
         { routeKey: 'event_badges', to: '/organizer/badges', icon: Award, label: 'Badges', creatorOnly: true },
         { routeKey: 'video_rooms', to: '/organizer/video', icon: Video, label: 'Video Rooms', creatorOnly: true },
         { routeKey: 'contacts', to: '/organizer/contacts', icon: Users, label: 'Contacts', educatorOnly: true },
+        { routeKey: 'speakers', to: '/organizer/speakers', icon: Mic, label: 'Speakers', educatorOnly: true },
+        { routeKey: 'promo_codes', to: '/organizer/promo-codes', icon: Tag, label: 'Promo Codes', educatorOnly: true },
+        { routeKey: 'reports', to: '/organizer/reports', icon: BarChart3, label: 'Reports', educatorOnly: true },
 
         // Course Manager items
         { routeKey: 'courses', to: '/courses/manage', icon: FileText, label: 'Manage Courses', courseManagerOnly: true },
@@ -99,6 +105,9 @@ export const Sidebar = () => {
             if (item.routeKey === 'creator_certificates') return hasFeature('manage_certificates');
             if (item.routeKey === 'event_badges') return hasFeature('manage_badges');
             if (item.routeKey === 'video_rooms') return hasFeature('manage_video');
+            if (item.routeKey === 'speakers') return hasFeature('create_events');
+            if (item.routeKey === 'promo_codes') return hasFeature('create_events');
+            if (item.routeKey === 'reports') return hasFeature('create_events');
             if (item.routeKey === 'courses') return hasFeature('create_courses');
             if (item.routeKey === 'course_certificates') return hasFeature('create_courses');
             if (item.routeKey === 'admin_users') return hasFeature('manage_users');

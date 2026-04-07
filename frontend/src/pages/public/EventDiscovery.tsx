@@ -64,6 +64,9 @@ export function EventDiscovery() {
         page,
         page_size: pageSize,
         search: searchTerm || undefined,
+        event_type: filters.eventTypes.length > 0 ? filters.eventTypes.join(',') : undefined,
+        format: filters.formats.length > 0 ? filters.formats.join(',') : undefined,
+        is_free: filters.freeOnly && !filters.paidOnly ? true : filters.paidOnly && !filters.freeOnly ? false : undefined,
       };
       const response = await getPublicEvents(params);
       setEvents(response.results);
@@ -74,7 +77,7 @@ export function EventDiscovery() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, searchTerm]);
+  }, [page, pageSize, searchTerm, filters]);
 
   useEffect(() => {
     fetchEvents();
@@ -118,38 +121,10 @@ export function EventDiscovery() {
     return count;
   }, [filters]);
 
-  // Apply client-side filters (until backend supports all filters)
+  // Sort events client-side (filters are now applied server-side)
   const filteredEvents = useMemo(() => {
-    let result = [...events];
+    const result = [...events];
 
-    // Event type filter (client-side for now)
-    if (filters.eventTypes.length > 0) {
-      result = result.filter((event) =>
-        filters.eventTypes.some(
-          (type) => event.event_type?.toLowerCase() === type.toLowerCase()
-        )
-      );
-    }
-
-    // Format filter (client-side for now)
-    if (filters.formats.length > 0) {
-      result = result.filter((event) =>
-        filters.formats.includes(event.format)
-      );
-    }
-
-    // Price filters (client-side for now)
-    if (filters.freeOnly && !filters.paidOnly) {
-      result = result.filter(
-        (event) => !event.price || Number(event.price) === 0
-      );
-    } else if (filters.paidOnly && !filters.freeOnly) {
-      result = result.filter(
-        (event) => event.price && Number(event.price) > 0
-      );
-    }
-
-    // Sorting
     result.sort((a, b) => {
       switch (sortBy) {
         case "upcoming":
@@ -164,7 +139,7 @@ export function EventDiscovery() {
     });
 
     return result;
-  }, [events, filters, sortBy]);
+  }, [events, sortBy]);
 
   // Filter sidebar content (reused for desktop and mobile)
   const FilterContent = () => (

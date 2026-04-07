@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,9 +19,17 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { UserPlus, Search, Mail } from 'lucide-react';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { UserPlus, Search, Mail, Upload, MoreVertical } from 'lucide-react';
+import { toast } from 'sonner';
 import client from '@/api/client';
 import { User } from '@/api/accounts/types';
+import { bulkInviteUsers, BulkInviteUser, updateAdminUser } from '@/api/accounts';
 
 interface AdminUser extends User {
     last_login_at: string | null;
@@ -35,6 +43,9 @@ export const UserManagementPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [inviteOpen, setInviteOpen] = useState(false);
     const [createOpen, setCreateOpen] = useState(false);
+    const [bulkInviteOpen, setBulkInviteOpen] = useState(false);
+    const [changeRoleOpen, setChangeRoleOpen] = useState(false);
+    const [changeRoleUser, setChangeRoleUser] = useState<AdminUser | null>(null);
 
     const fetchUsers = async () => {
         setIsLoading(true);
@@ -72,6 +83,7 @@ export const UserManagementPage: React.FC = () => {
                     <p className="text-muted-foreground">Manage users and send invitations</p>
                 </div>
                 <div className="flex gap-2">
+                    <BulkInviteDialog open={bulkInviteOpen} onOpenChange={setBulkInviteOpen} onSuccess={fetchUsers} />
                     <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} onSuccess={fetchUsers} />
                     <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} onSuccess={fetchUsers} />
                 </div>
@@ -147,13 +159,21 @@ export const UserManagementPage: React.FC = () => {
                                             {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}
                                         </td>
                                         <td className="p-4 text-right">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => toggleActive(u.uuid)}
-                                            >
-                                                {u.is_active ? 'Deactivate' : 'Activate'}
-                                            </Button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                                        <MoreVertical className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => toggleActive(u.uuid)}>
+                                                        {u.is_active ? 'Deactivate' : 'Activate'}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => { setChangeRoleUser(u); setChangeRoleOpen(true); }}>
+                                                        Change Role
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </td>
                                     </tr>
                                 ))}
@@ -162,9 +182,228 @@ export const UserManagementPage: React.FC = () => {
                     </div>
                 </CardContent>
             </Card>
+            {/* Change Role Dialog */}
+            {changeRoleUser && (
+                <ChangeRoleDialog
+                    open={changeRoleOpen}
+                    onOpenChange={(v) => { setChangeRoleOpen(v); if (!v) setChangeRoleUser(null); }}
+                    user={changeRoleUser}
+                    onSuccess={fetchUsers}
+                />
+            )}
         </div>
     );
 };
+
+// Bulk Invite Dialog
+function BulkInviteDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void }) {
+    const [csvUsers, setCsvUsers] = useState<BulkInviteUser[]>([]);
+    const [parseError, setParseError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [results, setResults] = useState<{ invited: number; errors: Array<{ email: string; error: string }> } | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const resetState = () => {
+        setCsvUsers([]);
+        setParseError(null);
+        setError(null);
+        setResults(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setParseError(null);
+        setError(null);
+        setResults(null);
+        const file = e.target.files?.[0];
+        if (!file) { setCsvUsers([]); return; }
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const text = evt.target?.result as string;
+                const lines = text.split(/\r?\n/).filter(l => l.trim());
+                if (lines.length < 2) { setParseError('CSV must have a header row and at least one data row'); return; }
+
+                const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+                const emailIdx = header.indexOf('email');
+                const nameIdx = header.indexOf('full_name');
+                const roleIdx = header.indexOf('role');
+
+                if (emailIdx === -1 || nameIdx === -1 || roleIdx === -1) {
+                    setParseError('CSV must have columns: email, full_name, role');
+                    return;
+                }
+
+                const parsed: BulkInviteUser[] = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = lines[i].split(',').map(c => c.trim());
+                    if (cols.length < 3) continue;
+                    const email = cols[emailIdx];
+                    const full_name = cols[nameIdx];
+                    const role = cols[roleIdx];
+                    if (email && full_name && role) {
+                        parsed.push({ email, full_name, role });
+                    }
+                }
+
+                if (parsed.length === 0) { setParseError('No valid rows found in CSV'); return; }
+                setCsvUsers(parsed);
+            } catch {
+                setParseError('Failed to parse CSV file');
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const handleSubmit = async () => {
+        if (csvUsers.length === 0) return;
+        setError(null);
+        setIsLoading(true);
+        try {
+            const res = await bulkInviteUsers(csvUsers);
+            setResults(res);
+            toast.success(`${res.invited} invitation(s) sent`);
+            if (res.errors.length === 0) {
+                onSuccess();
+            }
+        } catch (err: any) {
+            setError(err.response?.data?.detail || 'Failed to send bulk invitations');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetState(); }}>
+            <DialogTrigger asChild>
+                <Button variant="outline"><Upload className="mr-2 h-4 w-4" />Bulk Invite</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Bulk Invite Users</DialogTitle>
+                    <DialogDescription>Upload a CSV file with columns: email, full_name, role</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                    {error && <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">{error}</div>}
+                    {parseError && <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">{parseError}</div>}
+
+                    <div className="space-y-2">
+                        <Label htmlFor="csv-file">CSV File</Label>
+                        <Input id="csv-file" type="file" accept=".csv" ref={fileInputRef} onChange={handleFileChange} />
+                    </div>
+
+                    {csvUsers.length > 0 && !results && (
+                        <>
+                            <div className="text-sm font-medium">Preview ({csvUsers.length} users)</div>
+                            <div className="max-h-60 overflow-y-auto border rounded-md">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b bg-muted/50">
+                                            <th className="text-left p-2">Email</th>
+                                            <th className="text-left p-2">Name</th>
+                                            <th className="text-left p-2">Role</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {csvUsers.map((u, i) => (
+                                            <tr key={i} className="border-b last:border-0">
+                                                <td className="p-2">{u.email}</td>
+                                                <td className="p-2">{u.full_name}</td>
+                                                <td className="p-2">{u.role}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <Button onClick={handleSubmit} className="w-full" disabled={isLoading}>
+                                {isLoading ? 'Sending Invitations...' : `Send ${csvUsers.length} Invitation(s)`}
+                            </Button>
+                        </>
+                    )}
+
+                    {results && results.errors.length > 0 && (
+                        <div className="space-y-2">
+                            <div className="text-sm font-medium text-destructive">
+                                {results.errors.length} error(s):
+                            </div>
+                            <div className="max-h-40 overflow-y-auto border rounded-md p-2 text-sm">
+                                {results.errors.map((err, i) => (
+                                    <div key={i}><span className="font-medium">{err.email}</span>: {err.error}</div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+// Change Role Dialog
+function ChangeRoleDialog({ open, onOpenChange, user, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; user: AdminUser; onSuccess: () => void }) {
+    const [selectedRoles, setSelectedRoles] = useState<string[]>(user.roles || []);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const allRoles = ['learner', 'educator', 'course_manager', 'admin'];
+
+    const toggleRole = (role: string) => {
+        setSelectedRoles(prev =>
+            prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+        );
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (selectedRoles.length === 0) { setError('Select at least one role'); return; }
+        setError(null);
+        setIsLoading(true);
+        try {
+            await updateAdminUser(user.uuid, { roles: selectedRoles });
+            toast.success('Roles updated');
+            onOpenChange(false);
+            onSuccess();
+        } catch (err: any) {
+            setError(err.response?.data?.detail || 'Failed to update roles');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Change Role</DialogTitle>
+                    <DialogDescription>Update roles for {user.full_name} ({user.email})</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {error && <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">{error}</div>}
+                    <div className="space-y-2">
+                        <Label>Roles</Label>
+                        <div className="flex flex-wrap gap-2">
+                            {allRoles.map(role => (
+                                <Badge
+                                    key={role}
+                                    variant={selectedRoles.includes(role) ? "default" : "outline"}
+                                    className="cursor-pointer select-none"
+                                    onClick={() => toggleRole(role)}
+                                >
+                                    {role}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                        {isLoading ? 'Updating...' : 'Update Roles'}
+                    </Button>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 // Invite Dialog
 function InviteDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void }) {

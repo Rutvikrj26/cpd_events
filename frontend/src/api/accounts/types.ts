@@ -66,6 +66,17 @@ export interface NotificationPreferences {
     notify_certificate_issued: boolean;
 }
 
+export interface UserSession {
+    uuid: string;
+    session_key: string;
+    ip_address: string;
+    user_agent: string;
+    device_type: string;
+    last_activity_at: string;
+    expires_at: string;
+    is_active: boolean;
+}
+
 // Admin types
 export interface AdminUserCreate {
     email: string;

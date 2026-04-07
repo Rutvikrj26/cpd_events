@@ -15,7 +15,11 @@ import {
    AlertCircle,
    Plus,
    Banknote,
-   ExternalLink
+   ExternalLink,
+   Monitor,
+   Shield,
+   Download,
+   AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,13 +48,15 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { getPaymentMethods, deletePaymentMethod, getSubscription, getBillingPortal } from "@/api/billing";
-import { getCurrentUser, updateProfile, changePassword, getNotificationPreferences, updateNotificationPreferences } from "@/api/accounts";
+import { getCurrentUser, updateProfile, changePassword, getNotificationPreferences, updateNotificationPreferences, exportUserData, deleteAccount } from "@/api/accounts";
 import { PaymentMethod, Subscription } from "@/api/billing/types";
 import { User as UserType, NotificationPreferences } from "@/api/accounts/types";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { getPayoutsDashboardLink, getPayoutsStatus, initiatePayoutsConnect, PayoutsStatus } from "@/api/payouts";
 import { getRoleFlags } from "@/lib/role-utils";
+import { ActiveSessionsTab } from "@/components/settings/ActiveSessionsTab";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 // Schema for General Profile
 const profileSchema = z.object({
@@ -88,8 +94,13 @@ export function ProfileSettings() {
    const [loadingNotifications, setLoadingNotifications] = useState(true);
    const [savingNotifications, setSavingNotifications] = useState(false);
 
+   // Privacy state
+   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+   const [deletingAccount, setDeletingAccount] = useState(false);
+   const [exportingData, setExportingData] = useState(false);
+
    // Payouts state
-   const { user: authUser } = useAuth();
+   const { user: authUser, logout } = useAuth();
    const { isEducator, isCourseManager, isCreator } = getRoleFlags(authUser);
    const [payoutsStatus, setPayoutsStatus] = useState<PayoutsStatus | null>(null);
    const [loadingPayouts, setLoadingPayouts] = useState(true);
@@ -291,6 +302,40 @@ export function ProfileSettings() {
       }
    };
 
+   const handleExportData = async () => {
+      setExportingData(true);
+      try {
+         const blob = await exportUserData();
+         const url = window.URL.createObjectURL(blob);
+         const a = document.createElement("a");
+         a.href = url;
+         a.download = "my-data-export.json";
+         document.body.appendChild(a);
+         a.click();
+         document.body.removeChild(a);
+         window.URL.revokeObjectURL(url);
+         toast.success("Data export downloaded");
+      } catch (error: any) {
+         toast.error(error.message || "Failed to export data");
+      } finally {
+         setExportingData(false);
+      }
+   };
+
+   const handleDeleteAccount = async () => {
+      setDeletingAccount(true);
+      try {
+         await deleteAccount();
+         toast.success("Account deleted");
+         await logout();
+      } catch (error: any) {
+         toast.error(error.message || "Failed to delete account");
+      } finally {
+         setDeletingAccount(false);
+         setShowDeleteDialog(false);
+      }
+   };
+
    const getInitials = (name: string) => {
       return name
          .split(" ")
@@ -339,10 +384,22 @@ export function ProfileSettings() {
                         <Lock className="mr-2 h-4 w-4" /> Security
                      </TabsTrigger>
                      <TabsTrigger
+                        value="sessions"
+                        className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
+                     >
+                        <Monitor className="mr-2 h-4 w-4" /> Sessions
+                     </TabsTrigger>
+                     <TabsTrigger
                         value="notifications"
                         className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
                      >
                         <Bell className="mr-2 h-4 w-4" /> Notifications
+                     </TabsTrigger>
+                     <TabsTrigger
+                        value="privacy"
+                        className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
+                     >
+                        <Shield className="mr-2 h-4 w-4" /> Privacy
                      </TabsTrigger>
                      {isCreator && (
                         <TabsTrigger
@@ -685,20 +742,6 @@ export function ProfileSettings() {
                                        disabled={savingNotifications}
                                     />
                                  </div>
-                                 <Separator />
-                                 <div className="flex items-center justify-between space-x-2">
-                                    <div className="space-y-0.5">
-                                       <label className="text-sm font-medium leading-none">
-                                          Marketing Updates
-                                       </label>
-                                       <p className="text-sm text-muted-foreground">Receive news about new features and promotions.</p>
-                                    </div>
-                                    <Switch
-                                       checked={notifications.notify_marketing}
-                                       onCheckedChange={(checked) => handleNotificationChange('notify_marketing', checked)}
-                                       disabled={savingNotifications}
-                                    />
-                                 </div>
                               </>
                            ) : (
                               <p className="text-muted-foreground text-center py-4">
@@ -707,6 +750,77 @@ export function ProfileSettings() {
                            )}
                         </CardContent>
                      </Card>
+                  </TabsContent>
+
+                  {/* SESSIONS TAB */}
+                  <TabsContent value="sessions" className="mt-0">
+                     <ActiveSessionsTab />
+                  </TabsContent>
+
+                  {/* PRIVACY TAB */}
+                  <TabsContent value="privacy" className="mt-0 space-y-6">
+                     <Card>
+                        <CardHeader>
+                           <CardTitle>Export My Data</CardTitle>
+                           <CardDescription>
+                              Download a copy of all your personal data stored in our system.
+                           </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                           <Button onClick={handleExportData} disabled={exportingData}>
+                              {exportingData ? (
+                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                 <Download className="mr-2 h-4 w-4" />
+                              )}
+                              Export My Data
+                           </Button>
+                        </CardContent>
+                     </Card>
+
+                     <Card className="border-destructive/50">
+                        <CardHeader>
+                           <CardTitle className="text-destructive">Delete Account</CardTitle>
+                           <CardDescription>
+                              Permanently delete your account and all associated data. This action cannot be undone.
+                           </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                           <Button
+                              variant="destructive"
+                              onClick={() => setShowDeleteDialog(true)}
+                           >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete My Account
+                           </Button>
+                        </CardContent>
+                     </Card>
+
+                     <ConfirmDialog
+                        open={showDeleteDialog}
+                        onOpenChange={setShowDeleteDialog}
+                        title="Delete Account Permanently"
+                        description={
+                           <div className="space-y-3">
+                              <div className="flex items-start gap-2 text-destructive">
+                                 <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0" />
+                                 <span className="font-medium">This action is permanent and cannot be undone.</span>
+                              </div>
+                              <p>Deleting your account will:</p>
+                              <ul className="list-disc ml-5 space-y-1 text-sm">
+                                 <li>Remove all your personal information</li>
+                                 <li>Delete your event history and certificates</li>
+                                 <li>Cancel any active subscriptions</li>
+                                 <li>Revoke access to all sessions</li>
+                              </ul>
+                              <p className="text-sm">We recommend exporting your data before proceeding.</p>
+                           </div>
+                        }
+                        confirmLabel="Delete My Account"
+                        variant="destructive"
+                        isLoading={deletingAccount}
+                        onConfirm={handleDeleteAccount}
+                     />
                   </TabsContent>
 
                   {/* PAYOUTS TAB */}

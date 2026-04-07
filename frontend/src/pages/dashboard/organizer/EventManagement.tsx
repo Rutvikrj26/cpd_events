@@ -30,7 +30,8 @@ import { PageHeader } from "@/components/custom/PageHeader";
 import { StatusBadge } from "@/components/custom/StatusBadge";
 import { toast } from "sonner";
 import { getEvent, updateEvent, publishEvent, unpublishEvent, getEventRegistrations, checkInAttendee, deleteEvent, cancelEventRegistration, refundEventRegistration } from "@/api/events";
-import { issueCertificates } from "@/api/certificates";
+import { issueCertificates, revokeCertificate } from "@/api/certificates";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
    AlertDialog,
    AlertDialogAction,
@@ -47,6 +48,7 @@ import {
 
 import { EditAttendanceDialog } from "@/components/events/EditAttendanceDialog";
 import { AttendanceReconciliation } from "@/components/events/AttendanceReconciliation";
+import { CustomFieldResponsesDialog } from "@/components/events/CustomFieldResponsesDialog";
 import { FeedbackCard, FeedbackSummary } from "@/components/feedback";
 import { getEventFeedback, calculateFeedbackSummary } from "@/api/feedback";
 import { EventFeedback } from "@/api/feedback/types";
@@ -66,6 +68,15 @@ export function EventManagement() {
    const [actionReason, setActionReason] = useState('');
    const [actionLoading, setActionLoading] = useState(false);
    const [actionAttendee, setActionAttendee] = useState<any>(null);
+
+   // Custom field responses dialog state
+   const [customFieldDialogOpen, setCustomFieldDialogOpen] = useState(false);
+   const [customFieldAttendee, setCustomFieldAttendee] = useState<any>(null);
+
+   // Certificate revocation state
+   const [revokeTarget, setRevokeTarget] = useState<any>(null);
+   const [revokeReason, setRevokeReason] = useState('');
+   const [revokeLoading, setRevokeLoading] = useState(false);
 
    const fetchEvent = useCallback(async () => {
       if (!uuid) return;
@@ -276,6 +287,22 @@ export function EventManagement() {
       }
    };
 
+   const handleRevokeCertificate = async () => {
+      if (!uuid || !revokeTarget?.certificate_uuid) return;
+      setRevokeLoading(true);
+      try {
+         await revokeCertificate(uuid, revokeTarget.certificate_uuid, revokeReason);
+         toast.success("Certificate revoked");
+         setRevokeTarget(null);
+         setRevokeReason('');
+         fetchRegistrations();
+      } catch (error: any) {
+         toast.error(error?.response?.data?.detail || "Failed to revoke certificate");
+      } finally {
+         setRevokeLoading(false);
+      }
+   };
+
 
 
 
@@ -323,6 +350,33 @@ export function EventManagement() {
          toast.error(error?.response?.data?.message || "Failed to delete event");
          setDeleting(false);
       }
+   };
+
+   const handleExportCsv = () => {
+      if (attendees.length === 0) {
+         toast.error("No attendees to export");
+         return;
+      }
+      const headers = ['Full Name', 'Email', 'Status', 'Payment Status', 'Attended', 'Registered At'];
+      const rows = attendees.map(a => [
+         `"${(a.full_name || '').replace(/"/g, '""')}"`,
+         `"${(a.email || '').replace(/"/g, '""')}"`,
+         a.status || '',
+         a.payment_status || '',
+         a.attended ? 'Yes' : 'No',
+         a.created_at ? new Date(a.created_at).toISOString() : '',
+      ].join(','));
+      const csvContent = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${event?.title || 'event'}-attendees.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("CSV exported");
    };
 
    const filteredAttendees = attendees.filter(a =>
@@ -480,6 +534,11 @@ export function EventManagement() {
                      Certificates
                   </TabsTrigger>
                )}
+               {event.badges_enabled && (
+                  <TabsTrigger value="badges" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
+                     Badges
+                  </TabsTrigger>
+               )}
                <TabsTrigger value="feedback" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
                   <MessageSquare className="h-4 w-4 mr-2" />
                   Feedback
@@ -503,7 +562,7 @@ export function EventManagement() {
                   <Button variant="outline" size="sm" className="w-full sm:w-auto">
                      <Filter className="mr-2 h-4 w-4" /> Filter
                   </Button>
-                  <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleExportCsv}>
                      <Download className="mr-2 h-4 w-4" /> Export CSV
                   </Button>
                </div>
@@ -570,6 +629,14 @@ export function EventManagement() {
                                              }}>
                                                 Edit Attendance
                                              </DropdownMenuItem>
+                                             {event.custom_fields && event.custom_fields.length > 0 && (
+                                                <DropdownMenuItem onClick={() => {
+                                                   setCustomFieldAttendee(attendee);
+                                                   setCustomFieldDialogOpen(true);
+                                                }}>
+                                                   View Responses
+                                                </DropdownMenuItem>
+                                             )}
                                              <DropdownMenuSeparator />
                                              {canRefund ? (
                                                 <DropdownMenuItem
@@ -606,6 +673,15 @@ export function EventManagement() {
                attendee={selectedAttendee}
                eventUuid={uuid || ''}
                onSuccess={fetchRegistrations}
+            />
+
+            {/* Custom Field Responses Dialog */}
+            <CustomFieldResponsesDialog
+               open={customFieldDialogOpen}
+               onOpenChange={setCustomFieldDialogOpen}
+               attendeeName={customFieldAttendee?.full_name || ''}
+               eventUuid={uuid || ''}
+               registrationUuid={customFieldAttendee?.uuid || ''}
             />
 
             <AlertDialog
@@ -803,15 +879,81 @@ export function EventManagement() {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                                        {attendee.certificate_uuid ? 'Issued' : 'Not Issued'}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                       <Button
-                                          size="sm"
-                                          variant="outline"
-                                          disabled={!attendee.attendance_eligible || !!attendee.certificate_uuid}
-                                          onClick={() => handleIssueCertificate(attendee.uuid)}
-                                       >
-                                          {attendee.certificate_uuid ? 'Issued' : 'Issue'}
-                                       </Button>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                       {attendee.certificate_uuid ? (
+                                          <Button
+                                             size="sm"
+                                             variant="outline"
+                                             className="text-destructive border-destructive hover:bg-destructive/10"
+                                             onClick={() => setRevokeTarget(attendee)}
+                                          >
+                                             Revoke
+                                          </Button>
+                                       ) : (
+                                          <Button
+                                             size="sm"
+                                             variant="outline"
+                                             disabled={!attendee.attendance_eligible}
+                                             onClick={() => handleIssueCertificate(attendee.uuid)}
+                                          >
+                                             Issue
+                                          </Button>
+                                       )}
+                                    </td>
+                                 </tr>
+                              ))}
+                           </tbody>
+                        </table>
+                     </div>
+                  </Card>
+               </TabsContent>
+            )}
+
+            {/* BADGES TAB */}
+            {event.badges_enabled && (
+               <TabsContent value="badges" className="mt-0">
+                  <div className="mb-4 p-4 rounded-lg bg-muted/50 border">
+                     <div className="flex gap-3 items-center">
+                        <Award className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                           <h3 className="text-sm font-medium">Auto-Issue Badges</h3>
+                           <p className="text-sm text-muted-foreground">
+                              {event.auto_issue_badges
+                                 ? "Badges are automatically issued to eligible attendees when the event completes."
+                                 : "Auto-issue is disabled. Badges will not be automatically issued."}
+                           </p>
+                        </div>
+                     </div>
+                  </div>
+                  <Card>
+                     <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-border">
+                           <thead className="bg-muted/50">
+                              <tr>
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Attendee</th>
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Eligibility</th>
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Badge Status</th>
+                              </tr>
+                           </thead>
+                           <tbody className="bg-card divide-y divide-border">
+                              {filteredAttendees.filter(a => a.status !== "cancelled").map((attendee) => (
+                                 <tr key={attendee.uuid} className="hover:bg-muted/50">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                       <div className="text-sm font-medium text-foreground">{attendee.full_name}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                       {attendee.attendance_eligible ? (
+                                          <Badge variant="outline" className="text-success bg-success-subtle border-success">Eligible</Badge>
+                                       ) : (
+                                          <Badge variant="outline" className="text-muted-foreground bg-muted border-border">Not Eligible</Badge>
+                                       )}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                                       {attendee.badge_uuid ? (
+                                          <Badge variant="default">Issued</Badge>
+                                       ) : (
+                                          <span>Not Issued</span>
+                                       )}
                                     </td>
                                  </tr>
                               ))}
@@ -851,6 +993,35 @@ export function EventManagement() {
                </div>
             </TabsContent>
          </Tabs>
+
+         {/* Certificate Revocation Dialog */}
+         <ConfirmDialog
+            open={!!revokeTarget}
+            onOpenChange={(open) => {
+               if (!open) {
+                  setRevokeTarget(null);
+                  setRevokeReason('');
+               }
+            }}
+            title="Revoke Certificate"
+            description={
+               <div className="space-y-3">
+                  <p>Are you sure you want to revoke the certificate for <strong>{revokeTarget?.full_name}</strong>? This action can be undone by reissuing.</p>
+                  <div className="space-y-2">
+                     <label className="text-sm font-medium">Reason for revocation</label>
+                     <Input
+                        value={revokeReason}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRevokeReason(e.target.value)}
+                        placeholder="e.g. Attendance records corrected"
+                     />
+                  </div>
+               </div>
+            }
+            confirmLabel="Revoke Certificate"
+            variant="destructive"
+            isLoading={revokeLoading}
+            onConfirm={handleRevokeCertificate}
+         />
       </div>
    );
 }
