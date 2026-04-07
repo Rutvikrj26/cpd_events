@@ -29,11 +29,13 @@ from conferencing.serializers import (
     VideoRoomSerializer,
     VideoStatusSerializer,
 )
+from common.rbac import roles
 from conferencing.service import get_video_provider
 
 logger = logging.getLogger(__name__)
 
 
+@roles('learner', 'educator', 'course_manager', 'admin', route_name='video_status')
 class VideoStatusView(generics.GenericAPIView):
     """GET /api/v1/video/status/ — Check if video conferencing is configured."""
 
@@ -48,6 +50,7 @@ class VideoStatusView(generics.GenericAPIView):
         return Response(VideoStatusSerializer(data).data)
 
 
+@roles('learner', 'educator', 'admin', route_name='join_video')
 class JoinVideoView(generics.GenericAPIView):
     """
     POST /api/v1/events/{event_uuid}/join-video/
@@ -112,6 +115,7 @@ class JoinVideoView(generics.GenericAPIView):
         return Response(JoinVideoResponseSerializer(data).data)
 
 
+@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='join_course_video')
 class JoinCourseSessionVideoView(generics.GenericAPIView):
     """
     POST /api/v1/courses/{course_uuid}/sessions/{session_uuid}/join-video/
@@ -178,6 +182,7 @@ class JoinCourseSessionVideoView(generics.GenericAPIView):
         return Response(JoinVideoResponseSerializer(data).data)
 
 
+@roles('educator', 'admin', route_name='video_rooms')
 class VideoRoomViewSet(viewsets.ReadOnlyModelViewSet):
     """
     GET /api/v1/video/rooms/ — List video rooms for the authenticated user's events.
@@ -191,6 +196,10 @@ class VideoRoomViewSet(viewsets.ReadOnlyModelViewSet):
         from events.models import Event
 
         ct = ContentType.objects.get_for_model(Event)
+
+        if self.request.user.is_staff:
+            return VideoRoom.objects.filter(content_type=ct)
+
         user_event_ids = Event.objects.filter(
             owner=self.request.user, deleted_at__isnull=True
         ).values_list('id', flat=True)
@@ -239,6 +248,7 @@ class VideoRoomViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({'error': 'Failed to stop recording'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@roles('educator', 'admin', route_name='video_recordings')
 class VideoRecordingViewSet(viewsets.ReadOnlyModelViewSet):
     """
     GET /api/v1/video/recordings/ — List published recordings accessible to the user.
@@ -248,9 +258,23 @@ class VideoRecordingViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return VideoRecording.objects.filter(
+        qs = VideoRecording.objects.filter(
             is_published=True,
             status=VideoRecording.Status.AVAILABLE,
+        )
+        if self.request.user.is_staff:
+            return qs
+        # Scope to recordings from the user's own events
+        from django.contrib.contenttypes.models import ContentType
+        from events.models import Event
+
+        ct = ContentType.objects.get_for_model(Event)
+        user_event_ids = Event.objects.filter(
+            owner=self.request.user, deleted_at__isnull=True
+        ).values_list('id', flat=True)
+        return qs.filter(
+            video_room__content_type=ct,
+            video_room__object_id__in=user_event_ids,
         )
 
 

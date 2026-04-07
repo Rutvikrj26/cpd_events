@@ -21,23 +21,10 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         return obj.owner == request.user
 
 
-class IsEducator(permissions.BasePermission):
-    """Only users in the educator or admin group."""
+class IsEducatorOrAdmin(permissions.BasePermission):
+    """Educators or admins (checks educator/admin group or is_staff)."""
 
     message = "Educator or admin role required."
-
-    def has_permission(self, request, view):
-        if not request.user.is_authenticated:
-            return False
-        if request.user.is_staff:
-            return True
-        return request.user.groups.filter(name__in=["educator", "admin"]).exists()
-
-
-class IsEducatorOrAdmin(permissions.BasePermission):
-    """Educators or admins."""
-
-    message = "Educator or admin required."
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -58,17 +45,6 @@ class IsContentCreator(permissions.BasePermission):
         if request.user.is_staff:
             return True
         return request.user.groups.filter(name__in=["educator", "course_manager", "admin"]).exists()
-
-
-class IsEducatorOrReadOnly(permissions.BasePermission):
-    """Educators can write, everyone can read."""
-
-    def has_permission(self, request, view):
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        if not request.user.is_authenticated:
-            return False
-        return request.user.groups.filter(name__in=["educator", "admin"]).exists()
 
 
 class IsEventOwner(permissions.BasePermission):

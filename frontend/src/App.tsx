@@ -213,21 +213,53 @@ export default function App() {
                   <Route path="/cpd" element={<CPDTracking />} />
 
                   {/* Course management */}
-                  <Route path="/courses/manage" element={<OrgCoursesPage />} />
+                  <Route path="/courses/manage" element={
+                    <ProtectedRoute requiredFeature="create_courses">
+                      <OrgCoursesPage />
+                    </ProtectedRoute>
+                  } />
                   <Route path="/courses/manage/new" element={
                     <ProtectedRoute requiredFeature="create_courses">
                       <CreateCoursePage />
                     </ProtectedRoute>
                   } />
-                  <Route path="/courses/manage/:courseSlug" element={<CourseManagementPage />} />
+                  <Route path="/courses/manage/:courseSlug" element={
+                    <ProtectedRoute requiredFeature="create_courses">
+                      <CourseManagementPage />
+                    </ProtectedRoute>
+                  } />
 
                   {/* Educator pages */}
-                  <Route path="/organizer/contacts" element={<ContactsPage />} />
-                  <Route path="/organizer/reports" element={<ReportsPage />} />
-                  <Route path="/organizer/certificates" element={<OrganizerCertificatesPage />} />
-                  <Route path="/organizer/events/:uuid/manage" element={<EventManagement />} />
-                  <Route path="/organizer/badges" element={<OrganizerBadgesPage />} />
-                  <Route path="/organizer/video" element={<VideoManagement />} />
+                  <Route path="/organizer/contacts" element={
+                    <ProtectedRoute requiredFeature="manage_contacts">
+                      <ContactsPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/organizer/reports" element={
+                    <ProtectedRoute requiredFeature="create_events">
+                      <ReportsPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/organizer/certificates" element={
+                    <ProtectedRoute requiredFeature="manage_certificates">
+                      <OrganizerCertificatesPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/organizer/events/:uuid/manage" element={
+                    <ProtectedRoute requiredFeature="create_events">
+                      <EventManagement />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/organizer/badges" element={
+                    <ProtectedRoute requiredFeature="manage_badges">
+                      <OrganizerBadgesPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/organizer/video" element={
+                    <ProtectedRoute requiredFeature="manage_video">
+                      <VideoManagement />
+                    </ProtectedRoute>
+                  } />
 
                   {/* Admin pages */}
                   <Route path="/admin/users" element={

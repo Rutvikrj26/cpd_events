@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getToken, removeToken } from '@/lib/auth';
+import { getToken, getRefreshToken, setToken, removeToken } from '@/lib/auth';
 import { ApiErrorResponse } from './types';
 import { toast } from 'sonner';
 
@@ -12,7 +12,7 @@ const client = axios.create({
     },
 });
 
-// Public endpoints that should NOT include Authorization header
+// Public endpoints that should NOT include Authorization header or trigger refresh
 const PUBLIC_ENDPOINTS = [
     '/auth/signup/',
     '/auth/token/',
@@ -24,17 +24,28 @@ const PUBLIC_ENDPOINTS = [
     '/auth/zoom/callback/',
 ];
 
-// Endpoints where we suppress global error toasts (they handle their own errors)
-const SILENT_ERROR_ENDPOINTS: string[] = [];
+function isPublicEndpoint(url: string | undefined): boolean {
+    return PUBLIC_ENDPOINTS.some(ep => url?.includes(ep));
+}
 
+// ---------- Token refresh queue ----------
+// When the access token expires and multiple requests fail with 401 simultaneously,
+// only ONE refresh request is sent. All others wait in the queue and retry with the new token.
+let isRefreshing = false;
+let failedQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = [];
+
+function processQueue(error: unknown, token: string | null) {
+    failedQueue.forEach(({ resolve, reject }) => {
+        if (token) resolve(token);
+        else reject(error);
+    });
+    failedQueue = [];
+}
+
+// ---------- Request interceptor ----------
 client.interceptors.request.use(
     (config) => {
-        // Skip adding Authorization header for public endpoints
-        const isPublicEndpoint = PUBLIC_ENDPOINTS.some(
-            endpoint => config.url?.includes(endpoint)
-        );
-
-        if (!isPublicEndpoint) {
+        if (!isPublicEndpoint(config.url)) {
             const token = getToken();
             if (token) {
                 config.headers['Authorization'] = `Bearer ${token}`;
@@ -43,6 +54,81 @@ client.interceptors.request.use(
         return config;
     },
     (error) => Promise.reject(error)
+);
+
+// ---------- Response interceptor ----------
+client.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const originalRequest = error.config;
+
+        // --- 401: attempt token refresh (except for public endpoints and retries) ---
+        if (
+            error.response?.status === 401 &&
+            !isPublicEndpoint(originalRequest?.url) &&
+            !originalRequest._retry
+        ) {
+            const refreshToken = getRefreshToken();
+            if (!refreshToken) {
+                removeToken();
+                window.location.href = '/login';
+                return Promise.reject(error);
+            }
+
+            if (isRefreshing) {
+                // Another refresh is in flight — queue this request
+                return new Promise<string>((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                }).then((newToken) => {
+                    originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+                    return client(originalRequest);
+                });
+            }
+
+            isRefreshing = true;
+            originalRequest._retry = true;
+
+            try {
+                const { data } = await axios.post(`${API_URL}/auth/token/refresh/`, {
+                    refresh: refreshToken,
+                });
+                const newAccess: string = data.access;
+                // If server rotated the refresh token, store the new one too
+                setToken(newAccess, data.refresh ?? refreshToken);
+                processQueue(null, newAccess);
+
+                originalRequest.headers['Authorization'] = `Bearer ${newAccess}`;
+                return client(originalRequest);
+            } catch (refreshError) {
+                processQueue(refreshError, null);
+                removeToken();
+                window.location.href = '/login';
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+
+        // --- Toast notifications for non-401 errors ---
+        if (error.response && !isPublicEndpoint(originalRequest?.url)) {
+            const errorMessage = getApiErrorMessage(error);
+
+            if (error.response.status >= 500) {
+                toast.error('Server Error', {
+                    description: 'Something went wrong on our end. Please try again later.',
+                });
+            } else if (error.response.status === 403) {
+                toast.error('Access Denied', { description: errorMessage });
+            } else if (error.response.status === 404) {
+                toast.error('Not Found', { description: errorMessage });
+            } else if (error.response.status !== 401) {
+                // 400, 422, etc. (skip 401 — already handled above)
+                toast.error('Error', { description: errorMessage });
+            }
+        }
+
+        return Promise.reject(error);
+    }
 );
 
 /**
@@ -56,11 +142,9 @@ export function getApiErrorMessage(error: unknown): string {
         if (data.error) {
             const { message, details } = data.error;
 
-            // If there are field-level details, format them nicely
             if (details && typeof details === 'object') {
                 const fieldErrors = Object.entries(details)
                     .map(([field, errors]) => {
-                        // Clean up field name (convert snake_case to Title Case)
                         const cleanField = field
                             .replace(/_/g, ' ')
                             .replace(/\b\w/g, l => l.toUpperCase());
@@ -74,59 +158,11 @@ export function getApiErrorMessage(error: unknown): string {
         }
     }
 
-    // Fallback for non-API errors
     if (error instanceof Error) {
         return error.message;
     }
 
     return 'An unexpected error occurred';
 }
-
-client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-        const isPublicEndpoint = PUBLIC_ENDPOINTS.some(
-            endpoint => error.config?.url?.includes(endpoint)
-        );
-
-        const isSilentEndpoint = SILENT_ERROR_ENDPOINTS.some(
-            endpoint => error.config?.url?.includes(endpoint)
-        );
-
-        // Handle 401 - redirect to login (except for public auth endpoints)
-        if (error.response?.status === 401 && !isPublicEndpoint) {
-            removeToken();
-            window.location.href = '/login';
-            return Promise.reject(error);
-        }
-
-        // Show toast for all API errors (unless endpoint is in silent list)
-        if (error.response && !isSilentEndpoint) {
-            const errorMessage = getApiErrorMessage(error);
-
-            // Use different toast styles based on error type
-            if (error.response.status >= 500) {
-                toast.error('Server Error', {
-                    description: 'Something went wrong on our end. Please try again later.',
-                });
-            } else if (error.response.status === 403) {
-                toast.error('Access Denied', {
-                    description: errorMessage,
-                });
-            } else if (error.response.status === 404) {
-                toast.error('Not Found', {
-                    description: errorMessage,
-                });
-            } else {
-                // 400, 401, 422, etc.
-                toast.error('Error', {
-                    description: errorMessage,
-                });
-            }
-        }
-
-        return Promise.reject(error);
-    }
-);
 
 export default client;

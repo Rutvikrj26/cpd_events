@@ -28,6 +28,9 @@ export interface Manifest {
         create_events: boolean;
         create_courses: boolean;
         manage_certificates: boolean;
+        manage_contacts: boolean;
+        manage_badges: boolean;
+        manage_video: boolean;
         manage_users: boolean;
         configure_billing: boolean;
         browse_events: boolean;

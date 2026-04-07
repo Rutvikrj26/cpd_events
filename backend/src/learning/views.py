@@ -66,11 +66,16 @@ class EventModuleViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsContentCreator]
     lookup_field = 'uuid'
 
-    def get_queryset(self):
+    def _get_event(self):
         from events.models import Event
 
         event_uuid = self.kwargs.get('event_uuid')
-        event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
+        if self.request.user.is_staff:
+            return get_object_or_404(Event, uuid=event_uuid)
+        return get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
+
+    def get_queryset(self):
+        event = self._get_event()
         return EventModule.objects.filter(event=event).prefetch_related('contents', 'assignments')
 
     def get_serializer_class(self):
@@ -81,10 +86,7 @@ class EventModuleViewSet(viewsets.ModelViewSet):
         return EventModuleSerializer
 
     def perform_create(self, serializer):
-        from events.models import Event
-
-        event_uuid = self.kwargs.get('event_uuid')
-        event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
+        event = self._get_event()
         serializer.save(event=event)
 
     @swagger_auto_schema(
@@ -126,14 +128,21 @@ class ModuleContentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsContentCreator]
     lookup_field = 'uuid'
 
-    def get_queryset(self):
+    def _get_event_and_module(self):
         from events.models import Event
 
         event_uuid = self.kwargs.get('event_uuid')
         module_uuid = self.kwargs.get('module_uuid')
 
-        event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
+        if self.request.user.is_staff:
+            event = get_object_or_404(Event, uuid=event_uuid)
+        else:
+            event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
         module = get_object_or_404(EventModule, uuid=module_uuid, event=event)
+        return event, module
+
+    def get_queryset(self):
+        _, module = self._get_event_and_module()
         return ModuleContent.objects.filter(module=module)
 
     def get_serializer_class(self):
@@ -142,14 +151,17 @@ class ModuleContentViewSet(viewsets.ModelViewSet):
         return ModuleContentSerializer
 
     def perform_create(self, serializer):
-        from events.models import Event
-
-        event_uuid = self.kwargs.get('event_uuid')
-        module_uuid = self.kwargs.get('module_uuid')
-
-        event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
-        module = get_object_or_404(EventModule, uuid=module_uuid, event=event)
+        _, module = self._get_event_and_module()
         serializer.save(module=module)
+
+
+def _get_event_for_user(user, event_uuid):
+    """Helper: get event, allowing admin to access any event."""
+    from events.models import Event
+
+    if user.is_staff:
+        return get_object_or_404(Event, uuid=event_uuid)
+    return get_object_or_404(Event, uuid=event_uuid, owner=user)
 
 
 @roles('educator', 'course_manager', 'admin', route_name='assignments')
@@ -164,14 +176,12 @@ class AssignmentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsContentCreator]
     lookup_field = 'uuid'
 
+    def _get_module(self):
+        event = _get_event_for_user(self.request.user, self.kwargs.get('event_uuid'))
+        return get_object_or_404(EventModule, uuid=self.kwargs.get('module_uuid'), event=event)
+
     def get_queryset(self):
-        from events.models import Event
-
-        event_uuid = self.kwargs.get('event_uuid')
-        module_uuid = self.kwargs.get('module_uuid')
-
-        event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
-        module = get_object_or_404(EventModule, uuid=module_uuid, event=event)
+        module = self._get_module()
         return Assignment.objects.filter(module=module)
 
     def get_serializer_class(self):
@@ -180,13 +190,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         return AssignmentSerializer
 
     def perform_create(self, serializer):
-        from events.models import Event
-
-        event_uuid = self.kwargs.get('event_uuid')
-        module_uuid = self.kwargs.get('module_uuid')
-
-        event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
-        module = get_object_or_404(EventModule, uuid=module_uuid, event=event)
+        module = self._get_module()
         serializer.save(module=module)
 
 
@@ -299,9 +303,10 @@ class OrganizerSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = 'uuid'
 
     def get_queryset(self):
-        return AssignmentSubmission.objects.filter(assignment__module__event__owner=self.request.user).select_related(
-            'assignment', 'registration', 'registration__user'
-        )
+        qs = AssignmentSubmission.objects.select_related('assignment', 'registration', 'registration__user')
+        if self.request.user.is_staff:
+            return qs
+        return qs.filter(assignment__module__event__owner=self.request.user)
 
     @swagger_auto_schema(
         operation_summary="Grade submission",
@@ -527,6 +532,10 @@ class CourseViewSet(viewsets.ModelViewSet):
         # Public visibility logic for non-authenticated users
         if not user.is_authenticated:
             return queryset.filter(is_public=True, status=Course.Status.PUBLISHED)
+
+        # Admin sees everything
+        if user.is_staff:
+            return queryset.distinct()
 
         if self.action in ['list', 'retrieve']:
             return queryset.filter(

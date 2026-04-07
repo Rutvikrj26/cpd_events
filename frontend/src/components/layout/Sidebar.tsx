@@ -87,13 +87,21 @@ export const Sidebar = () => {
 
         // Feature flag filtering via manifest
         if (manifest && manifest.routes.length > 0) {
-            const alwaysShow = ['dashboard', 'profile', 'my_events', 'browse_events', 'browse_courses',
-                'course_certificates', 'creator_certificates', 'contacts', 'cpd_tracking',
-                'event_badges', 'badges', 'admin_users'];
+            // Items that don't need feature checks (basic navigation)
+            const alwaysShow = ['dashboard', 'profile', 'browse_events', 'browse_courses', 'cpd_tracking', 'badges'];
             if (alwaysShow.includes(item.routeKey)) return true;
 
+            // Map nav items to manifest features
             if (item.routeKey === 'certificates') return hasFeature('view_own_certificates');
-            if (item.routeKey === 'browse_events') return hasFeature('browse_events');
+            if (item.routeKey === 'registrations') return hasFeature('view_own_registrations');
+            if (item.routeKey === 'my_events') return hasFeature('create_events');
+            if (item.routeKey === 'contacts') return hasFeature('manage_contacts');
+            if (item.routeKey === 'creator_certificates') return hasFeature('manage_certificates');
+            if (item.routeKey === 'event_badges') return hasFeature('manage_badges');
+            if (item.routeKey === 'video_rooms') return hasFeature('manage_video');
+            if (item.routeKey === 'courses') return hasFeature('create_courses');
+            if (item.routeKey === 'course_certificates') return hasFeature('create_courses');
+            if (item.routeKey === 'admin_users') return hasFeature('manage_users');
 
             return hasRoute(item.routeKey);
         }
