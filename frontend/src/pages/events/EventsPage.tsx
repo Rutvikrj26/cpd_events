@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Calendar, MapPin, Users, MoreVertical, Copy, Edit, Eye, Trash2, Loader2, Building2 } from 'lucide-react';
 import { getEvents, getPublicEvents, deleteEvent } from '@/api/events';
 import { duplicateEvent } from '@/api/events/actions';
@@ -26,25 +26,18 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Subscription } from '@/api/billing/types';
 import { getRoleFlags } from '@/lib/role-utils';
-
-type EventsOutletContext = {
-    subscription: Subscription | null;
-};
 
 export const EventsPage = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
-    const outletContext = useOutletContext<EventsOutletContext | undefined>();
-    const subscription = outletContext?.subscription ?? null;
     const [events, setEvents] = useState<Event[]>([]);
     const [loading, setLoading] = useState(true);
     const [duplicating, setDuplicating] = useState<string | null>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
     const [deleting, setDeleting] = useState(false);
-    const { isOrganizer } = getRoleFlags(user, subscription);
+    const { isEducator } = getRoleFlags(user);
 
     const fetchEvents = async () => {
         try {
@@ -58,9 +51,9 @@ export const EventsPage = () => {
     };
 
     useEffect(() => {
-        if (!isOrganizer) return;
+        if (!isEducator) return;
         fetchEvents();
-    }, [isOrganizer]);
+    }, [isEducator]);
 
     const handleDuplicate = async (event: Event, e: React.MouseEvent) => {
         e.preventDefault();
@@ -101,7 +94,7 @@ export const EventsPage = () => {
         }
     };
 
-    if (!isOrganizer) {
+    if (!isEducator) {
         return <EventDiscovery />;
     }
 
@@ -112,13 +105,13 @@ export const EventsPage = () => {
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-3xl font-bold text-foreground">
-                        {isOrganizer ? 'My Events' : 'Browse Events'}
+                        {isEducator ? 'My Events' : 'Browse Events'}
                     </h1>
                     <p className="text-muted-foreground">
-                        {isOrganizer ? 'Manage your CPD events' : 'Discover upcoming CPD events'}
+                        {isEducator ? 'Manage your CPD events' : 'Discover upcoming CPD events'}
                     </p>
                 </div>
-                {isOrganizer && (
+                {isEducator && (
                     <Link to="/events/create">
                         <Button className="flex items-center gap-2">
                             <Plus size={16} /> Create Event
@@ -238,7 +231,7 @@ export const EventsPage = () => {
                 ))}
                 {events.length === 0 && (
                     <div className="col-span-full py-12 text-center text-muted-foreground bg-card rounded-xl border border-dashed border-slate-300">
-                        {isOrganizer
+                        {isEducator
                             ? "No events found. Create your first one!"
                             : "No upcoming events available. Check back later!"
                         }

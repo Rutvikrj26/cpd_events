@@ -50,24 +50,6 @@ class TestEventList:
         assert str(event.uuid) in event_uuids
         assert str(other_organizer_event.uuid) not in event_uuids
 
-    def test_org_admin_can_list_org_events(self, organizer_client, organization, other_organizer):
-        """Org admin can list events from other organizers in the org."""
-        from factories import EventFactory
-        from organizations.models import OrganizationMembership
-
-        OrganizationMembership.objects.create(
-            organization=organization,
-            user=other_organizer,
-            role=OrganizationMembership.Role.ORGANIZER,
-            is_active=True,
-        )
-        org_event = EventFactory(owner=other_organizer, organization=organization)
-
-        response = organizer_client.get(self.endpoint)
-        assert response.status_code == status.HTTP_200_OK
-        event_uuids = [e['uuid'] for e in response.data['results']]
-        assert str(org_event.uuid) in event_uuids
-
     def test_list_events_attendee_forbidden(self, auth_client):
         """Attendees cannot access organizer event list."""
         response = auth_client.get(self.endpoint)
@@ -253,31 +235,6 @@ class TestEventUpdate:
             },
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
-
-    def test_org_admin_can_update_org_event(self, organizer_client, organization, other_organizer):
-        """Org admin can update events owned by other organizers in the org."""
-        from factories import EventFactory
-        from organizations.models import OrganizationMembership
-
-        OrganizationMembership.objects.create(
-            organization=organization,
-            user=other_organizer,
-            role=OrganizationMembership.Role.ORGANIZER,
-            is_active=True,
-        )
-        org_event = EventFactory(owner=other_organizer, organization=organization)
-        org_event.certificates_enabled = False
-        org_event.save(update_fields=['certificates_enabled', 'updated_at'])
-
-        response = organizer_client.patch(
-            f'/api/v1/events/{org_event.uuid}/',
-            {
-                'title': 'Updated Title',
-            },
-        )
-        assert response.status_code == status.HTTP_200_OK
-        org_event.refresh_from_db()
-        assert org_event.title == 'Updated Title'
 
     def test_update_completed_event_limited(self, organizer_client, completed_event):
         """Limited fields can be updated on completed event."""

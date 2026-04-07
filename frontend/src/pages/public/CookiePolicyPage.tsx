@@ -43,7 +43,7 @@ export function CookiePolicyPage() {
                             <strong>Stripe:</strong> We use Stripe for payment processing. Stripe may set cookies to help detect and prevent fraud and to ensure the secure processing of your payment.
                         </li>
                         <li>
-                            <strong>Zoom:</strong> We integrate with Zoom to provide video conferencing features. Zoom may use cookies to enable these features and to analyze service usage.
+                            <strong>Video Conferencing:</strong> Our built-in video conferencing system may use cookies to maintain your session state and ensure reliable connectivity during online events.
                         </li>
                         <li>
                             <strong>Analytics:</strong> This site may use analytics solutions to understand how you use the site and ways that we can improve your experience. These cookies may track things such as how long you spend on the site and the pages that you visit so we can continue to produce engaging content.

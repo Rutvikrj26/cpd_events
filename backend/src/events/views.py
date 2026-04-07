@@ -15,7 +15,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from common.pagination import SmallPagination
-from common.permissions import IsOrganizerOrCourseManager, IsOrganizerOrOrgAdmin
+from common.permissions import IsContentCreator, IsEducatorOrAdmin
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import SoftDeleteModelViewSet
@@ -32,29 +32,11 @@ from .models import Event, EventCustomField, Speaker
 
 def _event_access_q(user, prefix: str = '') -> Q:
     owner_key = f'{prefix}owner'
-    org_user_key = f'{prefix}organization__memberships__user'
-    org_role_key = f'{prefix}organization__memberships__role'
-    org_active_key = f'{prefix}organization__memberships__is_active'
-
-    return Q(**{owner_key: user}) | Q(
-        **{
-            org_user_key: user,
-            org_role_key: 'admin',
-            org_active_key: True,
-        }
-    )
+    return Q(**{owner_key: user})
 
 
 def _user_can_manage_event(user, event) -> bool:
-    if event.owner_id == user.id:
-        return True
-    if event.organization_id:
-        return event.organization.memberships.filter(
-            user=user,
-            role='admin',
-            is_active=True,
-        ).exists()
-    return False
+    return event.owner_id == user.id
 
 
 # =============================================================================
@@ -98,7 +80,7 @@ class PublicEventFilter(filters.FilterSet):
 # =============================================================================
 
 
-@roles('organizer', 'course_manager', 'admin', route_name='events')
+@roles('educator', 'course_manager', 'admin', route_name='events')
 class EventViewSet(SoftDeleteModelViewSet):
     """
     Organizer-level CRUD for events.
@@ -111,7 +93,7 @@ class EventViewSet(SoftDeleteModelViewSet):
     """
 
     parser_classes = (MultiPartParser, FormParser, JSONParser)
-    permission_classes = [IsAuthenticated, IsOrganizerOrOrgAdmin | IsOrganizerOrCourseManager]
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin | IsContentCreator]
     filterset_class = EventFilter
     search_fields = ['title', 'description']
     ordering_fields = ['starts_at', 'created_at', 'title', 'registration_count']
@@ -138,17 +120,14 @@ class EventViewSet(SoftDeleteModelViewSet):
 
         from .services import event_service
 
-        organization_uuid = getattr(self.request, 'data', {}).get('organization')
-
         try:
             event = event_service.create_event(
-                user=self.request.user, data=serializer.validated_data, organization_uuid=organization_uuid
+                user=self.request.user, data=serializer.validated_data
             )
             serializer.instance = event
         except ValidationError as e:
             raise e
         except Exception as e:
-            # Re-raise known exceptions as is, wrap others if needed
             raise e
 
     @swagger_auto_schema(
@@ -319,9 +298,6 @@ class EventViewSet(SoftDeleteModelViewSet):
         from .tasks import sync_zoom_attendance
 
         event = self.get_object()
-        if not event.zoom_meeting_id:
-            return error_response('Event has no Zoom meeting linked.', code='NO_ZOOM', status_code=400)
-
         task = sync_zoom_attendance.delay(event.id)
         # task might be a dict if CLOUD_TASKS_SYNC=True or in emulator mode
         task_id = getattr(task, 'id', None) or (task.get('id') if isinstance(task, dict) else None)
@@ -338,8 +314,6 @@ class EventViewSet(SoftDeleteModelViewSet):
         Uses local AttendanceRecord data populated via Zoom webhooks.
         """
         event = self.get_object()
-        if not event.zoom_meeting_id:
-            return error_response('Event has no Zoom meeting linked.', code='NO_ZOOM', status_code=400)
 
         from django.db.models import Max, Sum
         from django.db.models.functions import Coalesce
@@ -666,7 +640,7 @@ class PublicEventDetailView(generics.RetrieveAPIView):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='event_custom_fields')
+@roles('educator', 'admin', route_name='event_custom_fields')
 class EventCustomFieldViewSet(viewsets.ModelViewSet):
     """
     Manage custom fields for an event.
@@ -674,7 +648,7 @@ class EventCustomFieldViewSet(viewsets.ModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/custom-fields/
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizerOrOrgAdmin]
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
     lookup_field = 'uuid'
 
     def get_queryset(self):
@@ -718,7 +692,7 @@ class EventCustomFieldViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='event_sessions')
+@roles('educator', 'admin', route_name='event_sessions')
 class EventSessionViewSet(viewsets.ModelViewSet):
     """
     Manage sessions for a multi-session event.
@@ -726,7 +700,7 @@ class EventSessionViewSet(viewsets.ModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/sessions/
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizerOrOrgAdmin]
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
     pagination_class = SmallPagination  # M5: Nested resource pagination
     lookup_field = 'uuid'
 
@@ -793,7 +767,7 @@ class EventSessionViewSet(viewsets.ModelViewSet):
         return Response({'message': 'Sessions reordered.'})
 
 
-@roles('attendee', 'organizer', 'admin', route_name='session_attendance')
+@roles('learner', 'educator', 'admin', route_name='session_attendance')
 class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
     """
     View session attendance for a registration.
@@ -859,13 +833,13 @@ class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializers.SessionAttendanceSerializer(session_attendance).data)
 
 
-@roles('organizer', 'admin', route_name='speakers')
+@roles('educator', 'admin', route_name='speakers')
 class SpeakerViewSet(SoftDeleteModelViewSet):
     """
     CRUD for speakers.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizerOrOrgAdmin]
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
     queryset = Speaker.objects.all()
     serializer_class = serializers.SpeakerSerializer
     search_fields = ['name', 'bio']

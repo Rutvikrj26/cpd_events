@@ -60,14 +60,7 @@ export function LoginPage() {
         return;
       }
 
-      // 2. Last active organization (pick up where left off)
-      const lastOrgSlug = localStorage.getItem("current_org_slug");
-      if (lastOrgSlug) {
-        navigate(`/org/${lastOrgSlug}`);
-        return;
-      }
-
-      // 3. Default fallback
+      // 2. Default fallback
       navigate("/dashboard");
     } catch (error) {
       toast.error("Invalid email or password");

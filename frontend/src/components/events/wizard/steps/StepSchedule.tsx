@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useEventWizard } from '../EventWizardContext';
 import { DateTimePicker } from '@/components/ui/date-time-picker';
-import { Clock, Plus, Edit2, Trash2, GripVertical, Video, Users } from 'lucide-react';
+import { Clock, Plus, Edit2, Trash2, GripVertical, Users } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -220,12 +220,6 @@ export const StepSchedule = () => {
                                                         <h4 className="font-semibold text-foreground truncate">
                                                             {session.title}
                                                         </h4>
-                                                        {session.has_separate_zoom && (
-                                                            <Badge variant="outline" className="shrink-0">
-                                                                <Video className="h-3 w-3 mr-1" />
-                                                                Separate Zoom
-                                                            </Badge>
-                                                        )}
                                                         {session.is_mandatory && (
                                                             <Badge variant="secondary" className="shrink-0">
                                                                 Required

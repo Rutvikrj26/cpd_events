@@ -6,7 +6,6 @@ from django.utils import timezone
 
 from events.models import Event, Speaker
 from feedback.models import EventFeedback
-from organizations.models import Organization
 from registrations.models import Registration
 
 User = get_user_model()
@@ -17,9 +16,6 @@ class FeedbackTests(TestCase):
         # Create User
         self.user = User.objects.create_user(email='test@example.com', password='password123', full_name='Test User')
         self.organizer = User.objects.create_user(email='org@example.com', password='password123', full_name='Org User')
-
-        # Create Organization
-        self.org = Organization.objects.create(name='Test Org', created_by=self.organizer)
 
         # Create Speaker
         self.speaker = Speaker.objects.create(

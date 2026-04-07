@@ -136,9 +136,8 @@ export function CourseDiscoveryPage() {
       };
     }
     
-    // Check if user can create courses (from manifest/subscription)
-    // For now, we'll check account_type
-    const canCreateCourses = user?.account_type === 'course_manager' || user?.account_type === 'admin';
+    // Check if user can create courses (from roles)
+    const canCreateCourses = user?.roles?.some(r => ['course_manager', 'admin'].includes(r));
     
     if (canCreateCourses) {
       return {

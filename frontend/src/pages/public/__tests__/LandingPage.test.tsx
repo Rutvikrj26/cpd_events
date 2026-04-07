@@ -15,52 +15,46 @@ describe("LandingPage", () => {
     it("renders hero section with main headline", () => {
         renderLandingPage();
 
-        // Hero contains "Host Events." and multiple instances of "Issue Certificates"
-        expect(screen.getByText(/host events/i)).toBeInTheDocument();
-        // Use getAllBy since there are multiple matches
-        const certificatesText = screen.getAllByText(/issue certificates/i);
-        expect(certificatesText.length).toBeGreaterThan(0);
+        expect(screen.getByText(/professional development/i)).toBeInTheDocument();
+        expect(screen.getByText(/for learners/i)).toBeInTheDocument();
+        expect(screen.getByText(/for providers/i)).toBeInTheDocument();
     });
 
-    it("has Start for Free CTA button linking to signup", () => {
+    it("has Browse Training CTA button for learners", () => {
         renderLandingPage();
 
-        const ctaButton = screen.getByRole("link", { name: /start for free/i });
-        expect(ctaButton).toHaveAttribute("href", "/signup?role=organizer");
+        const browseLinks = screen.getAllByRole("link", { name: /browse training/i });
+        expect(browseLinks.length).toBeGreaterThan(0);
+        expect(browseLinks[0]).toHaveAttribute("href", "/events/browse");
     });
 
-    it("has Contact Us button linking to contact", () => {
+    it("has Start Creating CTA button for providers", () => {
         renderLandingPage();
 
-        const contactButton = screen.getByRole("link", { name: /contact us/i });
-        expect(contactButton).toHaveAttribute("href", "/contact");
+        const startLinks = screen.getAllByRole("link", { name: /start creating/i });
+        expect(startLinks.length).toBeGreaterThan(0);
+        expect(startLinks[0]).toHaveAttribute("href", "/pricing");
     });
 
-    it("renders How It Works section", () => {
+    it("renders Why Learners Choose Accredit section", () => {
         renderLandingPage();
 
-        expect(screen.getByText("How It Works")).toBeInTheDocument();
-        expect(screen.getByText("Create Your Event")).toBeInTheDocument();
+        expect(screen.getByText("Why learners choose Accredit")).toBeInTheDocument();
+        expect(screen.getByText("CPD Wallet")).toBeInTheDocument();
+        expect(screen.getByText("Verified Credentials")).toBeInTheDocument();
     });
 
-    it("renders Core Features section", () => {
+    it("renders Why Providers Choose Accredit section", () => {
         renderLandingPage();
 
-        expect(screen.getByText("Zoom Integration")).toBeInTheDocument();
-        expect(screen.getByText("Automated Certificates")).toBeInTheDocument();
-        expect(screen.getByText("Attendance Tracking")).toBeInTheDocument();
-    });
-
-    it("renders Use Cases section", () => {
-        renderLandingPage();
-
-        expect(screen.getByText("Professional Associations")).toBeInTheDocument();
-        expect(screen.getByText("Training Providers")).toBeInTheDocument();
+        expect(screen.getByText("Why providers choose Accredit")).toBeInTheDocument();
+        expect(screen.getByText("Enterprise Reliability")).toBeInTheDocument();
+        expect(screen.getByText("Automated Workflows")).toBeInTheDocument();
     });
 
     it("renders CTA section at the bottom", () => {
         renderLandingPage();
 
-        expect(screen.getByText(/ready to streamline/i)).toBeInTheDocument();
+        expect(screen.getByText(/ready to get started/i)).toBeInTheDocument();
     });
 });

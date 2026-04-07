@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from common.permissions import IsOrganizer
+from common.permissions import IsEducator
 from common.rbac import roles
 from events.models import Event
 
@@ -24,7 +24,7 @@ from .services import (
 )
 
 
-@roles('organizer', 'admin', route_name='promo_codes')
+@roles('educator', 'admin', route_name='promo_codes')
 class PromoCodeViewSet(viewsets.ModelViewSet):
     """
     API endpoints for managing promo codes (organizer).
@@ -38,7 +38,7 @@ class PromoCodeViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = PromoCodeSerializer
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsEducator]
     lookup_field = 'uuid'
 
     def get_queryset(self):

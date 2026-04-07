@@ -26,8 +26,6 @@ from factories import (
     EventModuleFactory,
     EventSessionFactory,
     ModuleContentFactory,
-    OrganizationFactory,
-    OrganizationMembershipFactory,
     OrganizerFactory,
     RegistrationFactory,
     TagFactory,
@@ -174,39 +172,6 @@ def admin_user(db):
         password='adminpass123',
         full_name='Admin User',
     )
-
-
-# =============================================================================
-# Organization Fixtures
-# =============================================================================
-
-
-@pytest.fixture
-def organization(db, organizer):
-    """An organization owned by the organizer."""
-    org = OrganizationFactory(
-        name='Test Organization',
-        created_by=organizer,
-    )
-    # Create owner membership
-    OrganizationMembershipFactory(
-        organization=org,
-        user=organizer,
-        role='admin',
-    )
-    return org
-
-
-@pytest.fixture
-def org_member(db, organization):
-    """A member of the organization."""
-    member_user = OrganizerFactory()
-    OrganizationMembershipFactory(
-        organization=organization,
-        user=member_user,
-        role='instructor',
-    )
-    return member_user
 
 
 # =============================================================================
@@ -446,10 +411,10 @@ def assignment(db, event_module):
 
 
 @pytest.fixture
-def course(db, organization):
-    """A course owned by the organization."""
+def course(db, course_manager):
+    """A course owned by the course manager."""
     return CourseFactory(
-        organization=organization,
+        created_by=course_manager,
         title='Test Course',
     )
 
@@ -520,18 +485,6 @@ def mock_stripe(settings):
             billing_portal=MagicMock(Session=mock_portal),
             PaymentMethod=mock_pm,
         )
-
-
-@pytest.fixture
-def mock_zoom():
-    """Mock Zoom API for integration tests."""
-    mock_instance = MagicMock()
-    mock_instance.create_meeting.return_value = {
-        'id': 123456789,
-        'join_url': 'https://zoom.us/j/123456789',
-    }
-    mock_instance.refresh_token.return_value = True
-    yield mock_instance
 
 
 @pytest.fixture

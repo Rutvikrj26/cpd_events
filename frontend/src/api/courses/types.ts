@@ -29,11 +29,6 @@ export interface Course {
     format: CourseFormat;
 
     // Virtual/Live Session Settings (for Hybrid courses)
-    zoom_meeting_id?: string;
-    zoom_meeting_url?: string;
-    zoom_meeting_password?: string;
-    zoom_webinar_id?: string;
-    zoom_registrant_id?: string;
     live_session_start?: string;
     live_session_end?: string;
     live_session_timezone?: string;
@@ -99,10 +94,6 @@ export interface CourseCreateRequest {
     auto_issue_badges?: boolean;
     // Format & Virtual fields
     format?: CourseFormat;
-    zoom_meeting_id?: string;
-    zoom_meeting_url?: string;
-    zoom_meeting_password?: string;
-    zoom_webinar_id?: string;
     live_session_start?: string;
     live_session_end?: string;
     live_session_timezone?: string;
@@ -207,12 +198,6 @@ export interface CourseSession {
     ends_at?: string;
     duration_minutes: number;
     timezone: string;
-    zoom_meeting_id?: string;
-    zoom_join_url?: string;
-    zoom_start_url?: string;
-    zoom_password?: string;
-    zoom_settings?: Record<string, any>;
-    zoom_error?: string;
     cpd_credits: number | string;
     is_mandatory: boolean;
     minimum_attendance_percent: number;
@@ -232,9 +217,6 @@ export interface CourseSessionCreateRequest {
     starts_at: string;
     duration_minutes?: number;
     timezone?: string;
-    zoom_settings?: { enabled?: boolean };
-    zoom_meeting_id?: string;
-    zoom_password?: string;
     cpd_credits?: number;
     is_mandatory?: boolean;
     minimum_attendance_percent?: number;
@@ -251,9 +233,6 @@ export interface CourseSessionAttendance {
     attendance_minutes: number;
     attendance_percent?: number;
     is_eligible: boolean;
-    zoom_user_email?: string;
-    zoom_join_time?: string;
-    zoom_leave_time?: string;
     is_manual_override: boolean;
     override_reason?: string;
     created_at?: string;

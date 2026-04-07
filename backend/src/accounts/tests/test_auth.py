@@ -41,8 +41,9 @@ class TestSignupView:
         }
         response = api_client.post(self.endpoint, data)
         assert response.status_code == status.HTTP_201_CREATED
-        assert 'access' in response.data
-        assert 'refresh' in response.data
+        assert 'message' in response.data
+        assert 'access' not in response.data
+        assert 'refresh' not in response.data
         assert User.objects.filter(email='newuser@example.com').exists()
 
     def test_signup_organizer_success(self, api_client):

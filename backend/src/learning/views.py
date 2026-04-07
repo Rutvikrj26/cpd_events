@@ -9,7 +9,7 @@ from rest_framework import parsers, permissions, serializers, status, views, vie
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from common.permissions import IsOrganizerOrCourseManager
+from common.permissions import IsContentCreator
 from common.rbac import roles
 from common.utils import error_response
 
@@ -51,7 +51,7 @@ from .serializers import (
 )
 
 
-@roles('organizer', 'course_manager', 'admin', route_name='event_modules')
+@roles('educator', 'course_manager', 'admin', route_name='event_modules')
 class EventModuleViewSet(viewsets.ModelViewSet):
     """
     Event module management.
@@ -63,7 +63,7 @@ class EventModuleViewSet(viewsets.ModelViewSet):
     DELETE /events/{event_uuid}/modules/{uuid}/ - Delete module
     """
 
-    permission_classes = [permissions.IsAuthenticated, IsOrganizerOrCourseManager]
+    permission_classes = [permissions.IsAuthenticated, IsContentCreator]
     lookup_field = 'uuid'
 
     def get_queryset(self):
@@ -114,7 +114,7 @@ class EventModuleViewSet(viewsets.ModelViewSet):
         return Response(EventModuleSerializer(module).data)
 
 
-@roles('organizer', 'course_manager', 'admin', route_name='module_content')
+@roles('educator', 'course_manager', 'admin', route_name='module_content')
 class ModuleContentViewSet(viewsets.ModelViewSet):
     """
     Module content management.
@@ -123,7 +123,7 @@ class ModuleContentViewSet(viewsets.ModelViewSet):
     POST /events/{event_uuid}/modules/{module_uuid}/contents/ - Create content
     """
 
-    permission_classes = [permissions.IsAuthenticated, IsOrganizerOrCourseManager]
+    permission_classes = [permissions.IsAuthenticated, IsContentCreator]
     lookup_field = 'uuid'
 
     def get_queryset(self):
@@ -152,7 +152,7 @@ class ModuleContentViewSet(viewsets.ModelViewSet):
         serializer.save(module=module)
 
 
-@roles('organizer', 'course_manager', 'admin', route_name='assignments')
+@roles('educator', 'course_manager', 'admin', route_name='assignments')
 class AssignmentViewSet(viewsets.ModelViewSet):
     """
     Assignment management.
@@ -161,7 +161,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
     POST /events/{event_uuid}/modules/{module_uuid}/assignments/ - Create assignment
     """
 
-    permission_classes = [permissions.IsAuthenticated, IsOrganizerOrCourseManager]
+    permission_classes = [permissions.IsAuthenticated, IsContentCreator]
     lookup_field = 'uuid'
 
     def get_queryset(self):
@@ -190,7 +190,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         serializer.save(module=module)
 
 
-@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='attendee_submissions')
+@roles('learner', 'educator', 'course_manager', 'admin', route_name='attendee_submissions')
 class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
     """
     Attendee's assignment submissions.
@@ -288,13 +288,13 @@ class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
         return Response(AssignmentSubmissionSerializer(submission).data)
 
 
-@roles('organizer', 'course_manager', 'admin', route_name='organizer_submissions')
+@roles('educator', 'course_manager', 'admin', route_name='organizer_submissions')
 class OrganizerSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Organizer view of all submissions for their events.
     """
 
-    permission_classes = [permissions.IsAuthenticated, IsOrganizerOrCourseManager]
+    permission_classes = [permissions.IsAuthenticated, IsContentCreator]
     serializer_class = AssignmentSubmissionSerializer
     lookup_field = 'uuid'
 
@@ -346,7 +346,7 @@ class OrganizerSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(AssignmentSubmissionSerializer(submission).data)
 
 
-@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='my_learning')
+@roles('learner', 'educator', 'course_manager', 'admin', route_name='my_learning')
 class MyLearningViewSet(viewsets.GenericViewSet):
     """
     Attendee's learning dashboard.
@@ -439,7 +439,7 @@ class MyLearningViewSet(viewsets.GenericViewSet):
         return Response({'event_uuid': event.uuid, 'event_title': event.title, 'modules': module_data})
 
 
-@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='content_progress')
+@roles('learner', 'educator', 'course_manager', 'admin', route_name='content_progress')
 class ContentProgressView(views.APIView):
     """
     Update content progress.
@@ -502,10 +502,10 @@ class ContentProgressView(views.APIView):
         return Response(ContentProgressSerializer(progress).data)
 
 
-@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='courses')
+@roles('learner', 'educator', 'course_manager', 'admin', route_name='courses')
 class CourseViewSet(viewsets.ModelViewSet):
     """
-    Course management for organizations.
+    Course management.
     """
 
     permission_classes = [permissions.IsAuthenticated]
@@ -514,11 +514,6 @@ class CourseViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Course.objects.all()
         user = self.request.user
-
-        # Filter by organization
-        org_slug = self.request.query_params.get('org')
-        if org_slug:
-            queryset = queryset.filter(organization__slug=org_slug)
 
         # Filter by slug (for public view)
         slug = self.request.query_params.get('slug')
@@ -534,28 +529,12 @@ class CourseViewSet(viewsets.ModelViewSet):
             return queryset.filter(is_public=True, status=Course.Status.PUBLISHED)
 
         if self.action in ['list', 'retrieve']:
-            from organizations.models import OrganizationMembership
-
-            memberships = OrganizationMembership.objects.filter(user=user, is_active=True)
-            org_ids = memberships.filter(
-                role__in=['admin', 'course_manager', 'organizer'],
-            ).values_list('organization_id', flat=True)
-            instructor_course_ids = memberships.filter(
-                role='instructor',
-                assigned_course__isnull=False,
-            ).values_list('assigned_course_id', flat=True)
-
             return queryset.filter(
                 models.Q(is_public=True, status=Course.Status.PUBLISHED)
                 | models.Q(created_by=user)
-                | models.Q(organization_id__in=org_ids)
-                | models.Q(id__in=instructor_course_ids)
             ).distinct()
 
-        return queryset.filter(
-            models.Q(organization__memberships__user=user, organization__memberships__role__in=['admin', 'course_manager'])
-            | models.Q(created_by=user)
-        ).distinct()
+        return queryset.filter(created_by=user).distinct()
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -572,51 +551,18 @@ class CourseViewSet(viewsets.ModelViewSet):
         return CourseSerializer
 
     def perform_create(self, serializer):
-        from rest_framework.exceptions import PermissionDenied, ValidationError
+        from rest_framework.exceptions import PermissionDenied
 
-        from organizations.models import Organization
+        if not self.request.user.groups.filter(name__in=['course_manager', 'admin']).exists():
+            raise PermissionDenied("Course manager or admin role required to create courses.")
 
-        org_slug = self.request.data.get('organization_slug')
-        organization = None
+        subscription = getattr(self.request.user, 'subscription', None)
+        if not subscription or not subscription.can_create_courses:
+            raise PermissionDenied("Your subscription does not allow course creation.")
 
-        if org_slug:
-            try:
-                org = Organization.objects.get(slug=org_slug)
-            except Organization.DoesNotExist:
-                raise ValidationError(f"Organization with slug '{org_slug}' not found")
+        subscription.increment_courses()
 
-            if not org.memberships.filter(
-                user=self.request.user,
-                role__in=['admin', 'course_manager'],
-                is_active=True,
-            ).exists():
-                raise PermissionDenied("You do not have permission to create courses for this organization.")
-
-            # Check organization subscription limits
-            if hasattr(org, 'subscription'):
-                org_subscription = org.subscription
-                if not org_subscription.check_course_limit():
-                    limit = org_subscription.config.get('courses_per_month')
-                    raise PermissionDenied(
-                        f"Organization has reached its course limit of {limit} courses this month. "
-                        f"Please upgrade your plan to create more courses."
-                    )
-
-                # Increment organization course counter
-                org_subscription.increment_courses()
-
-            organization = org
-        else:
-            if self.request.user.account_type not in ['course_manager', 'admin']:
-                raise PermissionDenied("Course manager account required to create courses.")
-
-            subscription = getattr(self.request.user, 'subscription', None)
-            if not subscription or not subscription.can_create_courses:
-                raise PermissionDenied("Your subscription does not allow course creation.")
-
-            subscription.increment_courses()
-
-        serializer.save(organization=organization, created_by=self.request.user)
+        serializer.save(created_by=self.request.user)
 
     @action(detail=True, methods=['post'])
     def publish(self, request, uuid=None):
@@ -730,7 +676,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         })
 
 
-@roles('attendee', 'organizer', 'course_manager', 'admin', route_name='course_enrollments')
+@roles('learner', 'educator', 'course_manager', 'admin', route_name='course_enrollments')
 class CourseEnrollmentViewSet(viewsets.ModelViewSet):
     """
     User enrollments in courses.
@@ -1007,34 +953,11 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
 
     def _get_transfer_data(self, course) -> dict | None:
         """Get Stripe Connect transfer data for course payment."""
-        if not course.organization:
-            return None
-
-        org = course.organization
-        if not hasattr(org, 'subscription') or not org.subscription:
-            return None
-
-        connect_account_id = getattr(org.subscription, 'stripe_connect_account_id', None)
-        if not connect_account_id:
-            return None
-
-        # Calculate platform fee (e.g., 10%)
-        from django.conf import settings
-
-        platform_fee_percent = getattr(settings, 'PLATFORM_FEE_PERCENT', 10)
-        platform_fee = int(course.price_cents * platform_fee_percent / 100)
-
-        return {
-            'payment_intent_data': {
-                'application_fee_amount': platform_fee,
-                'transfer_data': {
-                    'destination': connect_account_id,
-                },
-            },
-        }
+        # In single-tenant mode, transfer data is handled at the owner level if applicable
+        return None
 
 
-@roles('attendee', 'organizer', 'course_manager', 'instructor', 'admin', route_name='course_modules')
+@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_modules')
 class CourseModuleViewSet(viewsets.ModelViewSet):
     """
     Manage modules within a course.
@@ -1140,7 +1063,7 @@ class CourseModuleViewSet(viewsets.ModelViewSet):
         return Response(CourseModuleSerializer(course_link).data)
 
 
-@roles('attendee', 'organizer', 'course_manager', 'instructor', 'admin', route_name='course_module_content')
+@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_module_content')
 class CourseModuleContentViewSet(viewsets.ModelViewSet):
     """
     Content management for course modules.
@@ -1234,7 +1157,7 @@ class CourseModuleContentViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-@roles('attendee', 'organizer', 'course_manager', 'instructor', 'admin', route_name='course_assignments')
+@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_assignments')
 class CourseAssignmentViewSet(viewsets.ModelViewSet):
     """
     Assignment management for course modules.
@@ -1307,7 +1230,7 @@ class CourseAssignmentViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-@roles('organizer', 'course_manager', 'instructor', 'admin', route_name='course_submissions')
+@roles('educator', 'course_manager', 'instructor', 'admin', route_name='course_submissions')
 class CourseSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Course staff view of submissions for a course.
@@ -1372,7 +1295,7 @@ class CourseSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(AssignmentSubmissionStaffSerializer(submission).data)
 
 
-@roles('attendee', 'organizer', 'course_manager', 'instructor', 'admin', route_name='course_announcements')
+@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_announcements')
 class CourseAnnouncementViewSet(viewsets.ModelViewSet):
     """
     Announcements for a course.
@@ -1433,7 +1356,7 @@ class CourseAnnouncementViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-@roles('organizer', 'course_manager', 'instructor', 'admin', route_name='course_sessions')
+@roles('educator', 'course_manager', 'instructor', 'admin', route_name='course_sessions')
 class CourseSessionViewSet(viewsets.ModelViewSet):
     """
     Live session management for hybrid courses.
@@ -1496,9 +1419,6 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
         from .tasks import sync_session_attendance
 
         session = self.get_object()
-        if not session.zoom_meeting_id:
-            return error_response('Session has no Zoom meeting linked.', code='NO_ZOOM', status_code=400)
-
         task = sync_session_attendance.delay(session.id)
         # task might be a dict if CLOUD_TASKS_SYNC=True or in emulator mode
         task_id = getattr(task, 'id', None) or (task.get('id') if isinstance(task, dict) else None)
@@ -1510,11 +1430,12 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def unmatched_participants(self, request, course_uuid=None, uuid=None):
-        """Get Zoom participants not matched to enrollment.
+        """Get video participants not matched to enrollment.
 
-        Uses webhook logs data populated via Zoom webhooks.
+        Uses webhook logs data populated via LiveKit webhooks.
         """
-        from integrations.models import ZoomWebhookLog
+        from conferencing.models import VideoRoom, VideoWebhookLog
+        from django.contrib.contenttypes.models import ContentType
 
         from .models import CourseSessionAttendance
         from .serializers import UnmatchedParticipantSerializer
@@ -1525,39 +1446,43 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("You do not have permission to perform this action.")
 
-        if not session.zoom_meeting_id:
-            return error_response('Session has no Zoom meeting linked.', code='NO_ZOOM', status_code=400)
+        # Find the video room for this session
+        ct = ContentType.objects.get_for_model(session)
+        video_room = VideoRoom.objects.filter(content_type=ct, object_id=session.id).first()
+        if not video_room:
+            return error_response('Session has no video room linked.', code='NO_VIDEO_ROOM', status_code=400)
 
-        # 1. Get matched emails from attendance records
+        # 1. Get matched participant identities from attendance records
         matched_records = CourseSessionAttendance.objects.filter(session=session)
-        matched_emails = set(r.zoom_user_email.lower() for r in matched_records if r.zoom_user_email)
+        matched_identities = set(r.zoom_participant_id for r in matched_records if r.zoom_participant_id)
 
         # 2. Get participant join events from webhook logs
-        join_logs = ZoomWebhookLog.objects.filter(
-            zoom_meeting_id=session.zoom_meeting_id,
-            event_type='meeting.participant_joined',
-            processing_status='completed'
+        join_logs = VideoWebhookLog.objects.filter(
+            room_name=video_room.room_name,
+            event_type='participant_joined',
+            processing_status='completed',
         ).order_by('-event_timestamp')
 
-        # 3. Extract unmatched participants from webhook payloads
+        # 3. Extract unmatched participants
         unmatched = []
-        seen_emails = set()
+        seen = set()
 
         for log in join_logs:
-            participant = log.payload.get('object', {}).get('participant', {})
-            email = participant.get('email', '').lower().strip()
+            participant = log.payload.get('participant', {})
+            identity = participant.get('identity', '')
+            name = participant.get('name', 'Unknown')
 
-            if not email or email in matched_emails or email in seen_emails:
+            if not identity or identity in matched_identities or identity in seen:
                 continue
 
-            seen_emails.add(email)
+            seen.add(identity)
             unmatched.append({
-                'user_id': participant.get('id'),
-                'user_name': participant.get('user_name', 'Unknown'),
-                'user_email': email,
-                'join_time': participant.get('join_time'),
-                'leave_time': None,  # Would need to look up leave event
-                'duration_minutes': 0
+                'user_id': identity,
+                'user_name': name,
+                'user_email': '',
+                'join_time': log.event_timestamp.isoformat() if log.event_timestamp else None,
+                'leave_time': None,
+                'duration_minutes': 0,
             })
 
         serializer = UnmatchedParticipantSerializer(unmatched, many=True)
@@ -1566,8 +1491,6 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def match_participant(self, request, course_uuid=None, uuid=None):
         """Manually match a participant to an enrollment."""
-        from integrations.services import attendance_matcher
-
         from .models import CourseEnrollment, CourseSessionAttendance
         from .serializers import MatchParticipantSerializer
 
@@ -1593,9 +1516,6 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
                  'override_by': request.user,
              }
         )
-
-        # Re-run match logic to update eligibility
-        attendance_matcher.match_session_attendance(session)
 
         return Response({'status': 'matched'})
 

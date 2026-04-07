@@ -34,9 +34,9 @@ Event and course management
 - Course catalog
 - Multi-session/hybrid events
 - Attendance tracking
-- Zoom integration
+- LiveKit video conferencing integration
 
-**Key Models**: `Event`, `Course`, `Session`, `Attendance`, `ZoomMeeting`
+**Key Models**: `Event`, `Course`, `Session`, `Attendance`, `VideoRoom`
 
 #### `registrations/`
 Event registration and enrollment
@@ -79,12 +79,12 @@ Learning management system features
 
 #### `integrations/`
 Third-party integrations
-- Zoom API integration
+- LiveKit video webhooks
 - Stripe payment processing
 - Email service providers
 - Webhook handling
 
-**Key Models**: `ZoomWebhook`, `StripeWebhook`, `Integration`
+**Key Models**: `VideoWebhook`, `StripeWebhook`, `Integration`
 
 ### Supporting Apps
 
@@ -185,9 +185,11 @@ EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_PUBLISHABLE_KEY=pk_test_...
 
-# Zoom
-ZOOM_CLIENT_ID=your-zoom-client-id
-ZOOM_CLIENT_SECRET=your-zoom-client-secret
+# LiveKit (optional - defaults work with docker-compose)
+LIVEKIT_API_KEY=devkey
+LIVEKIT_API_SECRET=secret_dev_key_change_in_production
+LIVEKIT_HOST=http://livekit:7880
+LIVEKIT_WS_URL=ws://localhost:7880
 
 # Cloud Tasks (for local dev, can be disabled)
 CLOUD_TASKS_ENABLED=False
@@ -295,7 +297,7 @@ Asynchronous tasks are handled using Google Cloud Tasks:
 - **Email Delivery**: Send transactional emails
 - **Certificate Generation**: Generate PDFs asynchronously
 - **Payment Processing**: Handle payment webhooks
-- **Zoom Sync**: Sync attendance from Zoom
+- **Video Processing**: Process LiveKit webhooks and attendance tracking
 - **Notifications**: Send push notifications
 
 ### Task Management
@@ -309,7 +311,7 @@ Business logic is encapsulated in service classes located in the `services/` app
 - `EmailService`: Email sending and templates
 - `PaymentService`: Stripe integration
 - `CertificateService`: Certificate generation
-- `ZoomService`: Zoom API integration
+- `VideoService`: LiveKit integration and room management
 - `NotificationService`: User notifications
 
 ### Service Usage Example
@@ -425,7 +427,7 @@ flake8
 - **Storage**: Google Cloud Storage
 - **Authentication**: JWT (djangorestframework-simplejwt)
 - **Payment**: Stripe
-- **Video**: Zoom API
+- **Video**: LiveKit (self-hosted)
 - **PDF Generation**: ReportLab
 
 See [TECHNOLOGY_STACK.md](../TECHNOLOGY_STACK.md) for complete technology overview.

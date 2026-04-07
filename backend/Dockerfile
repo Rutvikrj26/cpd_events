@@ -5,15 +5,8 @@ FROM python:3.13-slim AS base
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    POETRY_VERSION=2.0.1 \
-    POETRY_HOME="/opt/poetry" \
-    POETRY_NO_INTERACTION=1 \
-    POETRY_VIRTUALENVS_CREATE=false
-
-# Add Poetry to PATH
-ENV PATH="$POETRY_HOME/bin:$PATH"
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -29,11 +22,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     libpng-dev \
     libfreetype6-dev \
+    # curl for installing uv
+    curl \
     # Cleanup
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN pip install "poetry==$POETRY_VERSION"
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Set working directory
 WORKDIR /app
@@ -42,16 +37,19 @@ WORKDIR /app
 FROM base AS dependencies
 
 # Copy dependency files
-COPY pyproject.toml poetry.lock ./
+COPY pyproject.toml uv.lock ./
 
-# Install Python dependencies (production only)
-RUN poetry install --only main --no-root --no-directory
+# Install Python dependencies (production only, no dev dependencies)
+RUN uv sync --frozen --no-dev --no-install-project
 
 # Stage 3: Development image
 FROM dependencies AS development
 
-# Install development dependencies
-RUN poetry install --no-root --no-directory
+# Copy dependency files again for dev install
+COPY pyproject.toml uv.lock ./
+
+# Install all dependencies including dev
+RUN uv sync --frozen --no-install-project
 
 # Copy application code
 COPY . .
@@ -63,7 +61,7 @@ RUN mkdir -p /app/staticfiles /app/mediafiles
 EXPOSE 8000
 
 # Run development server
-CMD ["python", "src/manage.py", "runserver", "0.0.0.0:8000"]
+CMD ["uv", "run", "python", "src/manage.py", "runserver", "0.0.0.0:8000"]
 
 # Stage 4: Production image
 FROM base AS production
@@ -71,9 +69,14 @@ FROM base AS production
 # Create app user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Copy dependencies from dependencies stage
-COPY --from=dependencies /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
-COPY --from=dependencies /usr/local/bin /usr/local/bin
+# Copy uv from dependencies stage
+COPY --from=dependencies /usr/local/bin/uv /usr/local/bin/uv
+
+# Copy virtual environment from dependencies stage
+COPY --from=dependencies /app/.venv /app/.venv
+
+# Add venv to PATH
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Copy application code
 COPY --chown=appuser:appuser . .

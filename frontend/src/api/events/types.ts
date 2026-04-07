@@ -125,10 +125,6 @@ export interface EventCreateRequest {
     auto_issue_badges?: boolean;
     badge_template?: string | null;
 
-    // Zoom
-    zoom_settings?: any;
-
-
     // Location (for in-person/hybrid events)
     location?: string;
 
@@ -168,11 +164,6 @@ export interface EventSession {
     // Session type
     session_type: 'live' | 'recorded' | 'hybrid';
 
-    // Zoom (per-session)
-    has_separate_zoom: boolean;
-    zoom_meeting_id?: string;
-    zoom_join_url?: string;
-
     // CPD
     cpd_credits?: number;
 
@@ -199,7 +190,6 @@ export interface SessionFormData {
     starts_at: string;
     duration_minutes: number;
     session_type: 'live' | 'recorded' | 'hybrid';
-    has_separate_zoom: boolean;
     is_mandatory: boolean;
     is_published: boolean;
 }

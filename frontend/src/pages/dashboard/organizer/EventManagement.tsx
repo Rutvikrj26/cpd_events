@@ -7,10 +7,6 @@ import {
    MoreVertical,
    Award,
    Filter,
-   Video,
-   Copy,
-   ExternalLink,
-   RefreshCw,
    Trash2,
    MessageSquare,
    Star,
@@ -65,7 +61,6 @@ export function EventManagement() {
    const [editAttendanceOpen, setEditAttendanceOpen] = useState(false);
 
    const [selectedAttendee, setSelectedAttendee] = useState<any>(null);
-   const [retryingZoom, setRetryingZoom] = useState(false);
    const [actionDialogOpen, setActionDialogOpen] = useState(false);
    const [actionType, setActionType] = useState<'cancel' | 'refund' | null>(null);
    const [actionReason, setActionReason] = useState('');
@@ -284,31 +279,6 @@ export function EventManagement() {
 
 
 
-   const handleRetryZoom = async () => {
-      if (!event) return;
-
-      setRetryingZoom(true);
-      try {
-         // Trigger an update with the same zoom settings to fire the backend signal
-         // which will retry creating the meeting
-         await updateEvent(event.uuid, {
-            zoom_settings: event.zoom_settings
-         });
-         toast.success("Retry command sent. Please wait a moment for the meeting to be created.");
-
-         // Refresh event data after a delay to show the new meeting ID
-         setTimeout(() => {
-            fetchEvent();
-         }, 3000);
-
-      } catch (error) {
-         console.error("Failed to retry zoom creation", error);
-         toast.error("Failed to retry Zoom creation. Please check your Zoom integration settings.");
-      } finally {
-         setRetryingZoom(false);
-      }
-   };
-
    const handlePublish = async () => {
       if (!uuid) return;
       setPublishing(true);
@@ -496,134 +466,6 @@ export function EventManagement() {
                </CardContent>
             </Card>
          </div>
-
-         {/* Zoom Meeting Details Card */}
-         {event.zoom_settings?.enabled && (
-            <Card className="border-info bg-info-subtle">
-               <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                     <div className="flex items-center gap-2">
-                        <div className="icon-container-info">
-                           <Video className="h-5 w-5 icon-info" />
-                        </div>
-                        <div>
-                           <CardTitle className="text-base">Zoom Meeting</CardTitle>
-                           <CardDescription className="text-xs">
-                              {event.zoom_meeting_id ? 'Meeting created and ready' : 'Meeting pending creation'}
-                           </CardDescription>
-                        </div>
-                     </div>
-                     {!event.zoom_meeting_id && (
-                        <Button
-                           variant="outline"
-                           size="sm"
-                           className="gap-2"
-                           onClick={handleRetryZoom}
-                           disabled={retryingZoom}
-                        >
-                           <RefreshCw className={`h-4 w-4 ${retryingZoom ? 'animate-spin' : ''}`} />
-                           {retryingZoom ? 'Retrying...' : 'Retry Creation'}
-                        </Button>
-                     )}
-                  </div>
-                  {/* Zoom Error Display */}
-                  {event.zoom_error && !event.zoom_meeting_id && (
-                     <div className="mt-3 p-3 rounded-lg bg-error-subtle border border-error">
-                        <div className="flex items-start gap-2">
-                           <AlertCircle className="h-4 w-4 icon-error mt-0.5 shrink-0" />
-                           <div className="flex-1">
-                              <p className="text-sm font-medium text-error-muted">Meeting Creation Failed</p>
-                              <p className="text-xs text-error mt-1">{event.zoom_error}</p>
-                              {event.zoom_error_at && (
-                                 <p className="text-xs text-error mt-1">
-                                    Failed at {new Date(event.zoom_error_at).toLocaleString()}
-                                 </p>
-                              )}
-                           </div>
-                        </div>
-                     </div>
-                  )}
-               </CardHeader>
-               {event.zoom_meeting_id && (
-                  <CardContent className="pt-0">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Meeting ID */}
-                        <div className="space-y-1">
-                           <label className="text-xs font-medium text-muted-foreground">Meeting ID</label>
-                           <div className="flex items-center gap-2">
-                              <code className="flex-1 px-3 py-2 text-sm bg-background border rounded-md font-mono">
-                                 {event.zoom_meeting_id}
-                              </code>
-                              <Button
-                                 variant="ghost"
-                                 size="icon"
-                                 className="h-9 w-9"
-                                 onClick={() => {
-                                    navigator.clipboard.writeText(event.zoom_meeting_id);
-                                    toast.success('Meeting ID copied');
-                                 }}
-                              >
-                                 <Copy className="h-4 w-4" />
-                              </Button>
-                           </div>
-                        </div>
-
-                        {/* Password */}
-                        <div className="space-y-1">
-                           <label className="text-xs font-medium text-muted-foreground">Password</label>
-                           <div className="flex items-center gap-2">
-                              <code className="flex-1 px-3 py-2 text-sm bg-background border rounded-md font-mono">
-                                 {event.zoom_passcode || '—'}
-                              </code>
-                              {event.zoom_passcode && (
-                                 <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-9 w-9"
-                                    onClick={() => {
-                                       navigator.clipboard.writeText(event.zoom_passcode);
-                                       toast.success('Password copied');
-                                    }}
-                                 >
-                                    <Copy className="h-4 w-4" />
-                                 </Button>
-                              )}
-                           </div>
-                        </div>
-
-                        {/* Join URL */}
-                        <div className="space-y-1 md:col-span-2">
-                           <label className="text-xs font-medium text-muted-foreground">Attendee Join URL</label>
-                           <div className="flex items-center gap-2">
-                              <code className="flex-1 px-3 py-2 text-sm bg-background border rounded-md font-mono truncate">
-                                 {event.zoom_join_url}
-                              </code>
-                              <Button
-                                 variant="ghost"
-                                 size="icon"
-                                 className="h-9 w-9"
-                                 onClick={() => {
-                                    navigator.clipboard.writeText(event.zoom_join_url);
-                                    toast.success('Join URL copied');
-                                 }}
-                              >
-                                 <Copy className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                 variant="ghost"
-                                 size="icon"
-                                 className="h-9 w-9"
-                                 onClick={() => window.open(event.zoom_join_url, '_blank')}
-                              >
-                                 <ExternalLink className="h-4 w-4" />
-                              </Button>
-                           </div>
-                        </div>
-                     </div>
-                  </CardContent>
-               )}
-            </Card>
-         )}
 
          <Tabs defaultValue="registrations" className="w-full">
             <TabsList className="w-full justify-start border-b border-border bg-transparent p-0 h-auto rounded-none mb-6">
@@ -820,8 +662,8 @@ export function EventManagement() {
 
             {/* ATTENDANCE TAB */}
             <TabsContent value="attendance" className="mt-0 space-y-4">
-               {/* Attendance Reconciliation - for online/hybrid with Zoom */}
-               {(event.format === 'online' || event.format === 'hybrid') && event.zoom_meeting_id && (
+               {/* Attendance Reconciliation - for online/hybrid events */}
+               {(event.format === 'online' || event.format === 'hybrid') && (
                   <AttendanceReconciliation eventUuid={event.uuid} onReconciled={() => fetchEvent()} />
                )}
 
@@ -829,7 +671,7 @@ export function EventManagement() {
                   <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
                      <div className="text-sm text-muted-foreground">
                         {event.format === 'online'
-                           ? 'Attendance is tracked automatically via Zoom participation.'
+                           ? 'Attendance is tracked automatically via online participation.'
                            : event.format === 'hybrid'
                               ? 'Track in-person check-ins and online participation.'
                               : 'Mark attendance manually or use the QR scanner app.'}

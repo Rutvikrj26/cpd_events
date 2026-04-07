@@ -172,6 +172,7 @@ export const syncEventAttendance = async (eventUuid: string): Promise<{ task_id:
 
 export const matchParticipant = async (eventUuid: string, data: {
     registration_uuid: string;
+    // TODO: Rename these API fields when backend is updated to use generic participant fields
     zoom_user_email?: string;
     zoom_user_name?: string;
     zoom_join_time?: string;

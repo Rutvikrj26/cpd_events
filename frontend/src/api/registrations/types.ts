@@ -33,7 +33,6 @@ export interface Registration {
     allow_public_verification: boolean;
     waitlist_position?: number;
     promoted_from_waitlist_at?: string;
-    zoom_join_url?: string;
     can_join: boolean;
     certificate_url?: string;
     created_at: string;

@@ -73,7 +73,7 @@ function HeroDashboardMockup() {
                                 </div>
                                 <div>
                                     <p className="font-medium text-foreground text-sm">Annual CPD Workshop</p>
-                                    <p className="text-xs text-muted-foreground">2 CPD Credits • Online (Zoom)</p>
+                                    <p className="text-xs text-muted-foreground">2 CPD Credits • Online</p>
                                 </div>
                             </div>
                             <Badge className="bg-primary/10 text-primary border-0 text-xs">In Progress</Badge>
@@ -96,7 +96,7 @@ function HeroDashboardMockup() {
                 </div>
                 <div>
                     <p className="text-xs font-medium text-foreground">Attendance Verified</p>
-                    <p className="text-[10px] text-muted-foreground">Auto-tracked via Zoom</p>
+                    <p className="text-[10px] text-muted-foreground">Auto-tracked via built-in video</p>
                 </div>
             </div>
         </div>
@@ -121,7 +121,7 @@ export default function EventsProductPage() {
                             </h1>
                             <p className="text-xl text-muted-foreground mb-8 text-balance">
                                 The all-in-one platform for webinars, workshops, and conferences.
-                                Automate certificates, sync with Zoom, and manage registrations effortlessly.
+                                Automate certificates, track attendance with built-in video conferencing, and manage registrations effortlessly.
                             </p>
                             <div className="flex flex-col sm:flex-row gap-4">
                                 <Link to="/signup?role=organizer&plan=organizer">
@@ -156,8 +156,8 @@ export default function EventsProductPage() {
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
                         <FeatureCard
                             icon={Video}
-                            title="Seamless Zoom Integration"
-                            description="Connect your Zoom account to auto-generate secure meeting links. We track attendance down to the minute."
+                            title="Built-in Video Conferencing"
+                            description="Host online events with integrated video rooms. We automatically track attendance down to the minute — no external accounts needed."
                         />
                         <FeatureCard
                             icon={Award}

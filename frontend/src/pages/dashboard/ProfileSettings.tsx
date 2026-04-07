@@ -90,8 +90,7 @@ export function ProfileSettings() {
 
    // Payouts state
    const { user: authUser } = useAuth();
-   const { isOrganizer, isCourseManager } = getRoleFlags(authUser, subscription);
-   const isCreator = isOrganizer || isCourseManager;
+   const { isEducator, isCourseManager, isCreator } = getRoleFlags(authUser);
    const [payoutsStatus, setPayoutsStatus] = useState<PayoutsStatus | null>(null);
    const [loadingPayouts, setLoadingPayouts] = useState(true);
    const [initiatingConnect, setInitiatingConnect] = useState(false);

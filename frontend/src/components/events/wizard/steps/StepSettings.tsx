@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Video, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 import { useEventWizard } from '../EventWizardContext';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -10,15 +10,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
 import { getBadgeTemplates, BadgeTemplate } from '@/api/badges';
-import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { getRoleFlags } from '@/lib/role-utils';
 import { getPayoutsStatus, PayoutsStatus } from '@/api/payouts';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 
 export const StepSettings = () => {
     const { formData, updateFormData } = useEventWizard();
-    const { currentOrg } = useOrganization();
     const { user } = useAuth();
     const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
     const [badgeTemplates, setBadgeTemplates] = useState<BadgeTemplate[]>([]);
@@ -29,9 +28,7 @@ export const StepSettings = () => {
     const [userPayoutsEnabled, setUserPayoutsEnabled] = useState(false);
     const [loadingUserPayouts, setLoadingUserPayouts] = useState(true);
 
-    // Check if Stripe is connected (org OR individual user)
-    const orgStripeConnected = currentOrg?.stripe_charges_enabled || false;
-    const stripeConnected = orgStripeConnected || userPayoutsEnabled;
+    const stripeConnected = userPayoutsEnabled;
     const isPaidEvent = !formData.is_free;
     const attendanceMinutes = formData.minimum_attendance_minutes ?? 0;
     const durationMinutes = formData.duration_minutes ?? 0;
@@ -78,11 +75,11 @@ export const StepSettings = () => {
         fetchBadgeTemplates();
     }, [formData.badges_enabled]);
 
-    // Fetch individual user payouts status if not using an org
+    // Fetch individual user payouts status
+    const { isEducator } = getRoleFlags(user);
     useEffect(() => {
         const fetchUserPayouts = async () => {
-            // Only fetch if user is an organizer and not using an org with stripe enabled
-            if (user?.account_type !== 'organizer' || orgStripeConnected) {
+            if (!isEducator) {
                 setLoadingUserPayouts(false);
                 return;
             }
@@ -96,7 +93,7 @@ export const StepSettings = () => {
             }
         };
         fetchUserPayouts();
-    }, [user?.account_type, orgStripeConnected]);
+    }, [isEducator]);
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -169,15 +166,11 @@ export const StepSettings = () => {
                             <Alert variant="destructive" className="border-amber-300 bg-amber-50 text-amber-800">
                                 <AlertTriangle className="h-4 w-4" />
                                 <AlertDescription className="flex items-center justify-between">
-                                    <span>
-                                        {currentOrg
-                                            ? 'Connect your organization\'s Stripe account to accept payments.'
-                                            : 'Link your bank account to accept payments for this event.'}
-                                    </span>
-                                    <Link to={currentOrg ? `/organizations/${currentOrg.slug}/settings` : '/settings?tab=payouts'}>
+                                    <span>Link your bank account to accept payments for this event.</span>
+                                    <Link to="/settings?tab=payouts">
                                         <Button size="sm" variant="outline" className="ml-4">
                                             <ExternalLink className="h-3 w-3 mr-1" />
-                                            {currentOrg ? 'Setup Stripe' : 'Link Payouts'}
+                                            Link Payouts
                                         </Button>
                                     </Link>
                                 </AlertDescription>
@@ -399,49 +392,6 @@ export const StepSettings = () => {
                     </div>
                 )}
             </div>
-
-            {/* Zoom Settings - Only shown for online/hybrid events */}
-            {
-                (formData.format === 'online' || formData.format === 'hybrid') && (
-                    <>
-                        <Separator />
-
-                        <div className="space-y-4">
-                            <div className="space-y-2 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
-                                <Label className="flex items-center gap-2">
-                                    <Video className="h-4 w-4 text-blue-600" />
-                                    Online Meeting
-                                </Label>
-                                <p className="text-sm text-muted-foreground">
-                                    {formData.zoom_settings?.enabled
-                                        ? "A Zoom meeting will be created automatically when you publish the event."
-                                        : "Enable Zoom integration below, or manually add meeting details after creating the event."
-                                    }
-                                </p>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-0.5">
-                                    <Label className="text-base">Zoom Integration</Label>
-                                    <p className="text-sm text-muted-foreground">Automatically create a Zoom meeting for this event.</p>
-                                </div>
-                                <Switch
-                                    checked={!!formData.zoom_settings?.enabled}
-                                    onCheckedChange={(checked) => updateFormData({ zoom_settings: { ...formData.zoom_settings, enabled: checked } })}
-                                />
-                            </div>
-
-                            {formData.zoom_settings?.enabled && (
-                                <div className="pl-6 border-l-2 border-slate-100 ml-2">
-                                    <p className="text-sm text-muted-foreground">
-                                        A Zoom meeting will be created when you publish this event. Make sure you have connected your Zoom account in Settings → Integrations.
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    </>
-                )
-            }
 
             <Separator />
 

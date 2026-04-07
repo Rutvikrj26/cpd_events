@@ -1,5 +1,5 @@
 """
-Accounts app models - User, ZoomConnection, UserSession.
+Accounts app models - User, UserSession, UserInvitation.
 """
 
 from django.conf import settings
@@ -57,25 +57,21 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     """
     Custom user model for the CPD Events platform.
 
+    Roles are managed via Django Groups (learner, educator, course_manager, admin).
+    Users can belong to multiple groups simultaneously.
+
     Key Features:
     - Email-based authentication (no username)
-    - Account types: Attendee (default) and Organizer
+    - Django Groups for role management
     - Soft delete with data anonymization
     - Email verification flow
     - Notification preferences
-    - Organizer profile fields
 
     Soft Delete Behavior:
     - Email anonymized to prevent reuse issues
     - Personal data cleared for GDPR compliance
     - Related data (registrations, certificates) preserved
     """
-
-    class AccountType(models.TextChoices):
-        ATTENDEE = "attendee", "Attendee"
-        ORGANIZER = "organizer", "Organizer"
-        COURSE_MANAGER = "course_manager", "Course Manager"
-        ADMIN = "admin", "Admin"
 
     # =========================================
     # Authentication Fields
@@ -88,7 +84,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     )
     auth_provider = models.CharField(
         max_length=20,
-        choices=[("local", "Local"), ("google", "Google"), ("zoom", "Zoom")],
+        choices=[("local", "Local"), ("google", "Google")],
         default="local",
         help_text="Original authentication method used for account creation",
     )
@@ -105,16 +101,8 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     bio = models.TextField(blank=True, max_length=1000, help_text="User bio/description")
 
     # =========================================
-    # Account Type & Status
+    # Account Status
     # =========================================
-    account_type = models.CharField(
-        max_length=20,
-        choices=AccountType.choices,
-        default=AccountType.ATTENDEE,
-        db_index=True,
-        help_text="Account type determines available features",
-    )
-
     is_active = models.BooleanField(default=True, help_text="Whether user can log in")
     is_staff = models.BooleanField(default=False, help_text="Can access admin site")
     onboarding_completed = models.BooleanField(default=False, help_text="Whether user completed initial onboarding")
@@ -138,26 +126,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     # =========================================
     notify_event_reminders = models.BooleanField(default=True, help_text="Receive event reminders")
     notify_certificate_issued = models.BooleanField(default=True, help_text="Receive certificate notifications")
-    notify_marketing = models.BooleanField(default=False, help_text="Receive marketing emails")
     notify_event_updates = models.BooleanField(default=True, help_text="Receive event change notifications")
-
-    # =========================================
-    # Organizer Profile Fields
-    # =========================================
-    organizer_bio = models.TextField(blank=True, max_length=2000, help_text="Public bio for organizer profile")
-    organizer_website = models.URLField(blank=True, help_text="Website URL")
-    organizer_linkedin = models.URLField(blank=True, help_text="LinkedIn profile URL")
-    organizer_twitter = models.CharField(max_length=100, blank=True, help_text="Twitter/X handle")
-    organizer_logo_url = models.URLField(blank=True, help_text="Organization logo URL")
-    organizer_slug = models.SlugField(
-        max_length=100, unique=True, null=True, blank=True, help_text="URL-friendly identifier for public profile"
-    )
-    is_organizer_profile_public = models.BooleanField(default=False, help_text="Make organizer profile visible to public")
-    gst_hst_number = models.CharField(
-        max_length=50,
-        blank=True,
-        help_text="GST/HST registration number for tax handling",
-    )
 
     # =========================================
     # Engagement Stats (denormalized)
@@ -165,16 +134,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     events_attended_count = models.PositiveIntegerField(default=0, help_text="Number of events attended")
     certificates_earned_count = models.PositiveIntegerField(default=0, help_text="Number of certificates earned")
     total_cpd_credits = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text="Total CPD credits earned")
-
-    # Organizer stats
     events_hosted_count = models.PositiveIntegerField(default=0, help_text="Number of events hosted")
-
-    # =========================================
-    # Timestamps
-    # =========================================
-    stripe_connect_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe Connect Account ID")
-    stripe_account_status = models.CharField(max_length=50, default="pending", help_text="Connect account status")
-    stripe_charges_enabled = models.BooleanField(default=False, help_text="Whether account can accept payments")
 
     # =========================================
     # Timestamps
@@ -190,33 +150,57 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         db_table = "users"
         verbose_name = "User"
         verbose_name_plural = "Users"
+        permissions = [
+            ("can_manage_users", "Can manage users (admin)"),
+            ("can_invite_users", "Can invite users"),
+        ]
         indexes = [
             models.Index(fields=["email"]),
-            models.Index(fields=["account_type"]),
             models.Index(fields=["uuid"]),
-            models.Index(fields=["organizer_slug"]),
         ]
 
     def __str__(self):
         return f"{self.full_name} <{self.email}>"
 
     # =========================================
-    # Properties
+    # Role Properties (via Django Groups)
     # =========================================
     @property
-    def is_organizer(self):
-        """Check if user is an organizer."""
-        return self.account_type == self.AccountType.ORGANIZER
+    def is_educator(self):
+        """Check if user is in the educator group."""
+        return self.is_staff or self.groups.filter(name="educator").exists()
 
     @property
-    def is_attendee(self):
-        """Check if user is an attendee."""
-        return self.account_type == self.AccountType.ATTENDEE
+    def is_learner(self):
+        """Check if user is in the learner group."""
+        return self.groups.filter(name="learner").exists()
 
     @property
     def is_course_manager(self):
-        """Check if user is a course manager."""
-        return self.account_type == self.AccountType.COURSE_MANAGER
+        """Check if user is in the course_manager group."""
+        return self.is_staff or self.groups.filter(name="course_manager").exists()
+
+    @property
+    def is_admin(self):
+        """Check if user is staff or in the admin group."""
+        return self.is_staff or self.groups.filter(name="admin").exists()
+
+    @property
+    def role_names(self):
+        """Get list of group names the user belongs to."""
+        return list(self.groups.values_list("name", flat=True))
+
+    @property
+    def primary_role(self):
+        """Get the highest-priority role for display purposes."""
+        roles = set(self.role_names)
+        if self.is_staff or "admin" in roles:
+            return "admin"
+        if "educator" in roles:
+            return "educator"
+        if "course_manager" in roles:
+            return "course_manager"
+        return "learner"
 
     @property
     def display_name(self):
@@ -224,11 +208,6 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         if self.professional_title:
             return f"{self.full_name}, {self.professional_title}"
         return self.full_name
-
-    @property
-    def has_zoom_connected(self):
-        """Check if Zoom is connected."""
-        return hasattr(self, "zoom_connection") and self.zoom_connection.is_active
 
     @property
     def email_verification_expires_at(self):
@@ -240,46 +219,23 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     # =========================================
     # Methods
     # =========================================
-    def upgrade_to_organizer(self):
-        """Upgrade account to organizer."""
-        if self.account_type != self.AccountType.ORGANIZER:
-            self.account_type = self.AccountType.ORGANIZER
-            self.save(update_fields=["account_type", "updated_at"])
+    def assign_role(self, role_name: str):
+        """Add a role (Django Group) to this user."""
+        from django.contrib.auth.models import Group
 
-    def upgrade_to_course_manager(self):
-        """Upgrade account to course manager."""
-        if self.account_type != self.AccountType.COURSE_MANAGER:
-            self.account_type = self.AccountType.COURSE_MANAGER
-            self.save(update_fields=["account_type", "updated_at"])
+        group, _ = Group.objects.get_or_create(name=role_name)
+        self.groups.add(group)
 
-    def upgrade_to_admin(self):
-        """Upgrade account to admin (can create both events and courses)."""
-        if self.account_type != self.AccountType.ADMIN:
-            self.account_type = self.AccountType.ADMIN
-            self.save(update_fields=["account_type", "updated_at"])
+    def remove_role(self, role_name: str):
+        """Remove a role (Django Group) from this user."""
+        self.groups.filter(name=role_name).delete()
 
-    def downgrade_from_admin(self):
-        """
-        Downgrade from admin based on subscription.
-        Called when user is no longer an org admin.
-        """
-        subscription = getattr(self, "subscription", None)
-        if subscription and subscription.is_active:
-            if subscription.plan == "organizer":
-                self.account_type = self.AccountType.ORGANIZER
-            elif subscription.plan == "lms":
-                self.account_type = self.AccountType.COURSE_MANAGER
-            else:
-                self.account_type = self.AccountType.ATTENDEE
-        else:
-            self.account_type = self.AccountType.ATTENDEE
-        self.save(update_fields=["account_type", "updated_at"])
+    def set_roles(self, role_names: list[str]):
+        """Replace all roles with the given list."""
+        from django.contrib.auth.models import Group
 
-    def downgrade_to_attendee(self):
-        """Downgrade account to attendee."""
-        if self.account_type != self.AccountType.ATTENDEE:
-            self.account_type = self.AccountType.ATTENDEE
-            self.save(update_fields=["account_type", "updated_at"])
+        groups = Group.objects.filter(name__in=role_names)
+        self.groups.set(groups)
 
     def generate_email_verification_token(self):
         """Generate and save email verification token."""
@@ -333,8 +289,6 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         self.professional_title = ""
         self.organization_name = ""
         self.bio = ""
-        self.organizer_bio = ""
-        self.organizer_website = ""
         self.profile_photo_url = ""
         self.is_active = False
         self.email_verified = False
@@ -344,7 +298,6 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         # Save all changes and then soft delete
         self.save()
 
-        # If the model has soft_delete, use it
         if hasattr(self, "soft_delete"):
             self.soft_delete()
         else:
@@ -356,19 +309,12 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         """Soft delete with anonymization."""
         import uuid as uuid_lib
 
-        # Anonymize personal data
         anon_suffix = str(uuid_lib.uuid4())[:8]
         self.email = f"deleted_{anon_suffix}@deleted.local"
         self.full_name = "Deleted User"
         self.professional_title = ""
         self.organization_name = ""
         self.profile_photo_url = ""
-        self.organizer_bio = ""
-        self.organizer_website = ""
-        self.organizer_linkedin = ""
-        self.organizer_twitter = ""
-        self.organizer_logo_url = ""
-        self.organizer_slug = None
         self.is_active = False
 
         # Call parent soft_delete
@@ -380,124 +326,89 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         self.save(update_fields=["last_login_at", "updated_at"])
 
 
-class ZoomConnection(BaseModel):
+class UserInvitation(BaseModel):
     """
-    OAuth connection to Zoom for an organizer.
+    Invitation for a new user to join the institution.
 
-    Stores tokens and connection metadata.
-    One-to-one with User (only organizers can have this).
+    Admin creates an invitation, user receives email with activation link,
+    clicks link to set password and complete account setup.
     """
 
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="zoom_connection")
+    ROLE_CHOICES = [
+        ("learner", "Learner"),
+        ("educator", "Educator"),
+        ("course_manager", "Course Manager"),
+        ("admin", "Admin"),
+    ]
 
-    # =========================================
-    # OAuth Tokens (encrypted at rest)
-    # =========================================
-    access_token = EncryptedTextField(help_text="Zoom OAuth access token")
-    refresh_token = EncryptedTextField(help_text="Zoom OAuth refresh token")
-    token_expires_at = models.DateTimeField(help_text="When access token expires")
-
-    # =========================================
-    # Zoom Account Info
-    # =========================================
-    zoom_user_id = models.CharField(max_length=100, help_text="Zoom user ID")
-    zoom_account_id = models.CharField(max_length=100, blank=True, help_text="Zoom account ID")
-    zoom_email = LowercaseEmailField(blank=True, help_text="Email associated with Zoom account")
-
-    # =========================================
-    # Scopes
-    # =========================================
-    scopes = models.TextField(blank=True, help_text="OAuth scopes granted (comma-separated)")
-
-    # =========================================
-    # Status
-    # =========================================
-    is_active = models.BooleanField(default=True, help_text="Whether connection is active")
-    last_used_at = models.DateTimeField(null=True, blank=True, help_text="Last time connection was used")
-    last_error = models.TextField(blank=True, help_text="Last error message (if any)")
-    last_error_at = models.DateTimeField(null=True, blank=True, help_text="When last error occurred")
-    error_count = models.PositiveIntegerField(default=0, help_text="Consecutive error count")
+    email = LowercaseEmailField(db_index=True, help_text="Email to invite")
+    full_name = models.CharField(max_length=255, help_text="Invitee's full name")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="learner", help_text="Role to assign on acceptance")
+    invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="sent_invitations")
+    token = models.CharField(max_length=100, unique=True, db_index=True, help_text="Unique invitation token")
+    accepted_at = models.DateTimeField(null=True, blank=True, help_text="When the invitation was accepted")
+    expires_at = models.DateTimeField(help_text="When the invitation expires")
+    is_used = models.BooleanField(default=False, help_text="Whether the invitation has been used")
+    message = models.TextField(blank=True, help_text="Optional personal message from admin")
 
     class Meta:
-        db_table = "zoom_connections"
-        verbose_name = "Zoom Connection"
-        verbose_name_plural = "Zoom Connections"
+        db_table = "user_invitations"
+        ordering = ["-created_at"]
+        verbose_name = "User Invitation"
+        verbose_name_plural = "User Invitations"
+        indexes = [
+            models.Index(fields=["email"]),
+            models.Index(fields=["token"]),
+            models.Index(fields=["is_used", "-created_at"]),
+        ]
 
     def __str__(self):
-        return f"Zoom: {self.user.email}"
+        return f"Invitation for {self.email} ({self.role})"
 
     @property
-    def is_token_expired(self):
-        """Check if access token is expired."""
-        return timezone.now() >= self.token_expires_at
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
 
     @property
-    def needs_refresh(self):
-        """Check if token needs refresh (expires in < 5 minutes)."""
-        buffer = timezone.timedelta(minutes=5)
-        return timezone.now() >= (self.token_expires_at - buffer)
+    def is_valid(self):
+        return not self.is_used and not self.is_expired
 
-    def update_tokens(self, access_token, refresh_token, expires_in):
-        """Update OAuth tokens after refresh."""
-        self.access_token = access_token
-        self.refresh_token = refresh_token
-        self.token_expires_at = timezone.now() + timezone.timedelta(seconds=expires_in)
-        self.error_count = 0
-        self.last_error = ""
-        self.save(
-            update_fields=["access_token", "refresh_token", "token_expires_at", "error_count", "last_error", "updated_at"]
+    def accept(self, user):
+        """Mark invitation as accepted."""
+        self.is_used = True
+        self.accepted_at = timezone.now()
+        self.save(update_fields=["is_used", "accepted_at", "updated_at"])
+
+    @classmethod
+    def create_invitation(cls, email, full_name, role, invited_by, message="", expires_days=7):
+        """Create a new invitation with a unique token."""
+        return cls.objects.create(
+            email=email,
+            full_name=full_name,
+            role=role,
+            invited_by=invited_by,
+            token=generate_verification_code(48),
+            expires_at=timezone.now() + timezone.timedelta(days=expires_days),
+            message=message,
         )
-
-    def record_usage(self):
-        """Record that connection was used."""
-        self.last_used_at = timezone.now()
-        self.save(update_fields=["last_used_at", "updated_at"])
-
-    def record_error(self, error_message):
-        """Record an API error."""
-        self.last_error = error_message[:1000]
-        self.last_error_at = timezone.now()
-        self.error_count += 1
-
-        # Deactivate after too many errors
-        if self.error_count >= 5:
-            self.is_active = False
-
-        self.save(update_fields=["last_error", "last_error_at", "error_count", "is_active", "updated_at"])
-
-    def disconnect(self):
-        """Disconnect Zoom (soft delete)."""
-        self.is_active = False
-        self.access_token = ""
-        self.refresh_token = ""
-        self.save(update_fields=["is_active", "access_token", "refresh_token", "updated_at"])
 
 
 class UserSession(BaseModel):
     """
     Active user session for tracking logins.
-
-    Used for:
-    - Session management (logout from all devices)
-    - Security monitoring
-    - Analytics
     """
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sessions")
 
-    # Session identification
     session_key = models.CharField(max_length=100, unique=True, db_index=True, help_text="Django session key")
 
-    # Device info
     ip_address = models.GenericIPAddressField(null=True, blank=True, help_text="IP address")
     user_agent = models.TextField(blank=True, help_text="Browser user agent")
     device_type = models.CharField(max_length=50, blank=True, help_text="Detected device type")
 
-    # Timing
     last_activity_at = models.DateTimeField(auto_now=True, help_text="Last activity timestamp")
     expires_at = models.DateTimeField(help_text="When session expires")
 
-    # Status
     is_active = models.BooleanField(default=True, help_text="Whether session is active")
 
     class Meta:
@@ -511,26 +422,20 @@ class UserSession(BaseModel):
 
     @property
     def is_expired(self):
-        """Check if session is expired."""
         return timezone.now() >= self.expires_at
 
     def deactivate(self):
-        """Deactivate session (logout)."""
         self.is_active = False
         self.save(update_fields=["is_active", "updated_at"])
 
     @classmethod
     def deactivate_all_for_user(cls, user):
-        """Deactivate all sessions for a user (logout everywhere)."""
         return cls.objects.filter(user=user, is_active=True).update(is_active=False)
 
 
 class CPDRequirement(BaseModel):
     """
     CPD requirement tracking for a user.
-
-    Tracks annual CPD requirements for different licensing bodies
-    and calculates progress toward completion.
     """
 
     class PeriodType(models.TextChoices):
@@ -538,29 +443,23 @@ class CPDRequirement(BaseModel):
         FISCAL_YEAR = "fiscal_year", "Fiscal Year"
         ROLLING_12 = "rolling_12", "Rolling 12 Months"
 
-    # Relationships
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="cpd_requirements")
 
-    # Requirement details
     cpd_type = models.CharField(max_length=100, help_text="CPD type code (e.g., 'general', 'clinical', 'ethics')")
     cpd_type_display = models.CharField(max_length=255, blank=True, help_text="Human-readable CPD type name")
     annual_requirement = models.DecimalField(
         max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], help_text="Required credits per period"
     )
 
-    # Period settings
     period_type = models.CharField(max_length=20, choices=PeriodType.choices, default=PeriodType.CALENDAR_YEAR)
     fiscal_year_start_month = models.PositiveSmallIntegerField(default=1, help_text="Month when fiscal year starts (1-12)")
     fiscal_year_start_day = models.PositiveSmallIntegerField(default=1, help_text="Day when fiscal year starts")
 
-    # Licensing body
     licensing_body = models.CharField(max_length=255, blank=True, help_text="Name of licensing body")
     license_number = models.CharField(max_length=100, blank=True, help_text="License number")
 
-    # Notes
     notes = models.TextField(blank=True, help_text="Additional notes about this requirement")
 
-    # Status
     is_active = models.BooleanField(default=True, help_text="Whether this requirement is active")
 
     class Meta:
@@ -577,12 +476,6 @@ class CPDRequirement(BaseModel):
         return f"{self.user.email} - {self.cpd_type_display or self.cpd_type}"
 
     def get_current_period_bounds(self):
-        """
-        Get start and end dates for the current period.
-
-        Returns:
-            tuple: (start_date, end_date)
-        """
         from datetime import date
 
         today = date.today()
@@ -613,12 +506,6 @@ class CPDRequirement(BaseModel):
         return (start, end)
 
     def get_earned_credits(self):
-        """
-        Get credits earned in current period.
-
-        Returns:
-            Decimal: Total credits earned
-        """
         from decimal import Decimal
 
         from certificates.models import Certificate
@@ -636,7 +523,6 @@ class CPDRequirement(BaseModel):
         total = Decimal("0")
         for cert in certificates:
             try:
-                # Value stored as string/number in JSON
                 val = cert.certificate_data.get("cpd_credits", 0)
                 total += Decimal(str(val))
             except (TypeError, ValueError):
@@ -646,7 +532,6 @@ class CPDRequirement(BaseModel):
 
     @property
     def completion_percent(self):
-        """Calculate completion percentage."""
         if self.annual_requirement == 0:
             return 100
         earned = self.get_earned_credits()
@@ -655,7 +540,6 @@ class CPDRequirement(BaseModel):
 
     @property
     def credits_remaining(self):
-        """Calculate remaining credits needed."""
         from decimal import Decimal
 
         earned = self.get_earned_credits()
@@ -669,11 +553,10 @@ class Notification(BaseModel):
     """
 
     class Type(models.TextChoices):
-        ORG_INVITE = "org_invite", "Organization Invitation"
         PAYMENT_FAILED = "payment_failed", "Payment Failed"
         REFUND_PROCESSED = "refund_processed", "Refund Processed"
-        TRIAL_ENDING = "trial_ending", "Trial Ending"
-        PAYMENT_METHOD_EXPIRED = "payment_method_expired", "Payment Method Expired"
+        INVITATION_SENT = "invitation_sent", "Invitation Sent"
+        ACCOUNT_ACTIVATED = "account_activated", "Account Activated"
         SYSTEM = "system", "System"
 
     user = models.ForeignKey(
@@ -724,13 +607,6 @@ class AuditLog(BaseModel):
         blank=True,
         related_name="audit_logs",
     )
-    organization = models.ForeignKey(
-        "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="audit_logs",
-    )
     action = models.CharField(max_length=120, db_index=True)
     object_type = models.CharField(max_length=120, blank=True)
     object_uuid = models.CharField(max_length=64, blank=True)
@@ -743,7 +619,6 @@ class AuditLog(BaseModel):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["actor", "action"]),
-            models.Index(fields=["organization", "action"]),
             models.Index(fields=["-created_at"]),
         ]
 

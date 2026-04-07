@@ -14,7 +14,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from common.pagination import SmallPagination
-from common.permissions import IsOrganizer
+from common.permissions import IsEducator
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import ReadOnlyModelViewSet, SoftDeleteModelViewSet
@@ -49,7 +49,7 @@ class RegistrationFilter(filters.FilterSet):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='event_registrations')
+@roles('educator', 'admin', route_name='event_registrations')
 class EventRegistrationViewSet(SoftDeleteModelViewSet):
     """
     Manage registrations for an event (organizer view).
@@ -57,7 +57,7 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/registrations/
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsEducator]
     pagination_class = SmallPagination  # M5: Nested resource pagination
     filterset_class = RegistrationFilter
     search_fields = ['email', 'full_name', 'user__email', 'user__full_name']
@@ -781,7 +781,7 @@ class ConfirmPaymentView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles('attendee', 'organizer', 'admin', route_name='registrations')
+@roles('learner', 'educator', 'admin', route_name='registrations')
 class MyRegistrationViewSet(ReadOnlyModelViewSet):
     """
     Current user's registrations.
@@ -835,7 +835,7 @@ class MyRegistrationViewSet(ReadOnlyModelViewSet):
 # =============================================================================
 
 
-@roles('attendee', 'organizer', 'admin', route_name='link_registrations')
+@roles('learner', 'educator', 'admin', route_name='link_registrations')
 class LinkRegistrationsView(generics.GenericAPIView):
     """
     POST /api/v1/users/me/link-registrations/

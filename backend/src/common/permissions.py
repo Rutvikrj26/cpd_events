@@ -1,5 +1,5 @@
 """
-Common API permissions.
+Common API permissions using Django Groups and Permissions.
 """
 
 from rest_framework import permissions
@@ -21,52 +21,54 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         return obj.owner == request.user
 
 
-class IsOrganizer(permissions.BasePermission):
-    """Only users with organizer or admin account type."""
+class IsEducator(permissions.BasePermission):
+    """Only users in the educator or admin group."""
 
-    message = "Organizer or admin account required."
-
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.account_type in ("organizer", "admin")
-
-
-class IsOrganizerOrOrgAdmin(permissions.BasePermission):
-    """Organizers, admins, or organization admins/organizers."""
-
-    message = "Organizer, admin, or organization admin required."
+    message = "Educator or admin role required."
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
         if request.user.is_staff:
             return True
-        if request.user.account_type in ("organizer", "admin"):
-            return True
-        from organizations.models import OrganizationMembership
-
-        return OrganizationMembership.objects.filter(
-            user=request.user,
-            is_active=True,
-            role__in=["admin", "organizer"],
-        ).exists()
+        return request.user.groups.filter(name__in=["educator", "admin"]).exists()
 
 
-class IsOrganizerOrCourseManager(permissions.BasePermission):
-    """Organizers, course managers, or admins."""
+class IsEducatorOrAdmin(permissions.BasePermission):
+    """Educators or admins."""
 
-    message = "Organizer, course manager, or admin account required."
+    message = "Educator or admin required."
 
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.account_type in ["organizer", "course_manager", "admin"]
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        return request.user.groups.filter(name__in=["educator", "admin"]).exists()
 
 
-class IsOrganizerOrReadOnly(permissions.BasePermission):
-    """Organizers can write, everyone can read."""
+class IsContentCreator(permissions.BasePermission):
+    """Educators, course managers, or admins."""
+
+    message = "Educator, course manager, or admin role required."
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        return request.user.groups.filter(name__in=["educator", "course_manager", "admin"]).exists()
+
+
+class IsEducatorOrReadOnly(permissions.BasePermission):
+    """Educators can write, everyone can read."""
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
             return True
-        return request.user.is_authenticated and request.user.account_type == "organizer"
+        if not request.user.is_authenticated:
+            return False
+        return request.user.groups.filter(name__in=["educator", "admin"]).exists()
 
 
 class IsEventOwner(permissions.BasePermission):
@@ -109,73 +111,30 @@ class IsEventOwnerOrRegistrant(permissions.BasePermission):
         return bool(hasattr(obj, "registration") and obj.registration.user == user)
 
 
-class HasActiveSubscription(permissions.BasePermission):
+class HasPerm(permissions.BasePermission):
     """
-    Requires user to have an active subscription.
+    Generic permission class that checks a specific Django permission.
 
-    Checks that user has a subscription in 'active' or 'trialing' status.
+    Usage:
+        permission_classes = [HasPerm('events.can_create_event')]
+
+    Or use the factory:
+        permission_classes = [has_perm('events.can_create_event')]
     """
 
-    message = "Active subscription required."
+    perm = None
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
-
-        try:
-            from billing.models import Subscription
-
-            subscription = Subscription.objects.get(user=request.user)
-            return subscription.is_active
-        except Exception:
-            return False
-
-
-class CanCreateEvent(permissions.BasePermission):
-    """
-    Checks if user can create events based on subscription limits.
-    """
-
-    message = "Event creation limit reached for your plan."
-
-    def has_permission(self, request, view):
-        if not request.user.is_authenticated:
-            return False
-
-        if request.user.account_type != "organizer":
-            return False
-
-        try:
-            from billing.models import Subscription
-
-            subscription = Subscription.objects.get(user=request.user)
-            return subscription.check_event_limit()
-        except Exception:
-            # No subscription - allow if they're a new user (will get free tier)
+        if self.perm is None:
             return True
+        return request.user.has_perm(self.perm)
 
 
-class CanIssueCertificate(permissions.BasePermission):
-    """
-    Checks if user can issue certificates based on subscription limits.
-    """
-
-    message = "Certificate issuance limit reached for your plan."
-
-    def has_permission(self, request, view):
-        if not request.user.is_authenticated:
-            return False
-
-        if request.user.account_type != "organizer":
-            return False
-
-        try:
-            from billing.models import Subscription
-
-            subscription = Subscription.objects.get(user=request.user)
-            return subscription.check_certificate_limit()
-        except Exception:
-            return True
+def has_perm(perm_string: str):
+    """Factory to create a permission class for a specific Django permission."""
+    return type(f"HasPerm_{perm_string}", (HasPerm,), {"perm": perm_string})
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):

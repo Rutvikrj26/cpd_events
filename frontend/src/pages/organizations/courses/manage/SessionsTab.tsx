@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Calendar, Video, Edit2, Trash2, Users, Eye, EyeOff, AlertTriangle, Link2 } from 'lucide-react';
+import { Plus, Calendar, Video, Edit2, Trash2, Users, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -17,11 +17,6 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import {
-    Alert,
-    AlertDescription,
-    AlertTitle,
-} from '@/components/ui/alert';
 import {
     Dialog,
     DialogContent,
@@ -62,7 +57,6 @@ import {
 import { CourseSession, CourseSessionCreateRequest } from '@/api/courses/types';
 import { SessionAttendanceReconciliation } from '@/components/courses/SessionAttendanceReconciliation';
 import { toast } from 'sonner';
-import { getZoomStatus, initiateZoomOAuth } from '@/api/integrations';
 
 interface SessionsTabProps {
     courseUuid: string;
@@ -74,9 +68,6 @@ interface SessionFormData {
     starts_at: string;
     duration_minutes: number;
     session_type: 'live' | 'recorded' | 'hybrid';
-    zoom_enabled: boolean;
-    zoom_meeting_id: string;
-    zoom_password: string;
     is_mandatory: boolean;
     minimum_attendance_percent: number;
 }
@@ -84,7 +75,6 @@ interface SessionFormData {
 export function SessionsTab({ courseUuid }: SessionsTabProps) {
     const [sessions, setSessions] = useState<CourseSession[]>([]);
     const [loading, setLoading] = useState(true);
-    const [zoomConnected, setZoomConnected] = useState<boolean | null>(null);
     const [manageDialogOpen, setManageDialogOpen] = useState(false);
     const [reconcileSession, setReconcileSession] = useState<CourseSession | null>(null);
     const [editingSession, setEditingSession] = useState<CourseSession | null>(null);
@@ -97,32 +87,14 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
         starts_at: '',
         duration_minutes: 60,
         session_type: 'live',
-        zoom_enabled: true,
-        zoom_meeting_id: '',
-        zoom_password: '',
         is_mandatory: false,
         minimum_attendance_percent: 80,
     });
 
-    const checkZoomStatus = useCallback(async () => {
-        try {
-            const status = await getZoomStatus();
-            setZoomConnected(status.is_connected);
-        } catch (e) {
-            console.error('Failed to check Zoom status', e);
-            // Default to true to avoid nagging if API fails? Or false?
-            // False is safer to prompt connection.
-            setZoomConnected(false);
-        }
-    }, []);
-
     const fetchSessions = useCallback(async () => {
         try {
             setLoading(true);
-            const [data] = await Promise.all([
-                getCourseSessions(courseUuid),
-                checkZoomStatus()
-            ]);
+            const data = await getCourseSessions(courseUuid);
             // Sort by start date
             data.sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
             setSessions(data);
@@ -132,21 +104,11 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
         } finally {
             setLoading(false);
         }
-    }, [courseUuid, checkZoomStatus]);
+    }, [courseUuid]);
 
     useEffect(() => {
         fetchSessions();
     }, [fetchSessions]);
-
-    const handleConnectZoom = async () => {
-        try {
-            const authUrl = await initiateZoomOAuth();
-            window.location.href = authUrl;
-        } catch (e) {
-            console.error('Failed to initiate Zoom connection', e);
-            toast.error('Failed to connect to Zoom');
-        }
-    };
 
     const handleOpenAdd = () => {
         setEditingSession(null);
@@ -156,9 +118,6 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
             starts_at: '',
             duration_minutes: 60,
             session_type: 'live',
-            zoom_enabled: true,
-            zoom_meeting_id: '',
-            zoom_password: '',
             is_mandatory: false,
             minimum_attendance_percent: 80,
         });
@@ -173,10 +132,6 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
             starts_at: session.starts_at,
             duration_minutes: session.duration_minutes,
             session_type: session.session_type,
-            // If ID exists OR error exists, we assume it was meant to be enabled
-            zoom_enabled: Boolean(session.zoom_meeting_id) || Boolean(session.zoom_error),
-            zoom_meeting_id: session.zoom_meeting_id || '',
-            zoom_password: session.zoom_password || '',
             is_mandatory: session.is_mandatory,
             minimum_attendance_percent: session.minimum_attendance_percent,
         });
@@ -197,9 +152,6 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
             session_type: formData.session_type,
             is_mandatory: formData.is_mandatory,
             minimum_attendance_percent: formData.minimum_attendance_percent,
-            zoom_settings: { enabled: formData.zoom_enabled },
-            zoom_meeting_id: formData.zoom_meeting_id || undefined,
-            zoom_password: formData.zoom_password || undefined,
         };
 
         try {
@@ -248,21 +200,6 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
 
     return (
         <div className="space-y-6">
-            {!loading && zoomConnected === false && (
-                <Alert variant="destructive" className="bg-warning-subtle border-warning text-warning">
-                    <AlertTriangle className="h-4 w-4 icon-warning" />
-                    <AlertTitle>Zoom Not Connected</AlertTitle>
-                    <AlertDescription className="mt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <span>
-                            To automatically create meetings and track attendance, you must connect your Zoom account.
-                        </span>
-                        <Button size="sm" variant="outline" className="border-warning-muted hover:bg-warning-subtle" onClick={handleConnectZoom}>
-                            <Link2 className="h-4 w-4 mr-2" />
-                            Connect Zoom
-                        </Button>
-                    </AlertDescription>
-                </Alert>
-            )}
 
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -318,20 +255,6 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
                                         <div className="flex items-center gap-2">
                                             {session.session_type === 'live' && <Video className="h-3 w-3" />}
                                             {session.session_type}
-                                            {(session.zoom_error || (session.session_type === 'live' && !session.zoom_meeting_id)) && (
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <div className="text-amber-500 cursor-help">
-                                                                <AlertTriangle className="h-4 w-4" />
-                                                            </div>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            <p className="max-w-xs">{session.zoom_error || 'No Zoom meeting linked. Check creator Zoom connection.'}</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
-                                            )}
                                         </div>
                                     </TableCell>
                                     <TableCell>
@@ -390,7 +313,7 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
                     <DialogHeader>
                         <DialogTitle>{editingSession ? 'Edit' : 'Schedule'} Session</DialogTitle>
                         <DialogDescription>
-                            Configure the session details and Zoom integration.
+                            Configure the session details.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -446,48 +369,12 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="live">Live (Zoom)</SelectItem>
-                                    <SelectItem value="hybrid">Hybrid (In-person + Zoom)</SelectItem>
+                                    <SelectItem value="live">Live</SelectItem>
+                                    <SelectItem value="hybrid">Hybrid (In-person + Online)</SelectItem>
                                     <SelectItem value="recorded">Recorded / Webinar</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-
-                        <div className="flex items-center justify-between pt-2">
-                            <div className="space-y-0.5">
-                                <Label>Enable Zoom Meeting</Label>
-                                <p className="text-xs text-muted-foreground">Auto-create Zoom meeting</p>
-                            </div>
-                            <Switch
-                                checked={formData.zoom_enabled}
-                                onCheckedChange={(checked) => setFormData({ ...formData, zoom_enabled: checked })}
-                            />
-                        </div>
-
-                        {(formData.zoom_enabled || formData.session_type === 'live') && (
-                            <div className="border-l-2 border-primary/20 pl-4 space-y-3">
-                                <div className="space-y-1">
-                                    <Label htmlFor="zoom_meeting_id" className="text-xs">Zoom Meeting ID (Optional)</Label>
-                                    <Input
-                                        id="zoom_meeting_id"
-                                        placeholder="Leave blank to auto-create"
-                                        value={formData.zoom_meeting_id}
-                                        onChange={(e) => setFormData({ ...formData, zoom_meeting_id: e.target.value })}
-                                        className="h-8"
-                                    />
-                                    <p className="text-[10px] text-muted-foreground">Normally auto-generated. Enter manually only if using an external meeting.</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <Label htmlFor="zoom_password" className="text-xs">Passcode (Optional)</Label>
-                                    <Input
-                                        id="zoom_password"
-                                        value={formData.zoom_password}
-                                        onChange={(e) => setFormData({ ...formData, zoom_password: e.target.value })}
-                                        className="h-8"
-                                    />
-                                </div>
-                            </div>
-                        )}
 
                         <div className="flex items-center justify-between pt-2">
                             <div className="space-y-0.5">
@@ -514,7 +401,7 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
                     <DialogHeader>
                         <DialogTitle>Attendance Reconciliation</DialogTitle>
                         <DialogDescription>
-                            Match Zoom participants to enrolled learners for "{reconcileSession?.title}".
+                            Match participants to enrolled learners for "{reconcileSession?.title}".
                         </DialogDescription>
                     </DialogHeader>
                     {reconcileSession && (

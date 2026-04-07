@@ -27,11 +27,6 @@ class SignupSerializer(serializers.ModelSerializer):
     )
     password_confirm = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
 
-    # Optional fields for organizer signup
-    account_type = serializers.ChoiceField(
-        choices=['attendee', 'organizer', 'course_manager'], default='attendee', required=False
-    )
-
     class Meta:
         model = User
         fields = [
@@ -41,7 +36,6 @@ class SignupSerializer(serializers.ModelSerializer):
             'full_name',
             'professional_title',
             'organization_name',
-            'account_type',
         ]
         extra_kwargs = {
             'email': {'required': True},
@@ -56,14 +50,14 @@ class SignupSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
-        account_type = validated_data.pop('account_type', 'attendee')
 
         user = User(**validated_data)
         user.set_password(password)
-        user.account_type = account_type
         user.save()
 
-        # Note: Registration linking is handled in SignupView after user creation
+        # Assign default learner role
+        user.assign_role("learner")
+
         return user
 
 
@@ -83,7 +77,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'uuid': str(self.user.uuid),
             'email': self.user.email,
             'full_name': self.user.full_name,
-            'account_type': self.user.account_type,
+            'roles': self.user.role_names,
+            'primary_role': self.user.primary_role,
             'email_verified': self.user.email_verified,
         }
 
@@ -195,6 +190,9 @@ class EmailVerificationSerializer(serializers.Serializer):
 class UserSerializer(SoftDeleteModelSerializer):
     """Full user serializer for profile management."""
 
+    roles = serializers.SerializerMethodField()
+    primary_role = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -204,19 +202,15 @@ class UserSerializer(SoftDeleteModelSerializer):
             'professional_title',
             'organization_name',
             'profile_photo_url',
-            'account_type',
+            'bio',
+            'roles',
+            'primary_role',
             'email_verified',
             'onboarding_completed',
             'timezone',
-            # Organizer-specific
-            'organizer_logo_url',
-            'organizer_website',
-            'organizer_bio',
-            'gst_hst_number',
             # Notification preferences
             'notify_event_reminders',
             'notify_certificate_issued',
-            'notify_marketing',
             # Timestamps
             'created_at',
             'updated_at',
@@ -224,12 +218,19 @@ class UserSerializer(SoftDeleteModelSerializer):
         read_only_fields = [
             'uuid',
             'email',
-            'account_type',
+            'roles',
+            'primary_role',
             'email_verified',
             'onboarding_completed',
             'created_at',
             'updated_at',
         ]
+
+    def get_roles(self, obj):
+        return obj.role_names
+
+    def get_primary_role(self, obj):
+        return obj.primary_role
 
 
 class UserProfileUpdateSerializer(serializers.ModelSerializer):
@@ -242,22 +243,8 @@ class UserProfileUpdateSerializer(serializers.ModelSerializer):
             'professional_title',
             'organization_name',
             'profile_photo_url',
+            'bio',
             'timezone',
-            'gst_hst_number',
-        ]
-
-
-class OrganizerProfileUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating organizer-specific profile fields."""
-
-    class Meta:
-        model = User
-        fields = [
-            'organizer_logo_url',
-            'organizer_website',
-            'organizer_bio',
-            'is_organizer_profile_public',
-            'gst_hst_number',
         ]
 
 
@@ -269,7 +256,6 @@ class NotificationPreferencesSerializer(serializers.ModelSerializer):
         fields = [
             'notify_event_reminders',
             'notify_certificate_issued',
-            'notify_marketing',
         ]
 
 
@@ -294,25 +280,6 @@ class NotificationSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class PublicOrganizerSerializer(serializers.ModelSerializer):
-    """Public-facing organizer profile."""
-
-    display_name = serializers.SerializerMethodField()
-
-    class Meta:
-        model = User
-        fields = [
-            'uuid',
-            'display_name',
-            'organizer_logo_url',
-            'organizer_website',
-            'organizer_bio',
-        ]
-
-    def get_display_name(self, obj):
-        return obj.display_name
-
-
 class UserMinimalSerializer(serializers.ModelSerializer):
     """Minimal user data for embedding."""
 
@@ -322,7 +289,154 @@ class UserMinimalSerializer(serializers.ModelSerializer):
 
 
 # =============================================================================
-# Account Deletion Serializer (H7)
+# Admin User Management Serializers
+# =============================================================================
+
+
+class AdminUserListSerializer(serializers.ModelSerializer):
+    """User data for admin user management list."""
+
+    roles = serializers.SerializerMethodField()
+    primary_role = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            'uuid', 'email', 'full_name', 'professional_title',
+            'organization_name', 'roles', 'primary_role',
+            'is_active', 'is_staff', 'email_verified',
+            'last_login_at', 'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_roles(self, obj):
+        return obj.role_names
+
+    def get_primary_role(self, obj):
+        return obj.primary_role
+
+
+class AdminUserCreateSerializer(serializers.ModelSerializer):
+    """Create a user directly (admin action)."""
+
+    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
+    roles = serializers.ListField(child=serializers.CharField(), required=False, default=["learner"])
+
+    class Meta:
+        model = User
+        fields = ['email', 'full_name', 'professional_title', 'organization_name', 'password', 'roles']
+
+    def validate_roles(self, value):
+        valid_roles = {"learner", "educator", "course_manager", "admin"}
+        for role in value:
+            if role not in valid_roles:
+                raise serializers.ValidationError(f"Invalid role: {role}. Valid roles: {valid_roles}")
+        return value
+
+    def create(self, validated_data):
+        roles = validated_data.pop('roles', ['learner'])
+        password = validated_data.pop('password')
+
+        user = User(**validated_data)
+        user.set_password(password)
+        user.email_verified = True  # Admin-created users are auto-verified
+        user.save()
+
+        # Assign roles
+        for role_name in roles:
+            user.assign_role(role_name)
+
+        return user
+
+
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    """Update user details (admin action)."""
+
+    roles = serializers.ListField(child=serializers.CharField(), required=False)
+
+    class Meta:
+        model = User
+        fields = ['full_name', 'professional_title', 'organization_name', 'is_active', 'roles']
+
+    def validate_roles(self, value):
+        valid_roles = {"learner", "educator", "course_manager", "admin"}
+        for role in value:
+            if role not in valid_roles:
+                raise serializers.ValidationError(f"Invalid role: {role}. Valid roles: {valid_roles}")
+        return value
+
+    def update(self, instance, validated_data):
+        roles = validated_data.pop('roles', None)
+        instance = super().update(instance, validated_data)
+
+        if roles is not None:
+            instance.set_roles(roles)
+
+        return instance
+
+
+class InviteUserSerializer(serializers.Serializer):
+    """Send invitation to a new user."""
+
+    email = serializers.EmailField(required=True)
+    full_name = serializers.CharField(required=True, max_length=255)
+    role = serializers.ChoiceField(
+        choices=["learner", "educator", "course_manager", "admin"],
+        default="learner",
+    )
+    message = serializers.CharField(required=False, allow_blank=True, max_length=1000, default="")
+
+    def validate_email(self, value):
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value.lower()
+
+
+class BulkInviteSerializer(serializers.Serializer):
+    """Bulk invite users via list of invitations."""
+
+    invitations = serializers.ListField(
+        child=InviteUserSerializer(),
+        min_length=1,
+        max_length=100,
+    )
+
+
+class AcceptInvitationSerializer(serializers.Serializer):
+    """Accept an invitation and set password."""
+
+    token = serializers.CharField(required=True)
+    password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
+    password_confirm = serializers.CharField(required=True, write_only=True)
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError({'password_confirm': "Passwords don't match."})
+        return attrs
+
+
+class UserInvitationSerializer(serializers.ModelSerializer):
+    """Serializer for UserInvitation list/detail."""
+
+    from accounts.models import UserInvitation
+
+    invited_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        from accounts.models import UserInvitation
+        model = UserInvitation
+        fields = [
+            'uuid', 'email', 'full_name', 'role', 'invited_by_name',
+            'is_used', 'is_expired', 'expires_at', 'accepted_at', 'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_invited_by_name(self, obj):
+        return obj.invited_by.full_name if obj.invited_by else None
+
+
+# =============================================================================
+# Account Deletion Serializer
 # =============================================================================
 
 
@@ -346,7 +460,7 @@ class DeleteAccountSerializer(serializers.Serializer):
 
 
 # =============================================================================
-# GDPR Data Export Serializer (H6)
+# GDPR Data Export Serializer
 # =============================================================================
 
 

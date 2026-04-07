@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Calendar, Search, Loader2, Award, ExternalLink, Link2, RefreshCw } from "lucide-react";
+import { Calendar, Search, Loader2, Award, Link2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { JoinButton } from "@/components/video/JoinButton";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -207,12 +208,8 @@ function RegistrationCard({ registration, isPast = false }: { registration: Regi
               View Event
             </Button>
           </Link>
-          {registration.can_join && registration.zoom_join_url && (
-            <a href={registration.zoom_join_url} target="_blank" rel="noopener noreferrer">
-              <Button size="sm" className="bg-primary hover:bg-primary/90">
-                <ExternalLink className="h-3 w-3 mr-1" /> Join
-              </Button>
-            </a>
+          {!isPast && (
+            <JoinButton eventUuid={event.uuid} size="sm" label="Join" />
           )}
           {isPast && registration.certificate_issued && registration.certificate_url && (
             <a href={registration.certificate_url} target="_blank" rel="noopener noreferrer">

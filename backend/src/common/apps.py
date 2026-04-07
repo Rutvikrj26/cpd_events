@@ -18,7 +18,6 @@ class CommonConfig(AppConfig):
             import feedback.views  # noqa: F401
             import integrations.views  # noqa: F401
             import learning.views  # noqa: F401
-            import organizations.views  # noqa: F401
             import promo_codes.views  # noqa: F401
             import registrations.views  # noqa: F401
         except ImportError:

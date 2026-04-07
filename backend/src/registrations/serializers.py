@@ -255,9 +255,6 @@ class RegistrationDetailSerializer(SoftDeleteModelSerializer):
             'billing_state',
             'billing_postal_code',
             'billing_city',
-            # Zoom registrant fields
-            'zoom_registrant_join_url',
-            'zoom_registrant_id',
             # Custom fields
             'custom_field_responses',
             # Waitlist
@@ -369,20 +366,7 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
         read_only_fields = fields
 
     def get_zoom_join_url(self, obj):
-        """
-        Return registrant-specific URL if available, otherwise event URL.
-
-        Priority:
-        1. Registrant-specific URL (secure, unique)
-        2. Event-level URL (fallback if Zoom registration failed)
-        3. None (if not confirmed or not published)
-        """
-        if obj.status == 'confirmed' and obj.event.status in ['published', 'live']:
-            # Prefer registrant-specific URL
-            if obj.zoom_registrant_join_url:
-                return obj.zoom_registrant_join_url
-            # Fallback to event URL
-            return obj.event.zoom_join_url
+        """Return video join URL if available. Zoom fields removed; always returns None."""
         return None
 
     def get_can_join(self, obj):

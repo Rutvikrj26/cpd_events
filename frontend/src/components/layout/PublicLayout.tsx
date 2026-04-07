@@ -377,7 +377,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <h3 className="text-sm font-semibold text-foreground mb-4">Platform</h3>
               <ul className="space-y-3">
                 <li><Link to="/features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</Link></li>
-                <li><Link to="/features/zoom" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Zoom Integration</Link></li>
+                <li><Link to="/features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Video Conferencing</Link></li>
                 <li><Link to="/features/certificates" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Certificates</Link></li>
                 <li><Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</Link></li>
               </ul>

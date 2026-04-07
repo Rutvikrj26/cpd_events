@@ -13,9 +13,8 @@ from learning.services import CourseService
 @pytest.mark.django_db
 class TestCourseService:
     @patch('learning.services.StripeService')
-    @patch('accounts.services.zoom_service')
     def test_confirm_enrollment_success(
-        self, mock_zoom_service, MockStripeService, user, course
+        self, MockStripeService, user, course
     ):
         """Test successful enrollment confirmation."""
         # Setup Stripe Mock
@@ -28,18 +27,6 @@ class TestCourseService:
             'session': mock_session,
         }
 
-        # Setup Zoom Mock
-        mock_zoom_service.add_meeting_registrant.return_value = {
-            'success': True,
-            'join_url': 'https://zoom.us/j/123',
-            'registrant_id': 'reg-123',
-        }
-
-        # Configure course for Zoom
-        course.format = 'hybrid'
-        course.zoom_meeting_id = '123456789'
-        course.save()
-
         # Call service
         course_service = CourseService()
         result = course_service.confirm_enrollment(user, 'sess_123')
@@ -47,13 +34,11 @@ class TestCourseService:
         assert result['success'] is True
         enrollment = result['enrollment']
         assert enrollment.status == CourseEnrollment.Status.ACTIVE
-        assert enrollment.zoom_join_url == 'https://zoom.us/j/123'
         assert enrollment.stripe_checkout_session_id == 'sess_123'
 
     @patch('learning.services.StripeService')
-    @patch('accounts.services.zoom_service')
     def test_confirm_enrollment_payment_failed(
-        self, mock_zoom, MockStripeService, user, course
+        self, MockStripeService, user, course
     ):
         """Test handling of failed/unpaid sessions."""
         mock_stripe = MockStripeService.return_value
@@ -77,9 +62,8 @@ class TestCourseService:
             assert 'error' in result
 
     @patch('learning.services.StripeService')
-    @patch('accounts.services.zoom_service')
     def test_confirm_enrollment_idempotency(
-        self, mock_zoom_service, MockStripeService, user, course
+        self, MockStripeService, user, course
     ):
         """Test that calling confirm multiple times is safe."""
         mock_stripe = MockStripeService.return_value
@@ -89,13 +73,6 @@ class TestCourseService:
         mock_stripe.retrieve_checkout_session.return_value = {
             'success': True,
             'session': mock_session,
-        }
-
-        # Setup Zoom Mock
-        mock_zoom_service.add_meeting_registrant.return_value = {
-            'success': True,
-            'join_url': 'https://zoom.us/j/123/duplicate',
-            'registrant_id': 'reg-123',
         }
 
         course_service = CourseService()
@@ -116,11 +93,10 @@ class TestCourseService:
         assert enrollment.status == CourseEnrollment.Status.ACTIVE
 
     @patch('learning.services.StripeService')
-    @patch('accounts.services.zoom_service')
     def test_confirm_enrollment_zoom_failure(
-        self, mock_zoom_service, MockStripeService, user, course
+        self, MockStripeService, user, course
     ):
-        """Test that Zoom failure does not block enrollment."""
+        """Test enrollment confirmation succeeds even without zoom integration."""
         # Setup Stripe Mock
         mock_stripe = MockStripeService.return_value
         mock_session = MagicMock()
@@ -131,16 +107,6 @@ class TestCourseService:
             'session': mock_session,
         }
 
-        # Setup Zoom Mock to fail
-        mock_zoom_service.add_meeting_registrant.return_value = {
-            'success': False,
-            'error': 'Zoom API Error',
-        }
-
-        course.format = 'hybrid'
-        course.zoom_meeting_id = '123456789'
-        course.save()
-
         course_service = CourseService()
         result = course_service.confirm_enrollment(user, 'sess_123')
 
@@ -148,6 +114,3 @@ class TestCourseService:
         assert result['success'] is True
         enrollment = result['enrollment']
         assert enrollment.status == CourseEnrollment.Status.ACTIVE
-
-        # But no Zoom URL
-        assert not enrollment.zoom_join_url

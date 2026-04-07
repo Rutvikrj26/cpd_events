@@ -26,7 +26,7 @@ const faqCategories = [
         questions: [
             {
                 q: "What is Accredit?",
-                a: "Accredit is a comprehensive platform for managing professional development events. It enables you to create events, track attendance automatically through Zoom integration, and issue verifiable certificates to attendees who meet your requirements."
+                a: "Accredit is a comprehensive platform for managing professional development events. It enables you to create events, track attendance automatically through built-in video conferencing, and issue verifiable certificates to attendees who meet your requirements."
             },
             {
                 q: "Who is Accredit for?",
@@ -34,11 +34,11 @@ const faqCategories = [
             },
             {
                 q: "Is there a free plan?",
-                a: "Yes! You can start using Accredit for free. The free plan includes basic event management, Zoom integration, and certificate issuance. Upgrade to a paid plan for additional features like custom branding and team management."
+                a: "Yes! You can start using Accredit for free. The free plan includes basic event management, built-in video conferencing, and certificate issuance. Upgrade to a paid plan for additional features like custom branding and team management."
             },
             {
                 q: "Do I need technical skills to use Accredit?",
-                a: "No technical skills required. Our intuitive interface guides you through event creation, and attendance tracking is automatic when connected to Zoom. If you can use email and basic web applications, you can use Accredit."
+                a: "No technical skills required. Our intuitive interface guides you through event creation, and attendance tracking is automatic for online events using the built-in video conferencing. If you can use email and basic web applications, you can use Accredit."
             }
         ]
     },
@@ -49,7 +49,7 @@ const faqCategories = [
         questions: [
             {
                 q: "What event formats are supported?",
-                a: "Accredit supports three formats: Online (virtual events via Zoom), In-Person (physical events with manual check-in), and Hybrid (combination of both). You can also create multi-session events for programs that span multiple days or sessions."
+                a: "Accredit supports three formats: Online (virtual events with built-in video conferencing), In-Person (physical events with manual check-in), and Hybrid (combination of both). You can also create multi-session events for programs that span multiple days or sessions."
             },
             {
                 q: "Can I create multi-session events?",
@@ -67,24 +67,24 @@ const faqCategories = [
     },
     {
         id: "zoom",
-        name: "Zoom Integration",
+        name: "Video Conferencing",
         icon: Video,
         questions: [
             {
-                q: "How do I connect my Zoom account?",
-                a: "Navigate to Settings → Integrations in your dashboard and click 'Connect Zoom'. You'll be redirected to Zoom to authorize the connection. Once connected, Accredit can automatically create meetings and track attendance for your events."
+                q: "How does online event hosting work?",
+                a: "Accredit includes built-in video conferencing for online events. When you create an online event, a dedicated video room is automatically provisioned. Attendees join directly from their browser — no external software or account required."
             },
             {
-                q: "How is attendance tracked?",
-                a: "When connected to Zoom, attendance is tracked automatically via webhooks. The platform logs when each participant joins and leaves the meeting, calculates their attendance percentage, and determines eligibility for certificates based on your threshold."
+                q: "How is attendance tracked for online events?",
+                a: "Attendance is tracked automatically via the built-in video system. The platform logs when each participant joins and leaves the session, calculates their attendance percentage, and determines eligibility for certificates based on your configured threshold."
             },
             {
                 q: "What if someone joins late or leaves early?",
-                a: "The system tracks the total time each participant spends in the meeting and calculates an attendance percentage. For example, if someone attends 45 minutes of a 60-minute session, their attendance would be 75%. You can set the minimum threshold for certificate eligibility."
+                a: "The system tracks the total time each participant spends in the session and calculates an attendance percentage. For example, if someone attends 45 minutes of a 60-minute session, their attendance would be 75%. You can set the minimum threshold for certificate eligibility."
             },
             {
-                q: "Can I use my existing Zoom account?",
-                a: "Yes! Accredit connects to your existing Zoom account via OAuth. We don't require a special Zoom plan - any Zoom account (including free accounts) can be connected. However, some features like automatic recording require a Zoom Pro plan or higher."
+                q: "Do attendees need to install anything?",
+                a: "No. The built-in video conferencing runs entirely in the browser. Attendees simply click the event link and join directly — no downloads, plugins, or third-party accounts needed."
             },
             {
                 q: "What about in-person events?",

@@ -39,6 +39,7 @@ export function AttendanceReconciliation({ eventUuid, onReconciled }: Attendance
     const handleMatch = async (record: any, registrationUuid: string) => {
         await matchParticipant(eventUuid, {
             registration_uuid: registrationUuid,
+            // TODO: Rename these API fields when backend is updated to use generic participant fields
             zoom_user_email: record.user_email,
             zoom_user_name: record.user_name,
             zoom_join_time: record.join_time,

@@ -400,18 +400,11 @@ class CourseSerializer(serializers.ModelSerializer):
     """Full course details."""
 
     modules = CourseModuleSerializer(many=True, read_only=True)
-    organization_name = serializers.CharField(source='organization.name', read_only=True)
-    organization_slug = serializers.CharField(source='organization.slug', read_only=True)
-    organization_logo_url = serializers.CharField(source='organization.effective_logo_url', read_only=True)
 
     class Meta:
         model = Course
         fields = [
             'uuid',
-            'organization',
-            'organization_name',
-            'organization_slug',
-            'organization_logo_url',
             'title',
             'slug',
             'description',
@@ -430,16 +423,6 @@ class CourseSerializer(serializers.ModelSerializer):
             'stripe_price_id',
             # Format & Virtual settings
             'format',
-            'zoom_meeting_id',
-            'zoom_meeting_uuid',
-            'zoom_meeting_url',
-            'zoom_start_url',
-            'zoom_meeting_password',
-            'zoom_webinar_id',
-            'zoom_registrant_id',
-            'zoom_settings',
-            'zoom_error',
-            'zoom_error_at',
             'live_session_start',
             'live_session_end',
             'live_session_timezone',
@@ -468,7 +451,6 @@ class CourseSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'uuid',
-            'organization',
             'enrollment_count',
             'completion_count',
             'module_count',
@@ -480,18 +462,10 @@ class CourseSerializer(serializers.ModelSerializer):
 class CourseListSerializer(serializers.ModelSerializer):
     """List view for courses."""
 
-    organization_name = serializers.CharField(source='organization.name', read_only=True)
-    organization_slug = serializers.CharField(source='organization.slug', read_only=True)
-    organization_logo_url = serializers.CharField(source='organization.effective_logo_url', read_only=True)
-
     class Meta:
         model = Course
         fields = [
             'uuid',
-            'organization',
-            'organization_name',
-            'organization_slug',
-            'organization_logo_url',
             'title',
             'slug',
             'short_description',
@@ -569,7 +543,6 @@ class CourseCreateSerializer(serializers.ModelSerializer):
             'currency',
             # Format & Virtual settings
             'format',
-            'zoom_settings',
             'live_session_start',
             'live_session_end',
             'live_session_timezone',
@@ -694,12 +667,6 @@ class CourseSessionSerializer(serializers.ModelSerializer):
             'ends_at',
             'duration_minutes',
             'timezone',
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'zoom_start_url',
-            'zoom_password',
-            'zoom_settings',
-            'zoom_error',
             'cpd_credits',
             'is_mandatory',
             'minimum_attendance_percent',
@@ -712,11 +679,6 @@ class CourseSessionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'uuid',
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'zoom_start_url',
-            'zoom_password',
-            'zoom_error',
             'created_at',
             'updated_at',
         ]
@@ -742,15 +704,12 @@ class CourseSessionListSerializer(serializers.ModelSerializer):
             'starts_at',
             'ends_at',
             'duration_minutes',
-            'zoom_join_url',
             'cpd_credits',
             'is_mandatory',
             'is_published',
             'is_upcoming',
             'is_live',
             'is_past',
-            'zoom_meeting_id',
-            'zoom_password',
         ]
 
 
@@ -767,9 +726,6 @@ class CourseSessionCreateSerializer(serializers.ModelSerializer):
             'starts_at',
             'duration_minutes',
             'timezone',
-            'zoom_settings',
-            'zoom_meeting_id',
-            'zoom_password',
             'cpd_credits',
             'is_mandatory',
             'minimum_attendance_percent',

@@ -19,7 +19,6 @@ from django.utils import timezone
 
 from common.config import AssignmentDefaults, ModuleDefaults
 from common.models import BaseModel
-from common.validators import validate_zoom_settings_schema
 
 
 class EventModule(BaseModel):
@@ -552,14 +551,13 @@ class ModuleProgress(BaseModel):
 
 class Course(BaseModel):
     """
-    Self-paced learning course, owned by an organization.
+    Self-paced learning course.
 
     Courses are standalone learning experiences with modules, content,
     and assignments. Unlike events, courses don't have scheduled times -
     learners can complete them at their own pace.
 
     Key Features:
-    - Organization ownership
     - Self-paced modules and content
     - Enrollment management
     - Progress tracking
@@ -574,14 +572,6 @@ class Course(BaseModel):
     # =========================================
     # Ownership
     # =========================================
-    organization = models.ForeignKey(
-        "organizations.Organization",
-        on_delete=models.CASCADE,
-        related_name="courses",
-        null=True,
-        blank=True,
-        help_text="Organization that owns this course (null for personal LMS plans)",
-    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -610,21 +600,7 @@ class Course(BaseModel):
     # =========================================
     # Virtual/Live Session Settings (for Hybrid courses)
     # =========================================
-    zoom_meeting_id = models.CharField(max_length=100, blank=True, help_text="Zoom Meeting ID")
-    zoom_meeting_uuid = models.CharField(max_length=100, blank=True, help_text="Zoom Meeting UUID")
-    zoom_meeting_url = models.URLField(blank=True, help_text="Zoom Join URL")
-    zoom_start_url = models.URLField(max_length=2000, blank=True, help_text="Zoom Start URL for host")
-    zoom_meeting_password = models.CharField(max_length=50, blank=True, help_text="Zoom Meeting Password")
-    zoom_webinar_id = models.CharField(max_length=100, blank=True, help_text="Zoom Webinar ID (if webinar)")
-    zoom_registrant_id = models.CharField(max_length=255, blank=True, help_text="Zoom Registrant tracking")
-    zoom_settings = models.JSONField(
-        default=dict,
-        validators=[validate_zoom_settings_schema],
-        blank=True,
-        help_text="Zoom meeting settings (enabled, waiting_room, etc.)",
-    )
-    zoom_error = models.TextField(blank=True, help_text="Last Zoom integration error message")
-    zoom_error_at = models.DateTimeField(null=True, blank=True, help_text="When last Zoom error occurred")
+    video_settings = models.JSONField(default=dict, blank=True, help_text="Video conferencing settings")
 
     # Live session scheduling (for Hybrid format)
     live_session_start = models.DateTimeField(null=True, blank=True, help_text="Start time for live session")
@@ -730,21 +706,18 @@ class Course(BaseModel):
     class Meta:
         db_table = "courses"
         ordering = ["-created_at"]
+        permissions = [
+            ("can_create_course", "Can create courses"),
+            ("can_manage_course", "Can manage courses"),
+        ]
         constraints = [
             models.UniqueConstraint(
-                fields=["organization", "slug"],
-                condition=models.Q(organization__isnull=False),
-                name="unique_course_slug_per_organization",
-            ),
-            models.UniqueConstraint(
                 fields=["created_by", "slug"],
-                condition=models.Q(organization__isnull=True),
                 name="unique_course_slug_per_owner",
             ),
         ]
         indexes = [
             models.Index(fields=["status"]),
-            models.Index(fields=["organization", "status"]),
             models.Index(fields=["is_public", "status"]),
         ]
         verbose_name = "Course"
@@ -759,31 +732,11 @@ class Course(BaseModel):
             return False
         if user.is_staff:
             return True
-        if self.organization_id:
-            return self.organization.memberships.filter(
-                user=user,
-                role__in=["admin", "course_manager"],
-                is_active=True,
-            ).exists()
         return self.created_by_id == user.id
 
     def can_instruct(self, user) -> bool:
-        """Check if user is an instructor assigned to this course."""
-        if not user or not getattr(user, "is_authenticated", False):
-            return False
-        if not self.organization_id:
-            return False
-        return self.organization.memberships.filter(
-            user=user,
-            role="instructor",
-            assigned_course=self,
-            is_active=True,
-        ).exists()
-
-    @property
-    def owner(self):
-        """Map created_by to owner for Zoom service compatibility."""
-        return self.created_by
+        """Check if user is an instructor for this course (same as can_manage in single-tenant mode)."""
+        return self.can_manage(user)
 
     @property
     def is_free(self):
@@ -914,10 +867,6 @@ class CourseEnrollment(BaseModel):
 
     # Billing
     stripe_checkout_session_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe Checkout Session ID")
-
-    # Zoom (for hybrid courses)
-    zoom_join_url = models.URLField(max_length=500, blank=True, help_text="Unique Zoom join URL")
-    zoom_registrant_id = models.CharField(max_length=255, blank=True, help_text="Zoom Registrant ID")
 
     # Timestamps
     enrolled_at = models.DateTimeField(auto_now_add=True, help_text="When user enrolled")
@@ -1220,7 +1169,7 @@ class CourseSession(BaseModel):
     Individual live session within a hybrid course.
 
     Hybrid courses consist of self-paced content plus scheduled live sessions.
-    Each session can have its own Zoom meeting and tracks attendance independently.
+    Each session can have its own video meeting and tracks attendance independently.
     """
 
     class SessionType(models.TextChoices):
@@ -1242,20 +1191,8 @@ class CourseSession(BaseModel):
     duration_minutes = models.PositiveIntegerField(default=60, help_text="Duration in minutes")
     timezone = models.CharField(max_length=50, default="UTC", help_text="Session timezone")
 
-    # Zoom integration (per-session)
-    zoom_meeting_id = models.CharField(max_length=100, blank=True, db_index=True)
-    zoom_meeting_uuid = models.CharField(max_length=100, blank=True)
-    zoom_join_url = models.URLField(max_length=500, blank=True)
-    zoom_start_url = models.URLField(max_length=2000, blank=True)
-    zoom_password = models.CharField(max_length=50, blank=True)
-    zoom_settings = models.JSONField(
-        default=dict,
-        validators=[validate_zoom_settings_schema],
-        blank=True,
-        help_text="Zoom meeting settings",
-    )
-    zoom_error = models.TextField(blank=True, help_text="Last Zoom error message")
-    zoom_error_at = models.DateTimeField(null=True, blank=True)
+    # Video conferencing (per-session)
+    video_settings = models.JSONField(default=dict, blank=True, help_text="Video conferencing settings")
 
     # CPD credits for this session
     cpd_credits = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="CPD credits for attending")
@@ -1276,7 +1213,6 @@ class CourseSession(BaseModel):
         verbose_name_plural = "Course Sessions"
         indexes = [
             models.Index(fields=["course", "starts_at"]),
-            models.Index(fields=["zoom_meeting_id"]),
         ]
 
     def __str__(self):

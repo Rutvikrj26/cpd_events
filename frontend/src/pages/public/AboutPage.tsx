@@ -111,7 +111,7 @@ export function AboutPage() {
                                 Accredit was born from the frustration of organizing professional development events and dealing with the administrative overhead. We asked: what if attendance could be tracked automatically? What if certificates could be generated with one click? What if verification was instant?
                             </p>
                             <p>
-                                Today, Accredit handles all of this and more. We integrate directly with Zoom to track attendance in real-time, generate professional PDF certificates automatically, and provide a public verification portal for every certificate issued.
+                                Today, Accredit handles all of this and more. We provide built-in video conferencing to track attendance in real-time, generate professional PDF certificates automatically, and provide a public verification portal for every certificate issued.
                             </p>
                             <p className="font-medium text-foreground">
                                 Our goal is simple: let you focus on delivering great educational content while we handle the paperwork.

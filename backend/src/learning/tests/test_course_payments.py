@@ -7,22 +7,20 @@ from rest_framework.test import APITestCase
 
 from accounts.models import User
 from learning.models import Course, CourseEnrollment
-from organizations.models import Organization
 
 
 class TestCoursePayments(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='learner@example.com', password='password')
-        self.org = Organization.objects.create(name='Test Org', slug='test-org')
         self.course_paid = Course.objects.create(
-            organization=self.org, title="Paid Course", slug="paid-course", price_cents=1000, stripe_price_id="price_123"
+            title="Paid Course", slug="paid-course", price_cents=1000, stripe_price_id="price_123"
         )
-        self.course_free = Course.objects.create(organization=self.org, title="Free Course", slug="free-course", price_cents=0)
+        self.course_free = Course.objects.create(title="Free Course", slug="free-course", price_cents=0)
         self.client.force_authenticate(user=self.user)
 
     def test_enrollment_blocked_for_paid_course(self):
         """Ensure standard enrollment logic blocks paid courses."""
-        url = reverse('course-enrollment-list')
+        url = reverse('learning:course-enrollment-list')
         data = {'course_uuid': self.course_paid.uuid}
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -35,7 +33,7 @@ class TestCoursePayments(APITestCase):
 
     def test_enrollment_allowed_for_free_course(self):
         """Ensure free courses can be enrolled in directly."""
-        url = reverse('course-enrollment-list')
+        url = reverse('learning:course-enrollment-list')
         data = {'course_uuid': self.course_free.uuid}
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -46,7 +44,7 @@ class TestCoursePayments(APITestCase):
         """Test that checkout view calls Stripe service correctly."""
         mock_create_session.return_value = {'success': True, 'session_id': 'sess_123', 'url': 'https://checkout.stripe.com/...'}
 
-        url = reverse('course-checkout', kwargs={'uuid': self.course_paid.uuid})
+        url = reverse('learning:course-checkout', kwargs={'uuid': self.course_paid.uuid})
         data = {'success_url': 'http://localhost/success', 'cancel_url': 'http://localhost/cancel'}
         response = self.client.post(url, data)
 

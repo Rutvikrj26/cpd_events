@@ -32,9 +32,11 @@ class Command(BaseCommand):
             user.save()
             self.stdout.write(self.style.SUCCESS(f'Updated {email} as superuser'))
         else:
-            User.objects.create_superuser(
+            user = User.objects.create_superuser(
                 email=email,
                 password=password,
                 full_name=full_name,
             )
+            # Assign admin group
+            user.assign_role("admin")
             self.stdout.write(self.style.SUCCESS(f'Successfully created superuser: {email}'))

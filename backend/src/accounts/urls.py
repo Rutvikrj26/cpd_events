@@ -6,8 +6,6 @@ from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from integrations.urls import my_recordings_router
-
 from . import views
 
 app_name = 'accounts'
@@ -26,28 +24,25 @@ urlpatterns = [
     path('auth/password-reset/confirm/', views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('auth/password-change/', views.PasswordChangeView.as_view(), name='password_change'),
     path('auth/manifest/', views.ManifestView.as_view(), name='manifest'),
+    path('auth/accept-invitation/', views.AcceptInvitationView.as_view(), name='accept_invitation'),
     # OAuth
     path('auth/google/login/', views.GoogleAuthView.as_view(), name='google_auth'),
     path('auth/google/callback/', views.GoogleCallbackView.as_view(), name='google_callback'),
     # Current user
     path('users/me/', views.CurrentUserView.as_view(), name='current_user'),
-    path('users/me/organizer-profile/', views.OrganizerProfileView.as_view(), name='organizer_profile'),
     path('users/me/notifications/', views.NotificationPreferencesView.as_view(), name='notifications'),
-    path('users/me/upgrade/', views.UpgradeToOrganizerView.as_view(), name='upgrade'),
-    path('users/me/downgrade/', views.DowngradeToAttendeeView.as_view(), name='downgrade'),
     path('users/me/delete-account/', views.DeleteAccountView.as_view(), name='delete_account'),
-    path('users/me/export-data/', views.DataExportView.as_view(), name='export_data'),  # H6: GDPR
+    path('users/me/export-data/', views.DataExportView.as_view(), name='export_data'),
     path('users/me/onboarding/complete/', views.CompleteOnboardingView.as_view(), name='complete_onboarding'),
     path('users/me/sessions/', views.UserSessionListView.as_view(), name='user_sessions'),
     path('users/me/sessions/logout-all/', views.UserSessionLogoutAllView.as_view(), name='user_sessions_logout_all'),
     path('users/me/sessions/<uuid:uuid>/', views.UserSessionRevokeView.as_view(), name='user_session_revoke'),
-    # Payouts (Stripe Connect for individuals)
-    path('users/me/payouts/connect/', views.PayoutsConnectView.as_view(), name='payouts_connect'),
-    path('users/me/payouts/status/', views.PayoutsStatusView.as_view(), name='payouts_status'),
-    path('users/me/payouts/dashboard/', views.PayoutsDashboardView.as_view(), name='payouts_dashboard'),
-    # Public organizer profiles
-    path('organizers/<uuid:uuid>/', views.PublicOrganizerView.as_view(), name='public_organizer'),
+    # Admin user management
+    path('admin/users/', views.AdminUserListCreateView.as_view(), name='admin_users'),
+    path('admin/users/invite/', views.AdminInviteUserView.as_view(), name='admin_invite_user'),
+    path('admin/users/bulk-invite/', views.AdminBulkInviteView.as_view(), name='admin_bulk_invite'),
+    path('admin/users/<uuid:uuid>/', views.AdminUserUpdateView.as_view(), name='admin_user_detail'),
+    path('admin/users/<uuid:uuid>/deactivate/', views.AdminUserDeactivateView.as_view(), name='admin_user_deactivate'),
+    path('admin/invitations/', views.AdminInvitationListView.as_view(), name='admin_invitations'),
     path('', include(router.urls)),
-    # Integrations
-    path('users/me/', include(my_recordings_router.urls)),
 ]

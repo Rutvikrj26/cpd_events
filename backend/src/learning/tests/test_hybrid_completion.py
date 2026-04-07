@@ -8,7 +8,6 @@ from learning.models import (
     CourseSession,
     CourseSessionAttendance,
 )
-from organizations.models import Organization
 
 
 @pytest.mark.django_db
@@ -16,14 +15,12 @@ class TestHybridCompletion:
 
     def setup_method(self):
         self.user = User.objects.create(email='test@example.com', password='password')
-        self.org = Organization.objects.create(name="Test Org", slug="test-org")
 
     def test_completion_modules_only(self):
         """Test completion when only modules are required."""
         course = Course.objects.create(
             title="Modules Only Course",
             slug="modules-only",
-            organization=self.org,
             format='hybrid',
             hybrid_completion_criteria='modules_only'
         )
@@ -37,7 +34,6 @@ class TestHybridCompletion:
         course = Course.objects.create(
             title="Sessions Only Course",
             slug="sessions-only",
-            organization=self.org,
             format='hybrid',
             hybrid_completion_criteria='sessions_only'
         )
@@ -64,7 +60,6 @@ class TestHybridCompletion:
         course = Course.objects.create(
             title="Both Course",
             slug="both-course",
-            organization=self.org,
             format='hybrid',
             hybrid_completion_criteria='both'
         )
@@ -91,7 +86,6 @@ class TestHybridCompletion:
         course = Course.objects.create(
             title="Min Sessions Course",
             slug="min-sessions",
-            organization=self.org,
             format='hybrid',
             hybrid_completion_criteria='min_sessions',
             min_sessions_required=2
@@ -121,7 +115,6 @@ class TestHybridCompletion:
         course = Course.objects.create(
             title="Min Sessions Override",
             slug="min-sessions-override",
-            organization=self.org,
             format='hybrid',
             hybrid_completion_criteria='min_sessions',
             min_sessions_required=1

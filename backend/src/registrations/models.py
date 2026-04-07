@@ -168,18 +168,6 @@ class Registration(SoftDeleteModel):
     # =========================================
     allow_public_verification = models.BooleanField(default=True, help_text="Allow certificate to be publicly verified")
 
-    # =========================================
-    # Zoom Meeting Registration (unique per registrant)
-    # =========================================
-    zoom_registrant_join_url = models.URLField(
-        blank=True, max_length=2000, help_text="Unique Zoom join URL for this registrant"
-    )
-    zoom_registrant_id = models.CharField(max_length=100, blank=True, help_text="Zoom registrant ID from Zoom API")
-    zoom_add_attempt_count = models.PositiveSmallIntegerField(
-        default=0, help_text="Number of attempts to add registrant to Zoom"
-    )
-    zoom_add_error = models.TextField(blank=True, help_text="Last error when adding to Zoom")
-
     class Meta:
         db_table = 'registrations'
         unique_together = [['event', 'email']]
@@ -305,12 +293,6 @@ class Registration(SoftDeleteModel):
         )
 
         # Update event counts handled by signals
-
-        # Add to Zoom meeting if confirmed
-        if self.status == self.Status.CONFIRMED:
-            from registrations.tasks import add_zoom_registrant
-
-            add_zoom_registrant.delay(self.id)
 
         # Send email notification to attendee
         from integrations.services import email_service

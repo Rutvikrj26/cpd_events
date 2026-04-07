@@ -1,48 +1,35 @@
-import { Subscription } from "@/api/billing/types";
 import { User } from "@/api/accounts/types";
 
 type RoleFlags = {
     isAdmin: boolean;
-    isOrganizer: boolean;
+    isEducator: boolean;
     isCourseManager: boolean;
-    isAttendee: boolean;
+    isLearner: boolean;
+    isCreator: boolean;
 };
 
-export const getRoleFlags = (
-    user?: User | null,
-    subscription?: Subscription | null
-): RoleFlags => {
-    const roles = new Set<string>();
-    const plan = subscription?.plan;
+/**
+ * Derive role flags from user's group-based roles.
+ * No longer depends on subscription plans.
+ */
+export const getRoleFlags = (user?: User | null): RoleFlags => {
+    const roles = new Set(user?.roles ?? []);
+    const primaryRole = user?.primary_role;
 
-    if (plan === "organization") {
-        roles.add("organizer");
-        roles.add("course_manager");
-    } else if (plan === "organizer") {
-        roles.add("organizer");
-    } else if (plan === "lms") {
-        roles.add("course_manager");
-    } else if (plan === "attendee") {
-        roles.add("attendee");
-    }
-
-    if (!plan && user?.account_type) {
-        roles.add(user.account_type);
-    }
-
-    if (user?.account_type === "admin") {
-        roles.add("admin");
-    }
-
-    const isAdmin = roles.has("admin");
-    const isOrganizer = isAdmin || roles.has("organizer");
+    const isAdmin = primaryRole === "admin" || roles.has("admin");
+    const isEducator = isAdmin || roles.has("educator");
     const isCourseManager = isAdmin || roles.has("course_manager");
-    const isAttendee = roles.has("attendee") && !isOrganizer && !isCourseManager && !isAdmin;
+    const isCreator = isEducator || isCourseManager;
+    const isLearner = !isCreator && (roles.has("learner") || roles.size === 0);
 
     return {
         isAdmin,
-        isOrganizer,
+        isEducator,
         isCourseManager,
-        isAttendee,
+        isLearner,
+        isCreator,
     };
 };
+
+// Backward compat aliases
+export type { RoleFlags };

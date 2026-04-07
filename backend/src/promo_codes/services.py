@@ -4,7 +4,6 @@ Promo Code validation and application service.
 
 from decimal import Decimal
 
-from django.db.models import Q
 from django.utils import timezone
 
 from .models import PromoCode, PromoCodeUsage
@@ -89,12 +88,8 @@ class PromoCodeService:
         """
         code_upper = code.upper().strip()
 
-        # Find codes owned by the event owner or organization
-        owner_filter = Q(owner=event.owner)
-        if event.organization:
-            owner_filter |= Q(organization=event.organization)
-
-        promo = PromoCode.objects.filter(owner_filter, code__iexact=code_upper).first()
+        # Find codes owned by the event owner
+        promo = PromoCode.objects.filter(owner=event.owner, code__iexact=code_upper).first()
 
         return promo
 
