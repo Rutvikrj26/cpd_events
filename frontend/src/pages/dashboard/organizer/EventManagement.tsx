@@ -994,15 +994,6 @@ export function EventManagement() {
             </TabsContent>
          </Tabs>
 
-         {/* Custom Field Responses Dialog */}
-         <CustomFieldResponsesDialog
-            open={customFieldDialogOpen}
-            onOpenChange={setCustomFieldDialogOpen}
-            attendeeName={customFieldAttendee?.full_name || ""}
-            eventUuid={uuid}
-            registrationUuid={customFieldAttendee?.uuid}
-         />
-
          {/* Certificate Revocation Dialog */}
          <ConfirmDialog
             open={!!revokeTarget}
