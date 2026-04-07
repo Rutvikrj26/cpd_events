@@ -5,6 +5,7 @@ import {
     AuthResponse,
     SignupResponse,
     User,
+    UserSession,
     RefreshTokenRequest,
     PasswordResetRequest,
     PasswordResetConfirm,
@@ -76,4 +77,28 @@ export const updateNotificationPreferences = async (data: NotificationPreference
 export const completeOnboarding = async (): Promise<{ message: string; onboarding_completed: boolean }> => {
     const response = await client.post<{ message: string; onboarding_completed: boolean }>('/users/me/onboarding/complete/');
     return response.data;
+};
+
+// Sessions
+export const getUserSessions = async (): Promise<UserSession[]> => {
+    const response = await client.get<UserSession[]>('/users/me/sessions/');
+    return response.data;
+};
+
+export const revokeSession = async (uuid: string): Promise<void> => {
+    await client.delete(`/users/me/sessions/${uuid}/`);
+};
+
+export const logoutAllSessions = async (): Promise<void> => {
+    await client.post('/users/me/sessions/logout-all/');
+};
+
+// Data & Privacy
+export const exportUserData = async (): Promise<Blob> => {
+    const response = await client.post('/users/me/export-data/', {}, { responseType: 'blob' });
+    return response.data;
+};
+
+export const deleteAccount = async (): Promise<void> => {
+    await client.post('/users/me/delete-account/');
 };

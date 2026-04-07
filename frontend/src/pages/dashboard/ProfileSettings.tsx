@@ -685,20 +685,6 @@ export function ProfileSettings() {
                                        disabled={savingNotifications}
                                     />
                                  </div>
-                                 <Separator />
-                                 <div className="flex items-center justify-between space-x-2">
-                                    <div className="space-y-0.5">
-                                       <label className="text-sm font-medium leading-none">
-                                          Marketing Updates
-                                       </label>
-                                       <p className="text-sm text-muted-foreground">Receive news about new features and promotions.</p>
-                                    </div>
-                                    <Switch
-                                       checked={notifications.notify_marketing}
-                                       onCheckedChange={(checked) => handleNotificationChange('notify_marketing', checked)}
-                                       disabled={savingNotifications}
-                                    />
-                                 </div>
                               </>
                            ) : (
                               <p className="text-muted-foreground text-center py-4">
