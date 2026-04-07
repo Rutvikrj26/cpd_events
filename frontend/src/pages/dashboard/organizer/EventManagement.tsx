@@ -48,6 +48,7 @@ import {
 
 import { EditAttendanceDialog } from "@/components/events/EditAttendanceDialog";
 import { AttendanceReconciliation } from "@/components/events/AttendanceReconciliation";
+import { CustomFieldResponsesDialog } from "@/components/events/CustomFieldResponsesDialog";
 import { FeedbackCard, FeedbackSummary } from "@/components/feedback";
 import { getEventFeedback, calculateFeedbackSummary } from "@/api/feedback";
 import { EventFeedback } from "@/api/feedback/types";
@@ -67,6 +68,10 @@ export function EventManagement() {
    const [actionReason, setActionReason] = useState('');
    const [actionLoading, setActionLoading] = useState(false);
    const [actionAttendee, setActionAttendee] = useState<any>(null);
+
+   // Custom field responses dialog state
+   const [customFieldDialogOpen, setCustomFieldDialogOpen] = useState(false);
+   const [customFieldAttendee, setCustomFieldAttendee] = useState<any>(null);
 
    // Certificate revocation state
    const [revokeTarget, setRevokeTarget] = useState<any>(null);
@@ -624,6 +629,14 @@ export function EventManagement() {
                                              }}>
                                                 Edit Attendance
                                              </DropdownMenuItem>
+                                             {event.custom_fields && event.custom_fields.length > 0 && (
+                                                <DropdownMenuItem onClick={() => {
+                                                   setCustomFieldAttendee(attendee);
+                                                   setCustomFieldDialogOpen(true);
+                                                }}>
+                                                   View Responses
+                                                </DropdownMenuItem>
+                                             )}
                                              <DropdownMenuSeparator />
                                              {canRefund ? (
                                                 <DropdownMenuItem
@@ -660,6 +673,15 @@ export function EventManagement() {
                attendee={selectedAttendee}
                eventUuid={uuid || ''}
                onSuccess={fetchRegistrations}
+            />
+
+            {/* Custom Field Responses Dialog */}
+            <CustomFieldResponsesDialog
+               open={customFieldDialogOpen}
+               onOpenChange={setCustomFieldDialogOpen}
+               attendeeName={customFieldAttendee?.full_name || ''}
+               eventUuid={uuid || ''}
+               registrationUuid={customFieldAttendee?.uuid || ''}
             />
 
             <AlertDialog
@@ -971,6 +993,15 @@ export function EventManagement() {
                </div>
             </TabsContent>
          </Tabs>
+
+         {/* Custom Field Responses Dialog */}
+         <CustomFieldResponsesDialog
+            open={customFieldDialogOpen}
+            onOpenChange={setCustomFieldDialogOpen}
+            attendeeName={customFieldAttendee?.full_name || ""}
+            eventUuid={uuid}
+            registrationUuid={customFieldAttendee?.uuid}
+         />
 
          {/* Certificate Revocation Dialog */}
          <ConfirmDialog
