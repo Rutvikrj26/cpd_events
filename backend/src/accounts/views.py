@@ -682,9 +682,15 @@ class GoogleAuthView(generics.GenericAPIView):
     throttle_classes = [AuthThrottle]
 
     def get(self, request):
+        import secrets
+
+        from django.core.cache import cache
+
         from .google_oauth import get_google_auth_url
 
-        url = get_google_auth_url()
+        state = secrets.token_urlsafe(32)
+        cache.set(f"oauth_state:{state}", True, timeout=600)  # valid for 10 minutes
+        url = get_google_auth_url(state=state)
         return Response({"url": url})
 
 
@@ -701,7 +707,10 @@ class GoogleCallbackView(generics.GenericAPIView):
     throttle_classes = [AuthThrottle]
 
     def get(self, request):
+        from django.core.cache import cache
+
         code = request.query_params.get("code")
+        state = request.query_params.get("state")
         error = request.query_params.get("error")
 
         if error:
@@ -709,6 +718,11 @@ class GoogleCallbackView(generics.GenericAPIView):
 
         if not code:
             return error_response("Authorization code missing.", code="MISSING_CODE")
+
+        # Validate CSRF state parameter
+        if not state or not cache.get(f"oauth_state:{state}"):
+            return error_response("Invalid or expired state parameter.", code="INVALID_STATE")
+        cache.delete(f"oauth_state:{state}")  # single-use
 
         from django.conf import settings
         from django.db import transaction

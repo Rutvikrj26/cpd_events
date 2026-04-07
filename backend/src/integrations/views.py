@@ -30,4 +30,7 @@ class EmailLogViewSet(ReadOnlyModelViewSet):
 
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
-        return EmailLog.objects.filter(event__uuid=event_uuid, event__owner=self.request.user).order_by('-created_at')
+        qs_filter = {'event__uuid': event_uuid}
+        if not self.request.user.is_staff:
+            qs_filter['event__owner'] = self.request.user
+        return EmailLog.objects.filter(**qs_filter).order_by('-created_at')

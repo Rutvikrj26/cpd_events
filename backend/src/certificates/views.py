@@ -17,7 +17,7 @@ from rest_framework.response import Response
 logger = logging.getLogger(__name__)
 
 from common.pagination import SmallPagination
-from common.permissions import IsContentCreator, IsEducator
+from common.permissions import IsContentCreator, IsEducatorOrAdmin
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import ReadOnlyModelViewSet, SoftDeleteModelViewSet
@@ -46,6 +46,8 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     lookup_field = 'uuid'
 
     def get_queryset(self):
+        if self.request.user.is_staff:
+            return CertificateTemplate.objects.filter(deleted_at__isnull=True)
         return CertificateTemplate.objects.filter(owner=self.request.user, deleted_at__isnull=True)
 
     def get_serializer_class(self):
@@ -244,7 +246,7 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/certificates/
     """
 
-    permission_classes = [IsAuthenticated, IsEducator]
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
     pagination_class = SmallPagination  # M5: Nested resource pagination
     filterset_class = EventCertificateFilter
     ordering = ['-created_at']
@@ -252,9 +254,12 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
-        return Certificate.objects.filter(
-            registration__event__uuid=event_uuid, registration__event__owner=self.request.user, deleted_at__isnull=True
-        ).select_related('registration', 'registration__event', 'template')
+        qs_filter = {'registration__event__uuid': event_uuid, 'deleted_at__isnull': True}
+        if not self.request.user.is_staff:
+            qs_filter['registration__event__owner'] = self.request.user
+        return Certificate.objects.filter(**qs_filter).select_related(
+            'registration', 'registration__event', 'template'
+        )
 
     def get_serializer_class(self):
         if self.action == 'list':

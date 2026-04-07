@@ -228,7 +228,13 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
 
     def remove_role(self, role_name: str):
         """Remove a role (Django Group) from this user."""
-        self.groups.filter(name=role_name).delete()
+        from django.contrib.auth.models import Group
+
+        try:
+            group = Group.objects.get(name=role_name)
+            self.groups.remove(group)
+        except Group.DoesNotExist:
+            pass
 
     def set_roles(self, role_names: list[str]):
         """Replace all roles with the given list."""

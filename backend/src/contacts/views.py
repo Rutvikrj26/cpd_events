@@ -9,7 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from common.permissions import IsEducator
+from common.permissions import IsEducatorOrAdmin
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import BaseModelViewSet
@@ -54,9 +54,11 @@ class TagViewSet(BaseModelViewSet):
     DELETE /api/v1/tags/{uuid}/
     """
 
-    permission_classes = [IsAuthenticated, IsEducator]
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
 
     def get_queryset(self):
+        if self.request.user.is_staff:
+            return Tag.objects.all()
         return Tag.objects.filter(owner=self.request.user)
 
     def get_serializer_class(self):
@@ -107,9 +109,11 @@ class ContactListViewSet(BaseModelViewSet):
     DELETE /api/v1/contact-lists/{uuid}/
     """
 
-    permission_classes = [IsAuthenticated, IsEducator]
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
 
     def get_queryset(self):
+        if self.request.user.is_staff:
+            return ContactList.objects.all()
         return ContactList.objects.filter(owner=self.request.user)
 
     def get_serializer_class(self):
@@ -236,7 +240,7 @@ class ContactViewSet(BaseModelViewSet):
     Tags are used for segmentation instead of multiple lists.
     """
 
-    permission_classes = [IsAuthenticated, IsEducator]
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
     filterset_class = ContactFilter
     search_fields = ['email', 'full_name', 'organization_name']
     ordering_fields = ['full_name', 'email', 'created_at', 'events_attended_count']
@@ -247,6 +251,8 @@ class ContactViewSet(BaseModelViewSet):
         return ContactList.get_or_create_for_user(self.request.user)
 
     def get_queryset(self):
+        if self.request.user.is_staff:
+            return Contact.objects.all().prefetch_related('tags')
         contact_list = self._get_user_list()
         return Contact.objects.filter(contact_list=contact_list).prefetch_related('tags')
 

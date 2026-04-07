@@ -31,12 +31,18 @@ from .models import Event, EventCustomField, Speaker
 
 
 def _event_access_q(user, prefix: str = '') -> Q:
+    """Return Q filter for events accessible by this user.
+
+    Admin users (is_staff) get access to all events.
+    """
+    if user.is_staff:
+        return Q()  # No filter — admin sees everything
     owner_key = f'{prefix}owner'
     return Q(**{owner_key: user})
 
 
 def _user_can_manage_event(user, event) -> bool:
-    return event.owner_id == user.id
+    return user.is_staff or event.owner_id == user.id
 
 
 # =============================================================================
@@ -847,10 +853,13 @@ class SpeakerViewSet(SoftDeleteModelViewSet):
     ordering = ['name']
 
     def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return Speaker.objects.filter(deleted_at__isnull=True)
         return Speaker.objects.filter(
-            Q(owner=self.request.user)
+            Q(owner=user)
             | Q(
-                organization__memberships__user=self.request.user,
+                organization__memberships__user=user,
                 organization__memberships__role='admin',
                 organization__memberships__is_active=True,
             ),

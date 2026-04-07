@@ -152,6 +152,9 @@ def get_features_for_user(user) -> dict[str, bool]:
             "create_events": False,
             "create_courses": False,
             "manage_certificates": False,
+            "manage_contacts": False,
+            "manage_badges": False,
+            "manage_video": False,
             "manage_users": False,
             "configure_billing": False,
             "browse_events": True,
@@ -160,10 +163,16 @@ def get_features_for_user(user) -> dict[str, bool]:
             "view_own_certificates": True,
         }
 
+    is_educator = user.is_staff or user.groups.filter(name__in=["educator", "admin"]).exists()
+    is_creator = user.is_staff or user.groups.filter(name__in=["educator", "course_manager", "admin"]).exists()
+
     return {
         "create_events": user.has_perm("events.can_create_event"),
         "create_courses": user.has_perm("learning.can_create_course"),
         "manage_certificates": user.has_perm("certificates.can_issue_certificate"),
+        "manage_contacts": is_educator,
+        "manage_badges": is_educator,
+        "manage_video": is_educator,
         "manage_users": user.has_perm("accounts.can_manage_users"),
         "configure_billing": user.has_perm("billing.can_configure_billing"),
         "browse_events": True,
