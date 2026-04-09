@@ -4,7 +4,7 @@
     "pk": 1,
     "fields": {
       "uuid": "00000000-0000-4000-a000-000000000001",
-      "password": "!",
+      "password": "pbkdf2_sha256$870000$eec77029ed9bed180acc0154$b7n2IstTdvSfZiDkEijwDNoKwCwwCfc4dNzndJd6uE4=",
       "last_login": null,
       "is_superuser": true,
       "email": "admin@mededhub.com",
@@ -37,7 +37,7 @@
       "verification_token_created_at": null,
       "password_reset_token_created_at": null,
       "deleted_at": null,
-      "groups": [],
+      "groups": [4],
       "user_permissions": [],
       "created_at": "2025-01-01T09:00:00Z",
       "updated_at": "2025-02-01T09:00:00Z"
@@ -48,7 +48,7 @@
     "pk": 2,
     "fields": {
       "uuid": "00000000-0000-4000-a000-000000000002",
-      "password": "!",
+      "password": "pbkdf2_sha256$870000$eec77029ed9bed180acc0154$b7n2IstTdvSfZiDkEijwDNoKwCwwCfc4dNzndJd6uE4=",
       "last_login": null,
       "is_superuser": false,
       "email": "organizer@mededhub.com",
@@ -81,7 +81,7 @@
       "verification_token_created_at": null,
       "password_reset_token_created_at": null,
       "deleted_at": null,
-      "groups": [],
+      "groups": [2, 3],
       "user_permissions": [],
       "created_at": "2025-01-02T10:00:00Z",
       "updated_at": "2025-02-05T10:00:00Z"
@@ -92,7 +92,7 @@
     "pk": 3,
     "fields": {
       "uuid": "00000000-0000-4000-a000-000000000003",
-      "password": "!",
+      "password": "pbkdf2_sha256$870000$eec77029ed9bed180acc0154$b7n2IstTdvSfZiDkEijwDNoKwCwwCfc4dNzndJd6uE4=",
       "last_login": null,
       "is_superuser": false,
       "email": "emily.park@hospital.com",
@@ -125,7 +125,7 @@
       "verification_token_created_at": null,
       "password_reset_token_created_at": null,
       "deleted_at": null,
-      "groups": [],
+      "groups": [1],
       "user_permissions": [],
       "created_at": "2025-01-05T11:00:00Z",
       "updated_at": "2025-02-10T11:00:00Z"
@@ -136,7 +136,7 @@
     "pk": 4,
     "fields": {
       "uuid": "00000000-0000-4000-a000-000000000004",
-      "password": "!",
+      "password": "pbkdf2_sha256$870000$eec77029ed9bed180acc0154$b7n2IstTdvSfZiDkEijwDNoKwCwwCfc4dNzndJd6uE4=",
       "last_login": null,
       "is_superuser": false,
       "email": "m.torres@clinic.com",
@@ -169,7 +169,7 @@
       "verification_token_created_at": null,
       "password_reset_token_created_at": null,
       "deleted_at": null,
-      "groups": [],
+      "groups": [1],
       "user_permissions": [],
       "created_at": "2025-01-06T09:30:00Z",
       "updated_at": "2025-02-12T09:30:00Z"
@@ -180,7 +180,7 @@
     "pk": 5,
     "fields": {
       "uuid": "00000000-0000-4000-a000-000000000005",
-      "password": "!",
+      "password": "pbkdf2_sha256$870000$eec77029ed9bed180acc0154$b7n2IstTdvSfZiDkEijwDNoKwCwwCfc4dNzndJd6uE4=",
       "last_login": null,
       "is_superuser": false,
       "email": "aisha.khan@university.edu",
@@ -191,9 +191,9 @@
       "professional_title": "PhD",
       "organization_name": "University of Ottawa",
       "timezone": "America/Toronto",
-      "onboarding_completed": true,
-      "email_verified": true,
-      "email_verified_at": "2025-01-08T13:00:00Z",
+      "onboarding_completed": false,
+      "email_verified": false,
+      "email_verified_at": null,
       "events_attended_count": 0,
       "certificates_earned_count": 0,
       "total_cpd_credits": "0.00",
@@ -213,7 +213,7 @@
       "verification_token_created_at": null,
       "password_reset_token_created_at": null,
       "deleted_at": null,
-      "groups": [],
+      "groups": [1],
       "user_permissions": [],
       "created_at": "2025-01-08T13:00:00Z",
       "updated_at": "2025-02-15T13:00:00Z"

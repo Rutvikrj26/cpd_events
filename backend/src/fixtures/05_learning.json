@@ -585,5 +585,47 @@
       "body": "Welcome everyone! This self-paced course will guide you through the fundamentals of clinical ethics. Start with Module 1 and work at your own pace. Don't forget about the live discussion session on April 1st!",
       "is_published": true
     }
+  },
+  {
+    "model": "learning.coursesessionattendance",
+    "pk": 1,
+    "fields": {
+      "id": 1,
+      "uuid": "00000000-0000-4000-a000-000000000599",
+      "created_at": "2025-04-01T15:05:00Z",
+      "updated_at": "2025-04-01T15:05:00Z",
+      "session": 1,
+      "enrollment": 1,
+      "attendance_minutes": 55,
+      "is_eligible": true,
+      "zoom_participant_id": "lk_course_part_001",
+      "zoom_user_email": "emily.park@hospital.com",
+      "zoom_join_time": "2025-04-01T14:02:00Z",
+      "zoom_leave_time": "2025-04-01T14:57:00Z",
+      "is_manual_override": false,
+      "override_by": null,
+      "override_reason": ""
+    }
+  },
+  {
+    "model": "learning.coursesessionattendance",
+    "pk": 2,
+    "fields": {
+      "id": 2,
+      "uuid": "00000000-0000-4000-a000-000000000600",
+      "created_at": "2025-04-01T15:05:00Z",
+      "updated_at": "2025-04-01T15:05:00Z",
+      "session": 1,
+      "enrollment": 2,
+      "attendance_minutes": 40,
+      "is_eligible": false,
+      "zoom_participant_id": "lk_course_part_002",
+      "zoom_user_email": "m.torres@clinic.com",
+      "zoom_join_time": "2025-04-01T14:10:00Z",
+      "zoom_leave_time": "2025-04-01T14:50:00Z",
+      "is_manual_override": false,
+      "override_by": null,
+      "override_reason": ""
+    }
   }
 ]
