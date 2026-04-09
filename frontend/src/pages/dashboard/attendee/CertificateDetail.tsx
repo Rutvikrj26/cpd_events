@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { 
   Download, 
   Share2, 
-  Linkedin, 
+  Link2 as Linkedin,
   CheckCircle, 
   ShieldCheck,
   Calendar,

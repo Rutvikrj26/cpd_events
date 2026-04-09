@@ -7,7 +7,7 @@ import {
     Pencil,
     Trash2,
     Mail,
-    Linkedin,
+    Link2 as Linkedin,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
