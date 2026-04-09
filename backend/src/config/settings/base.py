@@ -38,15 +38,16 @@ LOCAL_APPS = [
     'integrations',
     'billing',
     'learning',
-    'organizations',
     'feedback',
     'promo_codes',
     'badges',
+    'conferencing',
 ]
 
 THIRD_PARTY_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'django_filters',
     'drf_yasg',
     'corsheaders',
@@ -188,7 +189,7 @@ REST_FRAMEWORK = {
     # Exception handling
     'EXCEPTION_HANDLER': 'common.exceptions.custom_exception_handler',
     # Schema
-    'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema',
+    'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.openapi.AutoSchema',
 }
 
 # JWT Settings
@@ -196,6 +197,7 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'USER_ID_FIELD': 'uuid',
     'USER_ID_CLAIM': 'user_uuid',
@@ -214,11 +216,12 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
 ]
 
-# Zoom Integrations
-ZOOM_CLIENT_ID = os.environ.get('ZOOM_CLIENT_ID')
-ZOOM_CLIENT_SECRET = os.environ.get('ZOOM_CLIENT_SECRET')
-ZOOM_REDIRECT_URI = os.environ.get('ZOOM_REDIRECT_URI')
-ZOOM_WEBHOOK_SECRET = os.environ.get('ZOOM_WEBHOOK_SECRET')
+# Video Conferencing (LiveKit)
+VIDEO_PROVIDER = os.environ.get('VIDEO_PROVIDER', 'livekit')
+LIVEKIT_API_KEY = os.environ.get('LIVEKIT_API_KEY', '')
+LIVEKIT_API_SECRET = os.environ.get('LIVEKIT_API_SECRET', '')
+LIVEKIT_HOST = os.environ.get('LIVEKIT_HOST', 'http://localhost:7880')
+LIVEKIT_WS_URL = os.environ.get('LIVEKIT_WS_URL', 'ws://localhost:7880')
 
 # Google OAuth
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
@@ -244,15 +247,10 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
 
-# Billing configuration imported from common.config.billing
-# These are re-exported here for backward compatibility with code that imports from settings
-from common.config.billing import (
-    DefaultPlan,
-    PlatformFees,
+# Deployment configuration
+from common.config.deployment import (
+    DEPLOYMENT_MODE,
+    INSTITUTION_LOGO_URL,
+    INSTITUTION_NAME,
+    REGISTRATION_MODE,
 )
-
-# Platform fee for paid event registrations (percentage of transaction)
-PLATFORM_FEE_PERCENT = PlatformFees.FEE_PERCENT
-
-# Default plan for new organizers
-BILLING_DEFAULT_PLAN = DefaultPlan.NAME

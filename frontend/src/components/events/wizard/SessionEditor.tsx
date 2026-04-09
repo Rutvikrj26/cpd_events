@@ -28,7 +28,6 @@ const defaultSession: SessionFormData = {
     starts_at: '',
     duration_minutes: 60,
     session_type: 'live',
-    has_separate_zoom: false,
     is_mandatory: true,
     is_published: true,
 };
@@ -158,17 +157,6 @@ export const SessionEditor = ({
 
                     {/* Toggles */}
                     <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                                <Label>Separate Zoom Meeting</Label>
-                                <p className="text-xs text-muted-foreground">Create a separate Zoom link for this session</p>
-                            </div>
-                            <Switch
-                                checked={formData.has_separate_zoom}
-                                onCheckedChange={(checked) => handleChange('has_separate_zoom', checked)}
-                            />
-                        </div>
-
                         <div className="flex items-center justify-between">
                             <div className="space-y-0.5">
                                 <Label>Required for Certificate</Label>

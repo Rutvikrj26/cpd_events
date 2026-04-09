@@ -113,7 +113,7 @@ export function ContactPage() {
                                 </h3>
                                 <div className="space-y-4">
                                     <TopicLink label="Getting started with events" />
-                                    <TopicLink label="Zoom integration setup" />
+                                    <TopicLink label="Setting up online events and video conferencing" />
                                     <TopicLink label="Certificate customization" />
                                     <TopicLink label="Pricing and billing" />
                                     <TopicLink label="Team management" />

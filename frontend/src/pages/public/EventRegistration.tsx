@@ -273,7 +273,6 @@ export function EventRegistration() {
                     full_name: `${formData.firstName} ${formData.lastName}`.trim(),
                     password: formData.password,
                     password_confirm: formData.password,
-                    account_type: "attendee",
                 });
                 toast.success("Account created! Check your email for verification.");
             } catch (signupError: any) {

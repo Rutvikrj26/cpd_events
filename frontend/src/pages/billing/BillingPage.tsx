@@ -42,7 +42,7 @@ const PLAN_FEATURES: Record<string, string[]> = {
     organizer: [
         '30 events per month',
         '500 certificates/month',
-        'Zoom integration',
+        'Built-in video conferencing',
         'Custom certificate templates',
         'Priority email support',
     ],

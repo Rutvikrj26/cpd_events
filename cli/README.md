@@ -4,20 +4,18 @@ A Python-based CLI tool for managing the CPD Events platform - streamlines local
 
 ## Installation
 
-### Recommended: Install with pipx (Editable Mode)
+### Recommended: Install with uv tool (Editable Mode)
 
-**pipx** creates isolated environments and makes CLIs available globally - perfect for development!
+**uv** is a fast Python package and project manager - perfect for development!
 
 ```bash
-# Install pipx if you haven't already
-brew install pipx  # macOS
-# or: python3 -m pip install --user pipx  # Linux
-
-pipx ensurepath
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# or on macOS: brew install uv
 
 # Install accredit in editable mode
 cd cli
-pipx install -e .
+uv tool install --editable .
 
 # Verify installation
 accredit --version
@@ -26,20 +24,17 @@ accredit --help
 
 **Editable mode** means changes to the source code are immediately reflected - no reinstall needed!
 
-For detailed installation instructions, see [INSTALL.md](INSTALL.md)
-
-### Alternative: Poetry (Development)
+### Alternative: Local Development Environment
 
 ```bash
 cd cli
-poetry install
+uv sync  # Install dependencies
 
-# Use with poetry run
-poetry run accredit --help
+# Run commands directly
+.venv/bin/accredit --help
 
-# Or activate the virtualenv
-poetry shell
-accredit --help
+# Or use uv run
+uv run accredit --help
 ```
 
 ## Usage
@@ -244,30 +239,28 @@ app.add_typer(deploy.app, name="deploy", help="Deployment commands")
 ### Running Tests
 
 ```bash
-poetry run pytest
+uv run pytest
 ```
 
 ### Code Formatting
 
 ```bash
-poetry run black accredit/
-poetry run ruff check accredit/
+uv run black accredit/
+uv run ruff check accredit/
 ```
 
 ## Troubleshooting
 
 - **Logs**: Located in `.cli/logs/`
 - **PIDs**: Process IDs stored in `.cli/pids/`
-- **Command not found**: Ensure you've activated the Poetry shell or use `poetry run accredit`
+- **Command not found**: Ensure `~/.local/bin` is in your PATH or use `uv run accredit`
 
 ## Uninstallation
 
 ```bash
-cd cli
-poetry env remove python
-```
+# If installed with uv tool
+uv tool uninstall accredit
 
-Or if installed with pip:
-```bash
-pip uninstall accredit
+# Or remove the local venv
+rm -rf .venv uv.lock
 ```

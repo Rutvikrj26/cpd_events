@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Calendar, Award, Clock, Video, GraduationCap, ExternalLink, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { JoinButton } from "@/components/video/JoinButton";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DashboardStat } from "@/components/dashboard/DashboardStats";
@@ -9,8 +10,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { getMyRegistrations } from "@/api/registrations";
 import { Registration } from "@/api/registrations/types";
 import { useAuth } from "@/contexts/AuthContext";
-import { PendingInvitationsBanner } from "@/components/PendingInvitationsBanner";
-
 export function AttendeeDashboard() {
   const { user } = useAuth();
   const [registrations, setRegistrations] = useState<Registration[]>([]);
@@ -52,9 +51,6 @@ export function AttendeeDashboard() {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
-      {/* Pending Invitations Banner */}
-      <PendingInvitationsBanner />
 
       {/* Welcome Header */}
       <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary to-primary/80 p-8 text-white shadow-lg">
@@ -179,14 +175,12 @@ export function AttendeeDashboard() {
 
                       {/* Action Area */}
                       <div className="mt-4 flex items-center gap-3 relative z-10">
-                        <Button
+                        <JoinButton
+                          eventUuid={reg.event.uuid}
                           size="sm"
+                          label="Join Session"
                           className="h-8 shadow-sm"
-                          disabled={!reg.can_join || !reg.zoom_join_url}
-                          onClick={() => reg.zoom_join_url && window.open(reg.zoom_join_url, '_blank')}
-                        >
-                          Join Session
-                        </Button>
+                        />
                         <Button variant="outline" size="sm" className="h-8" asChild>
                           <Link to={`/events/${reg.event.slug || reg.event.uuid}`}>View Details</Link>
                         </Button>

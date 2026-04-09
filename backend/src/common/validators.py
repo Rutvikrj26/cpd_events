@@ -83,35 +83,6 @@ def validate_field_positions_schema(value):
                 raise ValidationError(f"Field {field_name}: fontSize must be a number")
 
 
-def validate_zoom_settings_schema(value):
-    """
-    Validate Zoom meeting settings JSON.
-
-    Expected schema:
-    {
-        "waiting_room": <bool>,
-        "join_before_host": <bool>,
-        "mute_upon_entry": <bool>,
-        "auto_recording": "none" | "local" | "cloud"
-    }
-    """
-    if not isinstance(value, dict):
-        raise ValidationError("Zoom settings must be a dictionary")
-
-    valid_keys = {'waiting_room', 'join_before_host', 'mute_upon_entry', 'auto_recording', 'enabled'}
-    valid_recording = {'none', 'local', 'cloud'}
-
-    for key, val in value.items():
-        if key not in valid_keys:
-            raise ValidationError(f"Unknown Zoom setting: {key}")
-
-        if key in {'waiting_room', 'join_before_host', 'mute_upon_entry', 'enabled'} and not isinstance(val, bool):
-            raise ValidationError(f"Zoom setting {key} must be boolean")
-
-        if key == 'auto_recording' and val not in valid_recording:
-            raise ValidationError(f"auto_recording must be one of: {valid_recording}")
-
-
 def validate_certificate_data_schema(value):
     """
     Validate certificate snapshot data JSON.

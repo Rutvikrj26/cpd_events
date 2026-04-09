@@ -592,7 +592,7 @@ class TestRegistrationPaymentFlow:
             patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config,
             patch('registrations.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'),
             patch('registrations.services.stripe_payment_service.retrieve_payment_intent', return_value=intent),
-            patch('registrations.tasks.add_zoom_registrant.delay'),
+            patch('registrations.tasks.send_registration_confirmation.delay'),
         ):
             mock_config.return_value = True
             response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/confirm-payment/')

@@ -9,7 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from common.permissions import IsOrganizer
+from common.permissions import IsEducatorOrAdmin
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import BaseModelViewSet
@@ -42,7 +42,7 @@ class ContactFilter(filters.FilterSet):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='tags')
+@roles('educator', 'admin', route_name='tags')
 class TagViewSet(BaseModelViewSet):
     """
     Manage tags.
@@ -52,39 +52,19 @@ class TagViewSet(BaseModelViewSet):
     GET /api/v1/tags/{uuid}/
     PATCH /api/v1/tags/{uuid}/
     DELETE /api/v1/tags/{uuid}/
-
-    Returns personal tags (organization=NULL) AND org-shared tags
-    for organizations the user belongs to.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
 
     def get_queryset(self):
-        from django.db.models import Q
-
-        user = self.request.user
-
-        # Personal tags (no org)
-        personal = Q(owner=user, organization__isnull=True)
-
-        # Org-shared tags (user is member of the org)
-        user_org_ids = user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
-        org_shared = Q(organization_id__in=user_org_ids)
-
-        return Tag.objects.filter(personal | org_shared).distinct()
+        if self.request.user.is_staff:
+            return Tag.objects.all()
+        return Tag.objects.filter(owner=self.request.user)
 
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
             return serializers.TagCreateSerializer
         return serializers.TagSerializer
-
-    def get_serializer_context(self):
-        """Add user's org IDs to context for create serializer."""
-        context = super().get_serializer_context()
-        context['user_org_ids'] = list(
-            self.request.user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
-        )
-        return context
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -117,7 +97,7 @@ class TagViewSet(BaseModelViewSet):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='contact_lists')
+@roles('educator', 'admin', route_name='contact_lists')
 class ContactListViewSet(BaseModelViewSet):
     """
     Manage contact lists.
@@ -127,26 +107,14 @@ class ContactListViewSet(BaseModelViewSet):
     GET /api/v1/contact-lists/{uuid}/
     PATCH /api/v1/contact-lists/{uuid}/
     DELETE /api/v1/contact-lists/{uuid}/
-
-    Returns personal lists (organization=NULL) AND org-shared lists
-    for organizations the user belongs to.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
 
     def get_queryset(self):
-        from django.db.models import Q
-
-        user = self.request.user
-
-        # Personal lists (no org)
-        personal = Q(owner=user, organization__isnull=True)
-
-        # Org-shared lists (user is member of the org)
-        user_org_ids = user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
-        org_shared = Q(organization_id__in=user_org_ids)
-
-        return ContactList.objects.filter(personal | org_shared).distinct()
+        if self.request.user.is_staff:
+            return ContactList.objects.all()
+        return ContactList.objects.filter(owner=self.request.user)
 
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
@@ -154,14 +122,6 @@ class ContactListViewSet(BaseModelViewSet):
         if self.action == 'retrieve':
             return serializers.ContactListDetailSerializer
         return serializers.ContactListSerializer
-
-    def get_serializer_context(self):
-        """Add user's org IDs to context for create serializer."""
-        context = super().get_serializer_context()
-        context['user_org_ids'] = list(
-            self.request.user.organization_memberships.filter(is_active=True).values_list('organization_id', flat=True)
-        )
-        return context
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -265,7 +225,7 @@ class ContactListViewSet(BaseModelViewSet):
 # =============================================================================
 
 
-@roles('organizer', 'admin', route_name='contacts')
+@roles('educator', 'admin', route_name='contacts')
 class ContactViewSet(BaseModelViewSet):
     """
     Manage contacts.
@@ -280,7 +240,7 @@ class ContactViewSet(BaseModelViewSet):
     Tags are used for segmentation instead of multiple lists.
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
     filterset_class = ContactFilter
     search_fields = ['email', 'full_name', 'organization_name']
     ordering_fields = ['full_name', 'email', 'created_at', 'events_attended_count']
@@ -291,6 +251,8 @@ class ContactViewSet(BaseModelViewSet):
         return ContactList.get_or_create_for_user(self.request.user)
 
     def get_queryset(self):
+        if self.request.user.is_staff:
+            return Contact.objects.all().prefetch_related('tags')
         contact_list = self._get_user_list()
         return Contact.objects.filter(contact_list=contact_list).prefetch_related('tags')
 

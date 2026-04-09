@@ -21,7 +21,6 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from '@/components/ui/skeleton';
-import { useOrganization } from '@/contexts/OrganizationContext';
 import { getOrganizationCourses, getOwnedCourses, deleteCourse, Course } from '@/api/courses';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -39,9 +38,9 @@ import {
 const OrgCoursesPage = () => {
     const { slug } = useParams<{ slug: string }>();
     const navigate = useNavigate();
-    const { currentOrg, isManager } = useOrganization();
     const isPersonal = !slug;
-    const isInstructor = Boolean(currentOrg?.user_role === 'instructor');
+    // TODO: Replace with direct permission check when per-user role API is available
+    const isInstructor = false;
 
     const [courses, setCourses] = useState<Course[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -50,9 +49,8 @@ const OrgCoursesPage = () => {
     const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
 
     useEffect(() => {
-        if (!isPersonal && !currentOrg) return;
         loadCourses();
-    }, [slug, currentOrg, isPersonal]);
+    }, [slug, isPersonal]);
 
     const loadCourses = async () => {
         setIsLoading(true);
@@ -144,7 +142,7 @@ const OrgCoursesPage = () => {
                     </p>
                 </div>
 
-                {(isPersonal || isManager()) && (
+                {(isPersonal || true) && (
                     <Button onClick={() => navigate(isPersonal ? `/courses/manage/new` : `/org/${slug}/courses/new`)}>
                         <Plus className="mr-2 h-4 w-4" />
                         Create Course

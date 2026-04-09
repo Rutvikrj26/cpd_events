@@ -69,6 +69,15 @@ services:
       # GCP emulators for local development
       CLOUD_TASKS_EMULATOR_HOST: cloud-tasks-emulator:8123
       GCS_EMULATOR_HOST: http://gcs-emulator:4443
+      # LiveKit configuration
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: secret_dev_key_change_in_production
+      LIVEKIT_HOST: http://livekit:7880
+      LIVEKIT_WS_URL: ws://localhost:7880
+      # Deployment configuration
+      DEPLOYMENT_MODE: single_tenant
+      REGISTRATION_MODE: invite_only
+      INSTITUTION_NAME: Accredit
     depends_on:
       db:
         condition: service_healthy
@@ -78,6 +87,38 @@ services:
         condition: service_healthy
     stdin_open: true
     tty: true
+
+  # LiveKit Video Conferencing Server
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: cpd_livekit
+    command: --config /etc/livekit.yaml --bind 0.0.0.0
+    ports:
+      - "7880:7880"      # HTTP API + WebSocket signaling
+      - "7881:7881"      # RTC (WebRTC TCP)
+      - "7882:7882/udp"  # RTC (WebRTC UDP)
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7880"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # LiveKit Egress (Recording Service)
+  livekit-egress:
+    image: livekit/egress:latest
+    container_name: cpd_livekit_egress
+    environment:
+      EGRESS_CONFIG_FILE: /etc/egress.yaml
+    volumes:
+      - ./egress.yaml:/etc/egress.yaml:ro
+      - recording_data:/recordings
+    depends_on:
+      livekit:
+        condition: service_healthy
+    restart: unless-stopped
 
   # Frontend React Application (optional - if you want to dockerize frontend too)
   # frontend:
@@ -101,3 +142,4 @@ volumes:
   gcs_data:
   backend_static:
   backend_media:
+  recording_data:

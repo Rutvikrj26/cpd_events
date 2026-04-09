@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Calendar, Clock, Edit2, Video, GripVertical } from 'lucide-react';
+import { Plus, Trash2, Calendar, Clock, Edit2, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,7 +33,6 @@ export interface SessionDraft {
     duration_minutes: number;
     timezone: string;
     session_type: 'live' | 'recorded' | 'hybrid';
-    zoom_enabled: boolean;
     cpd_credits: number;
     is_mandatory: boolean;
     minimum_attendance_percent: number;
@@ -55,7 +54,6 @@ const defaultSession = (): SessionDraft => ({
     duration_minutes: 60,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     session_type: 'live',
-    zoom_enabled: true,
     cpd_credits: 0,
     is_mandatory: true,
     minimum_attendance_percent: 80,
@@ -146,12 +144,6 @@ export function SessionScheduler({ sessions, onChange, disabled }: SessionSchedu
                                             <span className="font-medium truncate">
                                                 {session.title || 'Untitled Session'}
                                             </span>
-                                            {session.zoom_enabled && (
-                                                <Badge variant="secondary" className="text-xs">
-                                                    <Video className="mr-1 h-3 w-3" />
-                                                    Zoom
-                                                </Badge>
-                                            )}
                                             {session.is_mandatory && (
                                                 <Badge variant="outline" className="text-xs">
                                                     Required
@@ -285,21 +277,6 @@ export function SessionScheduler({ sessions, onChange, disabled }: SessionSchedu
                             </div>
 
                             <div className="space-y-3 pt-2">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <Label>Enable Zoom Meeting</Label>
-                                        <p className="text-xs text-muted-foreground">
-                                            Automatically create a Zoom meeting
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        checked={editingSession.zoom_enabled}
-                                        onCheckedChange={(checked) =>
-                                            setEditingSession({ ...editingSession, zoom_enabled: checked })
-                                        }
-                                    />
-                                </div>
-
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <Label>Required for Completion</Label>

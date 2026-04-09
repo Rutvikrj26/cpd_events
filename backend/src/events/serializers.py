@@ -140,10 +140,6 @@ class EventSessionDetailSerializer(BaseModelSerializer):
             'duration_minutes',
             'timezone',
             'session_type',
-            'has_separate_zoom',
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'zoom_host_url',
             'cpd_credits',
             'minimum_attendance_percent',
             'minimum_required_minutes',
@@ -159,8 +155,6 @@ class EventSessionDetailSerializer(BaseModelSerializer):
             'ends_at',
             'is_past',
             'minimum_required_minutes',
-            'zoom_meeting_id',
-            'zoom_join_url',
             'attendance_count',
             'created_at',
             'updated_at',
@@ -189,10 +183,6 @@ class EventSessionCreateSerializer(serializers.ModelSerializer):
             'minimum_attendance_percent',
             'is_mandatory',
             'is_published',
-            'has_separate_zoom',
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'zoom_host_url',
         ]
 
 
@@ -214,10 +204,6 @@ class EventSessionUpdateSerializer(serializers.ModelSerializer):
             'minimum_attendance_percent',
             'is_mandatory',
             'is_published',
-            'has_separate_zoom',
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'zoom_host_url',
         ]
 
 
@@ -307,7 +293,6 @@ class EventListSerializer(SoftDeleteModelSerializer):
     """Lightweight event for list views."""
 
     owner_name = serializers.SerializerMethodField()
-    organization_info = serializers.SerializerMethodField()
     registration_count = serializers.IntegerField(read_only=True)
     attendee_count = serializers.IntegerField(read_only=True)
     attendee_count = serializers.IntegerField(read_only=True)
@@ -331,7 +316,6 @@ class EventListSerializer(SoftDeleteModelSerializer):
             'attendee_count',
             'waitlist_count',
             'owner_name',
-            'organization_info',
             'is_public',
             'featured_image_url',
             'certificates_enabled',
@@ -342,17 +326,6 @@ class EventListSerializer(SoftDeleteModelSerializer):
 
     def get_owner_name(self, obj):
         return obj.owner.display_name
-
-    def get_organization_info(self, obj):
-        """Return organization info if event belongs to an organization."""
-        if obj.organization:
-            return {
-                'uuid': str(obj.organization.uuid),
-                'name': obj.organization.name,
-                'slug': obj.organization.slug,
-                'logo_url': obj.organization.logo.url if obj.organization.logo else None,
-            }
-        return None
 
     def get_featured_image_url(self, obj):
         """Return featured image URL."""
@@ -372,7 +345,6 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
     status_transitions = serializers.SerializerMethodField()
     # Field aliases to match API contract with model field names
     capacity = serializers.IntegerField(source='max_attendees', read_only=True)
-    zoom_passcode = serializers.CharField(source='zoom_password', read_only=True)
     cpd_credits = serializers.DecimalField(source='cpd_credit_value', max_digits=5, decimal_places=2, read_only=True)
     cpd_type = serializers.CharField(source='cpd_credit_type', read_only=True)
     featured_image_url = serializers.SerializerMethodField()
@@ -414,13 +386,6 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'waitlist_enabled',
             'waitlist_max',
             'waitlist_auto_promote',
-            # Zoom
-            'zoom_meeting_id',
-            'zoom_join_url',
-            'zoom_passcode',
-            'zoom_settings',
-            'zoom_error',
-            'zoom_error_at',
             # CPD
             'cpd_credits',
             'cpd_type',
@@ -461,8 +426,6 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'uuid',
             'slug',
             'status',
-            'zoom_meeting_id',
-            'zoom_join_url',
             'registration_count',
             'attendee_count',
             'waitlist_count',
@@ -512,7 +475,6 @@ class EventCreateSerializer(serializers.ModelSerializer):
     badge_template = serializers.SlugRelatedField(
         slug_field='uuid', queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
     )
-    organization = serializers.UUIDField(required=False, allow_null=True, write_only=True)
     speakers = serializers.SlugRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
 
     class Meta:
@@ -559,7 +521,6 @@ class EventCreateSerializer(serializers.ModelSerializer):
             # Attendance
             'minimum_attendance_percent',
             'minimum_attendance_minutes',
-            'zoom_settings',
             # Location
             'location',
             # Multi-session
@@ -567,8 +528,6 @@ class EventCreateSerializer(serializers.ModelSerializer):
             # Education
             'learning_objectives',
             'speakers',
-            # Organization (optional, for org-owned events)
-            'organization',
         ]
         read_only_fields = ['uuid', 'slug']
 
@@ -580,11 +539,6 @@ class EventCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         custom_fields_data = validated_data.pop('custom_fields', [])
         speakers_data = validated_data.pop('speakers', None)
-        organization_uuid = validated_data.pop('organization', None)
-
-        # Handle write-only organization UUID
-        if organization_uuid:
-            validated_data['organization_id'] = organization_uuid
 
         # Generate unique slug (M1)
         title = validated_data.get('title', '')
@@ -656,7 +610,6 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             'is_public',
             'minimum_attendance_percent',
             'minimum_attendance_minutes',
-            'zoom_settings',
             # Location
             'location',
             # Multi-session
@@ -717,7 +670,6 @@ class PublicEventListSerializer(serializers.ModelSerializer):
     """Public event list for discovery."""
 
     organizer_name = serializers.SerializerMethodField()
-    organization_info = serializers.SerializerMethodField()
     is_registration_open = serializers.SerializerMethodField()
     # Field aliases to match API contract with model field names
     cpd_credits = serializers.DecimalField(source='cpd_credit_value', max_digits=5, decimal_places=2, read_only=True)
@@ -739,7 +691,6 @@ class PublicEventListSerializer(serializers.ModelSerializer):
             'timezone',
             'cpd_credits',
             'organizer_name',
-            'organization_info',
             'featured_image_url',
             'is_registration_open',
             'registration_enabled',
@@ -750,17 +701,6 @@ class PublicEventListSerializer(serializers.ModelSerializer):
 
     def get_organizer_name(self, obj):
         return obj.owner.display_name
-
-    def get_organization_info(self, obj):
-        if obj.organization:
-            return {
-                'uuid': str(obj.organization.uuid),
-                'name': obj.organization.name,
-                'slug': obj.organization.slug,
-                'logo_url': obj.organization.effective_logo_url,
-                'primary_color': obj.organization.primary_color,
-            }
-        return None
 
     def get_is_registration_open(self, obj):
         now = timezone.now()

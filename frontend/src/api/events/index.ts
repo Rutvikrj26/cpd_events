@@ -110,6 +110,12 @@ export const getEventRegistrations = async (eventUuid: string): Promise<any[]> =
     return Array.isArray(response.data) ? response.data : response.data.results || [];
 };
 
+// Get single registration detail (includes custom_field_responses)
+export const getRegistrationDetail = async (eventUuid: string, registrationUuid: string): Promise<any> => {
+    const response = await client.get<any>(`/events/${eventUuid}/registrations/${registrationUuid}/`);
+    return response.data;
+};
+
 export const checkInAttendee = async (eventUuid: string, registrationUuid: string, attended: boolean): Promise<any> => {
     const response = await client.patch<any>(`/events/${eventUuid}/registrations/${registrationUuid}/`, { attended });
     return response.data;
@@ -172,6 +178,7 @@ export const syncEventAttendance = async (eventUuid: string): Promise<{ task_id:
 
 export const matchParticipant = async (eventUuid: string, data: {
     registration_uuid: string;
+    // TODO: Rename these API fields when backend is updated to use generic participant fields
     zoom_user_email?: string;
     zoom_user_name?: string;
     zoom_join_time?: string;

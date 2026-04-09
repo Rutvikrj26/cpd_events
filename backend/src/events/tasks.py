@@ -44,7 +44,7 @@ def send_event_reminders(hours_before: int = 24):
                     'user_name': reg.user.full_name,
                     'event_title': event.title,
                     'event_date': event.starts_at.strftime('%B %d, %Y at %I:%M %p'),
-                    'join_url': event.zoom_join_url or '',
+                    'join_url': '',
                 },
             )
             count += 1
@@ -75,57 +75,6 @@ def auto_complete_events():
 
     logger.info(f"Auto-completed {count} events")
     return count
-
-
-@task()
-def create_zoom_meeting(event_id: int):
-    """
-    Create Zoom meeting for an event.
-    """
-    from accounts.services import zoom_service
-    from events.models import Event
-
-    try:
-        event = Event.objects.get(id=event_id)
-        result = zoom_service.create_meeting(event)
-
-        if not result.get('success'):
-            error_msg = result.get('error', 'Unknown Zoom error')
-            event.zoom_error = error_msg
-            event.zoom_error_at = timezone.now()
-            event.save(update_fields=['zoom_error', 'zoom_error_at', 'updated_at'])
-            logger.error(f"Failed to create Zoom meeting for event {event_id}: {error_msg}")
-            return False
-
-        # Clear error on success
-        if event.zoom_error:
-            event.zoom_error = ''
-            event.zoom_error_at = None
-            event.save(update_fields=['zoom_error', 'zoom_error_at', 'updated_at'])
-
-        return True
-    except Event.DoesNotExist:
-        return False
-
-
-@task()
-def sync_zoom_attendance(event_id: int):
-    """
-    Recalculate attendance statistics for an event.
-
-    Attendance data is collected via Zoom webhooks (participant_joined/left).
-    This task aggregates that data and updates registration attendance summaries.
-    """
-    from events.models import Event
-    from integrations.services import attendance_matcher
-
-    try:
-        event = Event.objects.get(id=event_id)
-        result = attendance_matcher.match_attendance(event)
-        logger.info(f"Synced attendance for event {event_id}: {result}")
-        return result
-    except Event.DoesNotExist:
-        return {}
 
 
 @task()

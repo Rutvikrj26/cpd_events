@@ -93,7 +93,7 @@ def up(backend, frontend):
             console.print("[green]Starting Backend...[/green]")
             start_process(
                 "backend",
-                ["poetry", "run", "python", "src/manage.py", "runserver"],
+                ["uv", "run", "python", "src/manage.py", "runserver"],
                 BACKEND_DIR,
                 LOGS_DIR / "backend.log",
                 backend_pid
@@ -227,7 +227,7 @@ def shell():
     console.print("[green]Opening Django Shell...[/green]")
     try:
         subprocess.run(
-            ["poetry", "run", "python", "src/manage.py", "shell"],
+            ["uv", "run", "python", "src/manage.py", "shell"],
             cwd=BACKEND_DIR,
             check=False
         )
@@ -254,10 +254,10 @@ def setup():
 
     # Backend Setup
     console.print("[cyan]Backend: Installing dependencies...[/cyan]")
-    subprocess.run(["poetry", "install"], cwd=BACKEND_DIR)
+    subprocess.run(["uv", "sync"], cwd=BACKEND_DIR)
 
     console.print("[cyan]Backend: Running migrations...[/cyan]")
-    subprocess.run(["poetry", "run", "python", "src/manage.py", "migrate"], cwd=BACKEND_DIR)
+    subprocess.run(["uv", "run", "python", "src/manage.py", "migrate"], cwd=BACKEND_DIR)
 
     # Frontend Setup
     console.print("[cyan]Frontend: Installing dependencies...[/cyan]")

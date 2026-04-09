@@ -2,23 +2,22 @@ export interface User {
     uuid: string;
     email: string;
     full_name: string;
-    account_type: 'attendee' | 'organizer' | 'course_manager' | 'admin';
+    roles: string[];
+    primary_role: 'learner' | 'educator' | 'course_manager' | 'admin';
     email_verified?: boolean;
     onboarding_completed?: boolean;
     is_active: boolean;
     date_joined: string;
     profile_image?: string;
-    // Organizer profile fields (from UserSerializer)
     organization_name?: string;
-    organizer_website?: string;
-    organizer_logo_url?: string;
-    organizer_bio?: string;
-    gst_hst_number?: string;
+    professional_title?: string;
+    bio?: string;
+    timezone?: string;
 }
 
 
 export interface LoginRequest {
-    email: string; // Backend uses 'email' field for auth
+    email: string;
     password: string;
 }
 
@@ -27,7 +26,6 @@ export interface SignupRequest {
     password: string;
     password_confirm: string;
     full_name: string;
-    account_type?: 'attendee' | 'organizer' | 'course_manager';
 }
 
 export interface RefreshTokenRequest {
@@ -42,18 +40,6 @@ export interface PasswordResetConfirm {
     token: string;
     new_password: string;
     new_password_confirm: string;
-}
-
-export interface OrganizerProfile {
-    organization_name: string;
-    bio?: string;
-    website?: string;
-}
-
-export interface UpgradeOrganizerRequest {
-    organization_name: string;
-    bio?: string;
-    website?: string;
 }
 
 export interface AuthResponse {
@@ -78,5 +64,59 @@ export interface PasswordChangeRequest {
 export interface NotificationPreferences {
     notify_event_reminders: boolean;
     notify_certificate_issued: boolean;
-    notify_marketing: boolean;
+}
+
+export interface UserSession {
+    uuid: string;
+    session_key: string;
+    ip_address: string;
+    user_agent: string;
+    device_type: string;
+    last_activity_at: string;
+    expires_at: string;
+    is_active: boolean;
+}
+
+// Admin types
+export interface AdminUserCreate {
+    email: string;
+    full_name: string;
+    password: string;
+    roles: string[];
+    professional_title?: string;
+    organization_name?: string;
+}
+
+export interface AdminUserUpdate {
+    full_name?: string;
+    professional_title?: string;
+    organization_name?: string;
+    is_active?: boolean;
+    roles?: string[];
+}
+
+export interface InviteUserRequest {
+    email: string;
+    full_name: string;
+    role: string;
+    message?: string;
+}
+
+export interface AcceptInvitationRequest {
+    token: string;
+    password: string;
+    password_confirm: string;
+}
+
+export interface UserInvitation {
+    uuid: string;
+    email: string;
+    full_name: string;
+    role: string;
+    invited_by_name: string | null;
+    is_used: boolean;
+    is_expired: boolean;
+    expires_at: string;
+    accepted_at: string | null;
+    created_at: string;
 }

@@ -44,14 +44,6 @@ class CertificateTemplate(SoftDeleteModel):
         related_name='certificate_templates',
         help_text="Organizer who owns this template",
     )
-    organization = models.ForeignKey(
-        'organizations.Organization',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='certificate_templates',
-        help_text="Organization that owns this template (null for individual organizers)",
-    )
 
     # =========================================
     # Basic Info
@@ -118,10 +110,13 @@ class CertificateTemplate(SoftDeleteModel):
     class Meta:
         db_table = 'certificate_templates'
         ordering = ['-created_at']
+        permissions = [
+            ("can_issue_certificate", "Can issue certificates"),
+            ("can_manage_templates", "Can manage certificate templates"),
+        ]
         indexes = [
             models.Index(fields=['owner']),
             models.Index(fields=['owner', 'is_active']),
-            models.Index(fields=['organization', 'is_shared']),
             models.Index(fields=['uuid']),
         ]
         verbose_name = 'Certificate Template'
@@ -452,11 +447,7 @@ class Certificate(SoftDeleteModel):
                 ),
                 'cpd_type': course.cpd_type,
                 'cpd_credits': str(course.cpd_credits),
-                'organizer_name': (
-                    course.organization.name
-                    if course.organization
-                    else (course.created_by.display_name if course.created_by else '')
-                ),
+                'organizer_name': (course.created_by.display_name if course.created_by else ''),
                 'issued_date': timezone.now().date().isoformat(),
                 'issued_datetime': timezone.now().isoformat(),
                 'type': 'course',

@@ -772,7 +772,7 @@ export function CoursePlayerPage() {
                         <div className="max-w-4xl mx-auto">
                             {/* Show sessions for hybrid courses */}
                             {course.format === 'hybrid' && sessions.length > 0 && (
-                                <SessionsPanel sessions={sessions} courseTitle={course.title} />
+                                <SessionsPanel sessions={sessions} courseTitle={course.title} courseUuid={course.uuid} />
                             )}
 
                             <div className="text-center py-12">

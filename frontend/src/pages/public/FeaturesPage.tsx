@@ -78,7 +78,7 @@ export function FeaturesPage() {
                                 <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
                                     <Video className="h-5 w-5" />
                                 </div>
-                                <h3 className="font-semibold text-sm">Zoom</h3>
+                                <h3 className="font-semibold text-sm">Video</h3>
                             </a>
                             <a href="#certificates" className="bg-card hover:bg-accent/5 border border-border hover:border-primary/50 rounded-xl p-4 text-center transition-all duration-300 hover:-translate-y-1 group">
                                 <div className="h-10 w-10 mx-auto bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-3 group-hover:bg-primary group-hover:text-white transition-colors">
@@ -141,23 +141,23 @@ export function FeaturesPage() {
                 ctaText="Start Building Courses"
             />
 
-            {/* Feature Highlight 3: Zoom Integration */}
+            {/* Feature Highlight 3: Video Conferencing */}
             <FeatureSection
                 id="zoom-integration"
-                badge="Zoom Integration"
+                badge="Built-in Video Conferencing"
                 title="Seamless Virtual Event Hosting"
-                description="Connect your Zoom account and run virtual events with automatic attendance tracking. No manual check-ins required."
+                description="Host virtual events with built-in video conferencing and automatic attendance tracking. No external accounts or software required."
                 features={[
-                    "One-click Zoom meeting and webinar creation",
+                    "Dedicated video rooms created automatically per event",
                     "Real-time attendance tracking per participant",
-                    "Automatic recording ingestion with visibility controls",
+                    "Session recordings with visibility controls",
                     "Session-level attendance for multi-day events",
                     "Attendance threshold for certificate eligibility"
                 ]}
                 visual={<ZoomIntegrationVisual />}
                 reversed={false}
                 ctaLink="/signup?role=organizer"
-                ctaText="Connect Zoom Now"
+                ctaText="Start Hosting Events"
             />
 
             {/* Feature Highlight 4: Certificates */}
@@ -400,7 +400,7 @@ function ZoomIntegrationVisual() {
                         <Video className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                        <h3 className="font-semibold text-foreground">Zoom Connected</h3>
+                        <h3 className="font-semibold text-foreground">Video Room Active</h3>
                         <p className="text-xs text-muted-foreground">Tracking attendance</p>
                     </div>
                 </div>

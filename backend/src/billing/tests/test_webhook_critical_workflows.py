@@ -2,7 +2,7 @@
 Tests for critical Stripe webhook workflows.
 
 Tests the fixes implemented for:
-1. account.updated webhook handling for both Organization AND User
+1. account.updated webhook handling for User
 2. charges_enabled validation before payment intent creation
 3. Race condition prevention with select_for_update locking
 """
@@ -19,54 +19,13 @@ from rest_framework import status
 
 @override_settings(STRIPE_WEBHOOK_SECRET='test_webhook_secret')
 class TestAccountUpdatedWebhook(TestCase):
-    """Tests for account.updated webhook handler supporting both Organization and User."""
+    """Tests for account.updated webhook handler supporting User."""
 
     endpoint = '/webhooks/stripe/'
 
     @patch('stripe.Webhook.construct_event')
-    def test_account_updated_updates_organization(self, mock_construct_event):
-        """account.updated should update Organization when stripe_connect_id matches."""
-        from accounts.models import User
-        from organizations.models import Organization
-
-        # Create an organizer
-        organizer = User.objects.create_user(
-            email='org_owner@test.com', password='testpass123', full_name='Org Owner', account_type='organizer'
-        )
-
-        org = Organization.objects.create(
-            name='Test Org',
-            created_by=organizer,
-            stripe_connect_id='acct_org_test123',
-            stripe_account_status='pending',
-            stripe_charges_enabled=False,
-        )
-
-        event_data = {
-            'type': 'account.updated',
-            'data': {
-                'object': {
-                    'id': 'acct_org_test123',
-                    'charges_enabled': True,
-                    'details_submitted': True,
-                }
-            },
-        }
-        mock_construct_event.return_value = event_data  # Return dict directly
-
-        response = self.client.post(
-            self.endpoint, json.dumps(event_data), content_type='application/json', HTTP_STRIPE_SIGNATURE='test_sig'
-        )
-
-        assert response.status_code == status.HTTP_200_OK
-
-        org.refresh_from_db()
-        assert org.stripe_charges_enabled is True
-        assert org.stripe_account_status == 'active'
-
-    @patch('stripe.Webhook.construct_event')
     def test_account_updated_updates_user(self, mock_construct_event):
-        """account.updated should update User when stripe_connect_id matches and no Org found."""
+        """account.updated should update User when stripe_connect_id matches."""
         from accounts.models import User
 
         # Create an organizer with Connect account
@@ -168,49 +127,6 @@ class TestAccountUpdatedWebhook(TestCase):
 class TestChargesEnabledValidation(TestCase):
     """Tests for charges_enabled validation before payment intent creation."""
 
-    def test_payment_intent_fails_when_org_charges_disabled(self):
-        """create_payment_intent should fail if organization has charges_enabled=False."""
-        from accounts.models import User
-        from billing.services import StripePaymentService
-        from events.models import Event
-        from organizations.models import Organization
-        from registrations.models import Registration
-
-        organizer = User.objects.create_user(
-            email='disabled_org@test.com', password='testpass123', full_name='Disabled Org Owner', account_type='organizer'
-        )
-
-        org = Organization.objects.create(
-            name='Disabled Org',
-            created_by=organizer,
-            stripe_connect_id='acct_disabled_org',
-            stripe_charges_enabled=False,  # Not enabled
-            stripe_account_status='pending',
-        )
-
-        event = Event.objects.create(
-            title='Paid Event',
-            owner=organizer,
-            organization=org,
-            price=Decimal('99.00'),
-            currency='usd',
-            status='published',
-            starts_at=timezone.now() + timedelta(days=7),
-        )
-
-        registration = Registration.objects.create(
-            event=event, email='attendee@test.com', full_name='Test Attendee', status='confirmed', payment_status='pending'
-        )
-
-        service = StripePaymentService()
-
-        with patch.object(StripePaymentService, 'is_configured', new_callable=PropertyMock) as mock_config:
-            mock_config.return_value = True
-            result = service.create_payment_intent(registration)
-
-        assert result['success'] is False
-        assert 'disabled' in result['error'].lower()
-
     def test_payment_intent_fails_when_user_charges_disabled(self):
         """create_payment_intent should fail if organizer user has charges_enabled=False."""
         from accounts.models import User
@@ -230,7 +146,6 @@ class TestChargesEnabledValidation(TestCase):
         event = Event.objects.create(
             title='Solo Paid Event',
             owner=organizer,
-            organization=None,
             price=Decimal('50.00'),
             currency='usd',
             status='published',
@@ -268,7 +183,6 @@ class TestChargesEnabledValidation(TestCase):
         event = Event.objects.create(
             title='Valid Paid Event',
             owner=organizer,
-            organization=None,
             price=Decimal('75.00'),
             currency='usd',
             status='published',

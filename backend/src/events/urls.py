@@ -6,7 +6,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from certificates.urls import certificate_router
-from integrations.urls import email_router, recording_router
+from integrations.urls import email_router
 from registrations.views import EventRegistrationViewSet
 
 from . import views
@@ -38,7 +38,6 @@ urlpatterns = [
     path('events/<uuid:event_uuid>/', include(custom_field_router.urls)),
     path('events/<uuid:event_uuid>/', include(session_router.urls)),
     path('events/<uuid:event_uuid>/', include(certificate_router.urls)),
-    path('events/<uuid:event_uuid>/', include(recording_router.urls)),
     path('events/<uuid:event_uuid>/', include(email_router.urls)),
     # Public events
     path('public/events/', views.PublicEventListView.as_view(), name='public_event_list'),

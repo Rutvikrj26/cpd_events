@@ -13,15 +13,13 @@ import { SettingsTab } from "./manage/SettingsTab";
 import { getCourseBySlug } from '@/api/courses';
 import { Course } from '@/api/courses/types';
 import { Loader2 } from 'lucide-react';
-import { useOrganization } from '@/contexts/OrganizationContext';
-
 export function CourseManagementPage() {
     const { slug, courseSlug } = useParams<{ slug?: string; courseSlug?: string }>();
     const [searchParams] = useSearchParams();
-    const { currentOrg } = useOrganization();
     const [course, setCourse] = useState<Course | null>(null);
     const [loading, setLoading] = useState(true);
-    const isInstructor = Boolean(slug && currentOrg?.user_role === 'instructor');
+    // TODO: Replace with direct permission check when per-user role API is available
+    const isInstructor = false;
 
     // Determine if sessions tab should be shown
     const showSessions = course?.format === 'hybrid';

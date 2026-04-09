@@ -15,11 +15,6 @@ class ContactList(BaseModel):
     Design:
     - Each organizer has exactly ONE personal list (auto-created)
     - Tags are used for segmentation instead of multiple lists
-    - Organizations can view member lists for cross-org visibility
-
-    Ownership:
-    - organization=NULL: personal list (only owner can access)
-    - organization=set: shared with org (all org members can access)
     """
 
     owner = models.ForeignKey(
@@ -27,14 +22,6 @@ class ContactList(BaseModel):
         on_delete=models.CASCADE,
         related_name='contact_lists',
         help_text="User who created this list",
-    )
-    organization = models.ForeignKey(
-        'organizations.Organization',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='contact_lists',
-        help_text="If set, list is shared with all org members",
     )
 
     name = models.CharField(max_length=100, help_text="List name")
@@ -46,23 +33,17 @@ class ContactList(BaseModel):
     class Meta:
         db_table = 'contact_lists'
         ordering = ['name']
+        permissions = [
+            ("can_manage_contacts", "Can manage contacts"),
+        ]
         indexes = [
             models.Index(fields=['owner']),
-            models.Index(fields=['organization']),
             models.Index(fields=['uuid']),
         ]
         constraints = [
-            # Personal lists: unique name per owner
             models.UniqueConstraint(
                 fields=['owner', 'name'],
-                condition=models.Q(organization__isnull=True),
-                name='unique_personal_contact_list_name',
-            ),
-            # Org lists: unique name per organization
-            models.UniqueConstraint(
-                fields=['organization', 'name'],
-                condition=models.Q(organization__isnull=False),
-                name='unique_org_contact_list_name',
+                name='unique_contact_list_name_per_owner',
             ),
         ]
         verbose_name = 'Contact List'
@@ -77,17 +58,11 @@ class ContactList(BaseModel):
         """
         contact_list, created = cls.objects.get_or_create(
             owner=user,
-            organization__isnull=True,
             defaults={
                 'name': 'My Contacts',
             },
         )
         return contact_list
-
-    @property
-    def is_shared(self):
-        """Check if this is an organization-shared list."""
-        return self.organization_id is not None
 
     def __str__(self):
         return f"{self.name} ({self.contact_count})"
@@ -99,11 +74,8 @@ class ContactList(BaseModel):
 
     def merge_into(self, target_list):
         """Merge this list into another list."""
-        # Must be same owner OR same organization
-        same_owner = target_list.owner == self.owner
-        same_org = self.organization_id and target_list.organization_id and self.organization_id == target_list.organization_id
-        if not (same_owner or same_org):
-            raise ValueError("Cannot merge lists from different owners or organizations")
+        if target_list.owner != self.owner:
+            raise ValueError("Cannot merge lists from different owners")
 
         for contact in self.contacts.all():
             if not Contact.objects.filter(contact_list=target_list, email=contact.email).exists():
@@ -117,7 +89,6 @@ class ContactList(BaseModel):
         """Create a copy of this list with all contacts."""
         new_list = ContactList.objects.create(
             owner=self.owner,
-            organization=self.organization,  # Preserve org context
             name=new_name or f"{self.name} (Copy)",
             description=self.description,
         )
@@ -265,8 +236,7 @@ class Tag(BaseModel):
     """
     Tag for categorizing contacts.
 
-    Tags are owned by a user and optionally shared with an organization.
-    If organization is set, all org members can use the tag.
+    Tags are owned by a user.
     """
 
     owner = models.ForeignKey(
@@ -274,14 +244,6 @@ class Tag(BaseModel):
         on_delete=models.CASCADE,
         related_name='tags',
         help_text="User who created this tag",
-    )
-    organization = models.ForeignKey(
-        'organizations.Organization',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='tags',
-        help_text="If set, tag is shared with all org members",
     )
 
     name = models.CharField(max_length=50, help_text="Tag name")
@@ -296,20 +258,11 @@ class Tag(BaseModel):
         ordering = ['name']
         indexes = [
             models.Index(fields=['owner']),
-            models.Index(fields=['organization']),
         ]
         constraints = [
-            # Personal tags: unique name per owner
             models.UniqueConstraint(
                 fields=['owner', 'name'],
-                condition=models.Q(organization__isnull=True),
-                name='unique_personal_tag_name',
-            ),
-            # Org tags: unique name per organization
-            models.UniqueConstraint(
-                fields=['organization', 'name'],
-                condition=models.Q(organization__isnull=False),
-                name='unique_org_tag_name',
+                name='unique_tag_name_per_owner',
             ),
         ]
         verbose_name = 'Tag'
@@ -318,11 +271,6 @@ class Tag(BaseModel):
     def __str__(self):
         return self.name
 
-    @property
-    def is_shared(self):
-        """Check if this is an organization-shared tag."""
-        return self.organization_id is not None
-
     def update_contact_count(self):
         """Update denormalized contact count."""
         self.contact_count = self.contacts.count()
@@ -330,11 +278,8 @@ class Tag(BaseModel):
 
     def merge_into(self, target_tag):
         """Merge this tag into another tag."""
-        # Must be same owner OR same organization
-        same_owner = target_tag.owner == self.owner
-        same_org = self.organization_id and target_tag.organization_id and self.organization_id == target_tag.organization_id
-        if not (same_owner or same_org):
-            raise ValueError("Cannot merge tags from different owners or organizations")
+        if target_tag.owner != self.owner:
+            raise ValueError("Cannot merge tags from different owners")
 
         for contact in self.contacts.all():
             contact.tags.add(target_tag)

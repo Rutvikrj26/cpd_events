@@ -1,17 +1,19 @@
 import React from 'react';
-import { Video, Calendar, Clock, ExternalLink, Users, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Video, Calendar, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { JoinButton } from '@/components/video/JoinButton';
 import { CourseSession } from '@/api/courses/types';
 
 interface SessionsPanelProps {
     sessions: CourseSession[];
     courseTitle: string;
+    courseUuid: string;
 }
 
-export function SessionsPanel({ sessions, courseTitle }: SessionsPanelProps) {
+export function SessionsPanel({ sessions, courseTitle, courseUuid }: SessionsPanelProps) {
     if (sessions.length === 0) {
         return null;
     }
@@ -146,28 +148,16 @@ export function SessionsPanel({ sessions, courseTitle }: SessionsPanelProps) {
                                     </div>
 
                                     <div className="flex-shrink-0">
-                                        {session.zoom_join_url && canJoin ? (
-                                            <Button
-                                                variant={status === 'live' ? 'default' : 'outline'}
-                                                size="sm"
-                                                asChild
-                                            >
-                                                <a
-                                                    href={session.zoom_join_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                >
-                                                    <ExternalLink className="mr-2 h-4 w-4" />
-                                                    {status === 'live' ? 'Join Now' : 'Join'}
-                                                </a>
-                                            </Button>
-                                        ) : session.zoom_error ? (
-                                            <Badge variant="destructive" className="text-xs">
-                                                Zoom Error
-                                            </Badge>
-                                        ) : status === 'past' ? (
+                                        {status === 'past' ? (
                                             <Badge variant="secondary">Completed</Badge>
-                                        ) : null}
+                                        ) : (
+                                            <JoinButton
+                                                courseUuid={courseUuid}
+                                                sessionUuid={session.uuid}
+                                                size="sm"
+                                                label="Join"
+                                            />
+                                        )}
                                     </div>
                                 </div>
                             </div>

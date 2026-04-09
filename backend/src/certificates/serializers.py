@@ -16,9 +16,6 @@ from .models import Certificate, CertificateStatusHistory, CertificateTemplate
 class CertificateTemplateListSerializer(SoftDeleteModelSerializer):
     """Lightweight template for list views."""
 
-    organization_name = serializers.CharField(source='organization.name', read_only=True, allow_null=True)
-    is_org_template = serializers.SerializerMethodField()
-
     class Meta:
         model = CertificateTemplate
         fields = [
@@ -30,23 +27,15 @@ class CertificateTemplateListSerializer(SoftDeleteModelSerializer):
             'field_positions',
             'version',
             'is_default',
-            'is_shared',
             'is_latest_version',
             'usage_count',
-            'organization_name',
-            'is_org_template',
             'created_at',
         ]
         read_only_fields = fields
 
-    def get_is_org_template(self, obj):
-        return obj.organization_id is not None
-
 
 class CertificateTemplateDetailSerializer(SoftDeleteModelSerializer):
     """Full template detail."""
-
-    organization_name = serializers.CharField(source='organization.name', read_only=True, allow_null=True)
 
     class Meta:
         model = CertificateTemplate
@@ -62,10 +51,8 @@ class CertificateTemplateDetailSerializer(SoftDeleteModelSerializer):
             'height_px',
             'orientation',
             'is_default',
-            'is_shared',
             'is_latest_version',
             'usage_count',
-            'organization_name',
             'original_template',
             'created_at',
             'updated_at',
@@ -75,7 +62,6 @@ class CertificateTemplateDetailSerializer(SoftDeleteModelSerializer):
             'version',
             'is_latest_version',
             'usage_count',
-            'organization_name',
             'original_template',
             'created_at',
             'updated_at',
@@ -324,10 +310,8 @@ class PublicCertificateVerificationSerializer(serializers.ModelSerializer):
     def get_organizer(self, obj):
         if obj.event:
             return {'display_name': obj.event.owner.display_name}
-        elif obj.course_enrollment and obj.course_enrollment.course.organization:
-             return {'display_name': obj.course_enrollment.course.organization.name}
-        elif obj.course_enrollment:
-             return {'display_name': obj.course_enrollment.course.created_by.display_name}
+        elif obj.course_enrollment and obj.course_enrollment.course.created_by:
+            return {'display_name': obj.course_enrollment.course.created_by.display_name}
         return {'display_name': 'Unknown'}
 
     def get_is_valid(self, obj):

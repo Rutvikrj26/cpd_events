@@ -34,14 +34,6 @@ class PromoCode(BaseModel):
     owner = models.ForeignKey(
         'accounts.User', on_delete=models.CASCADE, related_name='promo_codes', help_text="Organizer who created this code"
     )
-    organization = models.ForeignKey(
-        'organizations.Organization',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='promo_codes',
-        help_text="Organization that owns this code",
-    )
 
     # =========================================
     # Code Details

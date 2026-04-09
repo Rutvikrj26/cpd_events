@@ -4,7 +4,6 @@ import {
     CheckCircle,
     Circle,
     User,
-    Video,
     Calendar,
     CreditCard,
     BookOpen,
@@ -17,9 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import { getZoomStatus } from '@/api/integrations';
 import { getEvents } from '@/api/events';
-import { getSubscription } from '@/api/billing';
 import { getOwnedCourses } from '@/api/courses';
 import { getRoleFlags } from '@/lib/role-utils';
 
@@ -61,22 +58,21 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
             }
 
             const checklistItems: ChecklistItem[] = [];
-            const subscription = await getSubscription().catch(() => null);
-            const { isOrganizer, isCourseManager } = getRoleFlags(user, subscription);
+            const { isEducator, isCourseManager } = getRoleFlags(user);
 
-            if (!isOrganizer && !isCourseManager) {
+            if (!isEducator && !isCourseManager) {
                 setLoading(false);
                 return;
             }
 
             // 1. Complete Profile
-            const hasProfile = isOrganizer
+            const hasProfile = isEducator
                 ? !!(user?.full_name && user?.organization_name)
                 : !!user?.full_name;
             checklistItems.push({
                 id: 'profile',
                 title: 'Complete your profile',
-                description: isOrganizer
+                description: isEducator
                     ? 'Add your organization name and details'
                     : 'Add your personal details and preferences',
                 icon: User,
@@ -85,34 +81,8 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
                 action: 'Complete Profile'
             });
 
-            // 2. Connect Zoom (organizer or course manager)
-            if (isOrganizer || isCourseManager) {
-                try {
-                    const zoomStatus = await getZoomStatus();
-                    checklistItems.push({
-                        id: 'zoom',
-                        title: 'Connect Zoom account',
-                        description: 'Enable automatic meeting creation',
-                        icon: Video,
-                        completed: zoomStatus.is_connected,
-                        href: '/organizer/zoom',
-                        action: 'Connect Zoom'
-                    });
-                } catch {
-                    checklistItems.push({
-                        id: 'zoom',
-                        title: 'Connect Zoom account',
-                        description: 'Enable automatic meeting creation',
-                        icon: Video,
-                        completed: false,
-                        href: '/organizer/zoom',
-                        action: 'Connect Zoom'
-                    });
-                }
-            }
-
             // 3. Create First Event
-            if (isOrganizer) {
+            if (isEducator) {
                 try {
                     const events = await getEvents();
                     checklistItems.push({

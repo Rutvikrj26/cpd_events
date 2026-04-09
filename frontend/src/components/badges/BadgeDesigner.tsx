@@ -196,7 +196,7 @@ export function BadgeDesigner({
                     {/* Sidebar */}
                     <div className="w-80 border-l bg-gray-50 p-4 space-y-6 overflow-y-auto">
                         <div className="space-y-4">
-                            <h3 className="font-semibold text-foreground border-b pb-2">Zoom</h3>
+                            <h3 className="font-semibold text-foreground border-b pb-2">Scale</h3>
                             <div className="flex items-center gap-2">
                                 <Button variant="outline" size="icon" onClick={() => setScale(s => Math.max(0.2, s - 0.1))}>
                                     <ZoomOut className="h-4 w-4" />

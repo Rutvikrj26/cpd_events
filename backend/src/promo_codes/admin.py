@@ -22,7 +22,7 @@ class PromoCodeAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'discount_type', 'first_time_only']
     search_fields = ['code', 'description', 'owner__email']
     readonly_fields = ['uuid', 'current_uses', 'created_at', 'updated_at']
-    raw_id_fields = ['owner', 'organization']
+    raw_id_fields = ['owner']
     filter_horizontal = ['events']
 
     def discount_display(self, obj):

@@ -4,26 +4,22 @@ Centralized configuration constants for the CPD Events backend.
 This module provides a single entry point for all application constants,
 organized by domain. Import from here for cleaner code:
 
-    from common.config import TrialConfig, EventDuration, Pagination
+    from common.config import EventDuration, Pagination
 
 Or import specific modules:
 
-    from common.config.billing import TrialConfig, IndividualPlanLimits
     from common.config.events import EventDuration, AttendanceThresholds
-
-All constants are validated at import time - invalid values will raise
-ImproperlyConfigured exceptions immediately.
+    from common.config.deployment import DEPLOYMENT_MODE, INSTITUTION_NAME
 
 Modules:
-- billing: Trial periods, plan limits, Stripe configuration
+- deployment: Deployment mode, registration mode, institution branding
 - events: Duration limits, attendance thresholds, session defaults
-- accounts: Token expiry, JWT settings, Zoom integration
+- accounts: Token expiry, JWT settings
 - learning: Scoring defaults, assignment settings, course settings
 - integrations: Webhook settings, error truncation, feedback ratings
 - api: Pagination, throttling, upload limits, certificate dimensions
 """
 
-# Billing configuration
 # Accounts configuration
 from .accounts import (
     JwtConfig,
@@ -40,13 +36,13 @@ from .api import (
     UploadLimits,
     VerificationCodes,
 )
-from .billing import (
-    DefaultPlan,
-    IndividualPlanLimits,
-    OrganizationPlanLimits,
-    PlatformFees,
-    TicketingFees,
-    TicketingTaxCodes,
+
+# Deployment configuration
+from .deployment import (
+    DEPLOYMENT_MODE,
+    INSTITUTION_LOGO_URL,
+    INSTITUTION_NAME,
+    REGISTRATION_MODE,
 )
 
 # Events configuration
@@ -74,13 +70,11 @@ from .learning import (
 )
 
 __all__ = [
-    # Billing
-    'PlatformFees',
-    'TicketingFees',
-    'TicketingTaxCodes',
-    'IndividualPlanLimits',
-    'OrganizationPlanLimits',
-    'DefaultPlan',
+    # Deployment
+    'DEPLOYMENT_MODE',
+    'REGISTRATION_MODE',
+    'INSTITUTION_NAME',
+    'INSTITUTION_LOGO_URL',
     # Events
     'EventDuration',
     'AttendanceThresholds',

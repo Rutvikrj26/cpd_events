@@ -56,8 +56,6 @@ class CourseService:
         # 2. Create/Activate Enrollment (with retry for locking)
         import time
 
-        from accounts.services import zoom_service
-
         max_retries = 3
         enrollment = None
 
@@ -101,34 +99,5 @@ class CourseService:
         else:
             # Loop finished without breaking = failed all retries
             return {'success': False, 'error': 'Failed to confirm enrollment after retries'}
-
-        # 3. Synchronous Zoom Registration (if hybrid)
-        if enrollment and course.format == 'hybrid' and course.zoom_meeting_id:
-            try:
-                # Split full name
-                full_name = getattr(user, 'full_name', '').strip()
-                if ' ' in full_name:
-                    first_name, last_name = full_name.rsplit(' ', 1)
-                else:
-                    first_name = full_name
-                    last_name = '.' # Zoom requires last name
-
-                zoom_result = zoom_service.add_meeting_registrant(
-                    event=course,
-                    email=user.email,
-                    first_name=first_name,
-                    last_name=last_name
-                )
-
-                if zoom_result['success']:
-                    enrollment.zoom_join_url = zoom_result['join_url']
-                    enrollment.zoom_registrant_id = zoom_result['registrant_id']
-                    enrollment.save(update_fields=['zoom_join_url', 'zoom_registrant_id', 'updated_at'])
-                else:
-                    logger.warning(f"Failed to register user {user.email} for Zoom meeting {course.zoom_meeting_id}: {zoom_result.get('error')}")
-
-            except Exception as e:
-                 logger.error(f"Error during Zoom registration: {e}")
-                 # We don't fail the enrollment, just log
 
         return {'success': True, 'enrollment': enrollment}

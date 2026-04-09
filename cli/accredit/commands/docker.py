@@ -155,7 +155,7 @@ def init():
     console.print("[cyan]2. Running database migrations...[/cyan]")
     try:
         subprocess.run(
-            ["docker-compose", "exec", "backend", "poetry", "run", "python", "src/manage.py", "migrate"],
+            ["docker-compose", "exec", "backend", "uv", "run", "python", "src/manage.py", "migrate"],
             cwd=CLI_DIR,
             check=True
         )
@@ -166,7 +166,7 @@ def init():
 
     console.print("\n[bold green]✓ Docker environment initialized successfully![/bold green]")
     console.print("\nNext steps:")
-    console.print("  • Create superuser: [cyan]accredit docker exec backend poetry run python src/manage.py createsuperuser[/cyan]")
+    console.print("  • Create superuser: [cyan]accredit docker exec backend uv run python src/manage.py createsuperuser[/cyan]")
     console.print("  • Access API: [cyan]http://localhost:8000[/cyan]")
 
 

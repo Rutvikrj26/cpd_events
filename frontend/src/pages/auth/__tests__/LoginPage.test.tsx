@@ -57,8 +57,4 @@ describe("LoginPage", () => {
         expect(screen.getByText(/remember me/i)).toBeInTheDocument();
     });
 
-    it("has Zoom sign in button", () => {
-        renderLoginPage();
-        expect(screen.getByRole("button", { name: /sign in with zoom/i })).toBeInTheDocument();
-    });
 });

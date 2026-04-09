@@ -1,29 +1,44 @@
 /**
  * RBAC Manifest types and API.
- * 
+ *
  * The manifest is returned by the backend and contains:
- * - The user's role
+ * - The user's roles (Django Groups)
  * - Which routes they can access
  * - Which features are enabled for them
+ * - Deployment configuration
  */
 
 import client from '../client';
 
+export interface DeploymentConfig {
+    mode: 'single_tenant' | 'saas';
+    registration_mode: 'invite_only' | 'admin_approval' | 'open';
+    institution_name: string;
+    institution_logo_url: string;
+}
+
 export interface Manifest {
-    role: 'attendee' | 'organizer' | 'course_manager' | 'admin';
-    is_admin: boolean;
+    user: {
+        roles: string[];
+        primary_role: 'learner' | 'educator' | 'course_manager' | 'admin';
+        is_staff: boolean;
+    };
     routes: string[];
     features: {
         create_events: boolean;
         create_courses: boolean;
         manage_certificates: boolean;
-        view_billing: boolean;
+        manage_contacts: boolean;
+        manage_badges: boolean;
+        manage_video: boolean;
+        manage_users: boolean;
+        configure_billing: boolean;
         browse_events: boolean;
         register_for_events: boolean;
         view_own_registrations: boolean;
         view_own_certificates: boolean;
-        can_create_organization: boolean;
     };
+    deployment: DeploymentConfig;
 }
 
 /**

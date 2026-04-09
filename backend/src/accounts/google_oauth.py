@@ -23,13 +23,13 @@ def get_google_credentials():
     return client_id, client_secret, redirect_uri
 
 
-def get_google_auth_url(state: str | None = None):
+def get_google_auth_url(state: str):
     """
     Generate the Google OAuth authorization URL.
-    
+
     Args:
-        state: Optional state parameter for CSRF protection
-    
+        state: CSRF state parameter (required)
+
     Returns:
         Authorization URL string
     """
@@ -40,12 +40,10 @@ def get_google_auth_url(state: str | None = None):
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "scope": "openid email profile",
-        "access_type": "offline",  # Request refresh token
-        "prompt": "select_account",  # Always show account picker
+        "access_type": "offline",
+        "prompt": "select_account",
+        "state": state,
     }
-
-    if state:
-        params["state"] = state
 
     base_url = "https://accounts.google.com/o/oauth2/v2/auth"
     return f"{base_url}?{urlencode(params)}"

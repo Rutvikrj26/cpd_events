@@ -1,0 +1,8 @@
+api_key: devkey
+api_secret: secret_dev_key_change_in_production
+ws_url: ws://livekit:7880
+
+# Local file output for development
+file_output:
+  local: true
+  output_directory: /recordings

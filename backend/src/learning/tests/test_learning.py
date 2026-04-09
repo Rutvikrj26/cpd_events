@@ -218,72 +218,25 @@ class TestCourseViewSet:
 
     endpoint = '/api/v1/courses/'
 
-    def test_list_courses(self, organizer_client, course):
-        """Organizer can list their courses."""
-        response = organizer_client.get(self.endpoint)
+    def test_list_courses(self, course_manager_client, course):
+        """Course manager can list their courses."""
+        response = course_manager_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
 
-    def test_create_course(self, organizer_client, course):
-        """Organizer can create a course."""
-        # Need organization slug
-        from organizations.models import OrganizationMembership
-
-        membership = OrganizationMembership.objects.get(
-            organization=course.organization,
-            user=course.organization.created_by,
-        )
-        membership.role = OrganizationMembership.Role.COURSE_MANAGER
-        membership.save(update_fields=['role'])
-
+    def test_create_course(self, course_manager_client):
+        """Course manager can create a course."""
         data = {
             'title': 'New Course',
             'slug': 'new-course',
             'description': 'Course description',
-            'organization_slug': course.organization.slug,
         }
-        response = organizer_client.post(self.endpoint, data)
+        response = course_manager_client.post(self.endpoint, data)
         assert response.status_code == status.HTTP_201_CREATED
 
-    def test_publish_course(self, organizer_client, course):
-        """Organizer can publish a course."""
-        from organizations.models import OrganizationMembership
-
-        membership = OrganizationMembership.objects.get(
-            organization=course.organization,
-            user=course.organization.created_by,
-        )
-        membership.role = OrganizationMembership.Role.COURSE_MANAGER
-        membership.save(update_fields=['role'])
-
-        response = organizer_client.post(f'{self.endpoint}{course.uuid}/publish/')
+    def test_publish_course(self, course_manager_client, course):
+        """Course manager can publish a course."""
+        response = course_manager_client.post(f'{self.endpoint}{course.uuid}/publish/')
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-
-    def test_org_admin_can_update_org_course(self, organizer_client, organization, course_manager):
-        """Org admin can update courses owned by other course managers in the org."""
-        from factories import CourseFactory
-        from organizations.models import OrganizationMembership
-
-        OrganizationMembership.objects.create(
-            organization=organization,
-            user=course_manager,
-            role=OrganizationMembership.Role.COURSE_MANAGER,
-            is_active=True,
-        )
-        course = CourseFactory(
-            organization=organization,
-            created_by=course_manager,
-            title='Org Course',
-        )
-
-        response = organizer_client.patch(
-            f'{self.endpoint}{course.uuid}/',
-            {
-                'title': 'Updated Course Title',
-            },
-        )
-        assert response.status_code == status.HTTP_200_OK
-        course.refresh_from_db()
-        assert course.title == 'Updated Course Title'
 
 
 # =============================================================================

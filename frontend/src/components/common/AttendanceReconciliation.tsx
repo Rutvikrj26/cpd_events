@@ -93,7 +93,7 @@ export function AttendanceReconciliation({
                             <div>
                                 <p className="font-medium text-success-muted">All Attendance Matched</p>
                                 <p className="text-sm text-success">
-                                    No unmatched Zoom participants found.
+                                    No unmatched participants found.
                                 </p>
                             </div>
                         </div>
@@ -116,7 +116,7 @@ export function AttendanceReconciliation({
                         <div>
                             <CardTitle className="text-base">{title}</CardTitle>
                             <CardDescription>
-                                {description || `${unmatchedParticipants.length} Zoom participant${unmatchedParticipants.length !== 1 ? 's' : ''} not linked to registration`}
+                                {description || `${unmatchedParticipants.length} unmatched participant${unmatchedParticipants.length !== 1 ? 's' : ''} not linked to registration`}
                             </CardDescription>
                         </div>
                     </div>

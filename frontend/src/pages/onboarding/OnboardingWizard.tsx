@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Rocket,
     User,
-    Video,
     Calendar,
     BookOpen,
     ArrowRight,
@@ -12,7 +11,6 @@ import {
     Check,
     Crown,
     Loader2,
-    ExternalLink,
     Building2,
     CreditCard
 } from 'lucide-react';
@@ -24,8 +22,6 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/AuthContext';
 import { updateProfile, completeOnboarding } from '@/api/accounts';
-import { initiateZoomOAuth, getZoomStatus } from '@/api/integrations';
-import { ZoomStatus } from '@/api/integrations/types';
 import { createCheckoutSession } from '@/api/billing';
 import { getSubscription } from '@/api/billing';
 import { Subscription } from '@/api/billing/types';
@@ -51,20 +47,16 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         full_name: user?.full_name || '',
     });
 
-    // Zoom state
-    const [zoomStatus, setZoomStatus] = useState<ZoomStatus | null>(null);
-    const [zoomChecked, setZoomChecked] = useState(false);
-
     // Billing state
     const [subscription, setSubscription] = useState<Subscription | null>(null);
     const [billingChecked, setBillingChecked] = useState(false);
     const [addingPayment, setAddingPayment] = useState(false);
 
-    const isLmsOnly = subscription?.plan === 'lms' || (!subscription && user?.account_type === 'course_manager');
-    const isAttendee = user?.account_type === 'attendee';
-    const planLabel = subscription?.plan_display || (isLmsOnly ? 'LMS' : isAttendee ? 'Free' : 'Organizer');
+    const isLmsOnly = subscription?.plan === 'lms' || (!subscription && user?.primary_role === 'course_manager');
+    const isLearner = user?.primary_role === 'learner';
+    const planLabel = subscription?.plan_display || (isLmsOnly ? 'LMS' : isLearner ? 'Free' : 'Educator');
 
-    const steps = isAttendee
+    const steps = isLearner
         ? [
             { id: 'welcome', title: 'Welcome', icon: Rocket },
             { id: 'complete', title: 'Get Started', icon: Calendar },
@@ -80,7 +72,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                 { id: 'welcome', title: 'Welcome', icon: Rocket },
                 { id: 'profile', title: 'Your Profile', icon: User },
                 { id: 'billing', title: 'Billing', icon: CreditCard },
-                { id: 'integrations', title: 'Integrations', icon: Video },
                 { id: 'complete', title: 'Get Started', icon: Calendar },
             ];
 
@@ -116,16 +107,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         }
     };
 
-    const checkZoomStatus = async () => {
-        try {
-            const status = await getZoomStatus();
-            setZoomStatus(status);
-            setZoomChecked(true);
-        } catch {
-            setZoomChecked(true);
-        }
-    };
-
     const checkBillingStatus = async () => {
         try {
             const sub = await getSubscription();
@@ -133,20 +114,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             setBillingChecked(true);
         } catch {
             setBillingChecked(true);
-        }
-    };
-
-    const handleConnectZoom = async () => {
-        try {
-            const url = await initiateZoomOAuth();
-            // Store that we're in onboarding so callback can redirect back
-            const stepIndex = getStepIndex('integrations');
-            if (stepIndex >= 0) {
-                sessionStorage.setItem('onboarding_redirect', `/onboarding?step=${stepIndex}`);
-            }
-            window.location.href = url;
-        } catch (error) {
-            toast.error("Failed to initiate Zoom connection");
         }
     };
 
@@ -195,20 +162,13 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         setSearchParams({ step: currentStep.toString() }, { replace: true });
     }, [currentStep, setSearchParams]);
 
-    // Load zoom status when reaching integrations step
-    React.useEffect(() => {
-        if (stepId === 'integrations' && !zoomChecked) {
-            checkZoomStatus();
-        }
-    }, [stepId, zoomChecked]);
-
     // Load billing status when reaching billing step
     React.useEffect(() => {
         // Fetch subscription data on mount for non-attendees (needed for trial days on welcome step)
-        if (!isAttendee && !billingChecked) {
+        if (!isLearner && !billingChecked) {
             checkBillingStatus();
         }
-    }, [isAttendee, billingChecked]);
+    }, [isLearner, billingChecked]);
 
     // Handle checkout success/canceled return from Stripe
     React.useEffect(() => {
@@ -326,7 +286,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                         </div>
                                         <CardTitle className="text-2xl">Welcome to Accredit! 🎉</CardTitle>
                                         <CardDescription className="text-base">
-                                            {isAttendee
+                                            {isLearner
                                                 ? "You're all set to discover professional development opportunities"
                                                 : isLmsOnly
                                                     ? "Let's get you set up to launch impactful courses"
@@ -334,7 +294,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-6 text-center">
-                                        {isAttendee ? (
+                                        {isLearner ? (
                                             <>
                                                 <div className="grid grid-cols-3 gap-4 text-center">
                                                     <div className="p-4 bg-muted/30 rounded-lg">
@@ -388,7 +348,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                         )}
 
                                         <Button size="lg" onClick={nextStep} className="w-full">
-                                            {isAttendee ? "Let's Go!" : "Let's Get Started"}
+                                            {isLearner ? "Let's Go!" : "Let's Get Started"}
                                             <ArrowRight className="ml-2 h-4 w-4" />
                                         </Button>
                                     </CardContent>
@@ -458,78 +418,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                     </CardContent>
                                 </>
                             )}
-
-                            {/* Step 2: Integrations (Zoom) */}
-                            {stepId === 'integrations' && (
-                                <>
-                                    <CardHeader className="text-center pb-2">
-                                        <div className="mx-auto bg-blue-100 rounded-full p-4 w-16 h-16 flex items-center justify-center mb-2">
-                                            <Video className="h-8 w-8 text-blue-600" />
-                                        </div>
-                                        <CardTitle>Connect Zoom</CardTitle>
-                                        <CardDescription>
-                                            Enable automatic meeting creation and attendance tracking
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        {!zoomChecked ? (
-                                            <div className="flex justify-center py-8">
-                                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                                            </div>
-                                        ) : zoomStatus?.is_connected ? (
-                                            <div className="bg-success/10 border border-success/30 rounded-lg p-4 text-center">
-                                                <Check className="h-8 w-8 text-success mx-auto mb-2" />
-                                                <p className="font-medium text-success">Zoom Connected!</p>
-                                                <p className="text-sm text-muted-foreground mt-1">
-                                                    {zoomStatus.zoom_email}
-                                                </p>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-4">
-                                                <div className="bg-muted/30 rounded-lg p-4 space-y-2">
-                                                    <h4 className="font-medium">Why connect Zoom?</h4>
-                                                    <ul className="text-sm text-muted-foreground space-y-1">
-                                                        <li className="flex items-center gap-2">
-                                                            <Check className="h-4 w-4 text-primary" />
-                                                            Auto-create Zoom meetings for events
-                                                        </li>
-                                                        <li className="flex items-center gap-2">
-                                                            <Check className="h-4 w-4 text-primary" />
-                                                            Track attendance automatically
-                                                        </li>
-                                                        <li className="flex items-center gap-2">
-                                                            <Check className="h-4 w-4 text-primary" />
-                                                            Issue certificates based on attendance
-                                                        </li>
-                                                    </ul>
-                                                </div>
-
-                                                <Button
-                                                    className="w-full bg-blue-600 hover:bg-blue-700"
-                                                    onClick={handleConnectZoom}
-                                                >
-                                                    <Video className="mr-2 h-4 w-4" />
-                                                    Connect Zoom Account
-                                                    <ExternalLink className="ml-2 h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        )}
-
-                                        <div className="flex gap-3 pt-4">
-                                            <Button variant="outline" onClick={prevStep}>
-                                                <ArrowLeft className="mr-2 h-4 w-4" />
-                                                Back
-                                            </Button>
-                                            <Button className="flex-1" onClick={nextStep}>
-                                                {zoomStatus?.is_connected ? 'Continue' : 'Skip for Now'}
-                                                <ArrowRight className="ml-2 h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </>
-                            )}
-
-
 
                             {/* Step 3: Billing (Optional) */}
                             {stepId === 'billing' && (
@@ -615,7 +503,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                     </CardHeader>
                                     <CardContent className="space-y-4">
                                         <div className="grid gap-3">
-                                            {isAttendee ? (
+                                            {isLearner ? (
                                                 <>
                                                     <Button
                                                         size="lg"

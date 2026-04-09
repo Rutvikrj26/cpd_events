@@ -360,6 +360,7 @@ export interface UnmatchedParticipant {
 
 export interface MatchParticipantData {
     enrollment_uuid: string;
+    // TODO: Rename these API fields when backend is updated to use generic participant fields
     zoom_user_email?: string;
     zoom_user_name?: string;
     zoom_join_time?: string;

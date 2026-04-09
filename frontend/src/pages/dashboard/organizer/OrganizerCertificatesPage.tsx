@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Award, Eye, Calendar, Search, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,6 @@ import { Certificate } from '@/api/certificates/types';
 import { Event } from '@/api/events/types';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { Subscription } from '@/api/billing/types';
 import { getRoleFlags } from '@/lib/role-utils';
 import {
     Table,
@@ -34,10 +33,6 @@ interface CertificateWithEvent extends Certificate {
     eventTitle?: string;
 }
 
-type DashboardOutletContext = {
-    subscription: Subscription | null;
-};
-
 export const OrganizerCertificatesPage = () => {
     const [certificates, setCertificates] = useState<CertificateWithEvent[]>([]);
     const [events, setEvents] = useState<Event[]>([]);
@@ -46,13 +41,10 @@ export const OrganizerCertificatesPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
 
     const { user } = useAuth();
-    const outletContext = useOutletContext<DashboardOutletContext | undefined>();
-    const subscription = outletContext?.subscription ?? null;
-    const { isOrganizer, isCourseManager } = getRoleFlags(user, subscription);
+    const { isEducator, isCourseManager } = getRoleFlags(user);
 
-    const isLmsPlan = subscription?.plan === 'lms';
-    // Course managers (LMS plan) don't have event access - they only manage templates
-    const hasEventAccess = isOrganizer && !isLmsPlan;
+    // Course managers don't have event access - they only manage templates
+    const hasEventAccess = isEducator && !isCourseManager;
 
     useEffect(() => {
         const fetchData = async () => {

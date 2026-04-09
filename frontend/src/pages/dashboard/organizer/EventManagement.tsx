@@ -7,10 +7,6 @@ import {
    MoreVertical,
    Award,
    Filter,
-   Video,
-   Copy,
-   ExternalLink,
-   RefreshCw,
    Trash2,
    MessageSquare,
    Star,
@@ -34,7 +30,8 @@ import { PageHeader } from "@/components/custom/PageHeader";
 import { StatusBadge } from "@/components/custom/StatusBadge";
 import { toast } from "sonner";
 import { getEvent, updateEvent, publishEvent, unpublishEvent, getEventRegistrations, checkInAttendee, deleteEvent, cancelEventRegistration, refundEventRegistration } from "@/api/events";
-import { issueCertificates } from "@/api/certificates";
+import { issueCertificates, revokeCertificate } from "@/api/certificates";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
    AlertDialog,
    AlertDialogAction,
@@ -51,6 +48,7 @@ import {
 
 import { EditAttendanceDialog } from "@/components/events/EditAttendanceDialog";
 import { AttendanceReconciliation } from "@/components/events/AttendanceReconciliation";
+import { CustomFieldResponsesDialog } from "@/components/events/CustomFieldResponsesDialog";
 import { FeedbackCard, FeedbackSummary } from "@/components/feedback";
 import { getEventFeedback, calculateFeedbackSummary } from "@/api/feedback";
 import { EventFeedback } from "@/api/feedback/types";
@@ -65,12 +63,20 @@ export function EventManagement() {
    const [editAttendanceOpen, setEditAttendanceOpen] = useState(false);
 
    const [selectedAttendee, setSelectedAttendee] = useState<any>(null);
-   const [retryingZoom, setRetryingZoom] = useState(false);
    const [actionDialogOpen, setActionDialogOpen] = useState(false);
    const [actionType, setActionType] = useState<'cancel' | 'refund' | null>(null);
    const [actionReason, setActionReason] = useState('');
    const [actionLoading, setActionLoading] = useState(false);
    const [actionAttendee, setActionAttendee] = useState<any>(null);
+
+   // Custom field responses dialog state
+   const [customFieldDialogOpen, setCustomFieldDialogOpen] = useState(false);
+   const [customFieldAttendee, setCustomFieldAttendee] = useState<any>(null);
+
+   // Certificate revocation state
+   const [revokeTarget, setRevokeTarget] = useState<any>(null);
+   const [revokeReason, setRevokeReason] = useState('');
+   const [revokeLoading, setRevokeLoading] = useState(false);
 
    const fetchEvent = useCallback(async () => {
       if (!uuid) return;
@@ -281,33 +287,24 @@ export function EventManagement() {
       }
    };
 
-
-
-
-   const handleRetryZoom = async () => {
-      if (!event) return;
-
-      setRetryingZoom(true);
+   const handleRevokeCertificate = async () => {
+      if (!uuid || !revokeTarget?.certificate_uuid) return;
+      setRevokeLoading(true);
       try {
-         // Trigger an update with the same zoom settings to fire the backend signal
-         // which will retry creating the meeting
-         await updateEvent(event.uuid, {
-            zoom_settings: event.zoom_settings
-         });
-         toast.success("Retry command sent. Please wait a moment for the meeting to be created.");
-
-         // Refresh event data after a delay to show the new meeting ID
-         setTimeout(() => {
-            fetchEvent();
-         }, 3000);
-
-      } catch (error) {
-         console.error("Failed to retry zoom creation", error);
-         toast.error("Failed to retry Zoom creation. Please check your Zoom integration settings.");
+         await revokeCertificate(uuid, revokeTarget.certificate_uuid, revokeReason);
+         toast.success("Certificate revoked");
+         setRevokeTarget(null);
+         setRevokeReason('');
+         fetchRegistrations();
+      } catch (error: any) {
+         toast.error(error?.response?.data?.detail || "Failed to revoke certificate");
       } finally {
-         setRetryingZoom(false);
+         setRevokeLoading(false);
       }
    };
+
+
+
 
    const handlePublish = async () => {
       if (!uuid) return;
@@ -353,6 +350,33 @@ export function EventManagement() {
          toast.error(error?.response?.data?.message || "Failed to delete event");
          setDeleting(false);
       }
+   };
+
+   const handleExportCsv = () => {
+      if (attendees.length === 0) {
+         toast.error("No attendees to export");
+         return;
+      }
+      const headers = ['Full Name', 'Email', 'Status', 'Payment Status', 'Attended', 'Registered At'];
+      const rows = attendees.map(a => [
+         `"${(a.full_name || '').replace(/"/g, '""')}"`,
+         `"${(a.email || '').replace(/"/g, '""')}"`,
+         a.status || '',
+         a.payment_status || '',
+         a.attended ? 'Yes' : 'No',
+         a.created_at ? new Date(a.created_at).toISOString() : '',
+      ].join(','));
+      const csvContent = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${event?.title || 'event'}-attendees.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("CSV exported");
    };
 
    const filteredAttendees = attendees.filter(a =>
@@ -497,134 +521,6 @@ export function EventManagement() {
             </Card>
          </div>
 
-         {/* Zoom Meeting Details Card */}
-         {event.zoom_settings?.enabled && (
-            <Card className="border-info bg-info-subtle">
-               <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                     <div className="flex items-center gap-2">
-                        <div className="icon-container-info">
-                           <Video className="h-5 w-5 icon-info" />
-                        </div>
-                        <div>
-                           <CardTitle className="text-base">Zoom Meeting</CardTitle>
-                           <CardDescription className="text-xs">
-                              {event.zoom_meeting_id ? 'Meeting created and ready' : 'Meeting pending creation'}
-                           </CardDescription>
-                        </div>
-                     </div>
-                     {!event.zoom_meeting_id && (
-                        <Button
-                           variant="outline"
-                           size="sm"
-                           className="gap-2"
-                           onClick={handleRetryZoom}
-                           disabled={retryingZoom}
-                        >
-                           <RefreshCw className={`h-4 w-4 ${retryingZoom ? 'animate-spin' : ''}`} />
-                           {retryingZoom ? 'Retrying...' : 'Retry Creation'}
-                        </Button>
-                     )}
-                  </div>
-                  {/* Zoom Error Display */}
-                  {event.zoom_error && !event.zoom_meeting_id && (
-                     <div className="mt-3 p-3 rounded-lg bg-error-subtle border border-error">
-                        <div className="flex items-start gap-2">
-                           <AlertCircle className="h-4 w-4 icon-error mt-0.5 shrink-0" />
-                           <div className="flex-1">
-                              <p className="text-sm font-medium text-error-muted">Meeting Creation Failed</p>
-                              <p className="text-xs text-error mt-1">{event.zoom_error}</p>
-                              {event.zoom_error_at && (
-                                 <p className="text-xs text-error mt-1">
-                                    Failed at {new Date(event.zoom_error_at).toLocaleString()}
-                                 </p>
-                              )}
-                           </div>
-                        </div>
-                     </div>
-                  )}
-               </CardHeader>
-               {event.zoom_meeting_id && (
-                  <CardContent className="pt-0">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Meeting ID */}
-                        <div className="space-y-1">
-                           <label className="text-xs font-medium text-muted-foreground">Meeting ID</label>
-                           <div className="flex items-center gap-2">
-                              <code className="flex-1 px-3 py-2 text-sm bg-background border rounded-md font-mono">
-                                 {event.zoom_meeting_id}
-                              </code>
-                              <Button
-                                 variant="ghost"
-                                 size="icon"
-                                 className="h-9 w-9"
-                                 onClick={() => {
-                                    navigator.clipboard.writeText(event.zoom_meeting_id);
-                                    toast.success('Meeting ID copied');
-                                 }}
-                              >
-                                 <Copy className="h-4 w-4" />
-                              </Button>
-                           </div>
-                        </div>
-
-                        {/* Password */}
-                        <div className="space-y-1">
-                           <label className="text-xs font-medium text-muted-foreground">Password</label>
-                           <div className="flex items-center gap-2">
-                              <code className="flex-1 px-3 py-2 text-sm bg-background border rounded-md font-mono">
-                                 {event.zoom_passcode || '—'}
-                              </code>
-                              {event.zoom_passcode && (
-                                 <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-9 w-9"
-                                    onClick={() => {
-                                       navigator.clipboard.writeText(event.zoom_passcode);
-                                       toast.success('Password copied');
-                                    }}
-                                 >
-                                    <Copy className="h-4 w-4" />
-                                 </Button>
-                              )}
-                           </div>
-                        </div>
-
-                        {/* Join URL */}
-                        <div className="space-y-1 md:col-span-2">
-                           <label className="text-xs font-medium text-muted-foreground">Attendee Join URL</label>
-                           <div className="flex items-center gap-2">
-                              <code className="flex-1 px-3 py-2 text-sm bg-background border rounded-md font-mono truncate">
-                                 {event.zoom_join_url}
-                              </code>
-                              <Button
-                                 variant="ghost"
-                                 size="icon"
-                                 className="h-9 w-9"
-                                 onClick={() => {
-                                    navigator.clipboard.writeText(event.zoom_join_url);
-                                    toast.success('Join URL copied');
-                                 }}
-                              >
-                                 <Copy className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                 variant="ghost"
-                                 size="icon"
-                                 className="h-9 w-9"
-                                 onClick={() => window.open(event.zoom_join_url, '_blank')}
-                              >
-                                 <ExternalLink className="h-4 w-4" />
-                              </Button>
-                           </div>
-                        </div>
-                     </div>
-                  </CardContent>
-               )}
-            </Card>
-         )}
-
          <Tabs defaultValue="registrations" className="w-full">
             <TabsList className="w-full justify-start border-b border-border bg-transparent p-0 h-auto rounded-none mb-6">
                <TabsTrigger value="registrations" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
@@ -636,6 +532,11 @@ export function EventManagement() {
                {event.certificates_enabled && (
                   <TabsTrigger value="certificates" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
                      Certificates
+                  </TabsTrigger>
+               )}
+               {event.badges_enabled && (
+                  <TabsTrigger value="badges" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
+                     Badges
                   </TabsTrigger>
                )}
                <TabsTrigger value="feedback" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
@@ -661,7 +562,7 @@ export function EventManagement() {
                   <Button variant="outline" size="sm" className="w-full sm:w-auto">
                      <Filter className="mr-2 h-4 w-4" /> Filter
                   </Button>
-                  <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleExportCsv}>
                      <Download className="mr-2 h-4 w-4" /> Export CSV
                   </Button>
                </div>
@@ -728,6 +629,14 @@ export function EventManagement() {
                                              }}>
                                                 Edit Attendance
                                              </DropdownMenuItem>
+                                             {event.custom_fields && event.custom_fields.length > 0 && (
+                                                <DropdownMenuItem onClick={() => {
+                                                   setCustomFieldAttendee(attendee);
+                                                   setCustomFieldDialogOpen(true);
+                                                }}>
+                                                   View Responses
+                                                </DropdownMenuItem>
+                                             )}
                                              <DropdownMenuSeparator />
                                              {canRefund ? (
                                                 <DropdownMenuItem
@@ -764,6 +673,15 @@ export function EventManagement() {
                attendee={selectedAttendee}
                eventUuid={uuid || ''}
                onSuccess={fetchRegistrations}
+            />
+
+            {/* Custom Field Responses Dialog */}
+            <CustomFieldResponsesDialog
+               open={customFieldDialogOpen}
+               onOpenChange={setCustomFieldDialogOpen}
+               attendeeName={customFieldAttendee?.full_name || ''}
+               eventUuid={uuid || ''}
+               registrationUuid={customFieldAttendee?.uuid || ''}
             />
 
             <AlertDialog
@@ -820,8 +738,8 @@ export function EventManagement() {
 
             {/* ATTENDANCE TAB */}
             <TabsContent value="attendance" className="mt-0 space-y-4">
-               {/* Attendance Reconciliation - for online/hybrid with Zoom */}
-               {(event.format === 'online' || event.format === 'hybrid') && event.zoom_meeting_id && (
+               {/* Attendance Reconciliation - for online/hybrid events */}
+               {(event.format === 'online' || event.format === 'hybrid') && (
                   <AttendanceReconciliation eventUuid={event.uuid} onReconciled={() => fetchEvent()} />
                )}
 
@@ -829,7 +747,7 @@ export function EventManagement() {
                   <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
                      <div className="text-sm text-muted-foreground">
                         {event.format === 'online'
-                           ? 'Attendance is tracked automatically via Zoom participation.'
+                           ? 'Attendance is tracked automatically via online participation.'
                            : event.format === 'hybrid'
                               ? 'Track in-person check-ins and online participation.'
                               : 'Mark attendance manually or use the QR scanner app.'}
@@ -961,15 +879,81 @@ export function EventManagement() {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                                        {attendee.certificate_uuid ? 'Issued' : 'Not Issued'}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                       <Button
-                                          size="sm"
-                                          variant="outline"
-                                          disabled={!attendee.attendance_eligible || !!attendee.certificate_uuid}
-                                          onClick={() => handleIssueCertificate(attendee.uuid)}
-                                       >
-                                          {attendee.certificate_uuid ? 'Issued' : 'Issue'}
-                                       </Button>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                       {attendee.certificate_uuid ? (
+                                          <Button
+                                             size="sm"
+                                             variant="outline"
+                                             className="text-destructive border-destructive hover:bg-destructive/10"
+                                             onClick={() => setRevokeTarget(attendee)}
+                                          >
+                                             Revoke
+                                          </Button>
+                                       ) : (
+                                          <Button
+                                             size="sm"
+                                             variant="outline"
+                                             disabled={!attendee.attendance_eligible}
+                                             onClick={() => handleIssueCertificate(attendee.uuid)}
+                                          >
+                                             Issue
+                                          </Button>
+                                       )}
+                                    </td>
+                                 </tr>
+                              ))}
+                           </tbody>
+                        </table>
+                     </div>
+                  </Card>
+               </TabsContent>
+            )}
+
+            {/* BADGES TAB */}
+            {event.badges_enabled && (
+               <TabsContent value="badges" className="mt-0">
+                  <div className="mb-4 p-4 rounded-lg bg-muted/50 border">
+                     <div className="flex gap-3 items-center">
+                        <Award className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                           <h3 className="text-sm font-medium">Auto-Issue Badges</h3>
+                           <p className="text-sm text-muted-foreground">
+                              {event.auto_issue_badges
+                                 ? "Badges are automatically issued to eligible attendees when the event completes."
+                                 : "Auto-issue is disabled. Badges will not be automatically issued."}
+                           </p>
+                        </div>
+                     </div>
+                  </div>
+                  <Card>
+                     <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-border">
+                           <thead className="bg-muted/50">
+                              <tr>
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Attendee</th>
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Eligibility</th>
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Badge Status</th>
+                              </tr>
+                           </thead>
+                           <tbody className="bg-card divide-y divide-border">
+                              {filteredAttendees.filter(a => a.status !== "cancelled").map((attendee) => (
+                                 <tr key={attendee.uuid} className="hover:bg-muted/50">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                       <div className="text-sm font-medium text-foreground">{attendee.full_name}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                       {attendee.attendance_eligible ? (
+                                          <Badge variant="outline" className="text-success bg-success-subtle border-success">Eligible</Badge>
+                                       ) : (
+                                          <Badge variant="outline" className="text-muted-foreground bg-muted border-border">Not Eligible</Badge>
+                                       )}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                                       {attendee.badge_uuid ? (
+                                          <Badge variant="default">Issued</Badge>
+                                       ) : (
+                                          <span>Not Issued</span>
+                                       )}
                                     </td>
                                  </tr>
                               ))}
@@ -1009,6 +993,35 @@ export function EventManagement() {
                </div>
             </TabsContent>
          </Tabs>
+
+         {/* Certificate Revocation Dialog */}
+         <ConfirmDialog
+            open={!!revokeTarget}
+            onOpenChange={(open) => {
+               if (!open) {
+                  setRevokeTarget(null);
+                  setRevokeReason('');
+               }
+            }}
+            title="Revoke Certificate"
+            description={
+               <div className="space-y-3">
+                  <p>Are you sure you want to revoke the certificate for <strong>{revokeTarget?.full_name}</strong>? This action can be undone by reissuing.</p>
+                  <div className="space-y-2">
+                     <label className="text-sm font-medium">Reason for revocation</label>
+                     <Input
+                        value={revokeReason}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRevokeReason(e.target.value)}
+                        placeholder="e.g. Attendance records corrected"
+                     />
+                  </div>
+               </div>
+            }
+            confirmLabel="Revoke Certificate"
+            variant="destructive"
+            isLoading={revokeLoading}
+            onConfirm={handleRevokeCertificate}
+         />
       </div>
    );
 }

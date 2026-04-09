@@ -4,14 +4,12 @@ import App from "@/App";
 import * as accountsApi from "@/api/accounts";
 import * as manifestApi from "@/api/auth/manifest";
 import * as billingApi from "@/api/billing";
-import * as organizationsApi from "@/api/organizations";
 import * as registrationsApi from "@/api/registrations";
 
 // Mock API modules
 vi.mock("@/api/accounts");
 vi.mock("@/api/auth/manifest");
 vi.mock("@/api/billing");
-vi.mock("@/api/organizations");
 vi.mock("@/api/registrations");
 
 // Mock scroll to top to avoid errors in JSDOM
@@ -53,7 +51,6 @@ describe("Integration: Login Flow", () => {
         });
 
         (billingApi.getSubscription as any).mockResolvedValue(null);
-        (organizationsApi.getMyInvitations as any).mockResolvedValue([]);
         (registrationsApi.getMyRegistrations as any).mockResolvedValue([]);
     });
 

@@ -63,48 +63,6 @@ class OrganizerFactory(UserFactory):
 
 
 # =============================================================================
-# Organization Factories
-# =============================================================================
-
-
-class OrganizationFactory(DjangoModelFactory):
-    """Factory for creating Organization instances."""
-
-    class Meta:
-        model = 'organizations.Organization'
-
-    name = factory.Sequence(lambda n: f'Organization {n}')
-    slug = factory.Sequence(lambda n: f'org-{n}')
-    description = factory.Faker('paragraph')
-    created_by = factory.SubFactory(OrganizerFactory)
-    is_active = True
-
-
-class OrganizationMembershipFactory(DjangoModelFactory):
-    """Factory for creating OrganizationMembership instances."""
-
-    class Meta:
-        model = 'organizations.OrganizationMembership'
-
-    organization = factory.SubFactory(OrganizationFactory)
-    user = factory.SubFactory(OrganizerFactory)
-    role = 'instructor'
-    is_active = True
-    invited_at = factory.LazyFunction(timezone.now)
-    accepted_at = factory.LazyFunction(timezone.now)
-
-    class Params:
-        admin = factory.Trait(role='admin')
-        organizer = factory.Trait(role='organizer')
-        course_manager = factory.Trait(role='course_manager')
-        instructor = factory.Trait(role='instructor')
-        pending = factory.Trait(
-            accepted_at=None,
-            invitation_token=factory.Faker('uuid4'),
-        )
-
-
-# =============================================================================
 # Event Factories
 # =============================================================================
 
@@ -371,7 +329,6 @@ class CourseFactory(DjangoModelFactory):
     title = factory.Sequence(lambda n: f'Course {n}')
     slug = factory.Sequence(lambda n: f'course-{n}')
     description = factory.Faker('paragraph')
-    organization = factory.SubFactory(OrganizationFactory)
     status = 'draft'
 
 

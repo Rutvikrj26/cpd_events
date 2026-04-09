@@ -146,8 +146,6 @@ class StripeService:
         now = timezone.now()
 
         try:
-            from organizations.models import OrganizationSubscription
-
             from .models import Subscription
 
             subscriptions = list(
@@ -157,19 +155,8 @@ class StripeService:
                     trial_ends_at__isnull=False,
                 )
             )
-
-            if plan == OrganizationSubscription.Plan.ORGANIZATION:
-                org_subscriptions = list(
-                    OrganizationSubscription.objects.filter(
-                        plan=plan,
-                        status=OrganizationSubscription.Status.TRIALING,
-                        trial_ends_at__isnull=False,
-                    )
-                )
-            else:
-                org_subscriptions = []
         except Exception as exc:
-            logger.error(f"Failed to load subscriptions for trial sync: {exc}")
+            logger.error("Failed to load subscriptions for trial sync: %s", exc)
             return {'updated': 0, 'skipped': 0}
 
         for sub in subscriptions:
@@ -200,39 +187,11 @@ class StripeService:
             sub.save(update_fields=['trial_ends_at', 'updated_at'])
             updated += 1
 
-        for sub in org_subscriptions:
-            new_trial_end = None
-            if sub.current_period_start:
-                new_trial_end = sub.current_period_start + timedelta(days=trial_days)
-
-            if not new_trial_end or new_trial_end <= now:
-                skipped += 1
-                continue
-
-            if sub.trial_ends_at and new_trial_end <= sub.trial_ends_at:
-                skipped += 1
-                continue
-
-            if self.is_configured and sub.stripe_subscription_id:
-                try:
-                    self.stripe.Subscription.modify(
-                        sub.stripe_subscription_id,
-                        trial_end=int(new_trial_end.timestamp()),
-                    )
-                except Exception as exc:
-                    logger.error(f"Failed to update Stripe trial for org {sub.stripe_subscription_id}: {exc}")
-                    skipped += 1
-                    continue
-
-            sub.trial_ends_at = new_trial_end
-            sub.save(update_fields=['trial_ends_at', 'updated_at'])
-            updated += 1
-
         return {'updated': updated, 'skipped': skipped}
 
     def _apply_plan_to_user(self, user, plan: str) -> None:
         """Apply account_type changes based on subscription plan."""
-        if plan in ['organizer', 'organization']:
+        if plan == 'organizer':
             user.upgrade_to_organizer()
         elif plan == 'lms':
             user.upgrade_to_course_manager()
@@ -809,7 +768,6 @@ class StripeService:
         plan: str,
         success_url: str,
         cancel_url: str,
-        organization_uuid: str | None = None,
         billing_interval: str = 'month',
     ) -> dict[str, Any]:
         """
@@ -862,8 +820,6 @@ class StripeService:
                 'plan': plan,
                 'billing_interval': billing_interval,
             }
-            if organization_uuid:
-                metadata['organization_uuid'] = organization_uuid
 
             # Add session_id placeholder to success_url for sync confirmation
             # Stripe replaces {CHECKOUT_SESSION_ID} with actual session ID
@@ -1103,109 +1059,6 @@ class StripeService:
                 return {'success': False, 'error': str(e)}
 
         return {'success': False, 'error': 'Max retries exceeded'}
-
-    def confirm_organization_checkout_session(self, organization, session_id: str, max_retries: int = 3) -> dict[str, Any]:
-        """
-        Atomically confirm checkout session and sync Organization Subscription.
-        """
-        import time
-        from datetime import datetime
-
-        from django.db import transaction
-
-        from organizations.models import OrganizationSubscription
-
-        if not self.is_configured:
-            return {'success': False, 'error': 'Stripe not configured'}
-
-        for attempt in range(max_retries):
-            try:
-                # 1. Retrieve
-                session = self.stripe.checkout.Session.retrieve(session_id, expand=['subscription'])
-
-                # 2. Verify ownership
-                if session.metadata.get('organization_uuid') != str(organization.uuid):
-                    return {'success': False, 'error': 'Checkout session does not belong to this organization'}
-
-                # 3. Get subscription
-                stripe_sub = session.subscription
-                if not stripe_sub:
-                    if attempt < max_retries - 1:
-                        time.sleep(0.5)
-                        continue
-                    return {'success': False, 'error': 'No subscription found'}
-
-                if isinstance(stripe_sub, str):
-                    stripe_sub = self.stripe.Subscription.retrieve(stripe_sub)
-
-                # 4. Update
-                with transaction.atomic():
-                    subscription, created = OrganizationSubscription.objects.select_for_update().get_or_create(
-                        organization=organization
-                    )
-
-                # Idempotency check: if already updated, skip
-                if (
-                    not created
-                    and subscription.stripe_subscription_id == stripe_sub.id
-                    and subscription.status == stripe_sub.status
-                ):
-                    return {'success': True, 'subscription': subscription}
-
-                subscription.stripe_subscription_id = stripe_sub.id
-                subscription.stripe_customer_id = session.customer
-                subscription.status = stripe_sub.status
-                subscription.current_period_start = datetime.fromtimestamp(stripe_sub.current_period_start, tz=UTC)
-                subscription.current_period_end = datetime.fromtimestamp(stripe_sub.current_period_end, tz=UTC)
-
-                if stripe_sub.trial_end:
-                    subscription.trial_ends_at = datetime.fromtimestamp(stripe_sub.trial_end, tz=UTC)
-                else:
-                    subscription.trial_ends_at = None
-
-                plan = session.metadata.get('plan')
-                product = None
-                if not plan and stripe_sub.get('items') and stripe_sub['items'].data:
-                    try:
-                        item = stripe_sub['items'].data[0]
-                        product_id = item.price.product
-                        from billing.models import StripeProduct
-
-                        product = StripeProduct.objects.filter(stripe_product_id=product_id).first()
-                        if product:
-                            plan = product.plan
-                    except Exception:
-                        pass
-
-                if plan:
-                    subscription.plan = plan
-                    if not product:
-                        try:
-                            from billing.models import StripeProduct
-
-                            product = StripeProduct.objects.filter(plan=plan, is_active=True).first()
-                        except Exception:
-                            product = None
-                    if product:
-                        if product.included_seats is not None:
-                            subscription.included_seats = product.included_seats
-                        if product.seat_price_cents is not None:
-                            subscription.seat_price_cents = product.seat_price_cents
-
-                subscription.save()
-
-                return {'success': True, 'subscription': subscription}
-
-            except Exception as e:
-                # Retry on unique constraint or database lock
-                error_str = str(e).lower()
-                if ('unique constraint' in error_str or 'database is locked' in error_str) and attempt < max_retries - 1:
-                    time.sleep(0.5)
-                    continue
-                logger.error(f"Failed to confirm org checkout {session_id}: {e}")
-                return {'success': False, 'error': str(e)}
-
-        return {'success': False, 'error': 'Failed to confirm checkout session after retries'}
 
     def sync_payment_methods(self, user, customer_id: str | None = None) -> dict[str, Any]:
         """
@@ -1778,16 +1631,11 @@ class StripePaymentService:
 
     def get_payee_account_id(self, event) -> str | None:
         """Resolve the connected account to receive transfers for this event."""
-        payee_account_id = None
-        if event.organization and event.organization.stripe_connect_id:
-            payee_account_id = event.organization.stripe_connect_id
-            if not event.organization.stripe_charges_enabled:
-                return None
-        elif event.owner.stripe_connect_id:
-            payee_account_id = event.owner.stripe_connect_id
+        if event.owner.stripe_connect_id:
             if not event.owner.stripe_charges_enabled:
                 return None
-        return payee_account_id
+            return event.owner.stripe_connect_id
+        return None
 
     def _calculate_service_fee_cents(self, ticket_amount_cents: int, currency: str) -> int:
         """Calculate service fee in cents based on ticket price."""

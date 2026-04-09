@@ -5,6 +5,7 @@ Accounts app views and viewsets.
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
+from django.db import models
 from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status, viewsets
@@ -14,7 +15,12 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from common.permissions import IsOrganizer, IsOrganizerOrCourseManager
+from common.config.deployment import (
+    DEPLOYMENT_MODE,
+    INSTITUTION_LOGO_URL,
+    INSTITUTION_NAME,
+    REGISTRATION_MODE,
+)
 from common.rbac import roles
 from common.utils import error_response
 
@@ -49,8 +55,26 @@ class SignupView(generics.CreateAPIView):
     throttle_classes = [AuthThrottle]
 
     def create(self, request, *args, **kwargs):
+        # Gate self-service registration based on deployment mode
+        if REGISTRATION_MODE == "invite_only":
+            return Response(
+                {"error": {"code": "REGISTRATION_DISABLED", "message": "Registration is by invitation only. Contact your administrator."}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        if REGISTRATION_MODE == "admin_approval":
+            # Create user but set inactive until admin approves
+            user = serializer.save()
+            user.is_active = False
+            user.save(update_fields=["is_active"])
+            return Response(
+                {"message": "Registration submitted. An administrator will review and activate your account."},
+                status=status.HTTP_201_CREATED,
+            )
+
         user = serializer.save()
 
         # Generate verification token
@@ -60,7 +84,6 @@ class SignupView(generics.CreateAPIView):
         try:
             verification_url = f"{settings.FRONTEND_URL}/auth/verify-email?token={token}"
 
-            # Print URL prominently for dev testing (the email body below is mangled by quoted-printable encoding)
             print("\n" + "=" * 80)
             print("📧 VERIFICATION LINK (copy this, NOT the email body below):")
             print(f"   {verification_url}")
@@ -74,10 +97,6 @@ class SignupView(generics.CreateAPIView):
                 fail_silently=False,
             )
         except Exception as e:
-            # Log error but don't fail signup? Or fail?
-            # Better to log and maybe return a warning, or fail if critical.
-            # Ideally use a task so it doesn't fail the request.
-            # For now, let's log.
             import logging
 
             logger = logging.getLogger(__name__)
@@ -90,7 +109,7 @@ class SignupView(generics.CreateAPIView):
                     "uuid": str(user.uuid),
                     "email": user.email,
                     "full_name": user.full_name,
-                    "account_type": user.account_type,
+                    "roles": user.role_names,
                 },
             },
             status=status.HTTP_201_CREATED,
@@ -119,13 +138,9 @@ class EmailVerificationView(generics.GenericAPIView):
         token = serializer.validated_data["token"]
 
         try:
-            # First check if user exists with this token (including verified ones)
-            # We don't check email_verified=False yet
             user = User.objects.get(email_verification_token=token)
 
-            # If already verified, return success (idempotency)
             if user.email_verified:
-                # Generate tokens for auto-login just in case
                 from rest_framework_simplejwt.tokens import RefreshToken
 
                 refresh = RefreshToken.for_user(user)
@@ -139,7 +154,7 @@ class EmailVerificationView(generics.GenericAPIView):
                             "uuid": str(user.uuid),
                             "email": user.email,
                             "full_name": user.full_name,
-                            "account_type": user.account_type,
+                            "roles": user.role_names,
                         },
                     }
                 )
@@ -155,7 +170,8 @@ class EmailVerificationView(generics.GenericAPIView):
             )
 
         user.email_verified = True
-        user.save(update_fields=["email_verified", "updated_at"])
+        user.email_verification_token = ""
+        user.save(update_fields=["email_verified", "email_verification_token", "updated_at"])
 
         # Link any guest registrations
         from registrations.models import Registration
@@ -176,7 +192,7 @@ class EmailVerificationView(generics.GenericAPIView):
                     "uuid": str(user.uuid),
                     "email": user.email,
                     "full_name": user.full_name,
-                    "account_type": user.account_type,
+                    "roles": user.role_names,
                 },
             }
         )
@@ -204,10 +220,8 @@ class PasswordResetRequestView(generics.GenericAPIView):
 
             from .tasks import send_password_reset
 
-            # Construct reset URL
             reset_url = f"{settings.FRONTEND_URL}/auth/reset-password?token={user.password_reset_token}&email={user.email}"
 
-            # Print URL prominently for dev testing
             print("\n" + "=" * 80)
             print("🔐 PASSWORD RESET LINK (copy this, NOT the email body below):")
             print(f"   {reset_url}")
@@ -246,7 +260,7 @@ class PasswordResetConfirmView(generics.GenericAPIView):
         return Response({"message": "Password reset successfully."})
 
 
-@roles("attendee", "organizer", "course_manager", "admin", route_name="password_change")
+@roles("learner", "educator", "course_manager", "admin", route_name="password_change")
 class PasswordChangeView(generics.GenericAPIView):
     """POST /api/v1/auth/password-change/ - Change password."""
 
@@ -269,7 +283,7 @@ class PasswordChangeView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles("attendee", "organizer", "course_manager", "admin", route_name="user_sessions")
+@roles("learner", "educator", "course_manager", "admin", route_name="user_sessions")
 class UserSessionListView(generics.ListAPIView):
     """GET /api/v1/users/me/sessions/ - List active sessions."""
 
@@ -280,7 +294,7 @@ class UserSessionListView(generics.ListAPIView):
         return UserSession.objects.filter(user=self.request.user, is_active=True).order_by("-last_activity_at")
 
 
-@roles("attendee", "organizer", "course_manager", "admin", route_name="user_session_revoke")
+@roles("learner", "educator", "course_manager", "admin", route_name="user_session_revoke")
 class UserSessionRevokeView(generics.DestroyAPIView):
     """DELETE /api/v1/users/me/sessions/{uuid}/ - Revoke a specific session."""
 
@@ -295,7 +309,7 @@ class UserSessionRevokeView(generics.DestroyAPIView):
         instance.deactivate()
 
 
-@roles("attendee", "organizer", "course_manager", "admin", route_name="user_sessions_logout_all")
+@roles("learner", "educator", "course_manager", "admin", route_name="user_sessions_logout_all")
 class UserSessionLogoutAllView(generics.GenericAPIView):
     """POST /api/v1/users/me/sessions/logout-all/ - Logout from all sessions."""
 
@@ -311,7 +325,7 @@ class UserSessionLogoutAllView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles("attendee", "organizer", "course_manager", "admin", route_name="current_user")
+@roles("learner", "educator", "course_manager", "admin", route_name="current_user")
 class CurrentUserView(generics.RetrieveUpdateAPIView):
     """GET/PATCH /api/v1/users/me/ - Current user profile."""
 
@@ -326,18 +340,7 @@ class CurrentUserView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
-@roles("organizer", "admin", route_name="organizer_profile")
-class OrganizerProfileView(generics.RetrieveUpdateAPIView):
-    """GET/PATCH /api/v1/users/me/organizer-profile/ - Organizer profile."""
-
-    serializer_class = serializers.OrganizerProfileUpdateSerializer
-    permission_classes = [IsAuthenticated, IsOrganizer]
-
-    def get_object(self):
-        return self.request.user
-
-
-@roles("attendee", "organizer", "course_manager", "admin", route_name="notification_preferences")
+@roles("learner", "educator", "course_manager", "admin", route_name="notification_preferences")
 class NotificationPreferencesView(generics.RetrieveUpdateAPIView):
     """GET/PATCH /api/v1/users/me/notifications/ - Notification preferences."""
 
@@ -348,7 +351,7 @@ class NotificationPreferencesView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
-@roles("attendee", "organizer", "course_manager", "admin", route_name="user_notifications")
+@roles("learner", "educator", "course_manager", "admin", route_name="user_notifications")
 class UserNotificationViewSet(viewsets.ModelViewSet):
     """User notification inbox."""
 
@@ -382,41 +385,12 @@ class UserNotificationViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(notification).data)
 
 
-@roles("public", route_name="public_organizer")
-class PublicOrganizerView(generics.RetrieveAPIView):
-    """GET /api/v1/organizers/{uuid}/ - Public organizer profile."""
-
-    serializer_class = serializers.PublicOrganizerSerializer
-    permission_classes = [AllowAny]
-    lookup_field = "uuid"
-
-    def get_queryset(self):
-        return User.objects.filter(account_type="organizer", is_organizer_profile_public=True, deleted_at__isnull=True)
-
-
-@roles("attendee", route_name="upgrade_to_organizer")
-class UpgradeToOrganizerView(generics.GenericAPIView):
-    """POST /api/v1/users/me/upgrade/ - Upgrade to organizer."""
-
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-
-        if user.account_type == "organizer":
-            return error_response("Already an organizer.", code="ALREADY_ORGANIZER")
-
-        user.upgrade_to_organizer()
-
-        return Response({"message": "Successfully upgraded to organizer.", "user": serializers.UserSerializer(user).data})
-
-
 # =============================================================================
-# Account Deletion (H7)
+# Account Deletion (GDPR)
 # =============================================================================
 
 
-@roles("attendee", "organizer", "course_manager", "admin", route_name="delete_account")
+@roles("learner", "educator", "course_manager", "admin", route_name="delete_account")
 class DeleteAccountView(generics.GenericAPIView):
     """POST /api/v1/users/me/delete-account/ - Delete/anonymize account."""
 
@@ -430,18 +404,17 @@ class DeleteAccountView(generics.GenericAPIView):
         user = request.user
         serializer.validated_data.get("reason", "")
 
-        # Anonymize user data (GDPR compliant)
         user.anonymize()
 
         return Response({"message": "Account has been deleted."})
 
 
 # =============================================================================
-# GDPR Data Export (H6)
+# GDPR Data Export
 # =============================================================================
 
 
-@roles("attendee", "organizer", "course_manager", "admin", route_name="data_export")
+@roles("learner", "educator", "course_manager", "admin", route_name="data_export")
 class DataExportView(generics.GenericAPIView):
     """POST /api/v1/users/me/export-data/ - Request GDPR data export."""
 
@@ -460,7 +433,6 @@ class DataExportView(generics.GenericAPIView):
         options = serializer.validated_data
         export_format = options.get("format", "json")
 
-        # Collect user data
         export_data = {
             "user": {
                 "uuid": str(user.uuid),
@@ -469,13 +441,12 @@ class DataExportView(generics.GenericAPIView):
                 "professional_title": user.professional_title,
                 "organization_name": user.organization_name,
                 "bio": user.bio,
-                "account_type": user.account_type,
+                "roles": user.role_names,
                 "timezone": user.timezone,
                 "created_at": user.created_at.isoformat() if user.created_at else None,
             },
         }
 
-        # Include registrations
         if options.get("include_registrations", True):
             from registrations.models import Registration
 
@@ -494,7 +465,6 @@ class DataExportView(generics.GenericAPIView):
                 for r in registrations
             ]
 
-        # Include certificates
         if options.get("include_certificates", True):
             from certificates.models import Certificate
 
@@ -510,7 +480,6 @@ class DataExportView(generics.GenericAPIView):
                 for c in certificates
             ]
 
-        # Include attendance records
         if options.get("include_attendance", True):
             from registrations.models import AttendanceRecord
 
@@ -525,7 +494,6 @@ class DataExportView(generics.GenericAPIView):
                 for a in attendance
             ]
 
-        # Return as JSON download
         if export_format == "json":
             response = HttpResponse(
                 json.dumps(export_data, indent=2, default=str),
@@ -534,55 +502,7 @@ class DataExportView(generics.GenericAPIView):
             response["Content-Disposition"] = f'attachment; filename="data_export_{user.uuid}.json"'
             return response
 
-        # CSV would require more complex handling for nested data
         return Response(export_data)
-
-
-# =============================================================================
-# Account Downgrade
-# =============================================================================
-
-
-@roles("organizer", "course_manager", "admin", route_name="downgrade_account")
-class DowngradeToAttendeeView(generics.GenericAPIView):
-    """POST /api/v1/users/me/downgrade/ - Downgrade account to attendee."""
-
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-        if user.account_type == user.AccountType.ATTENDEE:
-            return Response({"message": "Account is already on attendee plan."})
-
-        from billing.services import stripe_service
-        from events.models import Event
-        from learning.models import Course
-
-        has_active_events = Event.objects.filter(
-            owner=user,
-            status__in=[Event.Status.DRAFT, Event.Status.PUBLISHED, Event.Status.LIVE],
-            deleted_at__isnull=True,
-        ).exists()
-        has_active_courses = Course.objects.filter(
-            created_by=user,
-            status__in=[Course.Status.DRAFT, Course.Status.PUBLISHED],
-            deleted_at__isnull=True,
-        ).exists()
-
-        if has_active_events or has_active_courses:
-            return error_response(
-                "You must archive or cancel active events/courses before downgrading.",
-                code="ACTIVE_CONTENT",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        subscription = getattr(user, "subscription", None)
-        if subscription and subscription.plan != "attendee":
-            if not stripe_service.cancel_subscription(subscription, immediate=True, reason="user_downgrade"):
-                return error_response("Failed to cancel subscription.", code="CANCEL_FAILED")
-
-        user.downgrade_to_attendee()
-        return Response({"message": "Account downgraded to attendee."})
 
 
 # =============================================================================
@@ -590,7 +510,7 @@ class DowngradeToAttendeeView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles("attendee", "organizer", "course_manager", "admin", route_name="complete_onboarding")
+@roles("learner", "educator", "course_manager", "admin", route_name="complete_onboarding")
 class CompleteOnboardingView(generics.GenericAPIView):
     """POST /api/v1/users/me/onboarding/complete/ - Mark onboarding as complete."""
 
@@ -615,7 +535,7 @@ class CompleteOnboardingView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles("attendee", "organizer", "course_manager", "admin", route_name="cpd_requirements")
+@roles("learner", "educator", "course_manager", "admin", route_name="cpd_requirements")
 class CPDRequirementViewSet(viewsets.ModelViewSet):
     """
     CRUD for user CPD requirements.
@@ -675,7 +595,6 @@ class CPDRequirementViewSet(viewsets.ModelViewSet):
         end_date = request.query_params.get("end_date")
         cpd_type = request.query_params.get("cpd_type")
 
-        # Parse dates if provided
         filters = {}
         if start_date:
             try:
@@ -703,11 +622,11 @@ class CPDRequirementViewSet(viewsets.ModelViewSet):
 
 
 # =============================================================================
-# RBAC Manifest Views
+# RBAC Manifest View
 # =============================================================================
 
 
-@roles("attendee", "organizer", "course_manager", "admin", route_name="manifest")
+@roles("learner", "educator", "course_manager", "admin", route_name="manifest")
 class ManifestView(generics.GenericAPIView):
     """
     GET /api/v1/auth/manifest/
@@ -731,145 +650,19 @@ class ManifestView(generics.GenericAPIView):
             "routes": get_allowed_routes_for_user(user),
             "features": get_features_for_user(user),
             "user": {
-                "account_type": getattr(user, "account_type", "attendee"),
+                "roles": user.role_names,
+                "primary_role": user.primary_role,
                 "is_staff": user.is_staff,
+            },
+            "deployment": {
+                "mode": DEPLOYMENT_MODE,
+                "registration_mode": REGISTRATION_MODE,
+                "institution_name": INSTITUTION_NAME,
+                "institution_logo_url": INSTITUTION_LOGO_URL,
             },
         }
 
         return Response(data)
-
-
-# =============================================================================
-# Zoom SSO Views
-# =============================================================================
-
-
-@roles("public", route_name="zoom_auth")
-class ZoomAuthView(generics.GenericAPIView):
-    """
-    GET /api/v1/auth/zoom/login/
-
-    Redirects the user to Zoom's OAuth authorization page.
-    """
-
-    permission_classes = [AllowAny]
-    throttle_classes = [AuthThrottle]
-
-    def get(self, request):
-        from .oauth import get_zoom_auth_url
-
-        url = get_zoom_auth_url()
-        return Response({"url": url})
-
-
-@roles("public", route_name="zoom_callback")
-class ZoomCallbackView(generics.GenericAPIView):
-    """
-    GET /api/v1/auth/zoom/callback/
-
-    Handles the OAuth callback from Zoom.
-    Exchanges code for token, gets user info, logs in or creates user.
-    """
-
-    permission_classes = [AllowAny]
-    throttle_classes = [AuthThrottle]
-
-    def get(self, request):
-        code = request.query_params.get("code")
-        error = request.query_params.get("error")
-
-        if error:
-            return error_response(f"Zoom OAuth error: {error}", code="ZOOM_AUTH_ERROR")
-
-        if not code:
-            return error_response("Authorization code missing.", code="MISSING_CODE")
-
-        from django.conf import settings
-        from django.db import transaction
-        from rest_framework_simplejwt.tokens import RefreshToken
-
-        from .models import User, ZoomConnection
-        from .oauth import exchange_code_for_token, get_zoom_user_info
-
-        # 1. Exchange code for tokens
-        token_data = exchange_code_for_token(code)
-        if not token_data:
-            return error_response("Failed to exchange code for token.", code="TOKEN_EXCHANGE_FAILED")
-
-        access_token = token_data.get("access_token")
-        refresh_token = token_data.get("refresh_token")
-        expires_in = token_data.get("expires_in", 3600)
-
-        # 2. Get user info
-        user_info = get_zoom_user_info(access_token)
-        if not user_info:
-            return error_response("Failed to fetch user info from Zoom.", code="USER_INFO_FAILED")
-
-        zoom_user_id = user_info.get("id")
-        email = user_info.get("email").lower()
-        first_name = user_info.get("first_name", "")
-        last_name = user_info.get("last_name", "")
-        full_name = f"{first_name} {last_name}".strip()
-
-        if not email:
-            return error_response("Zoom account must have an email address.", code="MISSING_EMAIL")
-
-        # 3. Find or create user
-        with transaction.atomic():
-            # Try to match by ZoomConnection first
-            zoom_conn = ZoomConnection.objects.filter(zoom_user_id=zoom_user_id).select_related("user").first()
-
-            if zoom_conn:
-                user = zoom_conn.user
-            else:
-                # Try to match by email
-                user = User.objects.filter(email=email).first()
-
-                if not user:
-                    # Create new user
-                    user = User.objects.create_user(
-                        email=email,
-                        full_name=full_name or email.split("@")[0],
-                        email_verified=True,  # Zoom emails are verified
-                        password=None,  # Unusable password
-                    )
-
-            # 4. Update/Create ZoomConnection
-            # Even for attendees, we store this to separate Zoom ID from Email
-            if not hasattr(user, "zoom_connection"):
-                ZoomConnection.objects.create(
-                    user=user,
-                    zoom_user_id=zoom_user_id,
-                    zoom_account_id=user_info.get("account_id", ""),
-                    zoom_email=email,
-                    access_token=access_token,
-                    refresh_token=refresh_token,
-                    token_expires_at=timezone.now() + timezone.timedelta(seconds=expires_in),
-                )
-            else:
-                # Update tokens
-                conn = user.zoom_connection
-                conn.zoom_user_id = zoom_user_id  # Ensure consistent
-                conn.zoom_email = email
-                conn.update_tokens(access_token, refresh_token, expires_in)
-
-            # Ensure user is active
-            if not user.is_active:
-                return error_response("Account is disabled.", code="ACCOUNT_DISABLED")
-
-            # Record login
-            user.record_login()
-
-            # 5. Generate JWT
-            refresh = RefreshToken.for_user(user)
-
-            # 6. Redirect to frontend
-            frontend_url = settings.CORS_ALLOWED_ORIGINS[0]  # Assuming first one is main frontend
-            redirect_url = f"{frontend_url}/auth/callback?access={str(refresh.access_token)}&refresh={str(refresh)}"
-
-            from django.http import HttpResponseRedirect
-
-            return HttpResponseRedirect(redirect_url)
 
 
 # =============================================================================
@@ -889,9 +682,15 @@ class GoogleAuthView(generics.GenericAPIView):
     throttle_classes = [AuthThrottle]
 
     def get(self, request):
+        import secrets
+
+        from django.core.cache import cache
+
         from .google_oauth import get_google_auth_url
 
-        url = get_google_auth_url()
+        state = secrets.token_urlsafe(32)
+        cache.set(f"oauth_state:{state}", True, timeout=600)  # valid for 10 minutes
+        url = get_google_auth_url(state=state)
         return Response({"url": url})
 
 
@@ -908,7 +707,10 @@ class GoogleCallbackView(generics.GenericAPIView):
     throttle_classes = [AuthThrottle]
 
     def get(self, request):
+        from django.core.cache import cache
+
         code = request.query_params.get("code")
+        state = request.query_params.get("state")
         error = request.query_params.get("error")
 
         if error:
@@ -916,6 +718,11 @@ class GoogleCallbackView(generics.GenericAPIView):
 
         if not code:
             return error_response("Authorization code missing.", code="MISSING_CODE")
+
+        # Validate CSRF state parameter
+        if not state or not cache.get(f"oauth_state:{state}"):
+            return error_response("Invalid or expired state parameter.", code="INVALID_STATE")
+        cache.delete(f"oauth_state:{state}")  # single-use
 
         from django.conf import settings
         from django.db import transaction
@@ -930,7 +737,6 @@ class GoogleCallbackView(generics.GenericAPIView):
             return error_response("Failed to exchange code for token.", code="TOKEN_EXCHANGE_FAILED")
 
         access_token = token_data.get("access_token")
-        id_token = token_data.get("id_token")
 
         # 2. Get user info from Google
         user_info = get_google_user_info(access_token)
@@ -951,29 +757,23 @@ class GoogleCallbackView(generics.GenericAPIView):
         if not email_verified:
             return error_response("Google email must be verified.", code="EMAIL_NOT_VERIFIED")
 
-        # Use name from Google, fallback to constructing from given/family names
         full_name = name or f"{given_name} {family_name}".strip() or email.split("@")[0]
 
         # 3. Find or create user
         with transaction.atomic():
-            # Try to match by google_user_id first
             user = User.objects.filter(google_user_id=google_user_id).first()
 
             if user:
-                # Existing Google user - just log them in
-                pass
+                pass  # Existing Google user - just log them in
             else:
-                # Try to match by email (link accounts)
                 user = User.objects.filter(email=email).first()
 
                 if user:
-                    # Existing user with same email - link Google account
-                    # Since Google verifies emails, we can safely link
+                    # Link Google account to existing user
                     user.google_user_id = google_user_id
                     if not user.email_verified:
                         user.email_verified = True
                         user.email_verified_at = timezone.now()
-                    # Update auth provider if it was local
                     if user.auth_provider == "local":
                         user.auth_provider = "google"
                     if picture and not user.profile_photo_url:
@@ -989,18 +789,26 @@ class GoogleCallbackView(generics.GenericAPIView):
                         ]
                     )
                 else:
+                    # Check registration mode
+                    if REGISTRATION_MODE == "invite_only":
+                        return error_response(
+                            "Registration is by invitation only. Contact your administrator.",
+                            code="REGISTRATION_DISABLED",
+                        )
+
                     # Create new user with Google OAuth
                     user = User.objects.create_user(
                         email=email,
                         full_name=full_name,
                         email_verified=True,
-                        password=None,  # No password for OAuth users
+                        password=None,
                         google_user_id=google_user_id,
                         auth_provider="google",
                         profile_photo_url=picture,
                     )
+                    # Assign default learner role
+                    user.assign_role("learner")
 
-            # Ensure user is active
             if not user.is_active:
                 return error_response("Account is disabled.", code="ACCOUNT_DISABLED")
 
@@ -1009,7 +817,6 @@ class GoogleCallbackView(generics.GenericAPIView):
 
             Registration.link_registrations_for_user(user)
 
-            # Record login
             user.record_login()
 
             # 4. Generate JWT tokens
@@ -1025,132 +832,264 @@ class GoogleCallbackView(generics.GenericAPIView):
 
 
 # =============================================================================
-# Individual Organizer Payouts (Stripe Connect)
+# Admin User Management Views
 # =============================================================================
 
 
-@roles("organizer", "course_manager", "admin", route_name="payouts_connect")
-class PayoutsConnectView(generics.GenericAPIView):
+@roles("admin", route_name="admin_users")
+class AdminUserListCreateView(generics.ListCreateAPIView):
     """
-    POST /api/v1/users/me/payouts/connect/
-
-    Initiates Stripe Connect Express onboarding for the individual organizer.
-    Returns the Stripe hosted onboarding URL.
+    GET /api/v1/admin/users/ - List all users (admin only)
+    POST /api/v1/admin/users/ - Create user directly (admin only)
     """
 
-    permission_classes = [IsAuthenticated, IsOrganizerOrCourseManager]
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return serializers.AdminUserCreateSerializer
+        return serializers.AdminUserListSerializer
+
+    def get_queryset(self):
+        qs = User.objects.filter(deleted_at__isnull=True).order_by("-created_at")
+        # Search/filter
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                models.Q(email__icontains=search) |
+                models.Q(full_name__icontains=search)
+            )
+        role = self.request.query_params.get("role")
+        if role:
+            qs = qs.filter(groups__name=role)
+        is_active = self.request.query_params.get("is_active")
+        if is_active is not None:
+            qs = qs.filter(is_active=is_active.lower() == "true")
+        return qs.distinct()
+
+
+@roles("admin", route_name="admin_user_detail")
+class AdminUserUpdateView(generics.RetrieveUpdateAPIView):
+    """
+    GET /api/v1/admin/users/{uuid}/ - Get user details
+    PATCH /api/v1/admin/users/{uuid}/ - Update user role/status
+    """
+
+    permission_classes = [IsAuthenticated]
+    lookup_field = "uuid"
+
+    def get_serializer_class(self):
+        if self.request.method in ["PATCH", "PUT"]:
+            return serializers.AdminUserUpdateSerializer
+        return serializers.AdminUserListSerializer
+
+    def get_queryset(self):
+        return User.objects.filter(deleted_at__isnull=True)
+
+
+@roles("admin", route_name="admin_user_deactivate")
+class AdminUserDeactivateView(generics.GenericAPIView):
+    """POST /api/v1/admin/users/{uuid}/deactivate/ - Deactivate a user."""
+
+    permission_classes = [IsAuthenticated]
+    lookup_field = "uuid"
+
+    def get_queryset(self):
+        return User.objects.filter(deleted_at__isnull=True)
+
+    def post(self, request, uuid):
+        user = self.get_queryset().get(uuid=uuid)
+        if user == request.user:
+            return error_response("You cannot deactivate your own account.", code="SELF_DEACTIVATE")
+        user.is_active = not user.is_active
+        user.save(update_fields=["is_active", "updated_at"])
+        action = "activated" if user.is_active else "deactivated"
+        return Response({"message": f"User {action} successfully.", "is_active": user.is_active})
+
+
+@roles("admin", route_name="admin_invite_user")
+class AdminInviteUserView(generics.GenericAPIView):
+    """POST /api/v1/admin/users/invite/ - Send invitation to a new user."""
+
+    serializer_class = serializers.InviteUserSerializer
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        from django.conf import settings
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        from billing.services import stripe_connect_service
+        from .models import UserInvitation
 
-        user = request.user
-
-        # 1. Create Connect Account if not exists
-        if not user.stripe_connect_id:
-            account_id = stripe_connect_service.create_account(
-                email=user.email,
-                country="US",  # Default; can be made dynamic
-            )
-            if not account_id:
-                return error_response("Failed to create Stripe account.", code="CONNECT_CREATE_FAILED")
-
-            user.stripe_connect_id = account_id
-            user.stripe_account_status = "pending"
-            user.save(update_fields=["stripe_connect_id", "stripe_account_status", "updated_at"])
-
-        # 2. Generate Onboarding Link
-        frontend_url = settings.CORS_ALLOWED_ORIGINS[0] if settings.CORS_ALLOWED_ORIGINS else "http://localhost:5173"
-        refresh_url = f"{frontend_url}/settings?tab=payouts&refresh=true"
-        return_url = f"{frontend_url}/settings?tab=payouts&success=true"
-
-        onboarding_url = stripe_connect_service.create_account_link(
-            account_id=user.stripe_connect_id,
-            refresh_url=refresh_url,
-            return_url=return_url,
+        invitation = UserInvitation.create_invitation(
+            email=serializer.validated_data["email"],
+            full_name=serializer.validated_data["full_name"],
+            role=serializer.validated_data["role"],
+            invited_by=request.user,
+            message=serializer.validated_data.get("message", ""),
         )
 
-        if not onboarding_url:
-            return error_response("Failed to generate onboarding link.", code="CONNECT_LINK_FAILED")
+        # Send invitation email
+        try:
+            invite_url = f"{settings.FRONTEND_URL}/auth/accept-invitation?token={invitation.token}"
 
-        return Response({"url": onboarding_url})
+            print("\n" + "=" * 80)
+            print("📧 INVITATION LINK (copy this, NOT the email body below):")
+            print(f"   {invite_url}")
+            print("=" * 80 + "\n")
 
-
-@roles("organizer", "course_manager", "admin", route_name="payouts_status")
-class PayoutsStatusView(generics.GenericAPIView):
-    """
-    GET /api/v1/users/me/payouts/status/
-
-    Checks and syncs the Stripe Connect status for the individual organizer.
-    """
-
-    permission_classes = [IsAuthenticated, IsOrganizerOrCourseManager]
-
-    def get(self, request):
-        from billing.services import stripe_connect_service
-
-        user = request.user
-
-        if not user.stripe_connect_id:
-            return Response(
-                {
-                    "connected": False,
-                    "status": "not_connected",
-                    "charges_enabled": False,
-                }
+            send_mail(
+                subject=f"You've been invited to {INSTITUTION_NAME}",
+                message=(
+                    f"Hello {invitation.full_name},\n\n"
+                    f"You've been invited to join {INSTITUTION_NAME}.\n\n"
+                    f"Click the following link to set up your account:\n{invite_url}\n\n"
+                    f"This invitation expires in 7 days.\n\n"
+                    f"{invitation.message}"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[invitation.email],
+                fail_silently=False,
             )
-
-        status_info = stripe_connect_service.get_account_status(user.stripe_connect_id)
-
-        if "error" in status_info:
-            return Response(
-                {"detail": "Failed to retrieve status from Stripe."},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        # Update local state
-        user.stripe_charges_enabled = status_info.get("charges_enabled", False)
-        if status_info.get("charges_enabled"):
-            user.stripe_account_status = "active"
-        elif status_info.get("details_submitted"):
-            user.stripe_account_status = "pending_verification"
-        else:
-            user.stripe_account_status = "restricted"
-
-        user.save(update_fields=["stripe_charges_enabled", "stripe_account_status", "updated_at"])
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to send invitation email to {invitation.email}: {e}")
 
         return Response(
             {
-                "connected": True,
-                "status": user.stripe_account_status,
-                "charges_enabled": user.stripe_charges_enabled,
-                "stripe_id": user.stripe_connect_id,
-                "details": status_info,
-            }
+                "message": f"Invitation sent to {invitation.email}.",
+                "invitation": serializers.UserInvitationSerializer(invitation).data,
+            },
+            status=status.HTTP_201_CREATED,
         )
 
 
-@roles("organizer", "course_manager", "admin", route_name="payouts_dashboard")
-class PayoutsDashboardView(generics.GenericAPIView):
-    """
-    POST /api/v1/users/me/payouts/dashboard/
+@roles("admin", route_name="admin_bulk_invite")
+class AdminBulkInviteView(generics.GenericAPIView):
+    """POST /api/v1/admin/users/bulk-invite/ - Bulk invite users."""
 
-    Returns a Stripe Express dashboard login link.
-    """
-
-    permission_classes = [IsAuthenticated, IsOrganizerOrCourseManager]
+    serializer_class = serializers.BulkInviteSerializer
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        from billing.services import stripe_connect_service
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        user = request.user
+        from .models import UserInvitation
 
-        if not user.stripe_connect_id:
-            return error_response("Stripe account not connected.", code="NOT_CONNECTED")
+        results = []
+        for invite_data in serializer.validated_data["invitations"]:
+            # Skip if user already exists
+            if User.objects.filter(email__iexact=invite_data["email"]).exists():
+                results.append({"email": invite_data["email"], "status": "skipped", "reason": "User already exists"})
+                continue
 
-        login_url = stripe_connect_service.create_login_link(user.stripe_connect_id)
-        if not login_url:
-            return error_response("Failed to create Stripe dashboard link.", code="DASHBOARD_LINK_FAILED")
+            invitation = UserInvitation.create_invitation(
+                email=invite_data["email"],
+                full_name=invite_data["full_name"],
+                role=invite_data.get("role", "learner"),
+                invited_by=request.user,
+                message=invite_data.get("message", ""),
+            )
 
-        return Response({"url": login_url})
+            # Send email (best effort)
+            try:
+                invite_url = f"{settings.FRONTEND_URL}/auth/accept-invitation?token={invitation.token}"
+                send_mail(
+                    subject=f"You've been invited to {INSTITUTION_NAME}",
+                    message=f"Hello {invitation.full_name},\n\nYou've been invited to join {INSTITUTION_NAME}.\n\nSet up your account: {invite_url}\n\nThis invitation expires in 7 days.",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[invitation.email],
+                    fail_silently=True,
+                )
+                results.append({"email": invite_data["email"], "status": "sent"})
+            except Exception:
+                results.append({"email": invite_data["email"], "status": "created", "reason": "Email failed"})
+
+        return Response({"results": results, "total": len(results)}, status=status.HTTP_201_CREATED)
+
+
+@roles("admin", route_name="admin_invitations")
+class AdminInvitationListView(generics.ListAPIView):
+    """GET /api/v1/admin/invitations/ - List all invitations."""
+
+    serializer_class = serializers.UserInvitationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        from .models import UserInvitation
+        return UserInvitation.objects.all().order_by("-created_at")
+
+
+# =============================================================================
+# Invitation Acceptance (Public)
+# =============================================================================
+
+
+@roles("public", route_name="accept_invitation")
+class AcceptInvitationView(generics.GenericAPIView):
+    """
+    POST /api/v1/auth/accept-invitation/
+
+    Public endpoint. Validates invitation token, creates user account,
+    assigns role, returns JWT tokens.
+    """
+
+    serializer_class = serializers.AcceptInvitationSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from .models import UserInvitation
+
+        token = serializer.validated_data["token"]
+
+        try:
+            invitation = UserInvitation.objects.get(token=token)
+        except UserInvitation.DoesNotExist:
+            return error_response("Invalid invitation token.", code="INVALID_TOKEN")
+
+        if not invitation.is_valid:
+            if invitation.is_used:
+                return error_response("This invitation has already been used.", code="INVITATION_USED")
+            return error_response("This invitation has expired.", code="INVITATION_EXPIRED")
+
+        # Check if user already exists
+        if User.objects.filter(email__iexact=invitation.email).exists():
+            return error_response("An account with this email already exists.", code="USER_EXISTS")
+
+        # Create user
+        user = User.objects.create_user(
+            email=invitation.email,
+            full_name=invitation.full_name,
+            password=serializer.validated_data["password"],
+            email_verified=True,
+        )
+
+        # Assign role from invitation
+        user.assign_role(invitation.role)
+
+        # Mark invitation as accepted
+        invitation.accept(user)
+
+        # Generate JWT tokens
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        refresh = RefreshToken.for_user(user)
+
+        return Response(
+            {
+                "message": "Account created successfully.",
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": {
+                    "uuid": str(user.uuid),
+                    "email": user.email,
+                    "full_name": user.full_name,
+                    "roles": user.role_names,
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )

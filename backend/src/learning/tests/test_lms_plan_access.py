@@ -20,15 +20,14 @@ class TestLmsPlanAccess:
         assert response.status_code == status.HTTP_201_CREATED
 
         course = Course.objects.get(slug='personal-lms-course')
-        assert course.organization is None
         assert course.created_by_id == course_manager.id
 
     def test_course_manager_owned_filter_lists_only_personal_courses(self, course_manager_client, course_manager):
         from factories import CourseFactory, UserFactory
 
-        CourseFactory(organization=None, created_by=course_manager, slug='owned-course')
+        CourseFactory(created_by=course_manager, slug='owned-course')
         other_user = UserFactory()
-        CourseFactory(organization=None, created_by=other_user, slug='other-course')
+        CourseFactory(created_by=other_user, slug='other-course')
 
         response = course_manager_client.get('/api/v1/courses/?owned=true')
         assert response.status_code == status.HTTP_200_OK
@@ -72,49 +71,6 @@ class TestLmsPlanAccess:
             {
                 'title': 'Limited Course',
                 'slug': 'limited-course',
-            },
-        )
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-
-    def test_org_course_limit_enforced(self, organizer_client, organization):
-        from billing.models import StripeProduct
-        from organizations.models import OrganizationMembership, OrganizationSubscription
-
-        membership = OrganizationMembership.objects.get(
-            organization=organization,
-            user=organization.created_by,
-        )
-        membership.role = OrganizationMembership.Role.COURSE_MANAGER
-        membership.save(update_fields=['role'])
-
-        StripeProduct.objects.update_or_create(
-            plan='organization',
-            defaults={
-                'name': 'Organization',
-                'stripe_product_id': 'prod_test_org_limit',
-                'is_active': True,
-                'courses_per_month': 1,
-            },
-        )
-
-        org_subscription, _ = OrganizationSubscription.objects.update_or_create(
-            organization=organization,
-            defaults={
-                'plan': 'organization',
-                'status': 'active',
-                'courses_created_this_period': 1,
-            },
-        )
-        if org_subscription.courses_created_this_period != 1:
-            org_subscription.courses_created_this_period = 1
-            org_subscription.save(update_fields=['courses_created_this_period', 'updated_at'])
-
-        response = organizer_client.post(
-            '/api/v1/courses/',
-            {
-                'title': 'Org Limited Course',
-                'slug': 'org-limited-course',
-                'organization_slug': organization.slug,
             },
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN

@@ -145,7 +145,6 @@ class CourseAdmin(admin.ModelAdmin):
 
     list_display = [
         'title',
-        'organization',
         'status',
         'format',
         'enrollment_count',
@@ -153,16 +152,16 @@ class CourseAdmin(admin.ModelAdmin):
         'cpd_credits',
         'created_at',
     ]
-    list_filter = ['status', 'is_public', 'format', 'organization']
-    search_fields = ['title', 'organization__name', 'description']
+    list_filter = ['status', 'is_public', 'format']
+    search_fields = ['title', 'description']
     ordering = ['-created_at']
     readonly_fields = ['uuid', 'created_at', 'updated_at', 'enrollment_count', 'completion_count', 'module_count', 'is_free']
     prepopulated_fields = {'slug': ('title',)}
-    raw_id_fields = ['organization', 'created_by', 'certificate_template']
+    raw_id_fields = ['created_by', 'certificate_template']
     inlines = [CourseModuleInline]
 
     fieldsets = (
-        ('Basic Info', {'fields': ('organization', 'title', 'slug', 'format', 'description', 'short_description')}),
+        ('Basic Info', {'fields': ('title', 'slug', 'format', 'description', 'short_description')}),
         ('Media', {'fields': ('featured_image', 'featured_image_url', 'thumbnail')}),
         ('CPD', {'fields': ('cpd_credits', 'cpd_type')}),
         ('Status', {'fields': ('status', 'is_public')}),

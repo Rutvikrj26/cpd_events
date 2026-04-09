@@ -154,7 +154,7 @@ class StripeWebhookView(View):
 
         # Upgrade user account_type based on plan
         user = subscription.user
-        if subscription.plan in ['organizer', 'organization']:
+        if subscription.plan == 'organizer':
             user.upgrade_to_organizer()
             logger.info(f"Upgraded user {user.email} to organizer via webhook")
         elif subscription.plan == 'lms':
@@ -226,7 +226,7 @@ class StripeWebhookView(View):
 
         # Upgrade/downgrade user account_type based on plan changes
         user = subscription.user
-        if subscription.plan in ['organizer', 'organization']:
+        if subscription.plan == 'organizer':
             user.upgrade_to_organizer()
         elif subscription.plan == 'lms':
             user.upgrade_to_course_manager()
@@ -520,11 +520,14 @@ class StripeWebhookView(View):
                         tax_result.get('error'),
                     )
 
-                # Trigger Zoom registrant addition if status changed to CONFIRMED
+                # Trigger registration confirmation email if status changed to CONFIRMED
                 if status_changed:
-                    from registrations.tasks import add_zoom_registrant
+                    try:
+                        from registrations.tasks import send_registration_confirmation
 
-                    add_zoom_registrant.delay(locked_reg.id)
+                        send_registration_confirmation.delay(locked_reg.id)
+                    except Exception as task_err:
+                        logger.warning("Failed to queue confirmation email for registration %s: %s", locked_reg.id, task_err)
         except Exception as e:
             logger.error(f"Error locking registration {registration_id} in webhook: {e}")
             raise
@@ -627,13 +630,11 @@ class StripeWebhookView(View):
     def _handle_account_updated(self, data):
         """Handle account.updated (for Connect accounts)."""
         from accounts.models import User
-        from organizations.models import Organization
 
         account_id = data.get('id')
         if not account_id:
             return
 
-        # Helper to update status
         def update_status(obj):
             charges_enabled = data.get('charges_enabled', False)
             details_submitted = data.get('details_submitted', False)
@@ -649,14 +650,6 @@ class StripeWebhookView(View):
 
             obj.save(update_fields=['stripe_charges_enabled', 'stripe_account_status'])
             logger.info(f"Updated Connect account status for {obj.__class__.__name__} {obj.uuid}: {obj.stripe_account_status}")
-
-        # Try Organization first
-        try:
-            org = Organization.objects.get(stripe_connect_id=account_id)
-            update_status(org)
-            return
-        except Organization.DoesNotExist:
-            pass
 
         # Try User
         try:

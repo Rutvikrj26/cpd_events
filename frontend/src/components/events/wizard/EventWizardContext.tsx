@@ -59,7 +59,6 @@ const initialFormData: Partial<EventCreateRequest> = {
     price: 0,
     currency: 'USD',
     is_free: true,
-    zoom_settings: {},
 
     // Multi-session support
     is_multi_session: false,

@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from common.permissions import IsOrganizer
+from common.permissions import IsEducatorOrAdmin
 from common.rbac import roles
 from events.models import Event
 
@@ -24,7 +24,7 @@ from .services import (
 )
 
 
-@roles('organizer', 'admin', route_name='promo_codes')
+@roles('educator', 'admin', route_name='promo_codes')
 class PromoCodeViewSet(viewsets.ModelViewSet):
     """
     API endpoints for managing promo codes (organizer).
@@ -38,12 +38,16 @@ class PromoCodeViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = PromoCodeSerializer
-    permission_classes = [IsAuthenticated, IsOrganizer]
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
     lookup_field = 'uuid'
 
     def get_queryset(self):
         """Filter to codes owned by current user or their organization."""
         user = self.request.user
+
+        if user.is_staff:
+            return PromoCode.objects.all().prefetch_related('events').distinct()
+
         queryset = PromoCode.objects.filter(owner=user)
 
         # Include organization codes if user belongs to one

@@ -65,7 +65,7 @@ export function PrivacyPage() {
                         These third parties have access to your Personal Data only to perform these tasks on our behalf and are obligated not to disclose or use it for any other purpose.
                     </p>
                     <ul className="list-disc pl-6 space-y-2 mt-2">
-                        <li><strong>Zoom:</strong> Used for hosting virtual events and tracking attendance.</li>
+                        <li><strong>Built-in Video Conferencing:</strong> Used for hosting virtual events and tracking attendance automatically.</li>
                         <li><strong>Google Cloud Platform (GCP):</strong> Used for secure cloud storage of files, certificates, and application data.</li>
                         <li><strong>Stripe:</strong> Used for payment processing. We do not store or collect your payment card details. That information is provided directly to our third-party payment processors whose use of your personal information is governed by their Privacy Policy.</li>
                     </ul>

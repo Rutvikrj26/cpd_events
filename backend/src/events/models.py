@@ -8,7 +8,6 @@ from django.utils import timezone
 
 from common.config import AttendanceThresholds, EventDuplication, EventDuration, SessionDefaults
 from common.models import BaseModel, SoftDeleteModel
-from common.validators import validate_zoom_settings_schema
 
 
 class Event(SoftDeleteModel):
@@ -21,7 +20,7 @@ class Event(SoftDeleteModel):
 
     Key Features:
     - Status management with validation
-    - Zoom meeting integration
+    - Video conferencing integration
     - CPD credit configuration
     - Certificate settings
     - Waitlist management
@@ -29,7 +28,6 @@ class Event(SoftDeleteModel):
 
     Soft Delete Behavior:
     - Registrations preserved (for certificates)
-    - Zoom meeting may be deleted via API
     """
 
     class Status(models.TextChoices):
@@ -62,14 +60,6 @@ class Event(SoftDeleteModel):
     # =========================================
     owner = models.ForeignKey(
         'accounts.User', on_delete=models.PROTECT, related_name='events', help_text="Organizer who owns this event"
-    )
-    organization = models.ForeignKey(
-        'organizations.Organization',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='events',
-        help_text="Organization that owns this event (null for individual organizers)",
     )
 
     # =========================================
@@ -175,18 +165,9 @@ class Event(SoftDeleteModel):
     allow_guest_registration = models.BooleanField(default=True, help_text="Allow registration without account")
 
     # =========================================
-    # Zoom Integration
+    # Video Conferencing
     # =========================================
-    zoom_meeting_id = models.CharField(max_length=20, blank=True, db_index=True, help_text="Zoom meeting ID")
-    zoom_meeting_uuid = models.CharField(max_length=100, blank=True, help_text="Zoom meeting UUID")
-    zoom_join_url = models.URLField(blank=True, help_text="Zoom join URL for attendees")
-    zoom_start_url = models.URLField(max_length=2000, blank=True, help_text="Zoom start URL for host")
-    zoom_password = models.CharField(max_length=50, blank=True, help_text="Zoom meeting password")
-    zoom_settings = models.JSONField(
-        default=dict, validators=[validate_zoom_settings_schema], blank=True, help_text="Zoom meeting settings"
-    )
-    zoom_error = models.TextField(blank=True, help_text="Last Zoom integration error message")
-    zoom_error_at = models.DateTimeField(null=True, blank=True, help_text="When last Zoom error occurred")
+    video_settings = models.JSONField(default=dict, blank=True, help_text="Video conferencing settings (e.g., {enabled: true})")
 
     # =========================================
     # CPD Settings
@@ -274,14 +255,16 @@ class Event(SoftDeleteModel):
     class Meta:
         db_table = 'events'
         ordering = ['-starts_at']
+        permissions = [
+            ("can_create_event", "Can create events"),
+            ("can_manage_event", "Can manage events"),
+        ]
         indexes = [
             models.Index(fields=['owner', 'status']),
-            models.Index(fields=['organization', 'status']),
             models.Index(fields=['status', '-starts_at']),
             models.Index(fields=['starts_at']),
             models.Index(fields=['uuid']),
             models.Index(fields=['slug']),
-            models.Index(fields=['zoom_meeting_id']),
         ]
         verbose_name = 'Event'
         verbose_name_plural = 'Events'
@@ -306,11 +289,6 @@ class Event(SoftDeleteModel):
     def is_past(self):
         """Check if event end time has passed."""
         return self.ends_at < timezone.now()
-
-    @property
-    def owning_entity(self):
-        """Return the organization or owner of this event."""
-        return self.organization or self.owner
 
     @property
     def is_free(self):
@@ -396,12 +374,10 @@ class Event(SoftDeleteModel):
         """
         # Block publishing paid events without connected payouts
         if self.price > 0:
-            has_org_payouts = self.organization and self.organization.stripe_charges_enabled
-            has_owner_payouts = self.owner.stripe_charges_enabled
-            if not has_org_payouts and not has_owner_payouts:
+            if not self.owner.stripe_charges_enabled:
                 raise ValueError(
                     "Cannot publish a paid event without connected payouts. "
-                    "Please link a bank account in your profile settings or organization settings."
+                    "Please link a bank account in your profile settings."
                 )
 
         self._change_status(self.Status.PUBLISHED, user, 'Event published')
@@ -603,10 +579,7 @@ class EventSession(BaseModel):
     duration_minutes = models.PositiveIntegerField(default=SessionDefaults.DURATION_MINUTES)
     timezone = models.CharField(max_length=50, default='UTC')
     session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.LIVE)
-    has_separate_zoom = models.BooleanField(default=False)
-    zoom_meeting_id = models.CharField(max_length=100, blank=True)
-    zoom_join_url = models.URLField(max_length=500, blank=True)
-    zoom_host_url = models.URLField(max_length=500, blank=True)
+    video_settings = models.JSONField(default=dict, blank=True, help_text="Video conferencing settings (e.g., {enabled: true})")
     cpd_credits = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     is_mandatory = models.BooleanField(default=True)
     is_published = models.BooleanField(default=True)
@@ -702,14 +675,6 @@ class Speaker(BaseModel):
 
     owner = models.ForeignKey(
         'accounts.User', on_delete=models.PROTECT, related_name='speakers', help_text="User who manages this speaker profile"
-    )
-    organization = models.ForeignKey(
-        'organizations.Organization',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='speakers',
-        help_text="Organization that owns this speaker profile",
     )
 
     name = models.CharField(max_length=200, help_text="Speaker full name")

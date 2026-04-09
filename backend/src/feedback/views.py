@@ -7,7 +7,7 @@ from .models import EventFeedback
 from .serializers import EventFeedbackSerializer
 
 
-@roles('attendee', 'organizer', 'admin', route_name='event_feedback')
+@roles('learner', 'educator', 'admin', route_name='event_feedback')
 class EventFeedbackViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing event feedback.

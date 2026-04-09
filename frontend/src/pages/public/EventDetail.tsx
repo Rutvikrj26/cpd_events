@@ -23,6 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/custom/StatusBadge";
+import { JoinButton } from "@/components/video/JoinButton";
 import { getPublicEvent, getPublicEvents } from "@/api/events";
 import { getMyRegistrations } from "@/api/registrations";
 import { Event } from "@/api/events/types";
@@ -140,7 +141,7 @@ export function EventDetail() {
   const organizerName = event.organizer?.display_name || event.organizer_name || event.owner?.display_name || "Unknown Organizer";
 
   // Check if current user is the organizer (check both nested objects as per API variant)
-  const isOrganizer = isAuthenticated && (user?.uuid === event.owner?.uuid || user?.uuid === event.organizer?.uuid);
+  const isEventOwner = isAuthenticated && (user?.uuid === event.owner?.uuid || user?.uuid === event.organizer?.uuid);
 
   // Calculate duration display
   const getDurationDisplay = () => {
@@ -163,7 +164,7 @@ export function EventDetail() {
 
   // Render the registration button based on state
   const renderRegistrationButton = (isLarge = false) => {
-    if (isOrganizer) {
+    if (isEventOwner) {
       return (
         <Link to={`/organizer/events/${event.uuid}/manage`}>
           <Button
@@ -550,9 +551,9 @@ export function EventDetail() {
           <div className="space-y-6">
             <Card className="shadow-md border-border">
               <CardHeader>
-                <CardTitle>{isOrganizer ? "Event Management" : "Registration"}</CardTitle>
+                <CardTitle>{isEventOwner ? "Event Management" : "Registration"}</CardTitle>
                 <CardDescription>
-                  {isOrganizer
+                  {isEventOwner
                     ? "Manage your event details and registrations."
                     : isPendingPayment
                       ? "Payment pending — complete payment to confirm."
@@ -655,30 +656,14 @@ export function EventDetail() {
                       <Video className="h-4 w-4 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="font-medium text-foreground">Online Event</p>
-                        {isConfirmedRegistration && userRegistration?.zoom_join_url ? (
+                        {isConfirmedRegistration ? (
                           <div className="mt-2 space-y-2">
-                            <a
-                              href={userRegistration.zoom_join_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
-                            >
-                              <Video className="h-4 w-4" />
-                              Join Meeting
-                            </a>
-                            <p className="text-xs text-muted-foreground">
-                              You'll also receive meeting details and reminders via email from Zoom
-                            </p>
-                          </div>
-                        ) : isConfirmedRegistration ? (
-                          <div className="mt-1 space-y-1">
-                            <p className="text-success">Meeting link will be available closer to the event date</p>
-                            <p className="text-xs text-muted-foreground">Check your email for the Zoom meeting invitation</p>
+                            <JoinButton eventUuid={event.uuid} size="sm" label="Join Video" />
+                            <p className="text-xs text-muted-foreground">Check your email for meeting details</p>
                           </div>
                         ) : isPendingPayment ? (
                           <div className="mt-1 space-y-1">
                             <p className="text-warning">Complete payment to receive meeting details</p>
-                            <p className="text-xs text-muted-foreground">You'll get the Zoom link once payment is confirmed</p>
                           </div>
                         ) : isWaitlisted ? (
                           <div className="mt-1 space-y-1">
@@ -695,30 +680,14 @@ export function EventDetail() {
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="font-medium text-foreground">Hybrid Event</p>
-                        {isConfirmedRegistration && userRegistration?.zoom_join_url ? (
+                        {isConfirmedRegistration ? (
                           <div className="mt-2 space-y-2">
-                            <a
-                              href={userRegistration.zoom_join_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
-                            >
-                              <Video className="h-4 w-4" />
-                              Join Online
-                            </a>
-                            <p className="text-xs text-muted-foreground">
-                              You'll also receive meeting details and reminders via email from Zoom
-                            </p>
-                          </div>
-                        ) : isConfirmedRegistration ? (
-                          <div className="mt-1 space-y-1">
-                            <p className="text-success">Details will be available closer to the event date</p>
-                            <p className="text-xs text-muted-foreground">Check your email for the Zoom meeting invitation</p>
+                            <JoinButton eventUuid={event.uuid} size="sm" label="Join Online" />
+                            <p className="text-xs text-muted-foreground">Check your email for meeting details</p>
                           </div>
                         ) : isPendingPayment ? (
                           <div className="mt-1 space-y-1">
                             <p className="text-warning">Complete payment to receive event details</p>
-                            <p className="text-xs text-muted-foreground">You'll get the online link once payment is confirmed</p>
                           </div>
                         ) : isWaitlisted ? (
                           <div className="mt-1 space-y-1">

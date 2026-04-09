@@ -23,14 +23,6 @@ vi.mock("@/contexts/AuthContext", () => ({
     }),
 }));
 
-// Mock OrganizationContext
-vi.mock("@/contexts/OrganizationContext", () => ({
-    useOrganization: () => ({
-        currentOrg: null,
-        organizations: [],
-    }),
-}));
-
 const renderDashboardLayout = async () => {
     const view = render(
         <BrowserRouter>

@@ -26,7 +26,6 @@ class EventAdmin(admin.ModelAdmin):
         ('CPD', {'fields': ('cpd_enabled', 'cpd_credit_type', 'cpd_credit_value', 'learning_objectives')}),
         ('Speakers', {'fields': ('speakers',)}),
         ('Certificates', {'fields': ('certificates_enabled', 'certificate_template', 'auto_issue_certificates')}),
-        ('Zoom', {'fields': ('zoom_meeting_id', 'zoom_join_url'), 'classes': ('collapse',)}),
     )
 
 

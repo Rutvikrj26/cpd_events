@@ -5,7 +5,6 @@ from django.utils import timezone
 from accounts.models import User
 from events.models import Event
 from learning.models import ContentProgress, Course, CourseEnrollment, CourseModule, EventModule, ModuleContent, ModuleProgress
-from organizations.models import Organization
 from registrations.models import Registration
 
 
@@ -20,8 +19,7 @@ class TestCourseProgressArchitecture:
         """Verify progress can be linked to a CourseEnrollment."""
         # Setup
         user = make_user()
-        org = Organization.objects.create(name="Test Org", slug="test-org")
-        course = Course.objects.create(title="Test Course", slug="test-course", organization=org)
+        course = Course.objects.create(title="Test Course", slug="test-course")
         enrollment = CourseEnrollment.objects.create(course=course, user=user)
 
         # Internal structure
@@ -67,10 +65,9 @@ class TestCourseProgressArchitecture:
     def test_validation_mutual_exclusivity(self):
         """Ensure one cannot have BOTH registration and course_enrollment."""
         user = make_user('conflict@example.com')
-        org = Organization.objects.create(name="Conflict Org", slug="conflict-org")
 
         # Course context
-        course = Course.objects.create(title="Conflict Course", slug="conflict-course", organization=org)
+        course = Course.objects.create(title="Conflict Course", slug="conflict-course")
         enrollment = CourseEnrollment.objects.create(course=course, user=user)
 
         # Event context

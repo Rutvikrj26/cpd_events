@@ -36,14 +36,6 @@ class BadgeTemplate(SoftDeleteModel):
         related_name='badge_templates',
         help_text="Organizer who owns this template",
     )
-    organization = models.ForeignKey(
-        'organizations.Organization',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='badge_templates',
-        help_text="Organization that owns this template",
-    )
 
     # Basic Info
     name = models.CharField(max_length=100, help_text="Template name")
@@ -74,7 +66,6 @@ class BadgeTemplate(SoftDeleteModel):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['owner']),
-            models.Index(fields=['organization']),
         ]
 
     def __str__(self):

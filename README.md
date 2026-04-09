@@ -13,15 +13,15 @@
 
 **CPD Events** is a production-ready SaaS platform that enables organizations to:
 - Create and manage virtual/hybrid CPD events
-- Automatically track attendance via Zoom integration
+- Automatically track attendance via LiveKit video conferencing
 - Issue verifiable digital certificates
 - Manage subscriptions and payments via Stripe
 - Deliver self-paced courses with full LMS capabilities
 
 ### Key Features
 
-- ✅ **Multi-format events**: Online (Zoom), in-person, hybrid
-- ✅ **Automatic attendance tracking**: Real-time via Zoom webhooks
+- ✅ **Multi-format events**: Online (LiveKit), in-person, hybrid
+- ✅ **Automatic attendance tracking**: Real-time via LiveKit webhooks
 - ✅ **Certificate management**: PDF generation with custom templates
 - ✅ **Flexible billing**: Multi-tier subscriptions with 14-day trial
 - ✅ **Learning Management**: Courses, modules, assignments, grading
@@ -60,7 +60,7 @@ Trials (default 30 days), limits, and pricing are all managed in the database pe
 - Node.js 18+
 - PostgreSQL 14+ (or use Docker)
 - Stripe account (for payments)
-- Zoom account (for virtual events)
+- LiveKit server (included in Docker setup for virtual events)
 
 ### Option 1: Docker (Recommended)
 
@@ -116,7 +116,7 @@ cpd_events/
 │   │   ├── registrations/# Registration & attendance tracking
 │   │   ├── learning/     # LMS (courses, modules, assignments)
 │   │   ├── organizations/# Multi-tenant organizations
-│   │   ├── integrations/ # Zoom, email, webhooks
+│   │   ├── integrations/ # LiveKit, email, webhooks
 │   │   ├── feedback/     # Event feedback & surveys
 │   │   └── promo_codes/  # Discount codes
 │   ├── Dockerfile
@@ -152,7 +152,7 @@ cpd_events/
 - **Database**: PostgreSQL (production) / SQLite (development)
 - **Authentication**: JWT tokens via djangorestframework-simplejwt
 - **Payments**: Stripe (Subscriptions + Connect)
-- **Integrations**: Zoom OAuth, webhooks
+- **Video**: LiveKit (self-hosted video conferencing with webhooks)
 - **Cloud**: Google Cloud Platform (Cloud Run, Cloud SQL, Cloud Storage)
 - **Tasks**: GCP Cloud Tasks (async processing)
 
@@ -193,13 +193,13 @@ cpd_events/
 
 ### Event Management
 - Create single or multi-session events
-- Support for online (Zoom), in-person, and hybrid formats
+- Support for online (LiveKit video), in-person, and hybrid formats
 - Custom registration forms with validation
 - Capacity management with automatic waitlist
 - Event duplication and templates
 
 ### Attendance Tracking
-- **Automatic**: Zoom webhooks capture join/leave events
+- **Automatic**: LiveKit webhooks capture join/leave events
 - **Manual**: In-person check-in for hybrid events
 - **Smart matching**: Email-based attendee matching
 - **Eligibility calculation**: Automatic certificate eligibility
@@ -318,7 +318,7 @@ See [`cli/DEPLOYMENT.md`](cli/DEPLOYMENT.md) for detailed deployment guide.
 - JWT-based authentication with refresh tokens
 - Encrypted OAuth tokens (Fernet encryption)
 - Stripe webhook signature validation
-- Zoom webhook signature validation
+- LiveKit webhook authentication
 - CORS configuration
 - Rate limiting on auth endpoints
 - GDPR-compliant user anonymization
@@ -417,7 +417,7 @@ Contributions are welcome! Please:
 - Built with [Django](https://www.djangoproject.com/) and [React](https://reactjs.org/)
 - UI from [Radix UI](https://www.radix-ui.com/) and [shadcn/ui](https://ui.shadcn.com/)
 - Icons from [Lucide](https://lucide.dev/)
-- Powered by [Stripe](https://stripe.com/) and [Zoom](https://zoom.us/)
+- Powered by [Stripe](https://stripe.com/) and [LiveKit](https://livekit.io/)
 
 ---
 

@@ -42,7 +42,6 @@ const eventSchema = z.object({
   creditType: z.string(),
   credits: z.coerce.number().min(0),
   enableCertificates: z.boolean().default(true),
-  enableZoom: z.boolean().default(true),
 });
 
 export function CreateEvent() {
@@ -63,7 +62,6 @@ export function CreateEvent() {
       creditType: "CME",
       credits: 1,
       enableCertificates: true,
-      enableZoom: true,
     },
   });
 
@@ -92,8 +90,6 @@ export function CreateEvent() {
 
         certificates_enabled: values.enableCertificates,
         auto_issue_certificates: values.enableCertificates,
-
-        zoom_settings: values.enableZoom ? { enabled: true } : {},
       };
 
       await createEvent(payload);
@@ -354,26 +350,6 @@ export function CreateEvent() {
                 )}
               />
 
-              <FormField
-                control={form.control as any}
-                name="enableZoom"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Create Zoom Meeting</FormLabel>
-                      <FormDescription>
-                        Automatically create a Zoom meeting and track attendance.
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
             </CardContent>
           </Card>
 

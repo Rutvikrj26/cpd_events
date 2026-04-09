@@ -39,7 +39,6 @@ import { useToast } from '@/components/ui/use-toast';
 import { createCourse } from '@/api/courses';
 import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
 import { getBadgeTemplates, BadgeTemplate } from '@/api/badges';
-import { useOrganization } from '@/contexts/OrganizationContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { SessionScheduler, SessionDraft } from '@/components/courses/SessionScheduler';
 
@@ -60,10 +59,6 @@ const courseSchema = z.object({
     // Hybrid completion
     hybrid_completion_criteria: z.enum(['modules_only', 'sessions_only', 'both', 'either', 'min_sessions']).optional(),
     min_sessions_required: z.coerce.number().min(1).default(1),
-    // Zoom settings (for Hybrid courses - auto-create meeting)
-    zoom_settings: z.object({
-        enabled: z.boolean().default(false),
-    }).default({ enabled: false }),
     // Live session scheduling
     live_session_start: z.string().optional(),
     live_session_end: z.string().optional(),
@@ -83,7 +78,6 @@ const CreateCoursePage = () => {
     const { slug } = useParams<{ slug?: string }>();
     const navigate = useNavigate();
     const { toast } = useToast();
-    const { currentOrg } = useOrganization();
     const isPersonal = !slug;
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -104,7 +98,6 @@ const CreateCoursePage = () => {
             format: 'online',
             hybrid_completion_criteria: 'both',
             min_sessions_required: 1,
-            zoom_settings: { enabled: false },
             live_session_start: '',
             live_session_end: '',
             live_session_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
@@ -151,7 +144,6 @@ const CreateCoursePage = () => {
         fetchTemplates();
     }, []);
 
-    // Watch format to show/hide Zoom fields
     const courseFormat = form.watch('format');
 
     // Auto-generate slug from title
@@ -200,7 +192,6 @@ const CreateCoursePage = () => {
                             starts_at: session.starts_at,
                             duration_minutes: session.duration_minutes,
                             timezone: session.timezone,
-                            zoom_settings: { enabled: session.zoom_enabled },
                             cpd_credits: session.cpd_credits,
                             is_mandatory: session.is_mandatory,
                             minimum_attendance_percent: session.minimum_attendance_percent,
@@ -481,7 +472,7 @@ const CreateCoursePage = () => {
                                             </div>
                                         </FormControl>
                                         <FormDescription>
-                                            Hybrid courses include scheduled live sessions via Zoom.
+                                            Hybrid courses include scheduled live sessions.
                                         </FormDescription>
                                         <FormMessage />
                                     </FormItem>

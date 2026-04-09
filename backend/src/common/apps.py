@@ -11,14 +11,15 @@ class CommonConfig(AppConfig):
         # Import all views that use @roles decorator to populate the registry
         try:
             import accounts.views  # noqa: F401
+            import badges.views  # noqa: F401
             import billing.views  # noqa: F401
             import certificates.views  # noqa: F401
+            import conferencing.views  # noqa: F401
             import contacts.views  # noqa: F401
             import events.views  # noqa: F401
             import feedback.views  # noqa: F401
             import integrations.views  # noqa: F401
             import learning.views  # noqa: F401
-            import organizations.views  # noqa: F401
             import promo_codes.views  # noqa: F401
             import registrations.views  # noqa: F401
         except ImportError:

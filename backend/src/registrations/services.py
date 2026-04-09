@@ -175,12 +175,6 @@ class RegistrationService:
                     registration.delete()
                     raise ValidationError(intent_data['error'])
 
-        # Queue Zoom registrant addition (async)
-        if registration.status == Registration.Status.CONFIRMED:
-            from registrations.tasks import add_zoom_registrant
-
-            add_zoom_registrant.delay(registration.id)
-
         return {
             'registration': registration,
             'client_secret': client_secret,
@@ -431,12 +425,6 @@ class PaymentConfirmationService:
                             registration.uuid,
                             tax_result.get('error'),
                         )
-
-                    # Trigger Zoom registrant addition after payment confirmed
-                    if registration.status == Registration.Status.CONFIRMED:
-                        from registrations.tasks import add_zoom_registrant
-
-                        add_zoom_registrant.delay(registration.id)
 
                     logger.info(f"Registration {registration.uuid} payment confirmed: PAID")
                     return {
