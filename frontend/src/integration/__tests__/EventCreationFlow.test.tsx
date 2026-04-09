@@ -22,7 +22,7 @@ vi.mock("@/components/layout/ScrollToTop", () => ({
 }));
 
 // Mock ReactQuill to simple textarea
-vi.mock("react-quill", () => ({
+vi.mock("react-quill-new", () => ({
     default: ({ value, onChange, placeholder }: any) => (
         <textarea
             data-testid="quill-editor"

@@ -1,0 +1,227 @@
+[
+  {
+    "model": "conferencing.videoroom",
+    "pk": 1,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000000701",
+      "created_at": "2025-03-01T10:00:00Z",
+      "updated_at": "2025-03-01T10:00:00Z",
+      "content_type": ["events", "event"],
+      "object_id": 1,
+      "room_id": "rm_ethics_webinar_001",
+      "room_name": "clinical-ethics-2025-03-20",
+      "provider": "livekit",
+      "status": "scheduled",
+      "started_at": null,
+      "ended_at": null,
+      "settings": {"max_duration_minutes": 150, "enable_chat": true, "enable_screen_share": true, "enable_recording": true},
+      "max_participants": 50,
+      "error": "",
+      "error_at": null
+    }
+  },
+  {
+    "model": "conferencing.videoroom",
+    "pk": 2,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000000702",
+      "created_at": "2025-02-01T10:00:00Z",
+      "updated_at": "2025-02-15T16:05:00Z",
+      "content_type": ["events", "event"],
+      "object_id": 2,
+      "room_id": "rm_acls_workshop_001",
+      "room_name": "acls-workshop-2025-02-15",
+      "provider": "livekit",
+      "status": "ended",
+      "started_at": "2025-02-15T13:02:00Z",
+      "ended_at": "2025-02-15T16:05:00Z",
+      "settings": {"max_duration_minutes": 200, "enable_chat": true, "enable_screen_share": true},
+      "max_participants": 30,
+      "error": "",
+      "error_at": null
+    }
+  },
+  {
+    "model": "conferencing.videoroom",
+    "pk": 3,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000000703",
+      "created_at": "2025-03-15T09:00:00Z",
+      "updated_at": "2025-03-15T09:00:00Z",
+      "content_type": ["learning", "coursesession"],
+      "object_id": 1,
+      "room_id": "rm_ethics_course_live_001",
+      "room_name": "ethics-course-live-2025-04-01",
+      "provider": "livekit",
+      "status": "scheduled",
+      "started_at": null,
+      "ended_at": null,
+      "settings": {"max_duration_minutes": 75, "enable_chat": true},
+      "max_participants": 100,
+      "error": "",
+      "error_at": null
+    }
+  },
+  {
+    "model": "conferencing.videowebhooklog",
+    "pk": 1,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000000704",
+      "created_at": "2025-02-15T13:02:00Z",
+      "updated_at": "2025-02-15T13:02:01Z",
+      "webhook_id": "wh_room_start_001",
+      "event_type": "room_started",
+      "event_timestamp": "2025-02-15T13:02:00Z",
+      "provider": "livekit",
+      "room_name": "acls-workshop-2025-02-15",
+      "room_id": "rm_acls_workshop_001",
+      "video_room": 2,
+      "payload": {"room": {"name": "acls-workshop-2025-02-15", "sid": "rm_acls_workshop_001"}},
+      "headers": {"Authorization": "Bearer [redacted]"},
+      "processing_status": "completed",
+      "processed_at": "2025-02-15T13:02:01Z",
+      "processing_attempts": 1,
+      "last_attempt_at": "2025-02-15T13:02:01Z",
+      "error_message": "",
+      "error_traceback": "",
+      "attendance_records_created": 0
+    }
+  },
+  {
+    "model": "conferencing.videowebhooklog",
+    "pk": 2,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000000705",
+      "created_at": "2025-02-15T13:03:00Z",
+      "updated_at": "2025-02-15T13:03:01Z",
+      "webhook_id": "wh_part_join_001",
+      "event_type": "participant_joined",
+      "event_timestamp": "2025-02-15T13:03:00Z",
+      "provider": "livekit",
+      "room_name": "acls-workshop-2025-02-15",
+      "room_id": "rm_acls_workshop_001",
+      "video_room": 2,
+      "payload": {"room": {"name": "acls-workshop-2025-02-15"}, "participant": {"identity": "emily.park@hospital.com", "name": "Dr. Emily Park"}},
+      "headers": {},
+      "processing_status": "completed",
+      "processed_at": "2025-02-15T13:03:01Z",
+      "processing_attempts": 1,
+      "last_attempt_at": "2025-02-15T13:03:01Z",
+      "error_message": "",
+      "error_traceback": "",
+      "attendance_records_created": 1
+    }
+  },
+  {
+    "model": "conferencing.videowebhooklog",
+    "pk": 3,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000000706",
+      "created_at": "2025-02-15T16:05:00Z",
+      "updated_at": "2025-02-15T16:05:01Z",
+      "webhook_id": "wh_room_end_001",
+      "event_type": "room_finished",
+      "event_timestamp": "2025-02-15T16:05:00Z",
+      "provider": "livekit",
+      "room_name": "acls-workshop-2025-02-15",
+      "room_id": "rm_acls_workshop_001",
+      "video_room": 2,
+      "payload": {"room": {"name": "acls-workshop-2025-02-15", "sid": "rm_acls_workshop_001"}},
+      "headers": {},
+      "processing_status": "completed",
+      "processed_at": "2025-02-15T16:05:01Z",
+      "processing_attempts": 1,
+      "last_attempt_at": "2025-02-15T16:05:01Z",
+      "error_message": "",
+      "error_traceback": "",
+      "attendance_records_created": 0
+    }
+  },
+  {
+    "model": "conferencing.videorecording",
+    "pk": 1,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000000707",
+      "created_at": "2025-02-15T13:02:00Z",
+      "updated_at": "2025-02-16T10:00:00Z",
+      "video_room": 2,
+      "event": 2,
+      "egress_id": "eg_acls_rec_001",
+      "provider": "livekit",
+      "recording_start": "2025-02-15T13:02:00Z",
+      "recording_end": "2025-02-15T16:05:00Z",
+      "duration_seconds": 10980,
+      "total_size_bytes": 524288000,
+      "status": "available",
+      "storage_path": "recordings/acls-workshop-2025-02-15/",
+      "access_level": "registrants",
+      "title": "ACLS Workshop Recording - Feb 2025",
+      "description": "Full recording of the Advanced Cardiac Life Support Workshop held on February 15, 2025.",
+      "is_published": true,
+      "published_at": "2025-02-16T10:00:00Z",
+      "auto_publish": false,
+      "view_count": 3,
+      "unique_viewers": 2
+    }
+  },
+  {
+    "model": "conferencing.videorecordingfile",
+    "pk": 1,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000000708",
+      "created_at": "2025-02-15T16:10:00Z",
+      "updated_at": "2025-02-15T16:10:00Z",
+      "recording": 1,
+      "file_type": "video",
+      "file_name": "acls-workshop-2025-02-15-video",
+      "file_extension": "mp4",
+      "file_size_bytes": 512000000,
+      "storage_url": "gs://mededhub-recordings/acls-workshop-2025-02-15/video.mp4",
+      "is_visible": true
+    }
+  },
+  {
+    "model": "conferencing.videorecordingfile",
+    "pk": 2,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000000709",
+      "created_at": "2025-02-15T16:10:00Z",
+      "updated_at": "2025-02-15T16:10:00Z",
+      "recording": 1,
+      "file_type": "chat",
+      "file_name": "acls-workshop-2025-02-15-chat",
+      "file_extension": "json",
+      "file_size_bytes": 12288,
+      "storage_url": "gs://mededhub-recordings/acls-workshop-2025-02-15/chat.json",
+      "is_visible": true
+    }
+  },
+  {
+    "model": "conferencing.recordingview",
+    "pk": 1,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000000710",
+      "created_at": "2025-02-17T10:00:00Z",
+      "updated_at": "2025-02-20T14:30:00Z",
+      "recording": 1,
+      "user": 3,
+      "first_viewed_at": "2025-02-17T10:00:00Z",
+      "last_viewed_at": "2025-02-20T14:30:00Z",
+      "view_count": 2
+    }
+  },
+  {
+    "model": "conferencing.recordingview",
+    "pk": 2,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000000711",
+      "created_at": "2025-02-18T11:00:00Z",
+      "updated_at": "2025-02-18T11:00:00Z",
+      "recording": 1,
+      "user": 4,
+      "first_viewed_at": "2025-02-18T11:00:00Z",
+      "last_viewed_at": null,
+      "view_count": 1
+    }
+  }
+]

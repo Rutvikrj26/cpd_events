@@ -1,0 +1,122 @@
+[
+  {
+    "model": "integrations.emaillog",
+    "pk": 1,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000001201",
+      "created_at": "2025-02-01T10:01:00Z",
+      "updated_at": "2025-02-01T10:16:00Z",
+      "recipient_email": "emily.park@hospital.com",
+      "recipient_name": "Dr. Emily Park",
+      "recipient_user": 3,
+      "email_type": "registration_confirm",
+      "subject": "Registration Confirmed: Clinical Ethics in Modern Practice",
+      "event": 1,
+      "registration": 1,
+      "certificate": null,
+      "status": "delivered",
+      "sent_at": "2025-02-01T10:01:00Z",
+      "delivered_at": "2025-02-01T10:01:05Z",
+      "opened_at": "2025-02-01T10:15:00Z",
+      "clicked_at": "2025-02-01T10:16:00Z",
+      "error_message": "",
+      "provider_message_id": "msg_brevo_001"
+    }
+  },
+  {
+    "model": "integrations.emaillog",
+    "pk": 2,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000001202",
+      "created_at": "2025-03-01T10:05:00Z",
+      "updated_at": "2025-03-01T12:00:30Z",
+      "recipient_email": "emily.park@hospital.com",
+      "recipient_name": "Dr. Emily Park",
+      "recipient_user": 3,
+      "email_type": "certificate",
+      "subject": "Your Certificate: Clinical Ethics in Modern Practice",
+      "event": 1,
+      "registration": 1,
+      "certificate": 1,
+      "status": "delivered",
+      "sent_at": "2025-03-01T10:05:00Z",
+      "delivered_at": "2025-03-01T10:05:08Z",
+      "opened_at": "2025-03-01T12:00:00Z",
+      "clicked_at": "2025-03-01T12:00:30Z",
+      "error_message": "",
+      "provider_message_id": "msg_brevo_002"
+    }
+  },
+  {
+    "model": "integrations.emaillog",
+    "pk": 3,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000001203",
+      "created_at": "2025-02-02T09:00:00Z",
+      "updated_at": "2025-02-02T11:30:00Z",
+      "recipient_email": "m.torres@clinic.com",
+      "recipient_name": "Dr. Michael Torres",
+      "recipient_user": 4,
+      "email_type": "registration_confirm",
+      "subject": "Registration Confirmed: Clinical Ethics in Modern Practice",
+      "event": 1,
+      "registration": 2,
+      "certificate": null,
+      "status": "delivered",
+      "sent_at": "2025-02-02T09:00:00Z",
+      "delivered_at": "2025-02-02T09:00:04Z",
+      "opened_at": "2025-02-02T11:30:00Z",
+      "clicked_at": null,
+      "error_message": "",
+      "provider_message_id": "msg_brevo_003"
+    }
+  },
+  {
+    "model": "integrations.emaillog",
+    "pk": 4,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000001204",
+      "created_at": "2025-02-10T14:00:00Z",
+      "updated_at": "2025-02-10T15:00:00Z",
+      "recipient_email": "aisha.khan@university.edu",
+      "recipient_name": "Dr. Aisha Khan",
+      "recipient_user": 5,
+      "email_type": "registration_confirm",
+      "subject": "Waitlisted: Clinical Ethics in Modern Practice",
+      "event": 1,
+      "registration": 3,
+      "certificate": null,
+      "status": "delivered",
+      "sent_at": "2025-02-10T14:00:00Z",
+      "delivered_at": "2025-02-10T14:00:06Z",
+      "opened_at": "2025-02-10T15:00:00Z",
+      "clicked_at": null,
+      "error_message": "",
+      "provider_message_id": "msg_brevo_004"
+    }
+  },
+  {
+    "model": "integrations.emaillog",
+    "pk": 5,
+    "fields": {
+      "id": "00000000-0000-4000-a000-000000001205",
+      "created_at": "2025-03-19T10:00:00Z",
+      "updated_at": "2025-03-19T18:00:00Z",
+      "recipient_email": "emily.park@hospital.com",
+      "recipient_name": "Dr. Emily Park",
+      "recipient_user": 3,
+      "email_type": "event_reminder",
+      "subject": "Reminder: Clinical Ethics in Modern Practice starts tomorrow",
+      "event": 1,
+      "registration": 1,
+      "certificate": null,
+      "status": "delivered",
+      "sent_at": "2025-03-19T10:00:00Z",
+      "delivered_at": "2025-03-19T10:00:05Z",
+      "opened_at": "2025-03-19T18:00:00Z",
+      "clicked_at": null,
+      "error_message": "",
+      "provider_message_id": "msg_brevo_005"
+    }
+  }
+]

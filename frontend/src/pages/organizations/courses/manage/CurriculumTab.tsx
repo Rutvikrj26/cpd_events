@@ -28,8 +28,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 // Import React Quill dynamically or standard import if environment supports it
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 
 interface CurriculumTabProps {
     courseUuid: string;
