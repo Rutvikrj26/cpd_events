@@ -3,10 +3,12 @@
     "model": "conferencing.videoroom",
     "pk": 1,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000000701",
       "created_at": "2025-03-01T10:00:00Z",
       "updated_at": "2025-03-01T10:00:00Z",
-      "content_type": ["events", "event"],
+      "content_type": [
+        "events",
+        "event"
+      ],
       "object_id": 1,
       "room_id": "rm_ethics_webinar_001",
       "room_name": "clinical-ethics-2025-03-20",
@@ -14,20 +16,28 @@
       "status": "scheduled",
       "started_at": null,
       "ended_at": null,
-      "settings": {"max_duration_minutes": 150, "enable_chat": true, "enable_screen_share": true, "enable_recording": true},
+      "settings": {
+        "max_duration_minutes": 150,
+        "enable_chat": true,
+        "enable_screen_share": true,
+        "enable_recording": true
+      },
       "max_participants": 50,
       "error": "",
-      "error_at": null
+      "error_at": null,
+      "uuid": "00000000-0000-4000-a000-000000000701"
     }
   },
   {
     "model": "conferencing.videoroom",
     "pk": 2,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000000702",
       "created_at": "2025-02-01T10:00:00Z",
       "updated_at": "2025-02-15T16:05:00Z",
-      "content_type": ["events", "event"],
+      "content_type": [
+        "events",
+        "event"
+      ],
       "object_id": 2,
       "room_id": "rm_acls_workshop_001",
       "room_name": "acls-workshop-2025-02-15",
@@ -35,20 +45,27 @@
       "status": "ended",
       "started_at": "2025-02-15T13:02:00Z",
       "ended_at": "2025-02-15T16:05:00Z",
-      "settings": {"max_duration_minutes": 200, "enable_chat": true, "enable_screen_share": true},
+      "settings": {
+        "max_duration_minutes": 200,
+        "enable_chat": true,
+        "enable_screen_share": true
+      },
       "max_participants": 30,
       "error": "",
-      "error_at": null
+      "error_at": null,
+      "uuid": "00000000-0000-4000-a000-000000000702"
     }
   },
   {
     "model": "conferencing.videoroom",
     "pk": 3,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000000703",
       "created_at": "2025-03-15T09:00:00Z",
       "updated_at": "2025-03-15T09:00:00Z",
-      "content_type": ["learning", "coursesession"],
+      "content_type": [
+        "learning",
+        "coursesession"
+      ],
       "object_id": 1,
       "room_id": "rm_ethics_course_live_001",
       "room_name": "ethics-course-live-2025-04-01",
@@ -56,17 +73,20 @@
       "status": "scheduled",
       "started_at": null,
       "ended_at": null,
-      "settings": {"max_duration_minutes": 75, "enable_chat": true},
+      "settings": {
+        "max_duration_minutes": 75,
+        "enable_chat": true
+      },
       "max_participants": 100,
       "error": "",
-      "error_at": null
+      "error_at": null,
+      "uuid": "00000000-0000-4000-a000-000000000703"
     }
   },
   {
     "model": "conferencing.videowebhooklog",
     "pk": 1,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000000704",
       "created_at": "2025-02-15T13:02:00Z",
       "updated_at": "2025-02-15T13:02:01Z",
       "webhook_id": "wh_room_start_001",
@@ -76,22 +96,29 @@
       "room_name": "acls-workshop-2025-02-15",
       "room_id": "rm_acls_workshop_001",
       "video_room": 2,
-      "payload": {"room": {"name": "acls-workshop-2025-02-15", "sid": "rm_acls_workshop_001"}},
-      "headers": {"Authorization": "Bearer [redacted]"},
+      "payload": {
+        "room": {
+          "name": "acls-workshop-2025-02-15",
+          "sid": "rm_acls_workshop_001"
+        }
+      },
+      "headers": {
+        "Authorization": "Bearer [redacted]"
+      },
       "processing_status": "completed",
       "processed_at": "2025-02-15T13:02:01Z",
       "processing_attempts": 1,
       "last_attempt_at": "2025-02-15T13:02:01Z",
       "error_message": "",
       "error_traceback": "",
-      "attendance_records_created": 0
+      "attendance_records_created": 0,
+      "uuid": "00000000-0000-4000-a000-000000000704"
     }
   },
   {
     "model": "conferencing.videowebhooklog",
     "pk": 2,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000000705",
       "created_at": "2025-02-15T13:03:00Z",
       "updated_at": "2025-02-15T13:03:01Z",
       "webhook_id": "wh_part_join_001",
@@ -101,7 +128,15 @@
       "room_name": "acls-workshop-2025-02-15",
       "room_id": "rm_acls_workshop_001",
       "video_room": 2,
-      "payload": {"room": {"name": "acls-workshop-2025-02-15"}, "participant": {"identity": "emily.park@hospital.com", "name": "Dr. Emily Park"}},
+      "payload": {
+        "room": {
+          "name": "acls-workshop-2025-02-15"
+        },
+        "participant": {
+          "identity": "emily.park@hospital.com",
+          "name": "Dr. Emily Park"
+        }
+      },
       "headers": {},
       "processing_status": "completed",
       "processed_at": "2025-02-15T13:03:01Z",
@@ -109,14 +144,14 @@
       "last_attempt_at": "2025-02-15T13:03:01Z",
       "error_message": "",
       "error_traceback": "",
-      "attendance_records_created": 1
+      "attendance_records_created": 1,
+      "uuid": "00000000-0000-4000-a000-000000000705"
     }
   },
   {
     "model": "conferencing.videowebhooklog",
     "pk": 3,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000000706",
       "created_at": "2025-02-15T16:05:00Z",
       "updated_at": "2025-02-15T16:05:01Z",
       "webhook_id": "wh_room_end_001",
@@ -126,7 +161,12 @@
       "room_name": "acls-workshop-2025-02-15",
       "room_id": "rm_acls_workshop_001",
       "video_room": 2,
-      "payload": {"room": {"name": "acls-workshop-2025-02-15", "sid": "rm_acls_workshop_001"}},
+      "payload": {
+        "room": {
+          "name": "acls-workshop-2025-02-15",
+          "sid": "rm_acls_workshop_001"
+        }
+      },
       "headers": {},
       "processing_status": "completed",
       "processed_at": "2025-02-15T16:05:01Z",
@@ -134,14 +174,14 @@
       "last_attempt_at": "2025-02-15T16:05:01Z",
       "error_message": "",
       "error_traceback": "",
-      "attendance_records_created": 0
+      "attendance_records_created": 0,
+      "uuid": "00000000-0000-4000-a000-000000000706"
     }
   },
   {
     "model": "conferencing.videorecording",
     "pk": 1,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000000707",
       "created_at": "2025-02-15T13:02:00Z",
       "updated_at": "2025-02-16T10:00:00Z",
       "video_room": 2,
@@ -161,14 +201,14 @@
       "published_at": "2025-02-16T10:00:00Z",
       "auto_publish": false,
       "view_count": 3,
-      "unique_viewers": 2
+      "unique_viewers": 2,
+      "uuid": "00000000-0000-4000-a000-000000000707"
     }
   },
   {
     "model": "conferencing.videorecordingfile",
     "pk": 1,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000000708",
       "created_at": "2025-02-15T16:10:00Z",
       "updated_at": "2025-02-15T16:10:00Z",
       "recording": 1,
@@ -177,14 +217,14 @@
       "file_extension": "mp4",
       "file_size_bytes": 512000000,
       "storage_url": "gs://mededhub-recordings/acls-workshop-2025-02-15/video.mp4",
-      "is_visible": true
+      "is_visible": true,
+      "uuid": "00000000-0000-4000-a000-000000000708"
     }
   },
   {
     "model": "conferencing.videorecordingfile",
     "pk": 2,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000000709",
       "created_at": "2025-02-15T16:10:00Z",
       "updated_at": "2025-02-15T16:10:00Z",
       "recording": 1,
@@ -193,35 +233,36 @@
       "file_extension": "json",
       "file_size_bytes": 12288,
       "storage_url": "gs://mededhub-recordings/acls-workshop-2025-02-15/chat.json",
-      "is_visible": true
+      "is_visible": true,
+      "uuid": "00000000-0000-4000-a000-000000000709"
     }
   },
   {
     "model": "conferencing.recordingview",
     "pk": 1,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000000710",
       "created_at": "2025-02-17T10:00:00Z",
       "updated_at": "2025-02-20T14:30:00Z",
       "recording": 1,
       "user": 3,
       "first_viewed_at": "2025-02-17T10:00:00Z",
       "last_viewed_at": "2025-02-20T14:30:00Z",
-      "view_count": 2
+      "view_count": 2,
+      "uuid": "00000000-0000-4000-a000-000000000710"
     }
   },
   {
     "model": "conferencing.recordingview",
     "pk": 2,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000000711",
       "created_at": "2025-02-18T11:00:00Z",
       "updated_at": "2025-02-18T11:00:00Z",
       "recording": 1,
       "user": 4,
       "first_viewed_at": "2025-02-18T11:00:00Z",
       "last_viewed_at": null,
-      "view_count": 1
+      "view_count": 1,
+      "uuid": "00000000-0000-4000-a000-000000000711"
     }
   }
 ]

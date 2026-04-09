@@ -235,6 +235,60 @@ def shell():
         pass
 
 @local.command()
+@click.option('--reset', is_flag=True, help='Flush the database before loading fixtures')
+def seed(reset):
+    """Load demo fixture data into the database."""
+    fixtures = [
+        "00_groups",
+        "01_accounts",
+        "02_events",
+        "03_registrations",
+        "04_certificates",
+        "05_learning",
+        "06_billing",
+        "07_conferencing",
+        "08_contacts",
+        "09_badges",
+        "10_feedback",
+        "11_promo_codes",
+        "12_integrations",
+    ]
+
+    if reset:
+        console.print("[yellow]Flushing database...[/yellow]")
+        result = subprocess.run(
+            ["uv", "run", "python", "src/manage.py", "flush", "--no-input"],
+            cwd=BACKEND_DIR,
+        )
+        if result.returncode != 0:
+            console.print("[red]Failed to flush database.[/red]")
+            return
+
+        console.print("[cyan]Re-running migrations...[/cyan]")
+        subprocess.run(
+            ["uv", "run", "python", "src/manage.py", "migrate"],
+            cwd=BACKEND_DIR,
+        )
+
+    console.print(f"[bold]Loading {len(fixtures)} fixtures...[/bold]")
+
+    # Load all fixtures in a single call so Django defers FK constraint
+    # checks until every object is in the database.
+    result = subprocess.run(
+        ["uv", "run", "python", "src/manage.py", "loaddata"] + fixtures,
+        cwd=BACKEND_DIR,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        for fixture in fixtures:
+            console.print(f"  [green]✓[/green] {fixture}")
+        console.print("[bold green]Demo data loaded successfully![/bold green]")
+    else:
+        console.print(f"[red]Failed to load fixtures:[/red]\n{result.stderr.strip()}")
+
+
+@local.command()
 def setup():
     """Run initial setup (install dependencies, migrate)."""
     console.print("[bold]Running setup...[/bold]")

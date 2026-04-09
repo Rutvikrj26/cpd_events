@@ -3,7 +3,6 @@
     "model": "integrations.emaillog",
     "pk": 1,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000001201",
       "created_at": "2025-02-01T10:01:00Z",
       "updated_at": "2025-02-01T10:16:00Z",
       "recipient_email": "emily.park@hospital.com",
@@ -20,14 +19,14 @@
       "opened_at": "2025-02-01T10:15:00Z",
       "clicked_at": "2025-02-01T10:16:00Z",
       "error_message": "",
-      "provider_message_id": "msg_brevo_001"
+      "provider_message_id": "msg_brevo_001",
+      "uuid": "00000000-0000-4000-a000-000000001201"
     }
   },
   {
     "model": "integrations.emaillog",
     "pk": 2,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000001202",
       "created_at": "2025-03-01T10:05:00Z",
       "updated_at": "2025-03-01T12:00:30Z",
       "recipient_email": "emily.park@hospital.com",
@@ -44,14 +43,14 @@
       "opened_at": "2025-03-01T12:00:00Z",
       "clicked_at": "2025-03-01T12:00:30Z",
       "error_message": "",
-      "provider_message_id": "msg_brevo_002"
+      "provider_message_id": "msg_brevo_002",
+      "uuid": "00000000-0000-4000-a000-000000001202"
     }
   },
   {
     "model": "integrations.emaillog",
     "pk": 3,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000001203",
       "created_at": "2025-02-02T09:00:00Z",
       "updated_at": "2025-02-02T11:30:00Z",
       "recipient_email": "m.torres@clinic.com",
@@ -68,14 +67,14 @@
       "opened_at": "2025-02-02T11:30:00Z",
       "clicked_at": null,
       "error_message": "",
-      "provider_message_id": "msg_brevo_003"
+      "provider_message_id": "msg_brevo_003",
+      "uuid": "00000000-0000-4000-a000-000000001203"
     }
   },
   {
     "model": "integrations.emaillog",
     "pk": 4,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000001204",
       "created_at": "2025-02-10T14:00:00Z",
       "updated_at": "2025-02-10T15:00:00Z",
       "recipient_email": "aisha.khan@university.edu",
@@ -92,14 +91,14 @@
       "opened_at": "2025-02-10T15:00:00Z",
       "clicked_at": null,
       "error_message": "",
-      "provider_message_id": "msg_brevo_004"
+      "provider_message_id": "msg_brevo_004",
+      "uuid": "00000000-0000-4000-a000-000000001204"
     }
   },
   {
     "model": "integrations.emaillog",
     "pk": 5,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000001205",
       "created_at": "2025-03-19T10:00:00Z",
       "updated_at": "2025-03-19T18:00:00Z",
       "recipient_email": "emily.park@hospital.com",
@@ -116,7 +115,8 @@
       "opened_at": "2025-03-19T18:00:00Z",
       "clicked_at": null,
       "error_message": "",
-      "provider_message_id": "msg_brevo_005"
+      "provider_message_id": "msg_brevo_005",
+      "uuid": "00000000-0000-4000-a000-000000001205"
     }
   }
 ]

@@ -3,7 +3,6 @@
     "model": "feedback.eventfeedback",
     "pk": 1,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000001001",
       "created_at": "2025-02-15T16:10:00Z",
       "updated_at": "2025-02-15T16:10:00Z",
       "event": 2,
@@ -12,14 +11,14 @@
       "content_quality_rating": 5,
       "speaker_rating": 5,
       "comments": "Excellent workshop! The simulation exercises were incredibly realistic and the ACLS protocol review was thorough. Dr. Chang is an outstanding instructor.",
-      "is_anonymous": false
+      "is_anonymous": false,
+      "uuid": "00000000-0000-4000-a000-000000001001"
     }
   },
   {
     "model": "feedback.eventfeedback",
     "pk": 2,
     "fields": {
-      "id": "00000000-0000-4000-a000-000000001002",
       "created_at": "2025-02-15T16:15:00Z",
       "updated_at": "2025-02-15T16:15:00Z",
       "event": 2,
@@ -28,7 +27,8 @@
       "content_quality_rating": 4,
       "speaker_rating": 5,
       "comments": "Great workshop overall. Would have appreciated more time for the hands-on simulation portion. Speaker was fantastic.",
-      "is_anonymous": false
+      "is_anonymous": false,
+      "uuid": "00000000-0000-4000-a000-000000001002"
     }
   }
 ]
