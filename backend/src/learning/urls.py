@@ -16,6 +16,7 @@ from .views import (
     CourseModuleContentViewSet,
     CourseModuleViewSet,
     CourseSessionViewSet,
+    CourseStaffViewSet,
     CourseSubmissionsViewSet,
     CourseViewSet,
     EventModuleViewSet,
@@ -95,6 +96,17 @@ urlpatterns = [
         'courses/<uuid:course_uuid>/announcements/<uuid:uuid>/',
         CourseAnnouncementViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update', 'delete': 'destroy'}),
         name='course-announcement-detail',
+    ),
+    # Course Staff
+    path(
+        'courses/<uuid:course_uuid>/staff/',
+        CourseStaffViewSet.as_view({'get': 'list', 'post': 'create'}),
+        name='course-staff-list',
+    ),
+    path(
+        'courses/<uuid:course_uuid>/staff/<uuid:uuid>/',
+        CourseStaffViewSet.as_view({'delete': 'destroy'}),
+        name='course-staff-detail',
     ),
     # Course Sessions (for hybrid courses)
     path(

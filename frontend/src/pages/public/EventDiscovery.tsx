@@ -430,7 +430,7 @@ export function EventDiscovery() {
 // Event card component for API data
 function EventCard({ event }: { event: Event }) {
   return (
-    <Link to={`/events/${event.slug || event.uuid}`} className="group block h-full">
+    <Link to={`/events/${event.uuid}/details`} className="group block h-full">
       <Card className="h-full overflow-hidden hover:shadow-lg transition-all duration-300 border-border/80 hover:border-primary/50 group-hover:-translate-y-1">
         <div className="h-44 bg-gradient-to-br from-slate-100 to-slate-200 relative flex items-center justify-center overflow-hidden">
           {/* Placeholder Image Logic */}

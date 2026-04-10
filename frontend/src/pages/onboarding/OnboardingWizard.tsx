@@ -510,7 +510,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                         className="w-full h-auto py-4"
                                                         onClick={() => {
                                                             handleComplete();
-                                                            navigate('/events/browse');
+                                                            navigate('/events');
                                                         }}
                                                     >
                                                         <Calendar className="mr-3 h-5 w-5" />

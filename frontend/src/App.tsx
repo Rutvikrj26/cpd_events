@@ -8,25 +8,22 @@ import { AuthenticatedRoot } from "@/components/auth/AuthenticatedRoot";
 
 
 // Layouts
-import { PublicLayout } from './components/layout/PublicLayout';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { AuthLayout } from './components/layout/AuthLayout';
 import ScrollToTop from './components/layout/ScrollToTop';
 
-// Public Pages (kept)
-import { EventDiscovery } from './pages/public/EventDiscovery';
-import { CourseDiscoveryPage } from './pages/public/CourseDiscoveryPage';
-import { EventDetail } from './pages/public/EventDetail';
-import { EventRegistration } from './pages/public/EventRegistration';
-import { NotFoundPage } from './pages/public/NotFoundPage';
-import { PublicCourseDetailPage } from './pages/courses/PublicCourseDetailPage';
+// Legal Pages
 import { TermsPage } from './pages/public/TermsPage';
 import { PrivacyPage } from './pages/public/PrivacyPage';
 import { CookiePolicyPage } from './pages/public/CookiePolicyPage';
 
+// Learner browsing (reused from public pages, now behind auth)
+import { EventDetail } from './pages/public/EventDetail';
+import { EventRegistration } from './pages/public/EventRegistration';
+import { PublicCourseDetailPage } from './pages/courses/PublicCourseDetailPage';
+
 // Auth Pages
 import { LoginPage } from "@/pages/auth/LoginPage";
-import { SignupPage } from "@/pages/auth/SignupPage";
 import { VerifyEmailPage } from "@/pages/auth/VerifyEmailPage";
 import { CheckEmailPage } from "@/pages/auth/CheckEmailPage";
 import { ForgotPasswordPage } from "@/pages/auth/ForgotPasswordPage";
@@ -93,54 +90,23 @@ export default function App() {
               {/* Root: redirect to dashboard if authenticated, login if not */}
               <Route path="/" element={<AuthenticatedRoot />} />
 
-              {/* Public event/course pages */}
-              <Route path="/events/browse" element={
-                <PublicLayout>
-                  <EventDiscovery />
-                </PublicLayout>
-              } />
-
-              <Route path="/courses/browse" element={
-                <PublicLayout>
-                  <CourseDiscoveryPage />
-                </PublicLayout>
-              } />
-
-              <Route path="/events/:id" element={
-                <PublicLayout>
-                  <EventDetail />
-                </PublicLayout>
-              } />
-
-              <Route path="/events/:id/register" element={
-                <PublicLayout>
-                  <EventRegistration />
-                </PublicLayout>
-              } />
-
-              <Route path="/courses/:slug" element={
-                <PublicLayout>
-                  <PublicCourseDetailPage />
-                </PublicLayout>
-              } />
-
               {/* Legal pages */}
               <Route path="/terms" element={
-                <PublicLayout>
+                <AuthLayout>
                   <TermsPage />
-                </PublicLayout>
+                </AuthLayout>
               } />
 
               <Route path="/privacy" element={
-                <PublicLayout>
+                <AuthLayout>
                   <PrivacyPage />
-                </PublicLayout>
+                </AuthLayout>
               } />
 
               <Route path="/cookies" element={
-                <PublicLayout>
+                <AuthLayout>
                   <CookiePolicyPage />
-                </PublicLayout>
+                </AuthLayout>
               } />
 
               {/* Public verification pages */}
@@ -152,12 +118,6 @@ export default function App() {
               <Route path="/login" element={
                 <AuthLayout>
                   <LoginPage />
-                </AuthLayout>
-              } />
-
-              <Route path="/signup" element={
-                <AuthLayout>
-                  <SignupPage />
                 </AuthLayout>
               } />
 
@@ -203,6 +163,11 @@ export default function App() {
                     </ProtectedRoute>
                   } />
 
+                  {/* Learner event/course browsing */}
+                  <Route path="/events/:id/details" element={<EventDetail />} />
+                  <Route path="/events/:id/register" element={<EventRegistration />} />
+                  <Route path="/courses/:slug" element={<PublicCourseDetailPage />} />
+
                   {/* Learner pages */}
                   <Route path="/registrations" element={<MyRegistrationsPage />} />
                   <Route path="/certificates" element={<CertificatesPage />} />
@@ -215,21 +180,13 @@ export default function App() {
                   <Route path="/cpd" element={<CPDTracking />} />
 
                   {/* Course management */}
-                  <Route path="/courses/manage" element={
-                    <ProtectedRoute requiredFeature="create_courses">
-                      <OrgCoursesPage />
-                    </ProtectedRoute>
-                  } />
+                  <Route path="/courses/manage" element={<OrgCoursesPage />} />
                   <Route path="/courses/manage/new" element={
                     <ProtectedRoute requiredFeature="create_courses">
                       <CreateCoursePage />
                     </ProtectedRoute>
                   } />
-                  <Route path="/courses/manage/:courseSlug" element={
-                    <ProtectedRoute requiredFeature="create_courses">
-                      <CourseManagementPage />
-                    </ProtectedRoute>
-                  } />
+                  <Route path="/courses/manage/:courseSlug" element={<CourseManagementPage />} />
 
                   {/* Educator pages */}
                   <Route path="/organizer/contacts" element={
@@ -296,12 +253,8 @@ export default function App() {
 
               </Route>
 
-              {/* Fallback */}
-              <Route path="*" element={
-                <PublicLayout>
-                  <NotFoundPage />
-                </PublicLayout>
-              } />
+              {/* Fallback — redirect unknown routes to login */}
+              <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
           </AuthProvider>
           <Toaster />

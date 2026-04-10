@@ -6,6 +6,7 @@ import {
     AssignmentSubmission,
     AssignmentSubmissionStaff,
     CourseAnnouncement,
+    CourseStaffMember,
 } from './types';
 import { PaginatedResponse, PaginationParams } from '../types';
 
@@ -61,7 +62,10 @@ export const getCourseBySlug = async (
         params: { slug, ...filters }
     });
     const results = Array.isArray(response.data) ? response.data : response.data.results;
-    return results && results.length > 0 ? results[0] : null;
+    if (!results || results.length === 0) return null;
+    // Fetch full detail (includes modules) via the retrieve endpoint
+    const detail = await client.get<Course>(`/courses/${results[0].uuid}/`);
+    return detail.data;
 };
 
 export const enrollInCourse = async (courseUuid: string): Promise<any> => {
@@ -400,4 +404,23 @@ export interface AttendanceStats {
 export const getAttendanceStats = async (courseUuid: string): Promise<AttendanceStats> => {
     const response = await client.get<AttendanceStats>(`/courses/${courseUuid}/attendance_stats/`);
     return response.data;
+};
+
+// ============================================
+// Course Staff
+// ============================================
+
+export const getCourseStaff = async (courseUuid: string): Promise<CourseStaffMember[]> => {
+    const response = await client.get(`/courses/${courseUuid}/staff/`);
+    const data = response.data;
+    return Array.isArray(data) ? data : (data.results || []);
+};
+
+export const addCourseStaff = async (courseUuid: string, data: { user_uuid: string; role?: string }): Promise<CourseStaffMember> => {
+    const response = await client.post<CourseStaffMember>(`/courses/${courseUuid}/staff/`, data);
+    return response.data;
+};
+
+export const removeCourseStaff = async (courseUuid: string, staffUuid: string): Promise<void> => {
+    await client.delete(`/courses/${courseUuid}/staff/${staffUuid}/`);
 };

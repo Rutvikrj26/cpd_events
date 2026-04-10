@@ -211,6 +211,7 @@ class AssignmentSubmissionSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     is_passing = serializers.BooleanField(read_only=True)
     assignment_title = serializers.CharField(source='assignment.title', read_only=True)
+    assignment = serializers.UUIDField(source='assignment.uuid', read_only=True)
 
     class Meta:
         model = AssignmentSubmission
@@ -320,6 +321,7 @@ class ContentProgressSerializer(serializers.ModelSerializer):
 
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     content_title = serializers.CharField(source='content.title', read_only=True)
+    content = serializers.UUIDField(source='content.uuid', read_only=True)
 
     class Meta:
         model = ContentProgress
@@ -400,6 +402,13 @@ class CourseSerializer(serializers.ModelSerializer):
     """Full course details."""
 
     modules = CourseModuleSerializer(many=True, read_only=True)
+    user_role = serializers.SerializerMethodField()
+
+    def get_user_role(self, obj):
+        request = self.context.get('request')
+        if request and request.user:
+            return obj.get_staff_role(request.user)
+        return None
 
     class Meta:
         model = Course
@@ -446,6 +455,7 @@ class CourseSerializer(serializers.ModelSerializer):
             'completion_count',
             'module_count',
             'modules',
+            'user_role',
             'created_at',
             'updated_at',
         ]
@@ -461,6 +471,14 @@ class CourseSerializer(serializers.ModelSerializer):
 
 class CourseListSerializer(serializers.ModelSerializer):
     """List view for courses."""
+
+    user_role = serializers.SerializerMethodField()
+
+    def get_user_role(self, obj):
+        request = self.context.get('request')
+        if request and request.user:
+            return obj.get_staff_role(request.user)
+        return None
 
     class Meta:
         model = Course
@@ -482,6 +500,7 @@ class CourseListSerializer(serializers.ModelSerializer):
             'enrollment_count',
             'module_count',
             'estimated_hours',
+            'user_role',
             'created_at',
         ]
 
@@ -567,6 +586,26 @@ class CourseCreateSerializer(serializers.ModelSerializer):
         attrs = _validate_certificate_settings(attrs, self.instance)
         attrs = _validate_badge_settings(attrs, self.instance)
         return attrs
+
+
+class CourseStaffSerializer(serializers.ModelSerializer):
+    """Course staff member details."""
+
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_name = serializers.CharField(source='user.display_name', read_only=True)
+
+    class Meta:
+        from .models import CourseStaff
+        model = CourseStaff
+        fields = ['uuid', 'user_email', 'user_name', 'role', 'created_at']
+        read_only_fields = fields
+
+
+class CourseStaffCreateSerializer(serializers.Serializer):
+    """Create a course staff assignment."""
+
+    user_uuid = serializers.UUIDField()
+    role = serializers.CharField(default='course_manager')
 
 
 class CourseEnrollmentSerializer(serializers.ModelSerializer):

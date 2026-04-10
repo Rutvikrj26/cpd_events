@@ -127,7 +127,7 @@ export function EventDetail() {
           <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-foreground">Event Not Found</h2>
           <p className="text-muted-foreground mt-2">{error || "The event you're looking for doesn't exist."}</p>
-          <Link to="/events/browse">
+          <Link to="/events">
             <Button className="mt-4">Browse Events</Button>
           </Link>
         </div>

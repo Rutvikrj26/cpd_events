@@ -748,10 +748,11 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
     speakers = SpeakerSerializer(many=True, read_only=True)
 
     def get_organizer(self, obj):
+        from common.config.deployment import INSTITUTION_LOGO_URL
         return {
             'uuid': str(obj.owner.uuid),
             'display_name': obj.owner.display_name,
-            'logo_url': obj.owner.organizer_logo_url,
+            'logo_url': INSTITUTION_LOGO_URL or '',
         }
 
     def get_spots_remaining(self, obj):

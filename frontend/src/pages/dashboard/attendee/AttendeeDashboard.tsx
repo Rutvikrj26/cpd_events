@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Calendar, Award, Clock, Video, GraduationCap, ExternalLink, Users } from "lucide-react";
+import { ArrowRight, Calendar, Award, Clock, Video, GraduationCap, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JoinButton } from "@/components/video/JoinButton";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -193,30 +193,8 @@ export function AttendeeDashboard() {
           )}
         </div>
 
-        {/* Side Column: Certificates & Upsell */}
+        {/* Side Column */}
         <div className="space-y-6">
-
-
-          {/* Organizer Upsell */}
-          <Card className="bg-foreground text-background border-none overflow-hidden relative shadow-lg">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-              <Users size={100} />
-            </div>
-            <CardHeader className="relative z-10">
-              <CardTitle className="text-lg">Host Your Own Events</CardTitle>
-              <CardDescription className="text-muted">
-                Ready to share your knowledge?
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="relative z-10">
-              <p className="text-sm text-muted mb-4 font-medium">
-                Upgrade to an Organizer account to create events, issue certificates, and track attendance automatically.
-              </p>
-              <Button asChild className="w-full bg-card text-foreground hover:bg-muted font-bold border-0" size="sm">
-                <Link to="/billing">Become an Organizer</Link>
-              </Button>
-            </CardContent>
-          </Card>
         </div>
       </div>
 

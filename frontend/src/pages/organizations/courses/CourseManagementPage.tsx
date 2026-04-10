@@ -18,20 +18,21 @@ export function CourseManagementPage() {
     const [searchParams] = useSearchParams();
     const [course, setCourse] = useState<Course | null>(null);
     const [loading, setLoading] = useState(true);
-    // TODO: Replace with direct permission check when per-user role API is available
-    const isInstructor = false;
+    // Course staff see limited tabs (no overview/settings)
+    const isStaffOnly = course?.user_role === 'course_manager';
 
     // Determine if sessions tab should be shown
     const showSessions = course?.format === 'hybrid';
 
-    const requestedTab = searchParams.get('tab') || 'overview';
+    const requestedTab = searchParams.get('tab') || (isStaffOnly ? 'curriculum' : 'overview');
     const availableTabs = [
-        'overview',
+        ...(isStaffOnly ? [] : ['overview']),
         'enrollments',
+        'curriculum',
         'announcements',
         'submissions',
         ...(showSessions ? ['sessions'] : []),
-        ...(isInstructor ? [] : ['curriculum', 'settings']),
+        ...(isStaffOnly ? [] : ['settings']),
     ];
     const defaultTab = availableTabs.includes(requestedTab) ? requestedTab : 'overview';
 
@@ -91,18 +92,20 @@ export function CourseManagementPage() {
 
             <Tabs defaultValue={defaultTab} className="w-full">
                 <TabsList>
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                    {!isStaffOnly && <TabsTrigger value="overview">Overview</TabsTrigger>}
                     {showSessions && <TabsTrigger value="sessions">Sessions</TabsTrigger>}
-                    {!isInstructor && <TabsTrigger value="curriculum">Curriculum</TabsTrigger>}
+                    <TabsTrigger value="curriculum">Curriculum</TabsTrigger>
                     <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
                     <TabsTrigger value="announcements">Announcements</TabsTrigger>
                     <TabsTrigger value="submissions">Submissions</TabsTrigger>
-                    {!isInstructor && <TabsTrigger value="settings">Settings</TabsTrigger>}
+                    {!isStaffOnly && <TabsTrigger value="settings">Settings</TabsTrigger>}
                 </TabsList>
 
-                <TabsContent value="overview" className="space-y-4 mt-6">
-                    <OverviewTab course={course} />
-                </TabsContent>
+                {!isStaffOnly && (
+                    <TabsContent value="overview" className="space-y-4 mt-6">
+                        <OverviewTab course={course} />
+                    </TabsContent>
+                )}
 
                 {showSessions && (
                     <TabsContent value="sessions" className="mt-6">
@@ -110,11 +113,9 @@ export function CourseManagementPage() {
                     </TabsContent>
                 )}
 
-                {!isInstructor && (
-                    <TabsContent value="curriculum" className="mt-6">
-                        <CurriculumTab courseUuid={course.uuid} />
-                    </TabsContent>
-                )}
+                <TabsContent value="curriculum" className="mt-6">
+                    <CurriculumTab courseUuid={course.uuid} />
+                </TabsContent>
 
                 <TabsContent value="enrollments" className="mt-6">
                     <EnrollmentsTab courseUuid={course.uuid} />
@@ -128,7 +129,7 @@ export function CourseManagementPage() {
                     <SubmissionsTab courseUuid={course.uuid} />
                 </TabsContent>
 
-                {!isInstructor && (
+                {!isStaffOnly && (
                     <TabsContent value="settings" className="mt-6">
                         <SettingsTab
                             course={course}

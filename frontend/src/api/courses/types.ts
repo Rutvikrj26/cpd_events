@@ -62,9 +62,20 @@ export interface Course {
     created_at: string;
     updated_at?: string;
 
+    // Permission
+    user_role?: 'admin' | 'course_manager' | null;
+
     // Relations
     organization_slug?: string;
     modules?: CourseModule[];
+}
+
+export interface CourseStaffMember {
+    uuid: string;
+    user_email: string;
+    user_name: string;
+    role: string;
+    created_at: string;
 }
 
 export interface CourseCreateRequest {

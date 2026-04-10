@@ -8,5 +8,4 @@ export {
     verifyEmail,
     resetPassword,
     confirmPasswordReset,
-    upgradeToOrganizer,
 } from '@/api/accounts';

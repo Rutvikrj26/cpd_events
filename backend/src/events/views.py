@@ -18,7 +18,7 @@ from common.pagination import SmallPagination
 from common.permissions import IsContentCreator, IsEducatorOrAdmin
 from common.rbac import roles
 from common.utils import error_response
-from common.viewsets import SoftDeleteModelViewSet
+from common.viewsets import BaseModelViewSet, SoftDeleteModelViewSet
 
 logger = logging.getLogger(__name__)
 
@@ -840,7 +840,7 @@ class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @roles('educator', 'admin', route_name='speakers')
-class SpeakerViewSet(SoftDeleteModelViewSet):
+class SpeakerViewSet(BaseModelViewSet):
     """
     CRUD for speakers.
     """
@@ -854,17 +854,14 @@ class SpeakerViewSet(SoftDeleteModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        qs = Speaker.objects.filter(is_active=True)
         if user.is_staff:
-            return Speaker.objects.filter(deleted_at__isnull=True)
-        return Speaker.objects.filter(
-            Q(owner=user)
-            | Q(
-                organization__memberships__user=user,
-                organization__memberships__role='admin',
-                organization__memberships__is_active=True,
-            ),
-            deleted_at__isnull=True,
-        ).distinct()
+            return qs
+        return qs.filter(owner=user)
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+    def perform_destroy(self, instance):
+        instance.is_active = False
+        instance.save(update_fields=['is_active', 'updated_at'])

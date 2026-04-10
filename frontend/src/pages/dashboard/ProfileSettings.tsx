@@ -100,7 +100,8 @@ export function ProfileSettings() {
    const [exportingData, setExportingData] = useState(false);
 
    // Payouts state
-   const { user: authUser, logout } = useAuth();
+   const { user: authUser, logout, manifest } = useAuth();
+   const isSingleTenant = manifest?.deployment?.mode === 'single_tenant';
    const { isEducator, isCourseManager, isCreator } = getRoleFlags(authUser);
    const [payoutsStatus, setPayoutsStatus] = useState<PayoutsStatus | null>(null);
    const [loadingPayouts, setLoadingPayouts] = useState(true);
@@ -168,8 +169,12 @@ export function ProfileSettings() {
    };
 
    useEffect(() => {
+      if (isSingleTenant) {
+         setLoadingPayment(false);
+         return;
+      }
       loadPaymentData();
-   }, []);
+   }, [isSingleTenant]);
 
    // Load notification preferences
    useEffect(() => {
@@ -186,9 +191,9 @@ export function ProfileSettings() {
       loadNotifications();
    }, []);
 
-   // Load payouts status (organizers only)
+   // Load payouts status (organizers only, not in single-tenant mode)
    useEffect(() => {
-      if (!isCreator) {
+      if (!isCreator || isSingleTenant) {
          setLoadingPayouts(false);
          return;
       }
@@ -371,12 +376,14 @@ export function ProfileSettings() {
                      >
                         <User className="mr-2 h-4 w-4" /> General
                      </TabsTrigger>
-                     <TabsTrigger
-                        value="billing"
-                        className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
-                     >
-                        <CreditCard className="mr-2 h-4 w-4" /> Billing
-                     </TabsTrigger>
+                     {!isSingleTenant && (
+                        <TabsTrigger
+                           value="billing"
+                           className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
+                        >
+                           <CreditCard className="mr-2 h-4 w-4" /> Billing
+                        </TabsTrigger>
+                     )}
                      <TabsTrigger
                         value="security"
                         className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
@@ -401,7 +408,7 @@ export function ProfileSettings() {
                      >
                         <Shield className="mr-2 h-4 w-4" /> Privacy
                      </TabsTrigger>
-                     {isCreator && (
+                     {isCreator && !isSingleTenant && (
                         <TabsTrigger
                            value="payouts"
                            className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
@@ -499,7 +506,7 @@ export function ProfileSettings() {
                   </TabsContent>
 
                   {/* BILLING TAB */}
-                  <TabsContent value="billing" className="mt-0 space-y-6">
+                  {!isSingleTenant && <TabsContent value="billing" className="mt-0 space-y-6">
                      <Card>
                         <CardHeader>
                            <CardTitle>Payment Methods</CardTitle>
@@ -642,7 +649,7 @@ export function ProfileSettings() {
                            </CardContent>
                         </Card>
                      )}
-                  </TabsContent>
+                  </TabsContent>}
 
                   {/* SECURITY TAB */}
                   <TabsContent value="security" className="mt-0">
@@ -824,7 +831,7 @@ export function ProfileSettings() {
                   </TabsContent>
 
                   {/* PAYOUTS TAB */}
-                  {isCreator && (
+                  {isCreator && !isSingleTenant && (
                      <TabsContent value="payouts" className="mt-0 space-y-6">
                         <Card>
                            <CardHeader>

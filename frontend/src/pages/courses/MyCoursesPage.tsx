@@ -62,8 +62,8 @@ export const MyCoursesPage = () => {
                         <Card key={enrollment.uuid} className="flex flex-col h-full hover:shadow-md transition-shadow">
                             <CardHeader className="pb-4">
                                 <div className="flex justify-between items-start mb-2">
-                                    <Badge variant={enrollment.status === 'completed' ? 'default' : 'secondary'}>
-                                        {enrollment.status === 'completed' ? 'Completed' : 'In Progress'}
+                                    <Badge variant={enrollment.status === 'completed' ? 'default' : enrollment.progress_percent >= 100 ? 'outline' : 'secondary'}>
+                                        {enrollment.status === 'completed' ? 'Completed' : enrollment.progress_percent >= 100 ? 'Awaiting Review' : 'In Progress'}
                                     </Badge>
                                     {enrollment.certificate_issued && (
                                         <div title="Certificate Earned">
@@ -98,7 +98,7 @@ export const MyCoursesPage = () => {
                             <CardFooter className="pt-0 flex gap-2">
                                 <Button className="flex-1" asChild>
                                     <Link to={`/learn/${enrollment.course?.uuid}`}>
-                                        {enrollment.status === 'completed' ? 'Review' : 'Continue'}
+                                        {enrollment.status === 'completed' ? 'Review' : enrollment.progress_percent >= 100 ? 'Review' : 'Continue'}
                                         <ArrowRight className="ml-2 h-4 w-4" />
                                     </Link>
                                 </Button>

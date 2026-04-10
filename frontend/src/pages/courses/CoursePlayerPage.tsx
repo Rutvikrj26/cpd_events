@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import {
     getCourse,
     getCourseProgress,
@@ -9,6 +11,7 @@ import {
     submitSubmission,
     getCourseAnnouncements,
     getCourseSessions,
+    getEnrollments,
 } from '@/api/courses';
 import { getCourseModules, getModuleContents } from '@/api/courses/modules';
 import { updateContentProgress } from '@/api/learning';
@@ -17,6 +20,8 @@ import { SessionsPanel } from '@/components/courses/SessionsPanel';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
@@ -39,7 +44,8 @@ import {
     Award,
     ExternalLink,
     ClipboardCheck,
-    Info
+    Info,
+    Lock
 } from 'lucide-react';
 
 interface ModuleContent {
@@ -79,6 +85,9 @@ export function CoursePlayerPage() {
     const [contentLoading, setContentLoading] = useState(false);
     const [completedContents, setCompletedContents] = useState<Set<string>>(new Set());
     const [isEnrollmentBlocked, setIsEnrollmentBlocked] = useState(false);
+    const [moduleAvailability, setModuleAvailability] = useState<Record<string, boolean>>({});
+    const [contentProgressMap, setContentProgressMap] = useState<Record<string, any>>({});
+    const [enrollmentProgress, setEnrollmentProgress] = useState<number>(0);
     const [submissions, setSubmissions] = useState<AssignmentSubmission[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [assignmentDraft, setAssignmentDraft] = useState({
@@ -104,13 +113,61 @@ export function CoursePlayerPage() {
                 const courseData = await getCourse(courseUuid);
                 setCourse(courseData);
 
+                // Check enrollment — redirect to detail page if not enrolled
+                try {
+                    const enrollments = await getEnrollments();
+                    const enrolled = enrollments.some(
+                        (e: any) => e.course?.uuid === courseUuid && ['active', 'completed'].includes(e.status)
+                    );
+                    if (!enrolled) {
+                        navigate(`/courses/${courseData.slug || courseUuid}`, { replace: true });
+                        return;
+                    }
+                } catch {
+                    // If enrollment check fails, allow access (staff/admin previews)
+                }
+
                 // Fetch modules
                 const modulesData = await getCourseModules(courseUuid);
 
-                // Fetch contents for each module
+                // Fetch progress FIRST to determine module availability
+                let completed = new Set<string>();
+                let availability: Record<string, boolean> = {};
+                let progressMap: Record<string, any> = {};
+                let savedEnrollmentProgress = 0;
+
+                try {
+                    const progress = await getCourseProgress(courseUuid);
+                    progress.modules.forEach((module: any) => {
+                        const mUuid = module.module?.uuid || module.module?.id;
+                        availability[mUuid] = module.is_available;
+                        module.content_progress.forEach((progressItem: any) => {
+                            progressMap[progressItem.content] = progressItem;
+                            if (progressItem.status === 'completed' || progressItem.progress_percent === 100) {
+                                completed.add(progressItem.content);
+                            }
+                        });
+                    });
+                    savedEnrollmentProgress = progress.enrollment?.progress_percent ?? 0;
+                } catch {
+                    // Progress unavailable (staff preview) — default all available
+                    modulesData.forEach((mod: any) => {
+                        availability[mod.module?.uuid || mod.uuid] = true;
+                    });
+                }
+
+                setCompletedContents(completed);
+                setModuleAvailability(availability);
+                setContentProgressMap(progressMap);
+                setEnrollmentProgress(savedEnrollmentProgress);
+
+                // Fetch contents only for AVAILABLE modules (skip locked ones to avoid 403)
                 const modulesWithContents = await Promise.all(
                     modulesData.map(async (mod) => {
                         const moduleUuid = mod.module?.uuid || mod.uuid;
+                        if (availability[moduleUuid] === false) {
+                            return { ...mod, contents: [], expanded: false };
+                        }
                         try {
                             const contents = await getModuleContents(courseUuid, moduleUuid);
                             return {
@@ -147,38 +204,23 @@ export function CoursePlayerPage() {
                     }
                 }
 
-                // Pull progress to restore completed items
-                try {
-                    const progress = await getCourseProgress(courseUuid);
-                    const completed = new Set<string>();
-                    progress.modules.forEach(module => {
-                        module.content_progress.forEach(progressItem => {
-                            if (progressItem.status === 'completed' || progressItem.progress_percent === 100) {
-                                completed.add(progressItem.content);
-                            }
-                        });
-                    });
-                    setCompletedContents(completed);
+                // Auto-select first incomplete content in an available module
+                const firstIncomplete = sortedModules
+                    .flatMap((mod) => {
+                        const moduleUuid = mod.module?.uuid || mod.uuid;
+                        if (!availability[moduleUuid]) return [];
+                        return (mod.contents || []).map(content => ({ content, moduleUuid }));
+                    })
+                    .find(({ content }) => !completed.has(content.uuid));
 
-                    // Auto-select first incomplete content
-                    const firstIncomplete = sortedModules
-                        .flatMap((mod) => {
-                            const moduleUuid = mod.module?.uuid || mod.uuid;
-                            return (mod.contents || []).map(content => ({ content, moduleUuid }));
-                        })
-                        .find(({ content }) => !completed.has(content.uuid));
-
-                    if (firstIncomplete) {
-                        setCurrentItem({ type: 'content', item: firstIncomplete.content, moduleUuid: firstIncomplete.moduleUuid });
-                        setCurrentModuleUuid(firstIncomplete.moduleUuid);
-                        didSelectContent = true;
-                        setModules(prev => prev.map((m) => ({
-                            ...m,
-                            expanded: (m.module?.uuid || m.uuid) === firstIncomplete.moduleUuid
-                        })));
-                    }
-                } catch (error: any) {
-                    // Progress may be unavailable for staff previews; ignore.
+                if (firstIncomplete) {
+                    setCurrentItem({ type: 'content', item: firstIncomplete.content, moduleUuid: firstIncomplete.moduleUuid });
+                    setCurrentModuleUuid(firstIncomplete.moduleUuid);
+                    didSelectContent = true;
+                    setModules(prev => prev.map((m) => ({
+                        ...m,
+                        expanded: (m.module?.uuid || m.uuid) === firstIncomplete.moduleUuid
+                    })));
                 }
 
                 // Fallback: Auto-select first content
@@ -233,11 +275,13 @@ export function CoursePlayerPage() {
 
     // Select content
     const selectContent = (content: ContentWithProgress, moduleUuid: string) => {
+        if (!moduleAvailability[moduleUuid]) return;
         setCurrentItem({ type: 'content', item: content, moduleUuid });
         setCurrentModuleUuid(moduleUuid);
     };
 
     const selectAssignment = (assignment: Assignment, moduleUuid: string) => {
+        if (!moduleAvailability[moduleUuid]) return;
         setCurrentItem({ type: 'assignment', item: assignment, moduleUuid });
         setCurrentModuleUuid(moduleUuid);
         const latest = getLatestSubmission(assignment.uuid);
@@ -248,15 +292,77 @@ export function CoursePlayerPage() {
         });
     };
 
-    // Mark content as complete
+    // Refresh module availability and fetch contents for newly unlocked modules
+    const refreshProgress = async () => {
+        if (!courseUuid) return;
+        try {
+            const progress = await getCourseProgress(courseUuid);
+            const completed = new Set<string>();
+            const availability: Record<string, boolean> = {};
+            const progressMap: Record<string, any> = {};
+
+            progress.modules.forEach((module: any) => {
+                const mUuid = module.module?.uuid || module.module?.id;
+                availability[mUuid] = module.is_available;
+                module.content_progress.forEach((progressItem: any) => {
+                    progressMap[progressItem.content] = progressItem;
+                    if (progressItem.status === 'completed' || progressItem.progress_percent === 100) {
+                        completed.add(progressItem.content);
+                    }
+                });
+            });
+            setCompletedContents(completed);
+            setModuleAvailability(availability);
+            setContentProgressMap(progressMap);
+            setEnrollmentProgress(progress.enrollment?.progress_percent ?? 0);
+
+            // Fetch contents for any newly unlocked modules that have no contents loaded yet
+            setModules(prev => {
+                const needsFetch: number[] = [];
+                prev.forEach((mod, idx) => {
+                    const mUuid = mod.module?.uuid || mod.uuid;
+                    if (availability[mUuid] && (!mod.contents || mod.contents.length === 0)) {
+                        needsFetch.push(idx);
+                    }
+                });
+                if (needsFetch.length > 0) {
+                    // Fetch in background, then update modules
+                    Promise.all(
+                        needsFetch.map(async (idx) => {
+                            const mod = prev[idx];
+                            const mUuid = mod.module?.uuid || mod.uuid;
+                            try {
+                                const contents = await getModuleContents(courseUuid, mUuid);
+                                return { idx, contents: contents.sort((a: any, b: any) => a.order - b.order) };
+                            } catch {
+                                return { idx, contents: [] };
+                            }
+                        })
+                    ).then(results => {
+                        setModules(current => current.map((mod, idx) => {
+                            const result = results.find(r => r.idx === idx);
+                            return result ? { ...mod, contents: result.contents } : mod;
+                        }));
+                    });
+                }
+                return prev;
+            });
+        } catch {
+            // ignore
+        }
+    };
+
     const markComplete = async () => {
         if (!courseUuid || !currentItem || currentItem.type !== 'content') return;
 
         try {
             await updateContentProgress(currentItem.item.uuid, { progress_percent: 100, completed: true });
 
-            // Update local state
+            // Update local state immediately
             setCompletedContents(prev => new Set([...prev, currentItem.item.uuid]));
+
+            // Refresh availability (may unlock next module)
+            await refreshProgress();
 
             toast({
                 title: 'Progress saved!',
@@ -290,11 +396,12 @@ export function CoursePlayerPage() {
             return;
         }
 
-        // Try first content of next module
+        // Try first content of next available module
         for (let i = moduleIndex + 1; i < modules.length; i++) {
-            if (modules[i].contents && modules[i].contents!.length > 0) {
-                setCurrentItem({ type: 'content', item: modules[i].contents![0], moduleUuid: modules[i].module?.uuid || modules[i].uuid });
-                setCurrentModuleUuid(modules[i].module?.uuid || modules[i].uuid);
+            const nextModuleUuid = modules[i].module?.uuid || modules[i].uuid;
+            if (moduleAvailability[nextModuleUuid] !== false && modules[i].contents && modules[i].contents!.length > 0) {
+                setCurrentItem({ type: 'content', item: modules[i].contents![0], moduleUuid: nextModuleUuid });
+                setCurrentModuleUuid(nextModuleUuid);
                 setModules(prev => prev.map((m, idx) => ({ ...m, expanded: idx === i })));
                 return;
             }
@@ -321,9 +428,8 @@ export function CoursePlayerPage() {
         }
     };
 
-    // Calculate progress
-    const totalContents = modules.reduce((sum, m) => sum + (m.contents?.length || 0), 0);
-    const progressPercent = totalContents > 0 ? Math.round((completedContents.size / totalContents) * 100) : 0;
+    // Progress from backend (source of truth)
+    const progressPercent = enrollmentProgress;
 
     const getLatestSubmission = (assignmentUuid: string) => {
         return submissions
@@ -506,17 +612,20 @@ export function CoursePlayerPage() {
                             const moduleUuid = mod.module?.uuid || mod.uuid;
                             const moduleTitle = mod.module?.title || `Module ${modIdx + 1}`;
                             const moduleCompleted = mod.contents?.every(c => completedContents.has(c.uuid));
+                            const isLocked = moduleAvailability[moduleUuid] === false;
 
                             return (
-                                <div key={moduleUuid} className="mb-2">
+                                <div key={moduleUuid} className={`mb-2 ${isLocked ? 'opacity-60' : ''}`}>
                                     <button
-                                        onClick={() => toggleModule(moduleUuid)}
-                                        className="w-full flex items-center gap-2 p-3 rounded-lg hover:bg-muted transition-colors text-left"
+                                        onClick={() => !isLocked && toggleModule(moduleUuid)}
+                                        className={`w-full flex items-center gap-2 p-3 rounded-lg transition-colors text-left ${isLocked ? 'cursor-not-allowed' : 'hover:bg-muted'}`}
                                     >
                                         <ChevronRight className={`h-4 w-4 transition-transform ${mod.expanded ? 'rotate-90' : ''}`} />
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
-                                                {moduleCompleted ? (
+                                                {isLocked ? (
+                                                    <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                ) : moduleCompleted ? (
                                                     <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
                                                 ) : (
                                                     <span className="w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-medium shrink-0">
@@ -526,7 +635,7 @@ export function CoursePlayerPage() {
                                                 <span className="font-medium truncate">{moduleTitle}</span>
                                             </div>
                                             <span className="text-xs text-muted-foreground">
-                                                {mod.contents?.length || 0} items
+                                                {isLocked ? 'Complete previous module to unlock' : `${mod.contents?.length || 0} items`}
                                             </span>
                                         </div>
                                     </button>
@@ -548,7 +657,10 @@ export function CoursePlayerPage() {
                                                             }`}
                                                     >
                                                         {getContentIcon(content.content_type, isCompleted)}
-                                                        <span className="truncate">{content.title}</span>
+                                                        <span className="truncate flex-1">{content.title}</span>
+                                                        {!content.is_required && (
+                                                            <span className="text-[10px] text-muted-foreground shrink-0">Optional</span>
+                                                        )}
                                                     </button>
                                                 );
                                             })}
@@ -629,6 +741,15 @@ export function CoursePlayerPage() {
 
                         {/* Content Viewer */}
                         <div className="flex-1 overflow-y-auto p-6">
+                          {currentItem && moduleAvailability[currentItem.moduleUuid] === false ? (
+                            <div className="flex flex-col items-center justify-center h-full text-center p-12">
+                                <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center mb-6">
+                                    <Lock className="h-10 w-10 text-muted-foreground" />
+                                </div>
+                                <h3 className="text-xl font-semibold">{activeContent?.title || activeAssignment?.title}</h3>
+                                <p className="text-muted-foreground mt-2 max-w-md">Complete the previous module to unlock this content.</p>
+                            </div>
+                          ) : (
                             <div className="max-w-4xl mx-auto">
                                 {activeContent && activeContent.content_type === 'video' && (
                                     <div className="aspect-video bg-black rounded-lg overflow-hidden">
@@ -745,9 +866,15 @@ export function CoursePlayerPage() {
                                     <QuizContent
                                         key={activeContent.uuid}
                                         content={activeContent}
-                                        onComplete={async () => {
-                                            await updateContentProgress(activeContent.uuid, { progress_percent: 100, completed: true });
+                                        savedProgress={contentProgressMap[activeContent.uuid]}
+                                        onComplete={async (quizResult?: { answers: Record<string, string[]>; score: number }) => {
+                                            await updateContentProgress(activeContent.uuid, {
+                                                progress_percent: 100,
+                                                completed: true,
+                                                position: quizResult ? { quiz_answers: quizResult.answers, score: quizResult.score, passed: true } : undefined,
+                                            });
                                             setCompletedContents(prev => new Set([...prev, activeContent.uuid]));
+                                            await refreshProgress();
                                         }}
                                     />
                                 )}
@@ -765,6 +892,7 @@ export function CoursePlayerPage() {
                                     />
                                 )}
                             </div>
+                          )}
                         </div>
                     </>
                 ) : (
@@ -825,16 +953,36 @@ export function CoursePlayerPage() {
 const QuizContent = ({
     content,
     onComplete,
+    savedProgress,
 }: {
     content: ContentWithProgress;
-    onComplete: () => Promise<void>;
+    onComplete: (quizResult?: { answers: Record<string, string[]>; score: number }) => Promise<void>;
+    savedProgress?: any;
 }) => {
-    const [answers, setAnswers] = useState<Record<string, string[]>>({});
-    const [result, setResult] = useState<{ scorePercent: number; passed: boolean } | null>(null);
+    const savedQuiz = savedProgress?.last_position;
+    const alreadyPassed = savedQuiz?.passed === true;
+
+    const [answers, setAnswers] = useState<Record<string, string[]>>(
+        alreadyPassed && savedQuiz?.quiz_answers ? savedQuiz.quiz_answers : {}
+    );
+    const [result, setResult] = useState<{ scorePercent: number; passed: boolean } | null>(
+        alreadyPassed ? { scorePercent: savedQuiz.score, passed: true } : null
+    );
 
     const quizData = content.content_data || {};
-    const questions = quizData.questions || [];
+    const rawQuestions = quizData.questions || [];
     const passingScore = quizData.passing_score ?? 70;
+
+    // Normalize questions: handle both string[] options and {id, text, isCorrect}[] options
+    const questions = rawQuestions.map((q: any) => {
+        const options = (q.options || []).map((opt: any, idx: number) => {
+            if (typeof opt === 'string') {
+                return { id: String(idx), text: opt, isCorrect: q.correct_answer === idx };
+            }
+            return { id: opt.id ?? String(idx), text: opt.text ?? opt, isCorrect: opt.isCorrect ?? false };
+        });
+        return { ...q, id: String(q.id), options, points: q.points ?? 1 };
+    });
 
     const handleSingleSelect = (questionId: string, optionId: string) => {
         setAnswers(prev => ({ ...prev, [questionId]: [optionId] }));
@@ -855,16 +1003,16 @@ const QuizContent = ({
         let earnedPoints = 0;
 
         questions.forEach((question: any) => {
-            const correctOptions = (question.options || []).filter((opt: any) => opt.isCorrect).map((opt: any) => opt.id);
+            const correctOptions = question.options.filter((opt: any) => opt.isCorrect).map((opt: any) => opt.id);
             const selected = answers[question.id] || [];
-            totalPoints += question.points || 0;
+            totalPoints += question.points;
 
             const isCorrect =
                 correctOptions.length === selected.length &&
                 correctOptions.every((id: string) => selected.includes(id));
 
             if (isCorrect) {
-                earnedPoints += question.points || 0;
+                earnedPoints += question.points;
             }
         });
 
@@ -873,14 +1021,24 @@ const QuizContent = ({
 
         setResult({ scorePercent, passed });
         if (passed) {
-            await onComplete();
+            await onComplete({ answers, score: scorePercent });
         }
+    };
+
+    const handleRetry = () => {
+        setAnswers({});
+        setResult(null);
     };
 
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Quiz</CardTitle>
+                <div className="flex items-center justify-between">
+                    <CardTitle>Quiz</CardTitle>
+                    {alreadyPassed && (
+                        <Badge className="bg-success">Passed — {savedQuiz.score}%</Badge>
+                    )}
+                </div>
             </CardHeader>
             <CardContent className="space-y-6">
                 {questions.length === 0 && (
@@ -892,32 +1050,46 @@ const QuizContent = ({
                             <Badge variant="outline">Q{index + 1}</Badge>
                             <p className="font-medium">{question.text}</p>
                         </div>
-                        <div className="space-y-2">
-                            {(question.options || []).map((option: any) => (
-                                <label key={option.id} className="flex items-center gap-2 text-sm">
-                                    <input
-                                        type={question.type === 'multiple' ? 'checkbox' : 'radio'}
-                                        name={question.id}
-                                        checked={(answers[question.id] || []).includes(option.id)}
-                                        onChange={() =>
-                                            question.type === 'multiple'
-                                                ? handleMultipleSelect(question.id, option.id)
-                                                : handleSingleSelect(question.id, option.id)
-                                        }
-                                    />
-                                    <span>{option.text}</span>
-                                </label>
-                            ))}
-                        </div>
+                        {question.type === 'multiple' ? (
+                            <div className="space-y-2 pl-2">
+                                {question.options.map((option: any) => (
+                                    <label key={option.id} className="flex items-center gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50 cursor-pointer text-sm">
+                                        <Checkbox
+                                            checked={(answers[question.id] || []).includes(option.id)}
+                                            onCheckedChange={() => handleMultipleSelect(question.id, option.id)}
+                                        />
+                                        <span>{option.text}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        ) : (
+                            <RadioGroup
+                                value={(answers[question.id] || [])[0] ?? ''}
+                                onValueChange={(value) => handleSingleSelect(question.id, value)}
+                                className="pl-2"
+                            >
+                                {question.options.map((option: any) => (
+                                    <label key={option.id} className="flex items-center gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50 cursor-pointer text-sm">
+                                        <RadioGroupItem value={option.id} />
+                                        <span>{option.text}</span>
+                                    </label>
+                                ))}
+                            </RadioGroup>
+                        )}
                     </div>
                 ))}
 
                 <div className="flex items-center justify-between">
-                    <Button onClick={handleSubmit}>Submit Quiz</Button>
+                    <Button onClick={handleSubmit} disabled={result?.passed}>Submit Quiz</Button>
                     {result && (
-                        <Badge className={result.passed ? 'bg-success' : 'bg-warning'}>
-                            {result.scorePercent}% {result.passed ? 'Passed' : 'Try again'}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                            <Badge className={result.passed ? 'bg-success' : 'bg-destructive'}>
+                                {result.scorePercent}% {result.passed ? 'Passed' : 'Try again'}
+                            </Badge>
+                            {!result.passed && (
+                                <Button variant="outline" size="sm" onClick={handleRetry}>Retry</Button>
+                            )}
+                        </div>
                     )}
                 </div>
             </CardContent>
@@ -983,12 +1155,19 @@ const AssignmentContent = ({
                 {(assignment.submission_type === 'text' || assignment.submission_type === 'mixed' || !assignment.submission_type) && (
                     <div className="space-y-2">
                         <p className="text-sm font-medium">Response</p>
-                        <textarea
-                            className="w-full min-h-[140px] border rounded-md p-3 text-sm"
-                            value={draft.text}
-                            disabled={!canEdit}
-                            onChange={(event) => onDraftChange({ ...draft, text: event.target.value })}
-                        />
+                        {canEdit ? (
+                            <ReactQuill
+                                theme="snow"
+                                value={draft.text}
+                                onChange={(value) => onDraftChange({ ...draft, text: value })}
+                                className="bg-background rounded-md"
+                            />
+                        ) : (
+                            <div
+                                className="border rounded-md p-4 bg-muted/30 text-sm prose prose-sm max-w-none opacity-80"
+                                dangerouslySetInnerHTML={{ __html: draft.text || submission?.content?.text || '<em>No response submitted</em>' }}
+                            />
+                        )}
                     </div>
                 )}
 
@@ -1017,14 +1196,23 @@ const AssignmentContent = ({
                     </div>
                 )}
 
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={onSaveDraft} disabled={!canEdit || isSubmitting}>
-                        Save Draft
-                    </Button>
-                    <Button onClick={onSubmit} disabled={!canEdit || isSubmitting}>
-                        Submit Assignment
-                    </Button>
-                </div>
+                {canEdit ? (
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={onSaveDraft} disabled={isSubmitting}>
+                            Save Draft
+                        </Button>
+                        <Button onClick={onSubmit} disabled={isSubmitting}>
+                            Submit Assignment
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="rounded-md bg-muted/50 border p-3 text-sm text-muted-foreground">
+                        {submission?.status === 'submitted' && 'Your submission is under review by the instructor.'}
+                        {submission?.status === 'graded' && `Graded — Score: ${submission.score ?? 'N/A'}`}
+                        {submission?.status === 'approved' && 'Your submission has been approved.'}
+                        {!['submitted', 'graded', 'approved'].includes(submission?.status || '') && 'Contact your instructor if you need to resubmit.'}
+                    </div>
+                )}
             </CardContent>
         </Card>
     );

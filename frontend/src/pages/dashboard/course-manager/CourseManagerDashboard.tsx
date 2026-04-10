@@ -6,11 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DashboardStat } from '@/components/dashboard/DashboardStats';
-import { OnboardingChecklist } from '@/components/onboarding';
 import { getOwnedCourses } from '@/api/courses';
 import { Course } from '@/api/courses/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { getRoleFlags } from '@/lib/role-utils';
 
 export function CourseManagerDashboard() {
+  const { user } = useAuth();
+  const { isAdmin } = getRoleFlags(user);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -55,24 +58,24 @@ export function CourseManagerDashboard() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <PageHeader
-        title="Course Manager Dashboard"
-        description="Build courses, track enrollments, and measure learner completion."
+        title={isAdmin ? "Course Manager Dashboard" : "Course Staff Dashboard"}
+        description={isAdmin ? "Build courses, track enrollments, and measure learner completion." : "Manage your assigned courses, grade submissions, and track enrollments."}
         actions={(
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="outline" size="lg" className="shadow-sm">
               <Link to="/courses/manage">Manage Courses</Link>
             </Button>
-            <Button asChild size="lg" className="shadow-sm">
-              <Link to="/courses/manage/new">
-                <Plus className="mr-2 h-4 w-4" />
-                Create New Course
-              </Link>
-            </Button>
+            {isAdmin && (
+              <Button asChild size="lg" className="shadow-sm">
+                <Link to="/courses/manage/new">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create New Course
+                </Link>
+              </Button>
+            )}
           </div>
         )}
       />
-
-      <OnboardingChecklist />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <DashboardStat
@@ -121,11 +124,13 @@ export function CourseManagerDashboard() {
                   </div>
                   <h3 className="text-lg font-medium text-foreground">No courses yet</h3>
                   <p className="text-muted-foreground mt-1 max-w-sm mx-auto mb-6">
-                    Create your first course to start enrolling learners.
+                    {isAdmin ? "Create your first course to start enrolling learners." : "You have not been assigned to any courses yet. Contact your administrator."}
                   </p>
-                  <Button asChild variant="outline">
-                    <Link to="/courses/manage/new">Create Course</Link>
-                  </Button>
+                  {isAdmin && (
+                    <Button asChild variant="outline">
+                      <Link to="/courses/manage/new">Create Course</Link>
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="overflow-x-auto">

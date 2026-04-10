@@ -9,7 +9,6 @@ import {
     RefreshTokenRequest,
     PasswordResetRequest,
     PasswordResetConfirm,
-    UpgradeOrganizerRequest,
     PasswordChangeRequest,
     NotificationPreferences
 } from './types';
@@ -64,10 +63,6 @@ export const updateProfile = async (data: Partial<User>): Promise<User> => {
     return response.data;
 };
 
-export const upgradeToOrganizer = async (data: UpgradeOrganizerRequest): Promise<void> => {
-    await client.post('/users/me/upgrade/', data);
-};
-
 // Notification Preferences
 export const getNotificationPreferences = async (): Promise<NotificationPreferences> => {
     const response = await client.get<NotificationPreferences>('/users/me/notifications/');
@@ -87,8 +82,9 @@ export const completeOnboarding = async (): Promise<{ message: string; onboardin
 
 // Sessions
 export const getUserSessions = async (): Promise<UserSession[]> => {
-    const response = await client.get<UserSession[]>('/users/me/sessions/');
-    return response.data;
+    const response = await client.get('/users/me/sessions/');
+    const data = response.data;
+    return Array.isArray(data) ? data : (data.results || []);
 };
 
 export const revokeSession = async (uuid: string): Promise<void> => {

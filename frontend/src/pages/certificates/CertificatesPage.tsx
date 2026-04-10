@@ -248,14 +248,9 @@ export const CertificatesPage = () => {
                         <p className="text-muted-foreground text-center max-w-sm">
                             {searchTerm
                                 ? "Try adjusting your search terms to find what you're looking for."
-                                : "Complete events to earn certificates. They will appear here once issued by the organizer."
+                                : "Complete events or courses to earn certificates. They will appear here once issued."
                             }
                         </p>
-                        {!searchTerm && (
-                            <Link to="/events/browse" className="mt-4">
-                                <Button variant="outline">Browse Events</Button>
-                            </Link>
-                        )}
                     </div>
                 )
             }

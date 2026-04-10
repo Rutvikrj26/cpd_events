@@ -88,6 +88,26 @@ class EventModule(BaseModel):
         if not self.is_published:
             return False
 
+        # Course sequential gating: previous module (by order) must be completed
+        if course_enrollment:
+            course_modules = list(
+                CourseModule.objects.filter(course=course_enrollment.course)
+                .select_related('module')
+                .order_by('order')
+            )
+            for i, cm in enumerate(course_modules):
+                if cm.module_id == self.id and i > 0:
+                    prev_module = course_modules[i - 1].module
+                    try:
+                        prev_progress = ModuleProgress.objects.get(
+                            course_enrollment=course_enrollment, module=prev_module
+                        )
+                        if prev_progress.status != ModuleProgress.Status.COMPLETED:
+                            return False
+                    except ModuleProgress.DoesNotExist:
+                        return False
+                    break
+
         if self.release_type == self.ReleaseType.IMMEDIATE:
             return True
 
@@ -735,8 +755,17 @@ class Course(BaseModel):
         return self.created_by_id == user.id
 
     def can_instruct(self, user) -> bool:
-        """Check if user is an instructor for this course (same as can_manage in single-tenant mode)."""
-        return self.can_manage(user)
+        """Check if user is admin, creator, or assigned course staff."""
+        return self.can_manage(user) or self.staff_assignments.filter(user=user).exists()
+
+    def get_staff_role(self, user) -> str | None:
+        """Returns 'admin' for owner/staff, assigned role for course staff, None otherwise."""
+        if not user or not getattr(user, 'is_authenticated', False):
+            return None
+        if self.can_manage(user):
+            return 'admin'
+        assignment = self.staff_assignments.filter(user=user).first()
+        return assignment.role if assignment else None
 
     @property
     def is_free(self):
@@ -836,6 +865,30 @@ class CourseModule(BaseModel):
 
     def __str__(self):
         return f"{self.course.title} - {self.module.title}"
+
+
+class CourseStaff(BaseModel):
+    """
+    Assigns users as staff on a course.
+
+    Course staff (course_managers) can manage curriculum, grade submissions,
+    and manage announcements, but cannot change course settings or delete courses.
+    """
+
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='staff_assignments')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='course_staff_assignments'
+    )
+    role = models.CharField(max_length=30, default='course_manager')
+
+    class Meta:
+        db_table = 'course_staff'
+        unique_together = ['course', 'user']
+        verbose_name = 'Course Staff'
+        verbose_name_plural = 'Course Staff'
+
+    def __str__(self):
+        return f"{self.user.email} - {self.course.title} ({self.role})"
 
 
 class CourseEnrollment(BaseModel):

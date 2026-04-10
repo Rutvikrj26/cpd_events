@@ -82,7 +82,7 @@ export function MyEvents() {
         title="My Events"
         description="View your upcoming schedule and past event history."
         actions={
-          <Link to="/events/browse">
+          <Link to="/events">
             <Button>Browse New Events</Button>
           </Link>
         }
@@ -239,7 +239,7 @@ function EmptyState({ tab }: { tab: string }) {
           : "You haven't attended any events yet."}
       </p>
       {tab === "upcoming" && (
-        <Link to="/events/browse">
+        <Link to="/events">
           <Button>Browse Events</Button>
         </Link>
       )}

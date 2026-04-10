@@ -627,5 +627,17 @@
       "override_by": null,
       "override_reason": ""
     }
+  },
+  {
+    "model": "learning.coursestaff",
+    "pk": 1,
+    "fields": {
+      "uuid": "00000000-0000-4000-a000-000000000701",
+      "created_at": "2025-02-15T10:00:00Z",
+      "updated_at": "2025-02-15T10:00:00Z",
+      "course": 1,
+      "user": 6,
+      "role": "course_manager"
+    }
   }
 ]

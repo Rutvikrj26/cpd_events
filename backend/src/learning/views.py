@@ -21,6 +21,7 @@ from .models import (
     CourseAnnouncement,
     CourseEnrollment,
     CourseModule,
+    CourseStaff,
     EventModule,
     ModuleContent,
     ModuleProgress,
@@ -41,6 +42,8 @@ from .serializers import (
     CourseListSerializer,
     CourseModuleSerializer,
     CourseSerializer,
+    CourseStaffCreateSerializer,
+    CourseStaffSerializer,
     EventModuleCreateSerializer,
     EventModuleListSerializer,
     EventModuleSerializer,
@@ -525,25 +528,30 @@ class CourseViewSet(viewsets.ModelViewSet):
         if slug:
             queryset = queryset.filter(slug=slug)
 
-        owned = self.request.query_params.get('owned')
-        if owned and user.is_authenticated:
-            queryset = queryset.filter(created_by=user)
+        # Admin sees everything (regardless of owned param)
+        if user.is_staff:
+            return queryset.distinct()
 
         # Public visibility logic for non-authenticated users
         if not user.is_authenticated:
             return queryset.filter(is_public=True, status=Course.Status.PUBLISHED)
 
-        # Admin sees everything
-        if user.is_staff:
-            return queryset.distinct()
+        owned = self.request.query_params.get('owned')
+        if owned:
+            return queryset.filter(
+                models.Q(created_by=user) | models.Q(staff_assignments__user=user)
+            ).distinct()
 
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'progress']:
             return queryset.filter(
                 models.Q(is_public=True, status=Course.Status.PUBLISHED)
                 | models.Q(created_by=user)
+                | models.Q(staff_assignments__user=user)
             ).distinct()
 
-        return queryset.filter(created_by=user).distinct()
+        return queryset.filter(
+            models.Q(created_by=user) | models.Q(staff_assignments__user=user)
+        ).distinct()
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -562,8 +570,8 @@ class CourseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         from rest_framework.exceptions import PermissionDenied
 
-        if not self.request.user.groups.filter(name__in=['course_manager', 'admin']).exists():
-            raise PermissionDenied("Course manager or admin role required to create courses.")
+        if not self.request.user.is_staff:
+            raise PermissionDenied("Only admins can create courses.")
 
         subscription = getattr(self.request.user, 'subscription', None)
         if not subscription or not subscription.can_create_courses:
@@ -573,9 +581,24 @@ class CourseViewSet(viewsets.ModelViewSet):
 
         serializer.save(created_by=self.request.user)
 
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+        if not serializer.instance.can_manage(self.request.user):
+            raise PermissionDenied("Only admins can update course settings.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+        if not instance.can_manage(self.request.user):
+            raise PermissionDenied("Only admins can delete courses.")
+        instance.delete()
+
     @action(detail=True, methods=['post'])
     def publish(self, request, uuid=None):
+        from rest_framework.exceptions import PermissionDenied
         course = self.get_object()
+        if not course.can_manage(request.user):
+            raise PermissionDenied("Only admins can publish courses.")
         course.publish()
         return Response(CourseSerializer(course).data)
 
@@ -683,6 +706,61 @@ class CourseViewSet(viewsets.ModelViewSet):
              'total_sessions': sessions.count(),
              'sessions': stats
         })
+
+
+@roles('admin', route_name='course_staff')
+class CourseStaffViewSet(viewsets.ModelViewSet):
+    """
+    Manage course staff assignments.
+
+    Only admins and course owners can assign/remove staff.
+    GET /courses/{course_uuid}/staff/
+    POST /courses/{course_uuid}/staff/
+    DELETE /courses/{course_uuid}/staff/{uuid}/
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = CourseStaffSerializer
+    lookup_field = 'uuid'
+    http_method_names = ['get', 'post', 'delete']
+
+    def get_queryset(self):
+        course_uuid = self.kwargs.get('course_uuid')
+        course = get_object_or_404(Course, uuid=course_uuid)
+        if not course.can_manage(self.request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only admins can manage course staff.")
+        return CourseStaff.objects.filter(course=course).select_related('user')
+
+    def create(self, request, course_uuid=None):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        course = get_object_or_404(Course, uuid=course_uuid)
+        if not course.can_manage(request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only admins can manage course staff.")
+
+        serializer = CourseStaffCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = get_object_or_404(User, uuid=serializer.validated_data['user_uuid'])
+        role = serializer.validated_data.get('role', 'course_manager')
+
+        staff, created = CourseStaff.objects.get_or_create(
+            course=course, user=user, defaults={'role': role}
+        )
+        if not created:
+            return Response({'detail': 'User is already assigned to this course.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(CourseStaffSerializer(staff).data, status=status.HTTP_201_CREATED)
+
+    def perform_destroy(self, instance):
+        course = instance.course
+        if not course.can_manage(self.request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only admins can manage course staff.")
+        instance.delete()
 
 
 @roles('learner', 'educator', 'course_manager', 'admin', route_name='course_enrollments')
@@ -1014,7 +1092,7 @@ class CourseModuleViewSet(viewsets.ModelViewSet):
         course_uuid = self.kwargs.get('course_uuid')
         course = get_object_or_404(Course, uuid=course_uuid)
 
-        if not course.can_manage(self.request.user):
+        if not course.can_instruct(self.request.user):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("You do not have access to this course.")
@@ -1034,7 +1112,7 @@ class CourseModuleViewSet(viewsets.ModelViewSet):
 
         course_uuid = self.kwargs.get('course_uuid')
         course = get_object_or_404(Course, uuid=course_uuid)
-        if not course.can_manage(self.request.user):
+        if not course.can_instruct(self.request.user):
             raise PermissionDenied("You do not have access to this course.")
         instance.delete()
 
@@ -1059,7 +1137,7 @@ class CourseModuleViewSet(viewsets.ModelViewSet):
     def update_content(self, request, course_uuid=None, uuid=None):
         """Update the underlying module content (title, desc, etc)."""
         course_link = self.get_object()  # This is CourseModule
-        if not course_link.course.can_manage(self.request.user):
+        if not course_link.course.can_instruct(self.request.user):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("You do not have access to this course.")
@@ -1098,18 +1176,22 @@ class CourseModuleContentViewSet(viewsets.ModelViewSet):
         if course.can_manage(self.request.user) or course.can_instruct(self.request.user):
             return base_queryset.order_by('order')
 
-        enrolled = CourseEnrollment.objects.filter(
+        from rest_framework.exceptions import PermissionDenied
+
+        enrollment = CourseEnrollment.objects.filter(
             user=self.request.user,
             course=course,
             status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
-        ).exists()
-        if enrolled:
+        ).first()
+        if enrollment:
+            # Enforce module-level gating
+            module = get_object_or_404(EventModule, uuid=module_uuid)
+            if not module.is_available_for(self.request.user, course_enrollment=enrollment):
+                raise PermissionDenied("Complete the previous module first.")
             return base_queryset.filter(
                 module__is_published=True,
                 is_published=True,
             ).order_by('order')
-
-        from rest_framework.exceptions import PermissionDenied
 
         raise PermissionDenied("You do not have access to this course.")
 
@@ -1124,7 +1206,7 @@ class CourseModuleContentViewSet(viewsets.ModelViewSet):
 
         # Verify access
         course = get_object_or_404(Course, uuid=course_uuid)
-        if not course.can_manage(self.request.user):
+        if not course.can_instruct(self.request.user):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("You do not have access to this course.")
@@ -1152,7 +1234,7 @@ class CourseModuleContentViewSet(viewsets.ModelViewSet):
 
         course_uuid = self.kwargs.get('course_uuid')
         course = get_object_or_404(Course, uuid=course_uuid)
-        if not course.can_manage(self.request.user):
+        if not course.can_instruct(self.request.user):
             raise PermissionDenied("You do not have access to this course.")
         serializer.save()
 
@@ -1161,7 +1243,7 @@ class CourseModuleContentViewSet(viewsets.ModelViewSet):
 
         course_uuid = self.kwargs.get('course_uuid')
         course = get_object_or_404(Course, uuid=course_uuid)
-        if not course.can_manage(self.request.user):
+        if not course.can_instruct(self.request.user):
             raise PermissionDenied("You do not have access to this course.")
         instance.delete()
 

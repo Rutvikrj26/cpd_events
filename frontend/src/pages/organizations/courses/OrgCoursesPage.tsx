@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { getRoleFlags } from '@/lib/role-utils';
 import { Plus, Search, BookOpen, Clock, Users, MoreVertical, FileText, CheckCircle, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,8 +40,10 @@ import {
 const OrgCoursesPage = () => {
     const { slug } = useParams<{ slug: string }>();
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const { isAdmin } = getRoleFlags(user);
     const isPersonal = !slug;
-    // TODO: Replace with direct permission check when per-user role API is available
+    // Legacy: was used to gate instructor-only views; kept false until removed everywhere
     const isInstructor = false;
 
     const [courses, setCourses] = useState<Course[]>([]);
@@ -136,13 +140,17 @@ const OrgCoursesPage = () => {
         <div className="container mx-auto py-8 px-4">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">{isPersonal ? 'My Courses' : 'Courses'}</h1>
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        {isAdmin ? 'My Courses' : 'Assigned Courses'}
+                    </h1>
                     <p className="text-muted-foreground">
-                        {isPersonal ? 'Manage your course catalog and content.' : 'Manage your self-paced learning content.'}
+                        {isAdmin
+                            ? 'Manage your course catalog and content.'
+                            : 'Courses you have been assigned to manage.'}
                     </p>
                 </div>
 
-                {(isPersonal || true) && (
+                {isAdmin && (
                     <Button onClick={() => navigate(isPersonal ? `/courses/manage/new` : `/org/${slug}/courses/new`)}>
                         <Plus className="mr-2 h-4 w-4" />
                         Create Course
@@ -255,7 +263,7 @@ const OrgCoursesPage = () => {
                                                             <DropdownMenuItem onClick={() => navigate(`/courses/${course.slug}`)}>
                                                                 View Public Page
                                                             </DropdownMenuItem>
-                                                            {course.status === 'draft' && (
+                                                            {isAdmin && course.status === 'draft' && (
                                                                 <DropdownMenuItem
                                                                     className="text-destructive focus:text-destructive"
                                                                     onClick={() => setCourseToDelete(course)}

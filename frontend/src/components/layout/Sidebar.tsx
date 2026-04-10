@@ -94,7 +94,9 @@ export const Sidebar = () => {
         // Feature flag filtering via manifest
         if (manifest && manifest.routes.length > 0) {
             // Items that don't need feature checks (basic navigation)
-            const alwaysShow = ['dashboard', 'profile', 'browse_events', 'browse_courses', 'cpd_tracking', 'badges'];
+            // 'courses' is here because course_managers need access via CourseStaff assignments,
+            // not via the create_courses feature flag.
+            const alwaysShow = ['dashboard', 'profile', 'browse_events', 'browse_courses', 'cpd_tracking', 'badges', 'courses', 'course_certificates'];
             if (alwaysShow.includes(item.routeKey)) return true;
 
             // Map nav items to manifest features
