@@ -26,9 +26,13 @@ import { DashboardStat } from "@/components/dashboard/DashboardStats";
 import { PageHeader } from "@/components/ui/page-header";
 import { getEvents } from "@/api/events";
 import { Event } from "@/api/events/types";
+import { useAuth } from "@/contexts/AuthContext";
+import { getRoleFlags } from "@/lib/role-utils";
 import { toast } from "sonner";
 
 export function OrganizerDashboard() {
+  const { user } = useAuth();
+  const { isAdmin } = getRoleFlags(user);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -73,7 +77,7 @@ export function OrganizerDashboard() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <PageHeader
-        title="Organizer Dashboard"
+        title={isAdmin ? 'Admin Dashboard' : 'Organizer Dashboard'}
         description="Manage your professional events, track attendance, and issue certificates."
         actions={
           <Button asChild size="lg" className="shadow-sm">

@@ -21,6 +21,62 @@ from common.config import AssignmentDefaults, ModuleDefaults
 from common.models import BaseModel
 
 
+def validate_module_content_data(content_type: str, content_data):
+    """
+    Shape-check ``ModuleContent.content_data`` for a given content_type.
+
+    Canonical shapes:
+      text:     {"body": "<html>"}
+      lesson:   {"video"?: {"url": str}, "text"?: {"body": "<html>"}}
+      video:    {"url": str, "provider"?: str, "thumbnail"?: str}
+      document: {}                  # binary lives on the `file` field
+      quiz:     {"questions": [...], "passing_score": int}
+      external: {"url": str, "open_in_new_tab"?: bool}
+    """
+    if content_data is None or content_data == {}:
+        return
+    if not isinstance(content_data, dict):
+        raise ValidationError({'content_data': 'content_data must be a JSON object.'})
+
+    def _text_block(value, field):
+        if not isinstance(value, dict) or not isinstance(value.get('body'), str):
+            raise ValidationError(
+                {'content_data': f'{field} must be an object with a "body" string.'}
+            )
+
+    if content_type == 'text':
+        if not isinstance(content_data.get('body'), str):
+            raise ValidationError(
+                {'content_data': 'text content requires {"body": "<html>"}.'}
+            )
+    elif content_type == 'lesson':
+        if 'video' in content_data and content_data['video'] is not None:
+            video = content_data['video']
+            if not isinstance(video, dict) or not isinstance(video.get('url'), str):
+                raise ValidationError(
+                    {'content_data': 'lesson.video must be {"url": "..."}.'}
+                )
+        if 'text' in content_data and content_data['text'] is not None:
+            _text_block(content_data['text'], 'lesson.text')
+    elif content_type == 'video':
+        if not isinstance(content_data.get('url'), str):
+            raise ValidationError(
+                {'content_data': 'video content requires {"url": "..."}.'}
+            )
+    elif content_type == 'quiz':
+        if not isinstance(content_data.get('questions'), list):
+            raise ValidationError(
+                {'content_data': 'quiz content requires a "questions" list.'}
+            )
+    elif content_type == 'external':
+        if not isinstance(content_data.get('url'), str):
+            raise ValidationError(
+                {'content_data': 'external content requires {"url": "..."}.'}
+            )
+    elif content_type == 'document':
+        pass
+
+
 class EventModule(BaseModel):
     """
     Learning module within an event.
@@ -180,13 +236,15 @@ class ModuleContent(BaseModel):
     # Duration in minutes (for tracking)
     duration_minutes = models.PositiveIntegerField(default=0)
 
-    # Content data (JSON) - structure depends on content_type
-    # video: {url, provider, video_id, thumbnail}
-    # document: {url, filename, file_type, size}
-    # text: {html_content}
-    # quiz: {questions: [...], passing_score}
-    # external: {url, open_in_new_tab}
-    content_data = models.JSONField(default=dict)
+    # Content data (JSON) — shape depends on content_type (enforced by
+    # validate_module_content_data below):
+    #   text:     {"body": "<html>"}
+    #   lesson:   {"video"?: {"url": "..."}, "text"?: {"body": "<html>"}}
+    #   video:    {"url": "...", "provider"?: "...", "thumbnail"?: "..."}
+    #   document: {} (the binary lives on the `file` field)
+    #   quiz:     {"questions": [...], "passing_score": int}
+    #   external: {"url": "...", "open_in_new_tab"?: bool}
+    content_data = models.JSONField(default=dict, blank=True)
     file = models.FileField(
         upload_to="learning/modules/", blank=True, null=True, help_text="Uploaded file (for document/video)"
     )
@@ -202,8 +260,48 @@ class ModuleContent(BaseModel):
         ordering = ["module", "order"]
         unique_together = [["module", "order"]]
 
+    def clean(self):
+        super().clean()
+        validate_module_content_data(self.content_type, self.content_data)
+
+    def save(self, *args, **kwargs):
+        # Normalize legacy content_data shapes on write so we never persist
+        # drift even if a caller bypasses the serializer validator.
+        self.content_data = _normalize_module_content_data(
+            self.content_type, self.content_data
+        )
+        validate_module_content_data(self.content_type, self.content_data)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.module.title} - {self.title}"
+
+
+def _normalize_module_content_data(content_type: str, content_data):
+    """Rewrite known legacy shapes into the canonical ones."""
+    if not isinstance(content_data, dict):
+        return content_data or {}
+    data = dict(content_data)
+
+    if content_type == 'text':
+        # Accept legacy {"text": "html"} or {"text": {"body": "html"}} and
+        # flatten to {"body": "html"}.
+        if 'body' not in data:
+            legacy = data.pop('text', None)
+            if isinstance(legacy, str):
+                data['body'] = legacy
+            elif isinstance(legacy, dict) and isinstance(legacy.get('body'), str):
+                data['body'] = legacy['body']
+    elif content_type == 'lesson':
+        # lesson.text may arrive as a plain string — wrap it.
+        text_block = data.get('text')
+        if isinstance(text_block, str):
+            data['text'] = {'body': text_block}
+        # lesson.video may arrive as a plain URL string — wrap it.
+        video_block = data.get('video')
+        if isinstance(video_block, str):
+            data['video'] = {'url': video_block}
+    return data
 
 
 class Assignment(BaseModel):
@@ -996,24 +1094,23 @@ class CourseEnrollment(BaseModel):
         self.completed_at = timezone.now()
         self.progress_percent = 100
 
-        # Issue certificate if enabled
-        if not self.certificate_issued:
-            if self.course.certificates_enabled and self.course.auto_issue_certificates and self.course.certificate_template:
-                from certificates.models import Certificate
+        # Issue certificate via the service so we get PDF generation, snapshot,
+        # subscription counters, and the unique-active-cert constraint.
+        if (
+            not self.certificate_issued
+            and self.course.certificates_enabled
+            and self.course.auto_issue_certificates
+            and self.course.certificate_template
+        ):
+            from certificates.services import certificate_service
 
-                # Check for existing cert first (avoid duplicates)
-                if not Certificate.objects.filter(course_enrollment=self).exists():
-                    cert = Certificate.objects.create(
-                        course_enrollment=self,
-                        template=self.course.certificate_template,
-                        status=Certificate.Status.ACTIVE,
-                        issued_by=self.course.created_by or self.user,  # Fallback to user if creator deleted? Or system user?
-                    )
-                    cert.build_certificate_data()
-                    cert.save()
-
-                    self.certificate_issued = True
-                    self.certificate_issued_at = timezone.now()
+            result = certificate_service.issue_certificate(
+                course_enrollment=self,
+                issued_by=self.course.created_by or self.user,
+            )
+            if result.get('success'):
+                # Service already set certificate_issued / certificate_issued_at on self.
+                self.refresh_from_db(fields=['certificate_issued', 'certificate_issued_at'])
 
         # Issue badge if enabled
         if self.course.badges_enabled and self.course.auto_issue_badges and self.course.badge_template:

@@ -395,6 +395,76 @@ export const StepSettings = () => {
 
             <Separator />
 
+            {/* Video Conferencing */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                        <Label className="text-base">Video Conferencing</Label>
+                        <p className="text-sm text-muted-foreground">
+                            Provision a LiveKit room so attendees can join online. Required for online / hybrid events if you want the in-app join button.
+                        </p>
+                    </div>
+                    <Switch
+                        checked={!!formData.video_settings?.enabled}
+                        onCheckedChange={(checked) =>
+                            updateFormData({
+                                video_settings: {
+                                    enabled: checked,
+                                    recording_enabled: checked ? (formData.video_settings?.recording_enabled ?? false) : false,
+                                    screen_share: formData.video_settings?.screen_share ?? true,
+                                },
+                            })
+                        }
+                    />
+                </div>
+
+                {formData.video_settings?.enabled && (
+                    <div className="pl-6 border-l-2 border-slate-100 ml-2 space-y-4">
+                        <div className="flex items-center justify-between max-w-sm">
+                            <div className="space-y-0.5">
+                                <Label className="text-sm">Record this event</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Start a LiveKit room-composite egress when the event goes live. The MP4 appears on the event page after completion.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={!!formData.video_settings?.recording_enabled}
+                                onCheckedChange={(checked) =>
+                                    updateFormData({
+                                        video_settings: {
+                                            enabled: true,
+                                            recording_enabled: checked,
+                                            screen_share: formData.video_settings?.screen_share ?? true,
+                                        },
+                                    })
+                                }
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between max-w-sm">
+                            <div className="space-y-0.5">
+                                <Label className="text-sm">Allow screen share</Label>
+                                <p className="text-xs text-muted-foreground">Participants can share their screen during the session.</p>
+                            </div>
+                            <Switch
+                                checked={formData.video_settings?.screen_share !== false}
+                                onCheckedChange={(checked) =>
+                                    updateFormData({
+                                        video_settings: {
+                                            enabled: true,
+                                            recording_enabled: formData.video_settings?.recording_enabled ?? false,
+                                            screen_share: checked,
+                                        },
+                                    })
+                                }
+                            />
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <Separator />
+
             {/* Event Visibility */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">

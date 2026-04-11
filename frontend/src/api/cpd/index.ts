@@ -2,6 +2,7 @@
  * CPD API client
  */
 import client from '../client';
+import { unwrapList } from '../pagination';
 import {
     CPDRequirement,
     CPDProgress,
@@ -13,8 +14,8 @@ import {
  * List all CPD requirements for the current user.
  */
 export const getCPDRequirements = async (): Promise<CPDRequirement[]> => {
-    const response = await client.get<CPDRequirement[]>('/cpd-requirements/');
-    return response.data;
+    const response = await client.get('/cpd-requirements/');
+    return unwrapList<CPDRequirement>(response.data);
 };
 
 /**

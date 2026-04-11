@@ -93,10 +93,11 @@ def admin_client(admin_user):
 
 @pytest.fixture
 def user(db):
-    """A regular attendee user."""
+    """A regular learner user."""
     return UserFactory(
         email='test@example.com',
         full_name='Test User',
+        groups=['learner'],
     )
 
 
@@ -111,46 +112,34 @@ def unverified_user(db):
 
 @pytest.fixture
 def organizer(db):
-    """An organizer user."""
+    """An organizer (educator) user with an active subscription."""
+    from billing.models import Subscription
+
     organizer = OrganizerFactory(
         email='organizer@example.com',
         full_name='Test Organizer',
-        organizer_slug='test-organizer',
     )
-
-    # Update subscription to organization plan with ACTIVE status so tests can create events
-    # Signal creates subscription with TRIALING status, we need ACTIVE to bypass trial expiration
-    from billing.models import Subscription
-
-    sub = Subscription.objects.get(user=organizer)
-    sub.plan = 'organization'
-    sub.status = 'active'  # Set to active to bypass trial expiration checks
-    sub.save()
-
-    # Refresh to ensure relationship is loaded
-    organizer.refresh_from_db()
-
+    Subscription.objects.update_or_create(
+        user=organizer,
+        defaults={'status': 'active'},
+    )
     return organizer
 
 
 @pytest.fixture
 def course_manager(db):
-    """A course manager user."""
+    """A course manager user with an active subscription."""
+    from billing.models import Subscription
+
     user = UserFactory(
         email='course-manager@example.com',
         full_name='Course Manager',
-        account_type='course_manager',
+        groups=['course_manager'],
     )
-
-    # Update subscription to LMS plan with ACTIVE status so tests can create courses
-    from billing.models import Subscription
-
-    sub = Subscription.objects.get(user=user)
-    sub.plan = 'lms'
-    sub.status = 'active'  # Set to active to bypass trial expiration checks
-    sub.save()
-
-    user.refresh_from_db()
+    Subscription.objects.update_or_create(
+        user=user,
+        defaults={'status': 'active'},
+    )
     return user
 
 
@@ -160,7 +149,6 @@ def other_organizer(db):
     return OrganizerFactory(
         email='other-organizer@example.com',
         full_name='Other Organizer',
-        organizer_slug='other-organizer',
     )
 
 

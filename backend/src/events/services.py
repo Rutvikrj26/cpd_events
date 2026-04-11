@@ -32,16 +32,18 @@ class EventService:
         Raises:
             PermissionDenied: If subscription limits are reached.
         """
-        # Check Individual Subscription Limits
+        # Check Individual Subscription Limits — best-effort in institutional
+        # deployments where the subscription model may not expose legacy
+        # SaaS-era attributes.
         subscription = getattr(user, 'subscription', None)
 
-        if subscription:
+        if subscription and hasattr(subscription, 'can_create_events'):
             if not subscription.can_create_events:
-                if subscription.is_access_blocked:
+                if getattr(subscription, 'is_access_blocked', False):
                     raise PermissionDenied("Your subscription has expired. Please upgrade to continue creating events.")
-                elif subscription.is_trial_expired:
+                elif getattr(subscription, 'is_trial_expired', False):
                     raise PermissionDenied("Your trial has ended. Please upgrade to a paid plan to create new events.")
-                elif not subscription.check_event_limit():
+                elif hasattr(subscription, 'check_event_limit') and not subscription.check_event_limit():
                     raise PermissionDenied("You have reached your monthly event limit. Please upgrade for more events.")
 
         # Pop custom fields to handle separately
@@ -65,8 +67,9 @@ class EventService:
             if speakers_data:
                 event.speakers.set(speakers_data)
 
-            if hasattr(user, 'subscription'):
-                user.subscription.increment_events()
+            sub = getattr(user, 'subscription', None)
+            if sub and hasattr(sub, 'increment_events'):
+                sub.increment_events()
 
         logger.info("Event created: %s", event.uuid)
         return event

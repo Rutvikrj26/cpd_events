@@ -167,7 +167,13 @@ class Event(SoftDeleteModel):
     # =========================================
     # Video Conferencing
     # =========================================
-    video_settings = models.JSONField(default=dict, blank=True, help_text="Video conferencing settings (e.g., {enabled: true})")
+    # Canonical shape enforced by VideoSettingsSerializer (events/serializers.py):
+    #   {"enabled": bool, "recording_enabled": bool, "screen_share": bool}
+    video_settings = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Video conferencing settings — see VideoSettingsSerializer",
+    )
 
     # =========================================
     # CPD Settings
@@ -307,7 +313,9 @@ class Event(SoftDeleteModel):
         """Check if registration is currently open."""
         if not self.registration_enabled:
             return False
-        if self.status not in [self.Status.PUBLISHED]:
+        # Late registrations for a live event are allowed — organisers commonly
+        # admit walk-ins once the session has started.
+        if self.status not in [self.Status.PUBLISHED, self.Status.LIVE]:
             return False
 
         now = timezone.now()
@@ -388,11 +396,24 @@ class Event(SoftDeleteModel):
         self.save(update_fields=['actual_start_at', 'updated_at'])
         self._change_status(self.Status.LIVE, user, 'Event started')
 
+        # Kick off recording if the event opted in.
+        if self._recording_enabled():
+            from conferencing.tasks import start_event_recording
+
+            start_event_recording.delay(self.id)
+
     def complete(self, user=None):
         """Complete the event."""
         self.actual_end_at = timezone.now()
         self.save(update_fields=['actual_end_at', 'updated_at'])
         self._change_status(self.Status.COMPLETED, user, 'Event completed')
+
+        # Stop recording (best-effort; the egress_ended webhook finalises
+        # storage_path + duration when the file is written out).
+        if self._recording_enabled():
+            from conferencing.tasks import stop_event_recording
+
+            stop_event_recording.delay(self.id)
 
         # Auto-issue certificates if enabled
         if self.auto_issue_certificates and self.certificates_enabled:
@@ -401,6 +422,10 @@ class Event(SoftDeleteModel):
         # Auto-issue badges if enabled
         if self.auto_issue_badges and self.badges_enabled:
             self._auto_issue_badges()
+
+    def _recording_enabled(self) -> bool:
+        settings = self.video_settings if isinstance(self.video_settings, dict) else {}
+        return bool(settings.get('enabled')) and bool(settings.get('recording_enabled'))
 
     def close(self, user=None):
         """Close the event (no more changes)."""

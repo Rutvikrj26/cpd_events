@@ -26,13 +26,9 @@ class CertificateTemplate(SoftDeleteModel):
     """
     A certificate template for generating certificates.
 
-    Templates are immutable after certificates are issued.
-    To "edit" a template, create a new version.
-
-    Versioning:
-    - When template is modified, create new template with incremented version
-    - Old version preserved for historical certificates
-    - Link via original_template FK
+    Templates are mutable — edits apply in place. Historical certificates
+    remain correct because each Certificate stores its rendered PDF in
+    file_url and snapshots its issue-time data in certificate_data.
     """
 
     # =========================================
@@ -79,20 +75,6 @@ class CertificateTemplate(SoftDeleteModel):
     )
 
     # =========================================
-    # Versioning
-    # =========================================
-    version = models.PositiveIntegerField(default=1, help_text="Template version number")
-    original_template = models.ForeignKey(
-        'self',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='versions',
-        help_text="Original template this is a version of",
-    )
-    is_latest_version = models.BooleanField(default=True, help_text="Is this the latest version")
-
-    # =========================================
     # Settings
     # =========================================
     is_default = models.BooleanField(default=False, help_text="Default template for new events")
@@ -123,7 +105,7 @@ class CertificateTemplate(SoftDeleteModel):
         verbose_name_plural = 'Certificate Templates'
 
     def __str__(self):
-        return f"{self.name} (v{self.version})"
+        return self.name
 
     @property
     def can_be_deleted(self):
@@ -142,36 +124,8 @@ class CertificateTemplate(SoftDeleteModel):
         self.is_default = True
         self.save(update_fields=['is_default', 'updated_at'])
 
-    def create_new_version(self, **changes):
-        """Create a new version of this template."""
-        self.is_latest_version = False
-        self.save(update_fields=['is_latest_version', 'updated_at'])
-
-        new_template = CertificateTemplate.objects.create(
-            owner=self.owner,
-            name=changes.get('name', self.name),
-            description=changes.get('description', self.description),
-            file_url=changes.get('file_url', self.file_url),
-            file_type=changes.get('file_type', self.file_type),
-            file_size_bytes=changes.get('file_size_bytes', self.file_size_bytes),
-            width_px=changes.get('width_px', self.width_px),
-            height_px=changes.get('height_px', self.height_px),
-            orientation=changes.get('orientation', self.orientation),
-            field_positions=changes.get('field_positions', self.field_positions),
-            version=self.version + 1,
-            original_template=self.original_template or self,
-            is_latest_version=True,
-            is_default=self.is_default,
-        )
-
-        if self.is_default:
-            self.is_default = False
-            self.save(update_fields=['is_default', 'updated_at'])
-
-        return new_template
-
     def duplicate(self, new_name=None):
-        """Create a copy of this template."""
+        """Create an independent copy of this template."""
         return CertificateTemplate.objects.create(
             owner=self.owner,
             name=new_name or f"{self.name} (Copy)",
@@ -183,10 +137,8 @@ class CertificateTemplate(SoftDeleteModel):
             height_px=self.height_px,
             orientation=self.orientation,
             field_positions=self.field_positions,
-            version=1,
-            original_template=None,
-            is_latest_version=True,
             is_default=False,
+            is_active=True,
         )
 
     def increment_usage(self):
@@ -215,20 +167,20 @@ class Certificate(SoftDeleteModel):
     # =========================================
     # Relationships
     # =========================================
-    registration = models.OneToOneField(
+    registration = models.ForeignKey(
         'registrations.Registration',
         on_delete=models.PROTECT,
         null=True,
         blank=True,
-        related_name='certificate',
+        related_name='certificates',
         help_text="Registration this certificate was issued for",
     )
-    course_enrollment = models.OneToOneField(
+    course_enrollment = models.ForeignKey(
         'learning.CourseEnrollment',
         on_delete=models.PROTECT,
         null=True,
         blank=True,
-        related_name='certificate',
+        related_name='certificates',
         help_text="Course enrollment this certificate was issued for",
     )
     template = models.ForeignKey(
@@ -306,6 +258,18 @@ class Certificate(SoftDeleteModel):
             models.Index(fields=['uuid']),
             models.Index(fields=['issued_by', '-created_at']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['registration'],
+                condition=models.Q(status='active', deleted_at__isnull=True, registration__isnull=False),
+                name='unique_active_cert_per_registration',
+            ),
+            models.UniqueConstraint(
+                fields=['course_enrollment'],
+                condition=models.Q(status='active', deleted_at__isnull=True, course_enrollment__isnull=False),
+                name='unique_active_cert_per_course_enrollment',
+            ),
+        ]
         verbose_name = 'Certificate'
         verbose_name_plural = 'Certificates'
 
@@ -336,9 +300,25 @@ class Certificate(SoftDeleteModel):
 
     @property
     def event(self):
-        """Shortcut to event (for legacy compatibility)."""
+        """Shortcut to the event this certificate was issued for, if any."""
         if self.registration:
             return self.registration.event
+        return None
+
+    @property
+    def course(self):
+        """Shortcut to the course this certificate was issued for, if any."""
+        if self.course_enrollment:
+            return self.course_enrollment.course
+        return None
+
+    @property
+    def owner_user(self):
+        """The user that owns the underlying event or course."""
+        if self.registration and self.registration.event:
+            return self.registration.event.owner
+        if self.course_enrollment and self.course_enrollment.course:
+            return self.course_enrollment.course.owner
         return None
 
     @property

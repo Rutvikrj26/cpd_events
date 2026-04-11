@@ -102,8 +102,88 @@ class JoinVideoView(generics.GenericAPIView):
         token = provider.generate_join_token(
             room_name=video_room.room_name,
             participant_identity=str(request.user.uuid),
-            participant_name=request.user.get_full_name() or request.user.email,
+            participant_name=request.user.full_name or request.user.email,
             is_host=is_owner,
+        )
+
+        ws_url = getattr(settings, 'LIVEKIT_WS_URL', '')
+        data = {
+            'token': token,
+            'ws_url': ws_url,
+            'room_name': video_room.room_name,
+        }
+        return Response(JoinVideoResponseSerializer(data).data)
+
+
+class JoinVideoGuestView(generics.GenericAPIView):
+    """
+    POST /api/v1/public/events/{event_uuid}/join-video/
+
+    Issue a LiveKit token for a guest attendee using their registration UUID.
+    No authentication required — the registration UUID itself is the bearer
+    secret. Used by attendees who registered through the public event page
+    without creating an account.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, event_uuid):
+        from django.contrib.contenttypes.models import ContentType
+
+        from events.models import Event
+        from registrations.models import Registration
+
+        registration_uuid = request.data.get('registration_uuid') if isinstance(request.data, dict) else None
+        if not registration_uuid:
+            return Response(
+                {'error': 'registration_uuid is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            event = Event.objects.get(uuid=event_uuid, deleted_at__isnull=True)
+        except Event.DoesNotExist:
+            return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            registration = Registration.objects.get(
+                uuid=registration_uuid,
+                event=event,
+                deleted_at__isnull=True,
+            )
+        except Registration.DoesNotExist:
+            return Response(
+                {'error': 'Registration not found for this event'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if registration.status not in ['confirmed', 'attended']:
+            return Response(
+                {'error': 'Registration is not confirmed'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        ct = ContentType.objects.get_for_model(Event)
+        try:
+            video_room = VideoRoom.objects.get(content_type=ct, object_id=event.id)
+        except VideoRoom.DoesNotExist:
+            return Response(
+                {'error': 'No video room for this event'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if video_room.status == VideoRoom.Status.ENDED:
+            return Response(
+                {'error': 'Video room has ended'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        provider = get_video_provider()
+        token = provider.generate_join_token(
+            room_name=video_room.room_name,
+            participant_identity=f"guest-{registration.uuid}",
+            participant_name=registration.full_name or registration.email,
+            is_host=False,
         )
 
         ws_url = getattr(settings, 'LIVEKIT_WS_URL', '')
@@ -169,7 +249,7 @@ class JoinCourseSessionVideoView(generics.GenericAPIView):
         token = provider.generate_join_token(
             room_name=video_room.room_name,
             participant_identity=str(request.user.uuid),
-            participant_name=request.user.get_full_name() or request.user.email,
+            participant_name=request.user.full_name or request.user.email,
             is_host=is_instructor,
         )
 

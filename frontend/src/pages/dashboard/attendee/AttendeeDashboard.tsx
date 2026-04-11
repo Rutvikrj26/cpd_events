@@ -10,6 +10,19 @@ import { PageHeader } from "@/components/ui/page-header";
 import { getMyRegistrations } from "@/api/registrations";
 import { Registration } from "@/api/registrations/types";
 import { useAuth } from "@/contexts/AuthContext";
+
+const TITLE_PREFIXES = new Set([
+  'dr', 'dr.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.',
+  'prof', 'prof.', 'professor', 'sir', 'madam', 'rev', 'rev.',
+]);
+
+function friendlyFirstName(fullName?: string | null): string {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(/\s+/);
+  const first = parts.find(p => !TITLE_PREFIXES.has(p.toLowerCase()) && p.length > 1);
+  return (first || parts[0] || '').replace(/,$/, '');
+}
+
 export function AttendeeDashboard() {
   const { user } = useAuth();
   const [registrations, setRegistrations] = useState<Registration[]>([]);
@@ -55,13 +68,13 @@ export function AttendeeDashboard() {
       {/* Welcome Header */}
       <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary to-primary/80 p-8 text-white shadow-lg">
         <div className="relative z-10">
-          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user?.full_name?.split(' ')[0] || 'Professional'}!</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {friendlyFirstName(user?.full_name) || 'Professional'}!</h1>
           <p className="mt-2 text-primary-foreground/90 max-w-xl">
             Track your professional development, manage upcoming events, and view your earned certificates.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button asChild variant="secondary" className="font-semibold shadow-sm">
-              <Link to="/events">Browse Events</Link>
+              <Link to="/registrations">My Learning</Link>
             </Button>
             <Button asChild variant="outline" className="bg-transparent text-white border-white/30 hover:bg-card/10 hover:text-white hover:border-white/50">
               <Link to="/settings">View Profile</Link>

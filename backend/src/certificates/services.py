@@ -5,6 +5,7 @@ Certificate services for PDF generation and delivery.
 import logging
 from typing import Any
 
+from django.db import transaction
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -386,86 +387,175 @@ class CertificateService:
         # Already a public URL
         return file_url
 
-    def issue_certificate(self, registration, template=None, issued_by=None) -> dict[str, Any]:
+    def issue_certificate(
+        self,
+        registration=None,
+        course_enrollment=None,
+        template=None,
+        issued_by=None,
+        force: bool = False,
+    ) -> dict[str, Any]:
         """
-        Issue a certificate for a registration.
+        Issue a certificate for a registration OR a course enrollment.
 
-        Args:
-            registration: Registration to issue certificate for
-            template: Template to use (optional, uses event default)
-            issued_by: User issuing the certificate
-
-        Returns:
-            Dict with success status and certificate
+        Exactly one of `registration` / `course_enrollment` must be provided.
+        If `force=True`, any existing active certificate for the target is
+        revoked + soft-deleted before a new one is created.
         """
         from certificates.models import Certificate
 
-        try:
-            event = registration.event
-            owner = event.owner
+        if bool(registration) == bool(course_enrollment):
+            return {
+                'success': False,
+                'code': 'INVALID_TARGET',
+                'error': 'Provide exactly one of registration or course_enrollment.',
+            }
 
-            # Check subscription certificate limit
-            subscription = getattr(owner, 'subscription', None)
-            if subscription:
-                if not subscription.check_certificate_limit():
-                    limit = subscription.limits.get('certificates_per_month')
+        try:
+            with transaction.atomic():
+                if registration is not None:
+                    owner, default_template, recipient_filter = self._registration_context(
+                        registration
+                    )
+                else:
+                    owner, default_template, recipient_filter = self._course_enrollment_context(
+                        course_enrollment
+                    )
+
+                # Subscription limit check (best-effort — skipped if the subscription
+                # model doesn't expose certificate limits in this deployment).
+                subscription = getattr(owner, 'subscription', None) if owner else None
+                if subscription and hasattr(subscription, 'check_certificate_limit'):
+                    if not subscription.check_certificate_limit():
+                        limit = getattr(subscription, 'limits', {}).get(
+                            'certificates_per_month'
+                        )
+                        return {
+                            'success': False,
+                            'code': 'LIMIT_EXCEEDED',
+                            'error': (
+                                f"Certificate limit reached ({limit} per month). "
+                                "Please upgrade your plan to issue more certificates."
+                            ),
+                            'limit_exceeded': True,
+                        }
+
+                template = template or default_template
+                if not template:
                     return {
                         'success': False,
-                        'error': f"Certificate limit reached ({limit} per month). Please upgrade your plan to issue more certificates.",
-                        'limit_exceeded': True,
+                        'code': 'NO_TEMPLATE',
+                        'error': 'No certificate template configured',
                     }
 
-            # Use event's template if not specified
-            if not template:
-                template = event.certificate_template
+                # Current non-deleted certificate for the same target (active or pending).
+                existing = (
+                    Certificate.objects.select_for_update()
+                    .filter(deleted_at__isnull=True, **recipient_filter)
+                    .exclude(status='revoked')
+                    .first()
+                )
 
-            if not template:
-                return {'success': False, 'error': 'No certificate template configured'}
+                if existing and not force:
+                    return {
+                        'success': True,
+                        'certificate': existing,
+                        'already_issued': True,
+                    }
 
-            # Check if certificate already exists
-            existing = Certificate.objects.filter(registration=registration, status='active').first()
+                if existing and force:
+                    existing.revoke(user=issued_by, reason='Superseded by re-issue')
+                    existing.deleted_at = timezone.now()
+                    existing.save(update_fields=['deleted_at', 'updated_at'])
 
-            if existing:
-                return {'success': True, 'certificate': existing, 'already_issued': True}
+                certificate = Certificate.objects.create(
+                    template=template,
+                    status='pending',
+                    issued_by=issued_by,
+                    **recipient_filter,
+                )
 
-            # Create certificate
-            certificate = Certificate.objects.create(
-                registration=registration,
-                template=template,
-                status='pending',
-                issued_by=issued_by,
-            )
+                certificate.certificate_data = certificate.build_certificate_data()
+                certificate.save(update_fields=['certificate_data', 'updated_at'])
 
-            # Build and save certificate data snapshot
-            cert_data = certificate.build_certificate_data()
-            certificate.certificate_data = cert_data
-            certificate.save()
+                try:
+                    pdf_bytes = self.generate_pdf(certificate)
+                except Exception as render_error:
+                    logger.exception(
+                        "Certificate PDF generation failed for %s", certificate.uuid
+                    )
+                    return {
+                        'success': False,
+                        'code': 'PDF_GENERATION_FAILED',
+                        'error': f'PDF generation failed: {render_error}',
+                    }
 
-            # Generate PDF
-            pdf_bytes = self.generate_pdf(certificate)
-            if pdf_bytes:
-                self.upload_pdf(certificate, pdf_bytes)
+                if pdf_bytes:
+                    try:
+                        self.upload_pdf(certificate, pdf_bytes)
+                    except Exception as upload_error:
+                        logger.exception(
+                            "Certificate PDF upload failed for %s", certificate.uuid
+                        )
+                        return {
+                            'success': False,
+                            'code': 'PDF_UPLOAD_FAILED',
+                            'error': f'PDF upload failed: {upload_error}',
+                        }
 
-            # Mark as issued
-            certificate.status = 'active'
-            certificate.issued_at = timezone.now()
-            certificate.issued_by = issued_by
-            certificate.save()
+                certificate.status = 'active'
+                certificate.issued_by = issued_by
+                certificate.save(
+                    update_fields=['status', 'issued_by', 'file_url', 'updated_at']
+                )
 
-            # Update registration
-            registration.certificate_issued = True
-            registration.certificate_issued_at = timezone.now()
-            registration.save(update_fields=['certificate_issued', 'certificate_issued_at', 'updated_at'])
+                if registration is not None:
+                    registration.certificate_issued = True
+                    registration.certificate_issued_at = timezone.now()
+                    registration.save(
+                        update_fields=[
+                            'certificate_issued',
+                            'certificate_issued_at',
+                            'updated_at',
+                        ]
+                    )
+                else:
+                    course_enrollment.certificate_issued = True
+                    course_enrollment.certificate_issued_at = timezone.now()
+                    course_enrollment.save(
+                        update_fields=[
+                            'certificate_issued',
+                            'certificate_issued_at',
+                            'updated_at',
+                        ]
+                    )
 
-            # Increment certificate counter in subscription
-            if subscription:
-                subscription.increment_certificates()
+                if subscription and hasattr(subscription, 'increment_certificates'):
+                    subscription.increment_certificates()
 
-            return {'success': True, 'certificate': certificate}
+                return {'success': True, 'certificate': certificate}
 
         except Exception as e:
-            logger.error(f"Certificate issuance failed: {e}")
-            return {'success': False, 'error': str(e)}
+            logger.exception("Certificate issuance failed")
+            return {'success': False, 'code': 'ISSUE_FAILED', 'error': str(e)}
+
+    def _registration_context(self, registration):
+        """Return (owner, default_template, lookup_filter) for a registration target."""
+        event = registration.event
+        return (
+            getattr(event, 'owner', None),
+            getattr(event, 'certificate_template', None),
+            {'registration': registration},
+        )
+
+    def _course_enrollment_context(self, course_enrollment):
+        """Return (owner, default_template, lookup_filter) for a course enrollment target."""
+        course = course_enrollment.course
+        return (
+            getattr(course, 'owner', None),
+            getattr(course, 'certificate_template', None),
+            {'course_enrollment': course_enrollment},
+        )
 
     def issue_bulk(self, event, registrations: list | None = None, issued_by=None) -> dict[str, Any]:
         """

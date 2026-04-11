@@ -13,7 +13,6 @@ export interface CertificateTemplate {
     is_shared?: boolean;
     is_org_template?: boolean;
     organization_name?: string | null;
-    version: number;
     usage_count: number;
     created_at: string;
     updated_at?: string;
@@ -63,9 +62,12 @@ export interface Certificate {
 }
 
 export interface CertificateIssueRequest {
-    registration_uuids?: string[];  // Specific registrations, or empty for all eligible
-    template_uuid?: string;         // Override event's default template
-    force?: boolean;                // Issue even if already has certificate
+    registration_uuids?: string[];
+    course_enrollment_uuids?: string[];
+    issue_all_eligible?: boolean;
+    template_uuid?: string;
+    force?: boolean;
+    send_email?: boolean;
 }
 
 export interface CertificateSummary {

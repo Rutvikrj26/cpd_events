@@ -14,7 +14,8 @@ import {
   Building2,
   Globe,
   Mail,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -405,6 +406,25 @@ export function EventDetail() {
                     </div>
                   </>
                 )}
+
+                <Separator />
+                <div>
+                  <h3 className="text-xl font-semibold text-foreground mb-4">Verifiable Certificate</h3>
+                  <div className="flex items-center justify-between gap-3 bg-info-subtle p-4 rounded-lg border border-info">
+                    <div className="flex items-center gap-3">
+                      <ShieldCheck className="h-8 w-8 text-info" />
+                      <div>
+                        <p className="font-medium text-foreground">Certificate of completion</p>
+                        <p className="text-sm text-muted-foreground">
+                          Eligible attendees receive a verifiable certificate. Anyone can verify any certificate using its code.
+                        </p>
+                      </div>
+                    </div>
+                    <Link to="/verify">
+                      <Button variant="outline" size="sm">Verify a certificate</Button>
+                    </Link>
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="schedule" className="pt-6">

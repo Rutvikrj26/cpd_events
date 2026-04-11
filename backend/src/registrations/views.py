@@ -506,7 +506,12 @@ class PublicRegistrationView(generics.CreateAPIView):
         logger = logging.getLogger(__name__)
 
         try:
-            event = Event.objects.get(uuid=event_uuid, status='published', registration_enabled=True, deleted_at__isnull=True)
+            event = Event.objects.get(
+                uuid=event_uuid,
+                status__in=['published', 'live'],
+                registration_enabled=True,
+                deleted_at__isnull=True,
+            )
         except Event.DoesNotExist:
             return error_response(
                 'Event not found or registration closed.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND

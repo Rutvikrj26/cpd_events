@@ -14,6 +14,29 @@ from common.utils import generate_unique_slug
 from .models import Event, EventCustomField, EventSession, EventStatusHistory, SessionAttendance, Speaker
 
 # =============================================================================
+# Video Settings
+# =============================================================================
+
+
+class VideoSettingsSerializer(serializers.Serializer):
+    """Typed wrapper for ``Event.video_settings`` JSON."""
+
+    enabled = serializers.BooleanField(default=False)
+    recording_enabled = serializers.BooleanField(default=False)
+    screen_share = serializers.BooleanField(default=True)
+
+    def to_representation(self, instance):
+        # `instance` here is a dict stored in the JSONField.
+        if not isinstance(instance, dict):
+            instance = {}
+        return {
+            'enabled': bool(instance.get('enabled', False)),
+            'recording_enabled': bool(instance.get('recording_enabled', False)),
+            'screen_share': bool(instance.get('screen_share', True)),
+        }
+
+
+# =============================================================================
 # Custom Field Serializers
 # =============================================================================
 
@@ -349,11 +372,32 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
     cpd_type = serializers.CharField(source='cpd_credit_type', read_only=True)
     featured_image_url = serializers.SerializerMethodField()
     attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
-    attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
     certificate_template = serializers.SlugRelatedField(read_only=True, slug_field='uuid')
     badge_template = serializers.SlugRelatedField(read_only=True, slug_field='uuid')
     speakers = SpeakerSerializer(many=True, read_only=True)
     sessions = EventSessionListSerializer(many=True, read_only=True)
+    video_settings = VideoSettingsSerializer(read_only=True)
+    latest_recording = serializers.SerializerMethodField()
+
+    def get_latest_recording(self, obj):
+        from conferencing.models import VideoRecording
+        recording = (
+            VideoRecording.objects
+            .filter(event=obj, status=VideoRecording.Status.AVAILABLE)
+            .order_by('-recording_end', '-created_at')
+            .first()
+        )
+        if not recording:
+            return None
+        return {
+            'uuid': str(recording.uuid),
+            'status': recording.status,
+            'storage_path': recording.storage_path,
+            'duration_seconds': recording.duration_seconds,
+            'duration_display': recording.duration_display,
+            'recording_end': recording.recording_end.isoformat() if recording.recording_end else None,
+            'is_published': recording.is_published,
+        }
 
     class Meta(SoftDeleteModelSerializer.Meta):
         model = Event
@@ -371,6 +415,11 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'ends_at',
             'timezone',
             'duration_minutes',
+            'actual_start_at',
+            'actual_end_at',
+            # Video conferencing
+            'video_settings',
+            'latest_recording',
             # Multi-session fields (H2)
             'is_multi_session',
             'minimum_attendance_percent',
@@ -476,6 +525,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
         slug_field='uuid', queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
     )
     speakers = serializers.SlugRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
+    video_settings = VideoSettingsSerializer(required=False)
 
     class Meta:
         model = Event
@@ -528,6 +578,8 @@ class EventCreateSerializer(serializers.ModelSerializer):
             # Education
             'learning_objectives',
             'speakers',
+            # Video conferencing
+            'video_settings',
         ]
         read_only_fields = ['uuid', 'slug']
 

@@ -122,13 +122,13 @@ export const EventsPage = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {events.map((event) => (
-                    <div key={event.uuid} className="group relative">
+                    <div key={event.uuid} className="group relative h-full">
                         <Link
                             to={`/organizer/events/${event.uuid}/manage`}
-                            className="block"
+                            className="block h-full"
                         >
-                            <div className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-md transition-shadow">
-                                <div className="h-48 bg-muted relative">
+                            <div className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-md transition-shadow h-full flex flex-col">
+                                <div className="h-48 bg-muted relative shrink-0">
                                     {event.featured_image_url ? (
                                         <img
                                             src={event.featured_image_url}
@@ -163,8 +163,8 @@ export const EventsPage = () => {
                                         </Badge>
                                     )}
                                 </div>
-                                <div className="p-5">
-                                    <h3 className="font-bold text-lg text-foreground group-hover:text-blue-600 transition-colors pr-8">
+                                <div className="p-5 flex flex-col flex-grow">
+                                    <h3 className="font-bold text-lg text-foreground group-hover:text-blue-600 transition-colors pr-8 line-clamp-2 min-h-[3.5rem]">
                                         {event.title}
                                     </h3>
                                     <div className="mt-4 space-y-2 text-sm text-muted-foreground">

@@ -51,7 +51,8 @@ import {
     updateCertificateTemplate,
     deleteCertificateTemplate,
     setDefaultTemplate,
-    uploadTemplateFile
+    uploadTemplateFile,
+    duplicateCertificateTemplate,
 } from "@/api/certificates";
 import { CertificateTemplate } from "@/api/certificates/types";
 import { toast } from "sonner";
@@ -70,9 +71,21 @@ export function CertificateTemplatesList() {
     const [submitting, setSubmitting] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [showFieldEditor, setShowFieldEditor] = useState<string | null>(null);
-    const [createStep, setCreateStep] = useState(1);
-    const [newTemplateUuid, setNewTemplateUuid] = useState<string | null>(null);
     const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+    const resetCreateDialog = () => {
+        setShowCreateDialog(false);
+        setEditingTemplate(null);
+        setFormData({ name: "", description: "" });
+        setPendingFile(null);
+    };
+
+    const stripHtml = (html: string): string => {
+        if (!html) return "";
+        const tmp = document.createElement("div");
+        tmp.innerHTML = html;
+        return (tmp.textContent || tmp.innerText || "").trim();
+    };
 
     useEffect(() => {
         fetchTemplates();
@@ -90,21 +103,42 @@ export function CertificateTemplatesList() {
     }
 
     const handleCreateTemplate = async () => {
+        if (submitting) return;
         if (!formData.name.trim()) {
             toast.error("Template name is required");
             return;
         }
 
         setSubmitting(true);
+        let created: CertificateTemplate | null = null;
         try {
-            const newTemplate = await createCertificateTemplate({
+            created = await createCertificateTemplate({
                 name: formData.name,
                 description: formData.description,
             });
-            setTemplates([newTemplate, ...templates]);
-            setShowCreateDialog(false);
-            setFormData({ name: "", description: "" });
-            toast.success("Template created successfully");
+
+            if (pendingFile) {
+                try {
+                    await uploadTemplateFile(created.uuid, pendingFile);
+                } catch (uploadError: any) {
+                    // Roll back the draft template so no orphan row is left behind.
+                    try {
+                        await deleteCertificateTemplate(created.uuid);
+                    } catch {
+                        // best-effort rollback; surface the upload error
+                    }
+                    throw uploadError;
+                }
+            }
+
+            await fetchTemplates();
+            const createdUuid = created.uuid;
+            const shouldOpenEditor = Boolean(pendingFile);
+            resetCreateDialog();
+            toast.success("Template created");
+            if (shouldOpenEditor) {
+                setShowFieldEditor(createdUuid);
+            }
         } catch (error: any) {
             toast.error(error?.response?.data?.detail || "Failed to create template");
         } finally {
@@ -112,8 +146,18 @@ export function CertificateTemplatesList() {
         }
     };
 
+    const handleDuplicate = async (uuid: string) => {
+        try {
+            const copy = await duplicateCertificateTemplate(uuid);
+            setTemplates(prev => [copy, ...prev]);
+            toast.success("Template duplicated");
+        } catch (error: any) {
+            toast.error(error?.response?.data?.detail || "Failed to duplicate template");
+        }
+    };
+
     const handleUpdateTemplate = async () => {
-        if (!editingTemplate) return;
+        if (!editingTemplate || submitting) return;
 
         setSubmitting(true);
         try {
@@ -121,11 +165,9 @@ export function CertificateTemplatesList() {
                 name: formData.name,
                 description: formData.description,
             });
-            // Refetch to get latest data
             await fetchTemplates();
-            setEditingTemplate(null);
-            setFormData({ name: "", description: "" });
-            toast.success("Template updated successfully");
+            resetCreateDialog();
+            toast.success("Template updated");
         } catch (error: any) {
             toast.error(error?.response?.data?.detail || "Failed to update template");
         } finally {
@@ -136,7 +178,7 @@ export function CertificateTemplatesList() {
     const handleDeleteTemplate = async (uuid: string) => {
         try {
             await deleteCertificateTemplate(uuid);
-            setTemplates(templates.filter(t => t.uuid !== uuid));
+            setTemplates(prev => prev.filter(t => t.uuid !== uuid));
             setShowDeleteDialog(null);
             toast.success("Template deleted");
         } catch (error: any) {
@@ -147,9 +189,9 @@ export function CertificateTemplatesList() {
     const handleSetDefault = async (uuid: string) => {
         try {
             await setDefaultTemplate(uuid);
-            setTemplates(templates.map(t => ({
+            setTemplates(prev => prev.map(t => ({
                 ...t,
-                is_default: t.uuid === uuid
+                is_default: t.uuid === uuid,
             })));
             toast.success("Default template updated");
         } catch (error: any) {
@@ -280,7 +322,7 @@ export function CertificateTemplatesList() {
                                                     <Star className="mr-2 h-4 w-4" /> Set as Default
                                                 </DropdownMenuItem>
                                             )}
-                                            <DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleDuplicate(template.uuid)}>
                                                 <Copy className="mr-2 h-4 w-4" /> Duplicate
                                             </DropdownMenuItem>
                                             <DropdownMenuSeparator />
@@ -296,11 +338,10 @@ export function CertificateTemplatesList() {
                             </CardHeader>
                             <CardContent>
                                 <p className="text-sm text-muted-foreground line-clamp-2">
-                                    <div dangerouslySetInnerHTML={{ __html: template.description || "No description" }} />
+                                    {stripHtml(template.description || "") || "No description"}
                                 </p>
                                 <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
                                     <div className="flex items-center gap-2">
-                                        <span>v{template.version || 1}</span>
                                         {template.file_url ? (
                                             <Badge variant="outline" className="text-success bg-success-subtle border-success text-xs">
                                                 <CheckCircle className="h-3 w-3 mr-1" /> PDF Ready
@@ -323,14 +364,7 @@ export function CertificateTemplatesList() {
             <Dialog
                 open={showCreateDialog || !!editingTemplate}
                 onOpenChange={(open) => {
-                    if (!open) {
-                        setShowCreateDialog(false);
-                        setEditingTemplate(null);
-                        setFormData({ name: "", description: "" });
-                        setCreateStep(1);
-                        setNewTemplateUuid(null);
-                        setPendingFile(null);
-                    }
+                    if (!open) resetCreateDialog();
                 }}
             >
                 <DialogContent className="max-w-2xl">
@@ -339,172 +373,83 @@ export function CertificateTemplatesList() {
                             {editingTemplate ? "Edit Template" : "Create Certificate Template"}
                         </DialogTitle>
                         <DialogDescription>
-                            {createStep === 1 && "Step 1 of 3: Enter template details"}
-                            {createStep === 2 && "Step 2 of 3: Upload your PDF certificate design"}
-                            {createStep === 3 && "Step 3 of 3: Position the merge fields"}
+                            {editingTemplate
+                                ? "Update this template. Already-issued certificates keep their original rendering."
+                                : "Name, describe, and optionally upload a PDF design in one step."}
                         </DialogDescription>
                     </DialogHeader>
 
-                    {/* Step 1: Name & Description */}
-                    {createStep === 1 && (
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="name">Template Name *</Label>
-                                <Input
-                                    id="name"
-                                    placeholder="e.g., Standard CPD Certificate"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="description">Description</Label>
-                                <ReactQuill
-                                    theme="snow"
-                                    value={formData.description}
-                                    onChange={(content) => setFormData({ ...formData, description: content })}
-                                    placeholder="Describe when this template should be used..."
-                                    className="mb-4"
-                                />
-                            </div>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="name">Template Name *</Label>
+                            <Input
+                                id="name"
+                                placeholder="e.g., Standard CPD Certificate"
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            />
                         </div>
-                    )}
-
-                    {/* Step 2: Upload PDF */}
-                    {createStep === 2 && (
-                        <div className="py-6">
-                            <div
-                                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${pendingFile ? 'border-success bg-success-subtle' : 'border-border hover:border-primary'
+                        <div className="space-y-2">
+                            <Label htmlFor="description">Description</Label>
+                            <ReactQuill
+                                theme="snow"
+                                value={formData.description}
+                                onChange={(content) => setFormData({ ...formData, description: content })}
+                                placeholder="Describe when this template should be used..."
+                                className="mb-4"
+                            />
+                        </div>
+                        {!editingTemplate && (
+                            <div className="space-y-2">
+                                <Label>PDF Design (optional)</Label>
+                                <div
+                                    className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                                        pendingFile ? 'border-success bg-success-subtle' : 'border-border hover:border-primary'
                                     }`}
-                                onClick={() => {
-                                    const input = document.createElement('input');
-                                    input.type = 'file';
-                                    input.accept = '.pdf';
-                                    input.onchange = (e) => {
-                                        const file = (e.target as HTMLInputElement).files?.[0];
-                                        if (file) setPendingFile(file);
-                                    };
-                                    input.click();
-                                }}
-                            >
-                                {pendingFile ? (
-                                    <div className="space-y-2">
-                                        <CheckCircle className="h-12 w-12 text-success mx-auto" />
-                                        <p className="text-success font-medium">{pendingFile.name}</p>
-                                        <p className="text-sm text-muted-foreground">Click to change file</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        <Upload className="h-12 w-12 text-muted-foreground mx-auto" />
-                                        <p className="text-foreground">Click to upload your PDF certificate template</p>
-                                        <p className="text-sm text-muted-foreground">Max size: 10MB</p>
-                                    </div>
-                                )}
+                                    onClick={() => {
+                                        const input = document.createElement('input');
+                                        input.type = 'file';
+                                        input.accept = '.pdf';
+                                        input.onchange = (e) => {
+                                            const file = (e.target as HTMLInputElement).files?.[0];
+                                            if (file) setPendingFile(file);
+                                        };
+                                        input.click();
+                                    }}
+                                >
+                                    {pendingFile ? (
+                                        <div className="space-y-1">
+                                            <CheckCircle className="h-8 w-8 text-success mx-auto" />
+                                            <p className="text-success font-medium">{pendingFile.name}</p>
+                                            <p className="text-xs text-muted-foreground">Click to change</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-1">
+                                            <Upload className="h-8 w-8 text-muted-foreground mx-auto" />
+                                            <p className="text-sm text-foreground">Click to upload a PDF certificate design</p>
+                                            <p className="text-xs text-muted-foreground">Max 10MB. You can also add one later from the menu.</p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    )}
-
-                    {/* Step 3: Position Fields - shows the FieldPositionEditor inline */}
-                    {createStep === 3 && newTemplateUuid && (
-                        <div className="py-4 text-center text-muted-foreground">
-                            <p>Opening field position editor...</p>
-                        </div>
-                    )}
+                        )}
+                    </div>
 
                     <DialogFooter>
-                        {createStep > 1 && (
-                            <Button
-                                variant="outline"
-                                onClick={() => setCreateStep(createStep - 1)}
-                                disabled={submitting || uploading}
-                            >
-                                Back
-                            </Button>
-                        )}
                         <Button
                             variant="outline"
-                            onClick={() => {
-                                setShowCreateDialog(false);
-                                setEditingTemplate(null);
-                                setFormData({ name: "", description: "" });
-                                setCreateStep(1);
-                                setNewTemplateUuid(null);
-                                setPendingFile(null);
-                            }}
+                            onClick={resetCreateDialog}
+                            disabled={submitting}
                         >
                             Cancel
                         </Button>
-
-                        {createStep === 1 && !editingTemplate && (
-                            <Button
-                                onClick={async () => {
-                                    if (!formData.name.trim()) {
-                                        toast.error("Template name is required");
-                                        return;
-                                    }
-                                    setSubmitting(true);
-                                    try {
-                                        const newTemplate = await createCertificateTemplate({
-                                            name: formData.name,
-                                            description: formData.description,
-                                        });
-                                        setNewTemplateUuid(newTemplate.uuid);
-                                        setTemplates([newTemplate, ...templates]);
-                                        setCreateStep(2);
-                                        toast.success("Template created! Now upload your PDF.");
-                                    } catch (error: any) {
-                                        toast.error(error?.response?.data?.detail || "Failed to create template");
-                                    } finally {
-                                        setSubmitting(false);
-                                    }
-                                }}
-                                disabled={submitting}
-                            >
-                                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Next: Upload PDF
-                            </Button>
-                        )}
-
-                        {createStep === 1 && editingTemplate && (
-                            <Button
-                                onClick={handleUpdateTemplate}
-                                disabled={submitting}
-                            >
-                                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Save Changes
-                            </Button>
-                        )}
-
-                        {createStep === 2 && (
-                            <Button
-                                onClick={async () => {
-                                    if (!pendingFile || !newTemplateUuid) {
-                                        toast.error("Please upload a PDF file");
-                                        return;
-                                    }
-                                    setUploading(true);
-                                    try {
-                                        await uploadTemplateFile(newTemplateUuid, pendingFile);
-                                        await fetchTemplates();
-                                        toast.success("PDF uploaded! Now position your fields.");
-                                        setShowCreateDialog(false);
-                                        setShowFieldEditor(newTemplateUuid);
-                                        setCreateStep(1);
-                                        setNewTemplateUuid(null);
-                                        setPendingFile(null);
-                                        setFormData({ name: "", description: "" });
-                                    } catch (error: any) {
-                                        toast.error(error?.response?.data?.detail || "Failed to upload PDF");
-                                    } finally {
-                                        setUploading(false);
-                                    }
-                                }}
-                                disabled={uploading || !pendingFile}
-                            >
-                                {uploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Upload & Position Fields
-                            </Button>
-                        )}
+                        <Button
+                            onClick={editingTemplate ? handleUpdateTemplate : handleCreateTemplate}
+                            disabled={submitting || !formData.name.trim()}
+                        >
+                            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {editingTemplate ? "Save Changes" : "Create Template"}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

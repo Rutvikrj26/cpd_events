@@ -223,19 +223,25 @@ class TestCourseViewSet:
         response = course_manager_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
 
-    def test_create_course(self, course_manager_client):
-        """Course manager can create a course."""
+    def test_create_course(self, admin_client):
+        """Only admins can create courses in the institutional model."""
         data = {
             'title': 'New Course',
             'slug': 'new-course',
             'description': 'Course description',
         }
-        response = course_manager_client.post(self.endpoint, data)
+        response = admin_client.post(self.endpoint, data)
         assert response.status_code == status.HTTP_201_CREATED
 
-    def test_publish_course(self, course_manager_client, course):
-        """Course manager can publish a course."""
-        response = course_manager_client.post(f'{self.endpoint}{course.uuid}/publish/')
+    def test_course_manager_cannot_create_course(self, course_manager_client):
+        """Course managers may not create courses — admins do."""
+        data = {'title': 'Rogue Course', 'slug': 'rogue-course', 'description': ''}
+        response = course_manager_client.post(self.endpoint, data)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_publish_course(self, admin_client, course):
+        """Admin can publish a course."""
+        response = admin_client.post(f'{self.endpoint}{course.uuid}/publish/')
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
 
 

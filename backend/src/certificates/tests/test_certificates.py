@@ -85,18 +85,128 @@ class TestEventCertificateViewSet:
         certificate.refresh_from_db()
         assert certificate.status == 'revoked'
 
-    def test_cannot_manage_other_event_certificates(self, organizer_client, other_organizer_event):
-        """Organizer cannot list certificates for another organizer's event."""
+    def test_educator_can_manage_any_institution_event_certificates(
+        self, organizer_client, other_organizer_event
+    ):
+        """Institutional model: any educator can manage certificates for any event in the institution."""
         endpoint = self.get_endpoint(other_organizer_event)
         response = organizer_client.get(endpoint)
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['count'] == 0
 
     def test_attendee_cannot_manage_certificates(self, auth_client, completed_event):
         """Attendees cannot access certificate management."""
         endpoint = self.get_endpoint(completed_event)
         response = auth_client.get(endpoint)
         assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_soft_deleted_event_returns_404_on_issue(
+        self, organizer_client, completed_event, attended_registration
+    ):
+        """Soft-deleted events cannot have certificates issued against them."""
+        from django.utils import timezone
+
+        completed_event.deleted_at = timezone.now()
+        completed_event.save(update_fields=['deleted_at'])
+
+        endpoint = f'{self.get_endpoint(completed_event)}issue/'
+        response = organizer_client.post(
+            endpoint,
+            {'registration_uuids': [str(attended_registration.uuid)]},
+            format='json',
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_force_reissue_replaces_existing_cert(
+        self, organizer_client, certificate, completed_event, certificate_template
+    ):
+        """Re-issuing with force=True soft-deletes the old cert and creates a new one."""
+        from certificates.models import Certificate
+
+        completed_event.certificate_template = certificate_template
+        completed_event.save(update_fields=['certificate_template'])
+
+        original_uuid = certificate.uuid
+        endpoint = f'{self.get_endpoint(completed_event)}issue/'
+
+        response = organizer_client.post(
+            endpoint,
+            {
+                'registration_uuids': [str(certificate.registration.uuid)],
+                'force': True,
+            },
+            format='json',
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['issued_count'] == 1
+
+        # Original soft-deleted, new active cert exists
+        original = Certificate.all_objects.get(uuid=original_uuid)
+        assert original.deleted_at is not None
+        new_cert_uuid = response.data['issued'][0]
+        assert str(new_cert_uuid) != str(original_uuid)
+        new_cert = Certificate.objects.get(uuid=new_cert_uuid)
+        assert new_cert.status == 'active'
+        assert new_cert.registration == certificate.registration
+
+    def test_issue_skipped_reasons_are_per_registration(
+        self, organizer_client, completed_event, attended_registration, certificate_template
+    ):
+        """Each skipped registration includes a reason in the response."""
+        from factories import RegistrationFactory
+
+        completed_event.certificate_template = certificate_template
+        completed_event.save(update_fields=['certificate_template'])
+
+        # Create a non-eligible registration (not attended)
+        ineligible = RegistrationFactory(
+            event=completed_event,
+            status='confirmed',
+            attended=False,
+            attendance_eligible=False,
+        )
+
+        endpoint = f'{self.get_endpoint(completed_event)}issue/'
+        response = organizer_client.post(
+            endpoint,
+            {
+                'registration_uuids': [
+                    str(attended_registration.uuid),
+                    str(ineligible.uuid),
+                ],
+            },
+            format='json',
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['issued_count'] == 1
+        assert response.data['skipped_count'] == 1
+        skipped = response.data['skipped']
+        assert any(
+            s['uuid'] == str(ineligible.uuid) and s['reason'] == 'NOT_ELIGIBLE'
+            for s in skipped
+        )
+
+    def test_cannot_create_duplicate_active_cert(
+        self, db, attended_registration, certificate_template, organizer
+    ):
+        """Unique constraint: two active certs for the same registration is a DB error."""
+        from django.db import IntegrityError, transaction
+
+        from certificates.models import Certificate
+
+        Certificate.objects.create(
+            registration=attended_registration,
+            template=certificate_template,
+            status='active',
+            issued_by=organizer,
+        )
+        with pytest.raises(IntegrityError):
+            with transaction.atomic():
+                Certificate.objects.create(
+                    registration=attended_registration,
+                    template=certificate_template,
+                    status='active',
+                    issued_by=organizer,
+                )
 
 
 # =============================================================================

@@ -4,15 +4,18 @@ Certificates app views and viewsets.
 
 import logging
 
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from django_filters import rest_framework as filters
 from drf_yasg.utils import swagger_auto_schema
+from django.http import HttpResponse
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +27,37 @@ from common.viewsets import ReadOnlyModelViewSet, SoftDeleteModelViewSet
 
 from . import serializers
 from .models import Certificate, CertificateTemplate
+
+INSTITUTION_CONTENT_GROUPS = ('educator', 'course_manager', 'admin')
+
+
+def _get_writable_event(event_uuid, user):
+    """
+    Fetch an active event that `user` is allowed to manage certificates for.
+
+    Institutional single-tenant model: staff, or any user in the educator /
+    course_manager / admin groups, can manage certificates for any active
+    event. Regular users may only manage events they own.
+
+    Returns the Event or None.
+    """
+    from events.models import Event
+
+    qs = Event.objects.filter(uuid=event_uuid, deleted_at__isnull=True)
+    if user.is_staff or user.groups.filter(name__in=INSTITUTION_CONTENT_GROUPS).exists():
+        return qs.first()
+    return qs.filter(owner=user).first()
+
+
+def _get_writable_course(course_uuid, user):
+    """Course equivalent of _get_writable_event."""
+    from learning.models import Course
+
+    qs = Course.objects.filter(uuid=course_uuid, deleted_at__isnull=True)
+    if user.is_staff or user.groups.filter(name__in=INSTITUTION_CONTENT_GROUPS).exists():
+        return qs.first()
+    return qs.filter(owner=user).first()
+
 
 # =============================================================================
 # Certificate Template ViewSet
@@ -46,9 +80,10 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     lookup_field = 'uuid'
 
     def get_queryset(self):
-        if self.request.user.is_staff:
-            return CertificateTemplate.objects.filter(deleted_at__isnull=True)
-        return CertificateTemplate.objects.filter(owner=self.request.user, deleted_at__isnull=True)
+        qs = CertificateTemplate.objects.filter(deleted_at__isnull=True, is_active=True)
+        if not self.request.user.is_staff:
+            qs = qs.filter(owner=self.request.user)
+        return qs.select_related('owner')
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -61,6 +96,30 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
+    @transaction.atomic
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_summary="Duplicate template",
+        operation_description="Create an independent copy of this template.",
+        responses={201: serializers.CertificateTemplateDetailSerializer},
+    )
+    @action(detail=True, methods=['post'], url_path='duplicate')
+    def duplicate(self, request, uuid=None):
+        """Duplicate this template."""
+        template = self.get_object()
+        new_name = request.data.get('name') if isinstance(request.data, dict) else None
+        new_template = template.duplicate(new_name=new_name)
+        return Response(
+            serializers.CertificateTemplateDetailSerializer(new_template).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @swagger_auto_schema(
         operation_summary="Set default template",
@@ -82,19 +141,15 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     @action(detail=False, methods=['get'], url_path='available')
     def available_templates(self, request):
         """
-        Get all templates available to the current user.
+        Get every template the current user is allowed to pick from.
 
-        Returns the user's own active templates.
+        In institutional single-tenant mode this matches the main list: all
+        active non-deleted templates for staff / educators / course_managers /
+        admins, and owned-only templates for anyone else.
         """
-        user = request.user
-
-        own_templates = CertificateTemplate.objects.filter(owner=user, is_active=True, deleted_at__isnull=True)
-
-        serializer = serializers.CertificateTemplateListSerializer(own_templates, many=True)
-
-        return Response(
-            {'own_count': own_templates.count(), 'templates': serializer.data}
-        )
+        templates = self.get_queryset()
+        serializer = serializers.CertificateTemplateListSerializer(templates, many=True)
+        return Response({'own_count': templates.count(), 'templates': serializer.data})
 
     @swagger_auto_schema(
         operation_summary="Upload template PDF",
@@ -224,6 +279,203 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
 
 
 # =============================================================================
+# Organization-wide Certificate Listing
+# =============================================================================
+
+
+@roles('educator', 'course_manager', 'admin', route_name='organization_certificates')
+class OrganizationCertificateListView(generics.ListAPIView):
+    """
+    List every certificate that belongs to an event or course the current
+    user is allowed to manage.
+
+    GET /api/v1/certificates/organization/
+    Supports ?search= (recipient name, short code), ?event=<uuid>, ?course=<uuid>,
+    ?status=active|revoked.
+    """
+
+    serializer_class = serializers.CertificateListSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = SmallPagination
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Certificate.objects.filter(deleted_at__isnull=True).select_related(
+            'registration', 'registration__event', 'course_enrollment', 'course_enrollment__course', 'template'
+        )
+        if not (
+            user.is_staff or user.groups.filter(name__in=INSTITUTION_CONTENT_GROUPS).exists()
+        ):
+            qs = qs.filter(
+                Q(registration__event__owner=user) | Q(course_enrollment__course__owner=user)
+            )
+
+        params = self.request.query_params
+        if event_uuid := params.get('event'):
+            qs = qs.filter(registration__event__uuid=event_uuid)
+        if course_uuid := params.get('course'):
+            qs = qs.filter(course_enrollment__course__uuid=course_uuid)
+        if status_filter := params.get('status'):
+            qs = qs.filter(status=status_filter)
+        if search := params.get('search'):
+            qs = qs.filter(
+                Q(registration__full_name__icontains=search)
+                | Q(registration__email__icontains=search)
+                | Q(course_enrollment__user__full_name__icontains=search)
+                | Q(course_enrollment__user__email__icontains=search)
+                | Q(short_code__icontains=search)
+            )
+        return qs.order_by('-created_at')
+
+
+# =============================================================================
+# Top-level Certificate Issue Endpoint
+# =============================================================================
+
+
+@roles('educator', 'course_manager', 'admin', route_name='certificate_issue')
+class CertificateIssueView(generics.GenericAPIView):
+    """
+    POST /api/v1/certificates/issue/
+
+    Unified issuance endpoint that accepts either registration_uuids or
+    course_enrollment_uuids and dispatches through the certificate service.
+    """
+
+    serializer_class = serializers.CertificateIssueSerializer
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        force = data.get('force', False)
+
+        from registrations.models import Registration
+        from learning.models import CourseEnrollment
+        from .services import certificate_service
+
+        targets = []
+        if data.get('registration_uuids'):
+            regs = Registration.objects.filter(
+                uuid__in=data['registration_uuids'], deleted_at__isnull=True
+            ).select_related('event')
+            for reg in regs:
+                event = _get_writable_event(reg.event.uuid, request.user)
+                if event is None:
+                    targets.append(('skip', reg.uuid, 'NOT_AUTHORIZED', None))
+                else:
+                    targets.append(('registration', reg.uuid, None, reg))
+        if data.get('course_enrollment_uuids'):
+            enrollments = CourseEnrollment.objects.filter(
+                uuid__in=data['course_enrollment_uuids'], deleted_at__isnull=True
+            ).select_related('course')
+            for enrollment in enrollments:
+                course = _get_writable_course(enrollment.course.uuid, request.user)
+                if course is None:
+                    targets.append(('skip', enrollment.uuid, 'NOT_AUTHORIZED', None))
+                else:
+                    targets.append(('course_enrollment', enrollment.uuid, None, enrollment))
+
+        issued = []
+        skipped = []
+        for kind, uuid_value, reason, obj in targets:
+            if kind == 'skip':
+                skipped.append({'uuid': str(uuid_value), 'reason': reason})
+                continue
+
+            if kind == 'registration':
+                if not obj.can_receive_certificate:
+                    skipped.append({'uuid': str(uuid_value), 'reason': 'NOT_ELIGIBLE'})
+                    continue
+                if obj.certificate_issued and not force:
+                    skipped.append({'uuid': str(uuid_value), 'reason': 'ALREADY_ISSUED'})
+                    continue
+                result = certificate_service.issue_certificate(
+                    registration=obj, issued_by=request.user, force=force
+                )
+            else:  # course_enrollment
+                if obj.certificate_issued and not force:
+                    skipped.append({'uuid': str(uuid_value), 'reason': 'ALREADY_ISSUED'})
+                    continue
+                result = certificate_service.issue_certificate(
+                    course_enrollment=obj, issued_by=request.user, force=force
+                )
+
+            if result['success']:
+                issued.append(str(result['certificate'].uuid))
+            else:
+                skipped.append(
+                    {
+                        'uuid': str(uuid_value),
+                        'reason': result.get('code', 'ISSUE_FAILED'),
+                        'detail': result.get('error'),
+                    }
+                )
+
+        return Response(
+            {
+                'issued_count': len(issued),
+                'skipped_count': len(skipped),
+                'issued': issued,
+                'skipped': skipped,
+            }
+        )
+
+
+# =============================================================================
+# Top-level Certificate Revoke Endpoint
+# =============================================================================
+
+
+@roles('educator', 'course_manager', 'admin', route_name='certificate_revoke')
+class CertificateRevokeView(APIView):
+    """
+    POST /api/v1/certificates/<uuid>/revoke/
+
+    Revokes a certificate the current user is allowed to manage.
+    Body: { "reason": "..." }
+    """
+
+    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+
+    def post(self, request, uuid):
+        try:
+            certificate = Certificate.objects.select_related(
+                'registration__event', 'course_enrollment__course'
+            ).get(uuid=uuid, deleted_at__isnull=True)
+        except Certificate.DoesNotExist:
+            return error_response(
+                'Certificate not found.',
+                code='NOT_FOUND',
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Authorization: the user must be able to manage the underlying event/course.
+        authorized = False
+        if certificate.event is not None:
+            authorized = _get_writable_event(certificate.event.uuid, request.user) is not None
+        elif certificate.course is not None:
+            authorized = _get_writable_course(certificate.course.uuid, request.user) is not None
+
+        if not authorized:
+            return error_response(
+                'Not authorized to revoke this certificate.',
+                code='FORBIDDEN',
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = serializers.CertificateRevokeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if certificate.status == 'revoked':
+            return error_response('Certificate already revoked.', code='ALREADY_REVOKED')
+
+        certificate.revoke(request.user, reason=serializer.validated_data['reason'])
+        return Response(serializers.CertificateDetailSerializer(certificate).data)
+
+
+# =============================================================================
 # Event Certificates ViewSet
 # =============================================================================
 
@@ -254,12 +506,12 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
-        qs_filter = {'registration__event__uuid': event_uuid, 'deleted_at__isnull': True}
-        if not self.request.user.is_staff:
-            qs_filter['registration__event__owner'] = self.request.user
-        return Certificate.objects.filter(**qs_filter).select_related(
-            'registration', 'registration__event', 'template'
-        )
+        event = _get_writable_event(event_uuid, self.request.user)
+        if event is None:
+            return Certificate.objects.none()
+        return Certificate.objects.filter(
+            registration__event=event, deleted_at__isnull=True
+        ).select_related('registration', 'registration__event', 'template')
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -277,55 +529,64 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
         serializer = serializers.CertificateIssueSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        from events.models import Event
         from registrations.models import Registration
 
-        try:
-            event = Event.objects.get(uuid=event_uuid, owner=request.user)
-        except Event.DoesNotExist:
+        event = _get_writable_event(event_uuid, request.user)
+        if event is None:
             return error_response('Event not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
 
         if not event.certificates_enabled:
             return error_response('Certificates not enabled for this event.', code='NOT_ENABLED')
 
+        force = serializer.validated_data.get('force', False)
         issued = []
         skipped = []
 
         if serializer.validated_data.get('issue_all_eligible'):
-            # Issue to all eligible registrations
-            registrations = (
-                Registration.objects.filter(event=event, status='confirmed', deleted_at__isnull=True)
-                .filter(Q(attendance_eligible=True) | Q(attendance_override=True))
-                .exclude(certificate_issued=True)
-            )
+            registrations = Registration.objects.filter(
+                event=event, status='confirmed', deleted_at__isnull=True
+            ).filter(Q(attendance_eligible=True) | Q(attendance_override=True))
+            if not force:
+                registrations = registrations.exclude(certificate_issued=True)
         elif serializer.validated_data.get('registration_uuids'):
             registrations = Registration.objects.filter(
-                event=event, uuid__in=serializer.validated_data['registration_uuids'], deleted_at__isnull=True
+                event=event,
+                uuid__in=serializer.validated_data['registration_uuids'],
+                deleted_at__isnull=True,
             )
         else:
-            registrations = []
+            registrations = Registration.objects.none()
+
+        from .services import certificate_service
 
         for reg in registrations:
-            # Check eligibility
             if not reg.can_receive_certificate:
-                skipped.append(str(reg.uuid))
+                skipped.append({'uuid': str(reg.uuid), 'reason': 'NOT_ELIGIBLE'})
                 continue
 
-            # Check if already issued
-            if reg.certificate_issued:
-                skipped.append(str(reg.uuid))
+            if reg.certificate_issued and not force:
+                skipped.append({'uuid': str(reg.uuid), 'reason': 'ALREADY_ISSUED'})
                 continue
 
-            # Issue certificate using service
-            from .services import certificate_service
-
-            result = certificate_service.issue_certificate(registration=reg, issued_by=request.user)
+            result = certificate_service.issue_certificate(
+                registration=reg, issued_by=request.user, force=force
+            )
 
             if result['success']:
                 issued.append(str(result['certificate'].uuid))
             else:
-                skipped.append(str(reg.uuid))
-                # logger.warning(f"Failed to issue certificate for {reg.uuid}: {result.get('error')}")
+                skipped.append(
+                    {
+                        'uuid': str(reg.uuid),
+                        'reason': result.get('code', 'ISSUE_FAILED'),
+                        'detail': result.get('error'),
+                    }
+                )
+                logger.warning(
+                    "Failed to issue certificate for registration %s: %s",
+                    reg.uuid,
+                    result.get('error'),
+                )
 
         return Response(
             {
@@ -347,12 +608,9 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
         """Revoke a certificate."""
         certificate = self.get_object()
         serializer = serializers.CertificateRevokeSerializer(data=request.data)
-        if not serializer.is_valid():
-            print(f"DEBUG REVOKE SERIALIZER ERRORS: {serializer.errors}")
         serializer.is_valid(raise_exception=True)
 
         if certificate.status == 'revoked':
-            print(f"DEBUG REFUSE REVOCATION: Status is {certificate.status}")
             return error_response('Certificate already revoked.', code='ALREADY_REVOKED')
 
         certificate.revoke(request.user, reason=serializer.validated_data['reason'])
@@ -432,16 +690,21 @@ class CertificateVerificationView(generics.RetrieveAPIView):
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        # Check if this is the certificate owner trying to access
-        is_owner = request.user.is_authenticated and instance.registration.user == request.user
+        owner_user = None
+        if instance.registration is not None:
+            owner_user = instance.registration.user
+        elif instance.course_enrollment is not None:
+            owner_user = instance.course_enrollment.user
 
-        # If feedback is required and the owner is trying to view, check feedback
-        event = instance.registration.event
-        if is_owner and event.require_feedback_for_certificate:
+        is_owner = request.user.is_authenticated and owner_user == request.user
+
+        event = instance.event
+        if is_owner and event is not None and event.require_feedback_for_certificate:
             from feedback.models import EventFeedback
 
-            # Check if user has submitted feedback for this event
-            feedback_exists = EventFeedback.objects.filter(event=event, registration=instance.registration).exists()
+            feedback_exists = EventFeedback.objects.filter(
+                event=event, registration=instance.registration
+            ).exists()
 
             if not feedback_exists:
                 return error_response(
@@ -450,7 +713,6 @@ class CertificateVerificationView(generics.RetrieveAPIView):
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
 
-        # Track view - only set first_viewed_at on first view
         instance.view_count = (instance.view_count or 0) + 1
         update_fields = ['view_count']
         if not instance.first_viewed_at:
@@ -460,6 +722,36 @@ class CertificateVerificationView(generics.RetrieveAPIView):
 
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+
+class CertificateQrCodeView(APIView):
+    """
+    GET /api/v1/public/certificates/verify/<code>/qr.svg
+
+    Streams a cacheable SVG QR code whose payload is the public verification
+    URL for a given short or verification code. No data is leaked — the QR
+    encodes only the verify-page URL.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, code):
+        import io
+
+        import qrcode
+        import qrcode.image.svg
+        from django.conf import settings
+
+        site_url = getattr(settings, 'SITE_URL', request.build_absolute_uri('/'))
+        target = f"{site_url.rstrip('/')}/verify/{code}"
+
+        factory = qrcode.image.svg.SvgImage
+        img = qrcode.make(target, image_factory=factory, box_size=10, border=2)
+        buffer = io.BytesIO()
+        img.save(buffer)
+        response = HttpResponse(buffer.getvalue(), content_type='image/svg+xml')
+        response['Cache-Control'] = 'public, max-age=3600'
+        return response
 
 
 # =============================================================================
@@ -498,13 +790,14 @@ class MyCertificateViewSet(ReadOnlyModelViewSet):
         if certificate.status != 'active':
             return error_response('Certificate not available.', code='NOT_AVAILABLE')
 
-        # Check if feedback is required
-        event = certificate.registration.event
-        if event.require_feedback_for_certificate:
+        # Feedback gate only applies to event certificates.
+        event = certificate.event
+        if event is not None and event.require_feedback_for_certificate:
             from feedback.models import EventFeedback
 
-            # Check if user has submitted feedback for this event
-            feedback_exists = EventFeedback.objects.filter(event=event, registration=certificate.registration).exists()
+            feedback_exists = EventFeedback.objects.filter(
+                event=event, registration=certificate.registration
+            ).exists()
 
             if not feedback_exists:
                 return error_response(

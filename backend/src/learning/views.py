@@ -573,11 +573,14 @@ class CourseViewSet(viewsets.ModelViewSet):
         if not self.request.user.is_staff:
             raise PermissionDenied("Only admins can create courses.")
 
+        # Subscription gate — best-effort in institutional mode. If the user's
+        # subscription exposes limits, respect them; otherwise let staff proceed.
         subscription = getattr(self.request.user, 'subscription', None)
-        if not subscription or not subscription.can_create_courses:
-            raise PermissionDenied("Your subscription does not allow course creation.")
-
-        subscription.increment_courses()
+        if subscription is not None and hasattr(subscription, 'can_create_courses'):
+            if not subscription.can_create_courses:
+                raise PermissionDenied("Your subscription does not allow course creation.")
+            if hasattr(subscription, 'increment_courses'):
+                subscription.increment_courses()
 
         serializer.save(created_by=self.request.user)
 

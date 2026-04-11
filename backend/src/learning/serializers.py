@@ -4,6 +4,9 @@ Serializers for learning API.
 
 from rest_framework import serializers
 
+from badges.models import BadgeTemplate
+from certificates.models import CertificateTemplate
+
 from .models import (
     Assignment,
     AssignmentSubmission,
@@ -403,6 +406,18 @@ class CourseSerializer(serializers.ModelSerializer):
 
     modules = CourseModuleSerializer(many=True, read_only=True)
     user_role = serializers.SerializerMethodField()
+    certificate_template = serializers.SlugRelatedField(
+        slug_field='uuid',
+        queryset=CertificateTemplate.objects.filter(deleted_at__isnull=True, is_active=True),
+        required=False,
+        allow_null=True,
+    )
+    badge_template = serializers.SlugRelatedField(
+        slug_field='uuid',
+        queryset=BadgeTemplate.objects.filter(deleted_at__isnull=True, is_active=True),
+        required=False,
+        allow_null=True,
+    )
 
     def get_user_role(self, obj):
         request = self.context.get('request')
@@ -543,6 +558,19 @@ def _validate_badge_settings(attrs, instance=None):
 
 class CourseCreateSerializer(serializers.ModelSerializer):
     """Create/update course."""
+
+    certificate_template = serializers.SlugRelatedField(
+        slug_field='uuid',
+        queryset=CertificateTemplate.objects.filter(deleted_at__isnull=True, is_active=True),
+        required=False,
+        allow_null=True,
+    )
+    badge_template = serializers.SlugRelatedField(
+        slug_field='uuid',
+        queryset=BadgeTemplate.objects.filter(deleted_at__isnull=True, is_active=True),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = Course

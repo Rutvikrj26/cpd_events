@@ -50,14 +50,11 @@
           "textAlign": "center"
         }
       },
-      "version": 1,
-      "is_latest_version": true,
       "is_default": true,
       "is_active": true,
       "is_shared": false,
       "usage_count": 2,
-      "last_used_at": "2025-03-01T10:00:00Z",
-      "original_template": null
+      "last_used_at": "2025-03-01T10:00:00Z"
     }
   },
   {

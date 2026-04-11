@@ -1,4 +1,5 @@
 import client from '../client';
+import { unwrapList } from '../pagination';
 import { Event, EventCreateRequest, EventUpdateRequest, EventSession, EventCustomField } from './types';
 import { PaginatedResponse, PaginationParams } from '../types';
 
@@ -69,8 +70,8 @@ export const deleteEventSession = async (eventUuid: string, sessionUuid: string)
 // -- Nested: Custom Fields --
 
 export const getEventCustomFields = async (eventUuid: string): Promise<EventCustomField[]> => {
-    const response = await client.get<EventCustomField[]>(`/events/${eventUuid}/custom-fields/`);
-    return response.data;
+    const response = await client.get(`/events/${eventUuid}/custom-fields/`);
+    return unwrapList<EventCustomField>(response.data);
 };
 
 // -- Public Routes --

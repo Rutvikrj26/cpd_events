@@ -28,6 +28,7 @@ import {
 import { UserPlus, Search, Mail, Upload, MoreVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import client from '@/api/client';
+import { unwrapList } from '@/api/pagination';
 import { User } from '@/api/accounts/types';
 import { bulkInviteUsers, BulkInviteUser, updateAdminUser } from '@/api/accounts';
 
@@ -39,7 +40,7 @@ interface AdminUser extends User {
 export const UserManagementPage: React.FC = () => {
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [search, setSearch] = useState('');
-    const [roleFilter, setRoleFilter] = useState('');
+    const [roleFilter, setRoleFilter] = useState('all');
     const [isLoading, setIsLoading] = useState(true);
     const [inviteOpen, setInviteOpen] = useState(false);
     const [createOpen, setCreateOpen] = useState(false);
@@ -52,9 +53,9 @@ export const UserManagementPage: React.FC = () => {
         try {
             const params = new URLSearchParams();
             if (search) params.set('search', search);
-            if (roleFilter) params.set('role', roleFilter);
+            if (roleFilter && roleFilter !== 'all') params.set('role', roleFilter);
             const response = await client.get(`/admin/users/?${params.toString()}`);
-            setUsers(response.data.results || response.data);
+            setUsers(unwrapList<AdminUser>(response.data));
         } catch (err) {
             console.error('Failed to fetch users:', err);
         } finally {
@@ -105,7 +106,7 @@ export const UserManagementPage: React.FC = () => {
                         <SelectValue placeholder="All roles" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">All roles</SelectItem>
+                        <SelectItem value="all">All roles</SelectItem>
                         <SelectItem value="learner">Learner</SelectItem>
                         <SelectItem value="educator">Educator</SelectItem>
                         <SelectItem value="course_manager">Course Manager</SelectItem>

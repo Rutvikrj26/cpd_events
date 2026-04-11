@@ -29,7 +29,6 @@ class UserFactory(DjangoModelFactory):
 
     email = factory.Sequence(lambda n: f'user{n}@example.com')
     full_name = factory.Faker('name')
-    account_type = 'attendee'
     email_verified = True
     is_active = True
 
@@ -40,26 +39,36 @@ class UserFactory(DjangoModelFactory):
         if create:
             self.save()
 
-    email_verified = True
-    is_active = True
+    @factory.post_generation
+    def groups(self, create, extracted, **kwargs):
+        """Attach the user to one or more role groups (e.g. groups=['educator'])."""
+        if not create or not extracted:
+            return
+        from django.contrib.auth.models import Group
+
+        for name in extracted:
+            group, _ = Group.objects.get_or_create(name=name)
+            self.groups.add(group)
 
     class Params:
-        organizer = factory.Trait(
-            account_type='organizer',
-            organizer_slug=factory.Sequence(lambda n: f'organizer-{n}'),
-            is_organizer_profile_public=True,
-        )
         unverified = factory.Trait(
             email_verified=False,
         )
 
 
 class OrganizerFactory(UserFactory):
-    """Factory for creating Organizer users."""
+    """Factory for creating Organizer (educator) users."""
 
-    account_type = 'organizer'
-    is_organizer_profile_public = True
-    organizer_slug = factory.Sequence(lambda n: f'organizer-{n}')
+    @factory.post_generation
+    def groups(self, create, extracted, **kwargs):
+        if not create:
+            return
+        from django.contrib.auth.models import Group
+
+        names = extracted or ['educator']
+        for name in names:
+            group, _ = Group.objects.get_or_create(name=name)
+            self.groups.add(group)
 
 
 # =============================================================================

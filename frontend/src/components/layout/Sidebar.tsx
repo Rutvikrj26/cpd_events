@@ -11,7 +11,7 @@ import {
     ChevronLeft,
     ChevronRight,
     FileText,
-    Search,
+    GraduationCap,
     Users,
     TrendingUp,
     Video,
@@ -55,9 +55,7 @@ export const Sidebar = () => {
         { routeKey: 'dashboard', to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
 
         // Learner items
-        { routeKey: 'browse_events', to: '/events', icon: Search, label: 'Browse Events', learnerOnly: true },
-        { routeKey: 'browse_courses', to: '/courses', icon: BookOpen, label: 'Browse Courses', learnerOnly: true },
-        { routeKey: 'registrations', to: '/registrations', icon: BookOpen, label: 'My Registrations', learnerOnly: true },
+        { routeKey: 'registrations', to: '/registrations', icon: GraduationCap, label: 'My Learning', learnerOnly: true },
         { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'My Certificates', learnerOnly: true },
         { routeKey: 'badges', to: '/badges', icon: Award, label: 'My Badges', learnerOnly: true },
         { routeKey: 'cpd_tracking', to: '/cpd', icon: TrendingUp, label: 'CPD Tracking', learnerOnly: true },
@@ -96,7 +94,7 @@ export const Sidebar = () => {
             // Items that don't need feature checks (basic navigation)
             // 'courses' is here because course_managers need access via CourseStaff assignments,
             // not via the create_courses feature flag.
-            const alwaysShow = ['dashboard', 'profile', 'browse_events', 'browse_courses', 'cpd_tracking', 'badges', 'courses', 'course_certificates'];
+            const alwaysShow = ['dashboard', 'profile', 'cpd_tracking', 'badges', 'courses', 'course_certificates'];
             if (alwaysShow.includes(item.routeKey)) return true;
 
             // Map nav items to manifest features

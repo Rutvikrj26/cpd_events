@@ -110,7 +110,7 @@ export const PublicCourseDetailPage = () => {
                 const currentUrl = window.location.origin;
                 const result = await courseCheckout(
                     course.uuid,
-                    `${currentUrl}/my-courses?enrolled=${course.uuid}`, // Success URL
+                    `${currentUrl}/registrations?tab=courses&enrolled=${course.uuid}`, // Success URL
                     `${currentUrl}/courses/${slug}` // Cancel URL (return to course page)
                 );
 
@@ -127,7 +127,7 @@ export const PublicCourseDetailPage = () => {
                     title: 'Enrolled successfully!',
                     description: 'You have been enrolled in this course.',
                 });
-                navigate('/my-courses');
+                navigate('/registrations?tab=courses');
             }
         } catch (error: any) {
             console.error('Enrollment failed:', error);

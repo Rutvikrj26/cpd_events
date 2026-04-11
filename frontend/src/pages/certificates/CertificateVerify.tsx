@@ -296,6 +296,19 @@ export const CertificateVerify = () => {
                     {/* Right Column - Sidebar Actions */}
                     <div className="lg:col-span-4 space-y-6">
 
+                        {/* QR Code Card */}
+                        <div className="bg-card rounded-xl shadow-sm border border-border p-6 text-center">
+                            <h3 className="font-semibold text-foreground mb-3">Scan to verify</h3>
+                            <img
+                                src={`/api/v1/public/certificates/verify/${code}/qr.svg`}
+                                alt="Verification QR code"
+                                className="mx-auto h-44 w-44 p-2 bg-white rounded-lg border border-border"
+                            />
+                            <p className="text-xs text-muted-foreground mt-3 break-all">
+                                {window.location.origin}/verify/{code}
+                            </p>
+                        </div>
+
                         {/* Actions Card */}
                         <div className="bg-card rounded-xl shadow-sm border border-border p-6">
                             <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">

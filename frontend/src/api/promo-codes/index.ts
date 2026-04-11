@@ -3,6 +3,7 @@
  */
 
 import api from '../client';
+import { unwrapList } from '../pagination';
 import type {
   PromoCode,
   PromoCodeUsage,
@@ -20,8 +21,8 @@ import type {
  * Get all promo codes for the current organizer
  */
 export async function getPromoCodes(): Promise<PromoCode[]> {
-  const response = await api.get<PromoCode[]>('/promo-codes/');
-  return response.data;
+  const response = await api.get('/promo-codes/');
+  return unwrapList<PromoCode>(response.data);
 }
 
 /**

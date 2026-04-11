@@ -1,11 +1,12 @@
 import client from '../client';
+import { unwrapList } from '../pagination';
 import { Module, ModuleContent, Assignment } from './types';
 
 // -- Student Actions --
 
 export const getMyLearning = async (): Promise<any[]> => {
-    const response = await client.get<any[]>('/learning/');
-    return response.data;
+    const response = await client.get('/learning/');
+    return unwrapList<any>(response.data);
 };
 
 export interface ContentProgressUpdate {
@@ -32,8 +33,8 @@ export const updateContentProgress = async (
 // /events/<uuid:event_uuid>/modules/
 
 export const getEventModules = async (eventUuid: string): Promise<Module[]> => {
-    const response = await client.get<Module[]>(`/events/${eventUuid}/modules/`);
-    return response.data;
+    const response = await client.get(`/events/${eventUuid}/modules/`);
+    return unwrapList<Module>(response.data);
 };
 
 export const createEventModule = async (eventUuid: string, data: Partial<Module>): Promise<Module> => {

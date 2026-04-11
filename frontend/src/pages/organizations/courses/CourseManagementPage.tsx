@@ -10,6 +10,7 @@ import { AnnouncementsTab } from "./manage/AnnouncementsTab";
 import { SubmissionsTab } from "./manage/SubmissionsTab";
 import { SessionsTab } from "./manage/SessionsTab";
 import { SettingsTab } from "./manage/SettingsTab";
+import { CertificatesTab } from "./manage/CertificatesTab";
 import { getCourseBySlug } from '@/api/courses';
 import { Course } from '@/api/courses/types';
 import { Loader2 } from 'lucide-react';
@@ -32,6 +33,7 @@ export function CourseManagementPage() {
         'announcements',
         'submissions',
         ...(showSessions ? ['sessions'] : []),
+        'certificates',
         ...(isStaffOnly ? [] : ['settings']),
     ];
     const defaultTab = availableTabs.includes(requestedTab) ? requestedTab : 'overview';
@@ -98,6 +100,7 @@ export function CourseManagementPage() {
                     <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
                     <TabsTrigger value="announcements">Announcements</TabsTrigger>
                     <TabsTrigger value="submissions">Submissions</TabsTrigger>
+                    <TabsTrigger value="certificates">Certificates</TabsTrigger>
                     {!isStaffOnly && <TabsTrigger value="settings">Settings</TabsTrigger>}
                 </TabsList>
 
@@ -127,6 +130,10 @@ export function CourseManagementPage() {
 
                 <TabsContent value="submissions" className="mt-6">
                     <SubmissionsTab courseUuid={course.uuid} />
+                </TabsContent>
+
+                <TabsContent value="certificates" className="mt-6">
+                    <CertificatesTab courseUuid={course.uuid} />
                 </TabsContent>
 
                 {!isStaffOnly && (

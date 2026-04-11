@@ -165,7 +165,13 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
     event_title = serializers.CharField(source='event.title', read_only=True)
     attendance_percent = serializers.IntegerField(read_only=True)
 
-    certificate_uuid = serializers.UUIDField(source='certificate.uuid', read_only=True, allow_null=True)
+    certificate_uuid = serializers.SerializerMethodField()
+
+    def get_certificate_uuid(self, obj):
+        cert = obj.certificates.filter(
+            status='active', deleted_at__isnull=True
+        ).order_by('-created_at').first()
+        return str(cert.uuid) if cert else None
 
     class Meta:
         model = Registration
@@ -375,8 +381,11 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
     def get_certificate_url(self, obj):
         if obj.certificate_issued:
             try:
-                cert = obj.certificate
-                return f"/api/v1/certificates/{cert.uuid}/"
+                cert = obj.certificates.filter(
+                    status='active', deleted_at__isnull=True
+                ).order_by('-created_at').first()
+                if cert:
+                    return f"/api/v1/certificates/{cert.uuid}/"
             except Exception as e:
                 logger.warning(f"Failed to resolve certificate for registration {obj.uuid}: {e}")
         return None

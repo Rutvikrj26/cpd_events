@@ -7,8 +7,9 @@ Endpoints tested:
 - GET /api/v1/certificate-templates/{uuid}/
 - PATCH /api/v1/certificate-templates/{uuid}/
 - DELETE /api/v1/certificate-templates/{uuid}/
-- POST /api/v1/certificate-templates/{uuid}/set_default/
-- GET /api/v1/certificate-templates/available_templates/
+- POST /api/v1/certificate-templates/{uuid}/set-default/
+- POST /api/v1/certificate-templates/{uuid}/duplicate/
+- GET /api/v1/certificate-templates/available/
 - POST /api/v1/certificate-templates/{uuid}/upload/
 - POST /api/v1/certificate-templates/{uuid}/preview/
 """
@@ -81,6 +82,28 @@ class TestCertificateTemplateDetail:
         certificate_template.refresh_from_db()
         assert certificate_template.name == 'Updated Template Name'
 
+    def test_update_template_used_in_place(self, organizer_client, certificate_template):
+        """Updating a template that has already issued certificates updates in place, not via a clone."""
+        from certificates.models import CertificateTemplate
+
+        certificate_template.usage_count = 5
+        certificate_template.save(update_fields=['usage_count'])
+        uuid = certificate_template.uuid
+        row_count_before = CertificateTemplate.objects.filter(owner=certificate_template.owner).count()
+
+        response = organizer_client.patch(
+            f'/api/v1/certificate-templates/{uuid}/', {'name': 'In-Place Edit'}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        certificate_template.refresh_from_db()
+        assert certificate_template.uuid == uuid
+        assert certificate_template.name == 'In-Place Edit'
+        assert (
+            CertificateTemplate.objects.filter(owner=certificate_template.owner).count()
+            == row_count_before
+        )
+
     def test_delete_template_without_certificates(self, organizer_client, certificate_template):
         """Organizer can delete a template with no issued certificates."""
         response = organizer_client.delete(f'/api/v1/certificate-templates/{certificate_template.uuid}/')
@@ -127,6 +150,41 @@ class TestSetDefaultTemplate:
 
         certificate_template.refresh_from_db()
         assert certificate_template.is_default is False
+
+
+# =============================================================================
+# Duplicate Template Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestDuplicateTemplate:
+    """Tests for the duplicate action."""
+
+    def test_duplicate_template(self, organizer_client, certificate_template):
+        """Organizer can duplicate a template."""
+        from certificates.models import CertificateTemplate
+
+        count_before = CertificateTemplate.objects.count()
+
+        response = organizer_client.post(
+            f'/api/v1/certificate-templates/{certificate_template.uuid}/duplicate/'
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert CertificateTemplate.objects.count() == count_before + 1
+        assert response.data['uuid'] != str(certificate_template.uuid)
+        assert response.data['name'] == f'{certificate_template.name} (Copy)'
+        assert response.data['is_default'] is False
+
+    def test_duplicate_template_with_custom_name(self, organizer_client, certificate_template):
+        """Organizer can duplicate a template and override the name."""
+        response = organizer_client.post(
+            f'/api/v1/certificate-templates/{certificate_template.uuid}/duplicate/',
+            {'name': 'My Clone'},
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['name'] == 'My Clone'
 
 
 # =============================================================================

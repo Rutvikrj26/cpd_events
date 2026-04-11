@@ -17,9 +17,33 @@ console = Console()
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 BACKEND_DIR = REPO_ROOT / "backend"
 FRONTEND_DIR = REPO_ROOT / "frontend"
+CLI_SRC_DIR = REPO_ROOT / "cli"
 CLI_DIR = REPO_ROOT / ".cli"
 LOGS_DIR = CLI_DIR / "logs"
 PIDS_DIR = CLI_DIR / "pids"
+
+LIVEKIT_CONTAINER_NAME = "cpd_livekit_dev"
+LIVEKIT_CONFIG_DIR = CLI_DIR / "livekit"
+LIVEKIT_CONFIG_FILE = LIVEKIT_CONFIG_DIR / "livekit.yaml"
+LIVEKIT_TEMPLATE_FILE = CLI_SRC_DIR / "livekit.yaml.template"
+
+
+def render_livekit_config():
+    """Render cli/livekit.yaml.template into .cli/livekit/livekit.yaml.
+
+    Substitutes ${LIVEKIT_WEBHOOK_URL} with a host-reachable URL so the
+    docker-hosted LiveKit container can POST back to a natively-running
+    backend on the host machine.
+    """
+    LIVEKIT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    template = LIVEKIT_TEMPLATE_FILE.read_text()
+    webhook_url = os.environ.get(
+        'LIVEKIT_WEBHOOK_URL',
+        'http://host.docker.internal:8000/api/v1/webhooks/video/',
+    )
+    rendered = template.replace('${LIVEKIT_WEBHOOK_URL}', webhook_url)
+    LIVEKIT_CONFIG_FILE.write_text(rendered)
+    return LIVEKIT_CONFIG_FILE
 
 def ensure_dirs():
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -286,6 +310,51 @@ def seed(reset):
         console.print("[bold green]Demo data loaded successfully![/bold green]")
     else:
         console.print(f"[red]Failed to load fixtures:[/red]\n{result.stderr.strip()}")
+
+
+@local.command()
+def livekit():
+    """Start a local LiveKit dev container (docker required)."""
+    if not LIVEKIT_TEMPLATE_FILE.exists():
+        console.print(f"[red]Missing template:[/red] {LIVEKIT_TEMPLATE_FILE}")
+        sys.exit(1)
+
+    config_path = render_livekit_config()
+    console.print(f"[cyan]Rendered[/cyan] {config_path}")
+
+    # Stop any previous dev container (ignore errors — it may not exist).
+    subprocess.run(
+        ["docker", "rm", "-f", LIVEKIT_CONTAINER_NAME],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    cmd = [
+        "docker", "run", "-d",
+        "--name", LIVEKIT_CONTAINER_NAME,
+        "--add-host=host.docker.internal:host-gateway",
+        "-p", "7880:7880",
+        "-p", "7881:7881",
+        "-p", "7882-7892:7882-7892/udp",
+        "-v", f"{config_path}:/etc/livekit.yaml:ro",
+        "livekit/livekit-server:latest",
+        "--config", "/etc/livekit.yaml",
+        "--bind", "0.0.0.0",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        console.print(f"[red]docker run failed:[/red] {result.stderr.strip()}")
+        sys.exit(1)
+
+    console.print(
+        f"[bold green]LiveKit started[/bold green] "
+        f"as [cyan]{LIVEKIT_CONTAINER_NAME}[/cyan] on ws://localhost:7880"
+    )
+    console.print(
+        "Backend env must expose LIVEKIT_API_KEY=devkey, "
+        "LIVEKIT_API_SECRET=secret_dev_key_change_in_production, "
+        "LIVEKIT_HOST=http://localhost:7880, LIVEKIT_WS_URL=ws://localhost:7880"
+    )
 
 
 @local.command()

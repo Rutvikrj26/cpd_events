@@ -1,16 +1,26 @@
 """
 LiveKit video conferencing provider implementation.
 
-Uses the official livekit-api Python SDK for:
+Uses the official ``livekit-api`` (>=0.8) Python SDK, whose transport is
+async-only (``LiveKitAPI`` holds an ``aiohttp.ClientSession``). The public
+method surface of this class is **synchronous** — we wrap each call in
+``async_to_sync`` so existing sync callers (signals, DRF request/response
+cycle, cloud-tasks runner) work unchanged. Each call creates a short-lived
+``LiveKitAPI`` session; this is acceptable because room/egress lifecycle
+operations are low-frequency and off the request hot path.
+
+Capabilities:
 - Room management (create, delete, list participants)
-- Access token generation (JWT-based participant auth)
-- Webhook verification and parsing
-- Recording via Egress service
+- Access token generation (JWT, sync — no network call)
+- Recording via Egress (room composite)
+- Webhook signature verification (sync — HMAC only, no network call)
 """
 
+import json
 import logging
 from datetime import datetime, timezone
 
+from asgiref.sync import async_to_sync
 from django.conf import settings
 
 from conferencing.provider import (
@@ -23,20 +33,20 @@ from conferencing.provider import (
 logger = logging.getLogger(__name__)
 
 
-def _get_livekit_api():
-    """Lazy import of livekit-api to allow graceful degradation."""
+def _get_livekit_api_module():
+    """Lazy import of livekit-api to allow graceful degradation if missing."""
     try:
         import livekit.api as lk_api
 
         return lk_api
-    except ImportError:
+    except ImportError as exc:
         raise RuntimeError(
-            "livekit-api package is not installed. Run: pip install livekit-api"
-        )
+            "livekit-api package is not installed. Run: uv add livekit-api"
+        ) from exc
 
 
 class LiveKitProvider(VideoProvider):
-    """LiveKit implementation of the VideoProvider interface."""
+    """LiveKit implementation of the ``VideoProvider`` interface."""
 
     def __init__(self):
         self._api_key = getattr(settings, 'LIVEKIT_API_KEY', '') or ''
@@ -44,8 +54,91 @@ class LiveKitProvider(VideoProvider):
         self._host = getattr(settings, 'LIVEKIT_HOST', '') or ''
         self._ws_url = getattr(settings, 'LIVEKIT_WS_URL', '') or ''
 
+    # ------------------------------------------------------------------
+    # Introspection
+    # ------------------------------------------------------------------
+
     def is_configured(self) -> bool:
         return bool(self._api_key and self._api_secret and self._host)
+
+    # ------------------------------------------------------------------
+    # Async implementations
+    # ------------------------------------------------------------------
+
+    async def _create_api(self):
+        lk = _get_livekit_api_module()
+        return lk.LiveKitAPI(self._host, self._api_key, self._api_secret)
+
+    async def _create_room_async(self, name: str, metadata, max_participants: int):
+        lk = _get_livekit_api_module()
+        api = await self._create_api()
+        try:
+            room = await api.room.create_room(
+                lk.CreateRoomRequest(
+                    name=name,
+                    metadata=json.dumps(metadata) if metadata else "",
+                    max_participants=max_participants,
+                )
+            )
+            return room
+        finally:
+            await api.aclose()
+
+    async def _delete_room_async(self, room_name: str) -> bool:
+        lk = _get_livekit_api_module()
+        api = await self._create_api()
+        try:
+            await api.room.delete_room(lk.DeleteRoomRequest(room=room_name))
+            return True
+        except Exception:
+            logger.exception("Failed to delete LiveKit room: %s", room_name)
+            return False
+        finally:
+            await api.aclose()
+
+    async def _list_participants_async(self, room_name: str):
+        lk = _get_livekit_api_module()
+        api = await self._create_api()
+        try:
+            response = await api.room.list_participants(
+                lk.ListParticipantsRequest(room=room_name)
+            )
+            return list(response.participants)
+        finally:
+            await api.aclose()
+
+    async def _start_recording_async(self, room_name: str, output_path: str):
+        lk = _get_livekit_api_module()
+        api = await self._create_api()
+        try:
+            file_output = lk.EncodedFileOutput(file_type=lk.EncodedFileType.MP4)
+            if output_path:
+                file_output.filepath = output_path
+            response = await api.egress.start_room_composite_egress(
+                lk.RoomCompositeEgressRequest(
+                    room_name=room_name,
+                    file_outputs=[file_output],
+                )
+            )
+            return response.egress_id
+        finally:
+            await api.aclose()
+
+    async def _stop_recording_async(self, egress_id: str) -> bool:
+        lk = _get_livekit_api_module()
+        api = await self._create_api()
+        try:
+            await api.egress.stop_egress(lk.StopEgressRequest(egress_id=egress_id))
+            return True
+        except Exception:
+            logger.exception("Failed to stop recording: egress_id=%s", egress_id)
+            return False
+        finally:
+            await api.aclose()
+
+    # ------------------------------------------------------------------
+    # Sync façade
+    # ------------------------------------------------------------------
 
     def create_room(
         self,
@@ -53,19 +146,7 @@ class LiveKitProvider(VideoProvider):
         metadata: dict | None = None,
         max_participants: int = 0,
     ) -> RoomResult:
-        lk = _get_livekit_api()
-        import json
-
-        room_service = lk.RoomServiceClient(
-            self._host, self._api_key, self._api_secret
-        )
-        room = room_service.create_room(
-            lk.CreateRoomRequest(
-                name=name,
-                metadata=json.dumps(metadata) if metadata else "",
-                max_participants=max_participants,
-            )
-        )
+        room = async_to_sync(self._create_room_async)(name, metadata or {}, max_participants)
         logger.info("LiveKit room created: %s (sid=%s)", room.name, room.sid)
         return RoomResult(
             room_id=room.sid,
@@ -74,17 +155,42 @@ class LiveKitProvider(VideoProvider):
         )
 
     def delete_room(self, room_name: str) -> bool:
-        lk = _get_livekit_api()
-        room_service = lk.RoomServiceClient(
-            self._host, self._api_key, self._api_secret
-        )
-        try:
-            room_service.delete_room(lk.DeleteRoomRequest(room=room_name))
+        ok = async_to_sync(self._delete_room_async)(room_name)
+        if ok:
             logger.info("LiveKit room deleted: %s", room_name)
-            return True
-        except Exception:
-            logger.exception("Failed to delete LiveKit room: %s", room_name)
-            return False
+        return ok
+
+    def list_participants(self, room_name: str) -> list[ParticipantInfo]:
+        participants = async_to_sync(self._list_participants_async)(room_name)
+        return [
+            ParticipantInfo(
+                identity=p.identity,
+                name=p.name,
+                joined_at=(
+                    datetime.fromtimestamp(p.joined_at, tz=timezone.utc)
+                    if p.joined_at
+                    else None
+                ),
+            )
+            for p in participants
+        ]
+
+    def start_recording(self, room_name: str, output_path: str = "") -> str:
+        egress_id = async_to_sync(self._start_recording_async)(room_name, output_path)
+        logger.info(
+            "Recording started for room %s, egress_id=%s", room_name, egress_id
+        )
+        return egress_id
+
+    def stop_recording(self, egress_id: str) -> bool:
+        ok = async_to_sync(self._stop_recording_async)(egress_id)
+        if ok:
+            logger.info("Recording stopped: egress_id=%s", egress_id)
+        return ok
+
+    # ------------------------------------------------------------------
+    # Sync-only operations (no network I/O to LiveKit server)
+    # ------------------------------------------------------------------
 
     def generate_join_token(
         self,
@@ -93,7 +199,7 @@ class LiveKitProvider(VideoProvider):
         participant_name: str,
         is_host: bool = False,
     ) -> str:
-        lk = _get_livekit_api()
+        lk = _get_livekit_api_module()
         token = (
             lk.AccessToken(self._api_key, self._api_secret)
             .with_identity(participant_identity)
@@ -117,72 +223,21 @@ class LiveKitProvider(VideoProvider):
         )
         return jwt_str
 
-    def list_participants(self, room_name: str) -> list[ParticipantInfo]:
-        lk = _get_livekit_api()
-        room_service = lk.RoomServiceClient(
-            self._host, self._api_key, self._api_secret
-        )
-        response = room_service.list_participants(
-            lk.ListParticipantsRequest(room=room_name)
-        )
-        return [
-            ParticipantInfo(
-                identity=p.identity,
-                name=p.name,
-                joined_at=datetime.fromtimestamp(p.joined_at, tz=timezone.utc) if p.joined_at else None,
-            )
-            for p in response.participants
-        ]
-
-    def start_recording(self, room_name: str, output_path: str = "") -> str:
-        lk = _get_livekit_api()
-        egress_service = lk.EgressServiceClient(
-            self._host, self._api_key, self._api_secret
-        )
-        file_output = lk.EncodedFileOutput(
-            file_type=lk.EncodedFileType.MP4,
-        )
-        if output_path:
-            file_output.filepath = output_path
-
-        response = egress_service.start_room_composite_egress(
-            lk.RoomCompositeEgressRequest(
-                room_name=room_name,
-                file_outputs=[file_output],
-            )
-        )
-        logger.info("Recording started for room %s, egress_id=%s", room_name, response.egress_id)
-        return response.egress_id
-
-    def stop_recording(self, egress_id: str) -> bool:
-        lk = _get_livekit_api()
-        egress_service = lk.EgressServiceClient(
-            self._host, self._api_key, self._api_secret
-        )
-        try:
-            egress_service.stop_egress(lk.StopEgressRequest(egress_id=egress_id))
-            logger.info("Recording stopped: egress_id=%s", egress_id)
-            return True
-        except Exception:
-            logger.exception("Failed to stop recording: egress_id=%s", egress_id)
-            return False
-
     def verify_webhook(self, body: bytes, auth_header: str) -> bool:
-        lk = _get_livekit_api()
+        lk = _get_livekit_api_module()
         try:
-            receiver = lk.WebhookReceiver(self._api_key, self._api_secret)
+            receiver = lk.WebhookReceiver(lk.TokenVerifier(self._api_key, self._api_secret))
             receiver.receive(body.decode('utf-8'), auth_header)
             return True
         except Exception:
+            logger.exception("LiveKit webhook verification failed")
             return False
 
     def parse_webhook(self, body: bytes, auth_header: str) -> WebhookEvent:
-        lk = _get_livekit_api()
-        receiver = lk.WebhookReceiver(self._api_key, self._api_secret)
+        lk = _get_livekit_api_module()
+        receiver = lk.WebhookReceiver(lk.TokenVerifier(self._api_key, self._api_secret))
         event = receiver.receive(body.decode('utf-8'), auth_header)
 
-        # Map LiveKit event types to our generic types
-        event_type = event.event or ""
         type_map = {
             "room_started": "room_started",
             "room_finished": "room_finished",
@@ -204,17 +259,28 @@ class LiveKitProvider(VideoProvider):
             room_name = event.room.name or ""
             room_id = event.room.sid or ""
 
-        metadata = {}
-        if event.egress_info:
+        metadata: dict = {}
+        if getattr(event, 'egress_info', None):
             metadata["egress_id"] = event.egress_info.egress_id
             metadata["status"] = str(event.egress_info.status)
+            # Try to surface the final file location when available.
+            file_results = getattr(event.egress_info, 'file_results', None) or []
+            if file_results:
+                first = file_results[0]
+                metadata["file_url"] = getattr(first, 'location', '') or ''
+                metadata["size_bytes"] = getattr(first, 'size', 0) or 0
+                metadata["duration_ms"] = getattr(first, 'duration', 0) or 0
 
         return WebhookEvent(
-            type=type_map.get(event_type, event_type),
+            type=type_map.get(event.event or "", event.event or ""),
             room_name=room_name,
             room_id=room_id,
             participant_identity=participant_identity,
             participant_name=participant_name,
-            timestamp=datetime.fromtimestamp(event.created_at, tz=timezone.utc) if event.created_at else None,
+            timestamp=(
+                datetime.fromtimestamp(event.created_at, tz=timezone.utc)
+                if event.created_at
+                else None
+            ),
             metadata=metadata,
         )

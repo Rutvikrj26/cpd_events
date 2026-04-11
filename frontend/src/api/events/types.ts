@@ -128,6 +128,13 @@ export interface EventCreateRequest {
     // Location (for in-person/hybrid events)
     location?: string;
 
+    // Video conferencing
+    video_settings?: {
+        enabled: boolean;
+        recording_enabled: boolean;
+        screen_share: boolean;
+    };
+
     // Branding
 
     is_public?: boolean;

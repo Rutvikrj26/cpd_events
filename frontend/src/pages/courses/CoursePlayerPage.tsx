@@ -777,8 +777,8 @@ export function CoursePlayerPage() {
                                 {activeContent && activeContent.content_type === 'text' && (
                                     <Card>
                                         <CardContent className="pt-6 prose max-w-none">
-                                            {activeContent.content_data?.text ? (
-                                                <div dangerouslySetInnerHTML={{ __html: activeContent.content_data.text }} />
+                                            {activeContent.content_data?.body ? (
+                                                <div dangerouslySetInnerHTML={{ __html: activeContent.content_data.body }} />
                                             ) : (
                                                 <p className="text-muted-foreground">No content available.</p>
                                             )}
@@ -830,10 +830,10 @@ export function CoursePlayerPage() {
                                                     )}
                                                 </div>
                                             )}
-                                            {(activeContent.content_data?.text?.body || activeContent.content_data?.text) && (
+                                            {activeContent.content_data?.text?.body && (
                                                 <div
                                                     className="prose max-w-none"
-                                                    dangerouslySetInnerHTML={{ __html: activeContent.content_data?.text?.body || activeContent.content_data?.text }}
+                                                    dangerouslySetInnerHTML={{ __html: activeContent.content_data.text.body }}
                                                 />
                                             )}
                                             {activeContent.file && (

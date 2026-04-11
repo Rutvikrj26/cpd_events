@@ -36,7 +36,7 @@ import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { EventsPage } from './pages/events/EventsPage';
 import { EventCreatePage } from './pages/events/EventCreatePage';
 import { EventDetailPage } from './pages/events/EventDetailPage';
-import { MyRegistrationsPage } from './pages/registrations/MyRegistrationsPage';
+import { MyLearningPage } from './pages/registrations/MyRegistrationsPage';
 import { CertificatesPage } from './pages/certificates/CertificatesPage';
 import { CertificateVerify } from './pages/certificates/CertificateVerify';
 import { CourseCertificatesPage } from './pages/certificates/CourseCertificatesPage';
@@ -48,7 +48,6 @@ import { ProfileSettings } from './pages/dashboard/ProfileSettings';
 // Learner Pages
 import { MyEvents } from './pages/dashboard/attendee/MyEvents';
 import { CPDTracking } from './pages/dashboard/attendee/CPDTracking';
-import { MyCoursesPage } from './pages/courses/MyCoursesPage';
 import { CoursePlayerPage } from './pages/courses/CoursePlayerPage';
 
 // Educator Pages
@@ -114,6 +113,11 @@ export default function App() {
               <Route path="/verify/:code" element={<CertificateVerify />} />
               <Route path="/badges/verify/:code" element={<PublicBadgePage />} />
 
+              {/* Public event & course pages */}
+              <Route path="/events/:id/details" element={<EventDetail />} />
+              <Route path="/events/:id/register" element={<EventRegistration />} />
+              <Route path="/courses/:slug" element={<PublicCourseDetailPage />} />
+
               {/* Auth Routes */}
               <Route path="/login" element={
                 <AuthLayout>
@@ -163,17 +167,11 @@ export default function App() {
                     </ProtectedRoute>
                   } />
 
-                  {/* Learner event/course browsing */}
-                  <Route path="/events/:id/details" element={<EventDetail />} />
-                  <Route path="/events/:id/register" element={<EventRegistration />} />
-                  <Route path="/courses/:slug" element={<PublicCourseDetailPage />} />
-
                   {/* Learner pages */}
-                  <Route path="/registrations" element={<MyRegistrationsPage />} />
+                  <Route path="/registrations" element={<MyLearningPage />} />
                   <Route path="/certificates" element={<CertificatesPage />} />
                   <Route path="/my-events" element={<MyEvents />} />
                   <Route path="/courses" element={<CourseCatalogPage />} />
-                  <Route path="/my-courses" element={<MyCoursesPage />} />
                   <Route path="/courses/certificates" element={<CourseCertificatesPage />} />
                   <Route path="/learn/:courseUuid" element={<CoursePlayerPage />} />
                   <Route path="/badges" element={<MyBadgesPage />} />

@@ -125,8 +125,8 @@ export function CPDTracking() {
    }
 
    const requirements = progress?.requirements || [];
-   const totalCredits = progress?.total_credits_earned || 0;
-   const totalRequired = requirements.reduce((sum, r) => sum + r.annual_requirement, 0);
+   const totalCredits = Number(progress?.total_credits_earned) || 0;
+   const totalRequired = requirements.reduce((sum, r) => sum + Number(r.annual_requirement || 0), 0);
    const overallProgress = totalRequired > 0 ? Math.min((totalCredits / totalRequired) * 100, 100) : 0;
 
    return (
@@ -376,8 +376,8 @@ function RequirementCard({
    onDelete: () => void;
 }) {
    const earned = parseFloat(requirement.earned_credits);
-   const required = requirement.annual_requirement;
-   const percent = requirement.completion_percent;
+   const required = Number(requirement.annual_requirement);
+   const percent = Number(requirement.completion_percent);
    const isComplete = percent >= 100;
 
    return (

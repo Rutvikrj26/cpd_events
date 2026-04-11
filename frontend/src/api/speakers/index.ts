@@ -1,9 +1,10 @@
 import api from "../client";
+import { unwrapList } from "../pagination";
 import type { Speaker, CreateSpeakerRequest, UpdateSpeakerRequest } from "./types";
 
 export async function getSpeakers(): Promise<Speaker[]> {
-    const response = await api.get<Speaker[]>("/speakers/");
-    return response.data;
+    const response = await api.get("/speakers/");
+    return unwrapList<Speaker>(response.data);
 }
 
 export async function getSpeaker(uuid: string): Promise<Speaker> {

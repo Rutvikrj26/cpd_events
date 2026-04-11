@@ -5,6 +5,7 @@ from rest_framework.routers import DefaultRouter
 
 from conferencing.views import (
     JoinCourseSessionVideoView,
+    JoinVideoGuestView,
     JoinVideoView,
     VideoRecordingViewSet,
     VideoRoomViewSet,
@@ -22,6 +23,11 @@ urlpatterns = [
         'events/<uuid:event_uuid>/join-video/',
         JoinVideoView.as_view(),
         name='event-join-video',
+    ),
+    path(
+        'public/events/<uuid:event_uuid>/join-video/',
+        JoinVideoGuestView.as_view(),
+        name='public-event-join-video',
     ),
     path(
         'courses/<uuid:course_uuid>/sessions/<uuid:session_uuid>/join-video/',

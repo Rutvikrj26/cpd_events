@@ -10,7 +10,102 @@ import traceback
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 
+from common.cloud_tasks import CloudTask
+
 logger = logging.getLogger(__name__)
+
+
+@CloudTask
+def start_event_recording(event_id: int):
+    """
+    Start a LiveKit room-composite egress for the given event.
+
+    Creates a ``VideoRecording`` row in ``RECORDING`` state so the frontend
+    can show a "recording" badge immediately; the ``egress_ended`` webhook
+    updates it to ``AVAILABLE`` with the stored file path.
+    """
+    from conferencing.models import VideoRecording, VideoRoom
+    from conferencing.service import get_video_provider
+    from events.models import Event
+
+    try:
+        event = Event.objects.get(id=event_id)
+    except Event.DoesNotExist:
+        logger.warning("start_event_recording: event %s not found", event_id)
+        return
+
+    ct = ContentType.objects.get_for_model(Event)
+    video_room = VideoRoom.objects.filter(content_type=ct, object_id=event.id).first()
+    if not video_room:
+        logger.info("start_event_recording: no VideoRoom for event %s", event_id)
+        return
+
+    if VideoRecording.objects.filter(
+        video_room=video_room,
+        status__in=[VideoRecording.Status.RECORDING, VideoRecording.Status.PROCESSING],
+    ).exists():
+        logger.info("Recording already in flight for event %s", event_id)
+        return
+
+    provider = get_video_provider()
+    if not provider.is_configured():
+        logger.warning("Video provider not configured; skipping recording start")
+        return
+
+    try:
+        egress_id = provider.start_recording(
+            room_name=video_room.room_name,
+            output_path=f"recordings/{video_room.room_name}.mp4",
+        )
+    except Exception:
+        logger.exception("Failed to start recording for event %s", event_id)
+        return
+
+    VideoRecording.objects.create(
+        video_room=video_room,
+        event=event,
+        egress_id=egress_id,
+        provider='livekit',
+        status=VideoRecording.Status.RECORDING,
+        recording_start=timezone.now(),
+        access_level=VideoRecording.AccessLevel.REGISTRANTS,
+    )
+    logger.info("Recording started for event %s (egress=%s)", event_id, egress_id)
+
+
+@CloudTask
+def stop_event_recording(event_id: int):
+    """Stop the in-flight egress for the given event, if any."""
+    from conferencing.models import VideoRecording
+    from conferencing.service import get_video_provider
+
+    recording = (
+        VideoRecording.objects.filter(
+            event_id=event_id,
+            status=VideoRecording.Status.RECORDING,
+        )
+        .order_by('-created_at')
+        .first()
+    )
+    if not recording:
+        logger.info("stop_event_recording: no in-flight recording for event %s", event_id)
+        return
+
+    provider = get_video_provider()
+    if not provider.is_configured():
+        logger.warning("Video provider not configured; cannot stop recording")
+        return
+
+    try:
+        provider.stop_recording(recording.egress_id)
+    except Exception:
+        logger.exception("Failed to stop recording for event %s", event_id)
+        recording.status = VideoRecording.Status.ERROR
+        recording.save(update_fields=['status', 'updated_at'])
+        return
+
+    recording.status = VideoRecording.Status.PROCESSING
+    recording.save(update_fields=['status', 'updated_at'])
 
 
 def create_video_room_for_object(content_type_id: int, object_id: int):

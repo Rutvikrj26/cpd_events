@@ -30,7 +30,7 @@ import { PageHeader } from "@/components/custom/PageHeader";
 import { StatusBadge } from "@/components/custom/StatusBadge";
 import { toast } from "sonner";
 import { getEvent, updateEvent, publishEvent, unpublishEvent, getEventRegistrations, checkInAttendee, deleteEvent, cancelEventRegistration, refundEventRegistration } from "@/api/events";
-import { issueCertificates, revokeCertificate } from "@/api/certificates";
+import { issueCertificates, revokeCertificate, reissueCertificate, CertificateIssueResult } from "@/api/certificates";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
    AlertDialog,
@@ -265,23 +265,60 @@ export function EventManagement() {
       }
    };
 
+   const summarizeIssueResult = (result: CertificateIssueResult) => {
+      if (result.issued_count > 0 && result.skipped_count === 0) {
+         toast.success(`Issued ${result.issued_count} certificate${result.issued_count === 1 ? '' : 's'}`);
+      } else if (result.issued_count > 0 && result.skipped_count > 0) {
+         toast.success(
+            `Issued ${result.issued_count}, skipped ${result.skipped_count}`,
+            {
+               description: result.skipped
+                  .slice(0, 3)
+                  .map(s => s.reason + (s.detail ? `: ${s.detail}` : ''))
+                  .join('\n'),
+            }
+         );
+      } else if (result.issued_count === 0 && result.skipped_count > 0) {
+         toast.error(
+            `No certificates issued — ${result.skipped_count} skipped`,
+            {
+               description: result.skipped
+                  .slice(0, 3)
+                  .map(s => s.reason + (s.detail ? `: ${s.detail}` : ''))
+                  .join('\n'),
+            }
+         );
+      }
+   };
+
    const handleIssueCertificate = async (registrationUuid: string) => {
       if (!uuid) return;
       try {
-         await issueCertificates(uuid, { registration_uuids: [registrationUuid] });
-         toast.success("Certificate issued successfully");
-         fetchRegistrations();
+         const result = await issueCertificates(uuid, { registration_uuids: [registrationUuid] });
+         summarizeIssueResult(result);
+         await fetchRegistrations();
       } catch (error: any) {
          toast.error(error?.response?.data?.detail || "Failed to issue certificate");
+      }
+   };
+
+   const handleReissueCertificate = async (registrationUuid: string) => {
+      if (!uuid) return;
+      try {
+         const result = await reissueCertificate(uuid, registrationUuid);
+         summarizeIssueResult(result);
+         await fetchRegistrations();
+      } catch (error: any) {
+         toast.error(error?.response?.data?.detail || "Failed to re-issue certificate");
       }
    };
 
    const handleIssueAllCertificates = async () => {
       if (!uuid) return;
       try {
-         const result = await issueCertificates(uuid, {});
-         toast.success(`Issued ${result.issued} certificates (${result.skipped} skipped)`);
-         fetchRegistrations();
+         const result = await issueCertificates(uuid, { issue_all_eligible: true });
+         summarizeIssueResult(result);
+         await fetchRegistrations();
       } catch (error: any) {
          toast.error(error?.response?.data?.detail || "Failed to issue certificates");
       }
@@ -881,14 +918,23 @@ export function EventManagement() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                        {attendee.certificate_uuid ? (
-                                          <Button
-                                             size="sm"
-                                             variant="outline"
-                                             className="text-destructive border-destructive hover:bg-destructive/10"
-                                             onClick={() => setRevokeTarget(attendee)}
-                                          >
-                                             Revoke
-                                          </Button>
+                                          <>
+                                             <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handleReissueCertificate(attendee.uuid)}
+                                             >
+                                                Re-issue
+                                             </Button>
+                                             <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="text-destructive border-destructive hover:bg-destructive/10"
+                                                onClick={() => setRevokeTarget(attendee)}
+                                             >
+                                                Revoke
+                                             </Button>
+                                          </>
                                        ) : (
                                           <Button
                                              size="sm"
