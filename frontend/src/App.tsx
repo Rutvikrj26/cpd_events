@@ -31,6 +31,7 @@ import { ResetPasswordPage } from "@/pages/auth/ResetPasswordPage";
 import { OAuthCallbackPage } from "@/pages/auth/OAuthCallbackPage";
 import { AcceptInvitationPage } from "@/pages/auth/AcceptInvitationPage";
 import { ConfirmEmailChangePage } from "@/pages/auth/ConfirmEmailChangePage";
+import { SignupPage } from "@/pages/auth/SignupPage";
 
 // Dashboard Pages
 import { DashboardPage } from './pages/dashboard/DashboardPage';
@@ -124,6 +125,11 @@ export default function App() {
               <Route path="/login" element={
                 <AuthLayout>
                   <LoginPage />
+                </AuthLayout>
+              } />
+              <Route path="/signup" element={
+                <AuthLayout>
+                  <SignupPage />
                 </AuthLayout>
               } />
 

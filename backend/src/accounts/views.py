@@ -394,8 +394,11 @@ class EmailChangeConfirmView(generics.GenericAPIView):
     throttle_classes = [AuthThrottle]
 
     def post(self, request):
-        from django.db import transaction
-        from rest_framework_simplejwt.tokens import OutstandingToken, BlacklistedToken
+        from django.db import IntegrityError
+        from rest_framework_simplejwt.token_blacklist.models import (
+            BlacklistedToken,
+            OutstandingToken,
+        )
 
         from .audit import log_audit_event
 
@@ -416,31 +419,32 @@ class EmailChangeConfirmView(generics.GenericAPIView):
             return error_response("This email change link has expired.", code="TOKEN_EXPIRED")
 
         new_email = user.pending_email
+        old_email = user.email
 
-        with transaction.atomic():
-            # Race check: another user may have claimed this email in the meantime.
-            if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
-                user.pending_email = ""
-                user.email_change_token = ""
-                user.email_change_requested_at = None
-                user.save(update_fields=[
-                    "pending_email",
-                    "email_change_token",
-                    "email_change_requested_at",
-                    "updated_at",
-                ])
-                return error_response(
-                    "This email is now in use by another account.",
-                    code="EMAIL_TAKEN",
-                )
-
-            old_email = user.email
-            user.email = new_email
+        # Cheap pre-check so we can surface a friendly error before the DB
+        # raises. The real guarantee is the unique constraint on User.email.
+        if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
             user.pending_email = ""
             user.email_change_token = ""
             user.email_change_requested_at = None
-            user.email_verified = True
-            user.email_verified_at = timezone.now()
+            user.save(update_fields=[
+                "pending_email",
+                "email_change_token",
+                "email_change_requested_at",
+                "updated_at",
+            ])
+            return error_response(
+                "This email is now in use by another account.",
+                code="EMAIL_TAKEN",
+            )
+
+        user.email = new_email
+        user.pending_email = ""
+        user.email_change_token = ""
+        user.email_change_requested_at = None
+        user.email_verified = True
+        user.email_verified_at = timezone.now()
+        try:
             user.save(update_fields=[
                 "email",
                 "pending_email",
@@ -450,19 +454,29 @@ class EmailChangeConfirmView(generics.GenericAPIView):
                 "email_verified_at",
                 "updated_at",
             ])
+        except IntegrityError:
+            # Someone claimed the email between the pre-check and save.
+            return error_response(
+                "This email is now in use by another account.",
+                code="EMAIL_TAKEN",
+            )
 
-            # Link any guest registrations whose email now matches.
+        # Link any guest registrations whose email now matches. Best-effort —
+        # failures here must not roll back the email swap.
+        try:
             from registrations.models import Registration
 
             Registration.link_registrations_for_user(user)
+        except Exception:
+            pass
 
-            # Invalidate all outstanding refresh tokens for this user so every
-            # device has to log in again with the new email.
-            try:
-                for ot in OutstandingToken.objects.filter(user=user):
-                    BlacklistedToken.objects.get_or_create(token=ot)
-            except Exception:
-                pass
+        # Invalidate all outstanding refresh tokens for this user so every
+        # device has to log in again with the new email. Best-effort.
+        try:
+            for ot in OutstandingToken.objects.filter(user=user):
+                BlacklistedToken.objects.get_or_create(token=ot)
+        except Exception:
+            pass
 
         log_audit_event(
             actor=user,

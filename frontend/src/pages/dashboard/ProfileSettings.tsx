@@ -132,9 +132,9 @@ export function ProfileSettings() {
          setUser(fresh);
       } catch (err: any) {
          const detail =
-            err?.response?.data?.current_password?.[0] ||
-            err?.response?.data?.new_email?.[0] ||
-            err?.response?.data?.detail ||
+            err?.response?.data?.error?.details?.current_password?.[0] ||
+            err?.response?.data?.error?.details?.new_email?.[0] ||
+            err?.response?.data?.error?.message ||
             "Failed to request email change";
          setEmailChangeError(detail);
       } finally {

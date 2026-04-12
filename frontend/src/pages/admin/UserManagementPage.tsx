@@ -606,9 +606,8 @@ function ChangeRoleDialog({ open, onOpenChange, user, onSuccess }: { open: boole
             onOpenChange(false);
             onSuccess();
         } catch (err: any) {
-            const detail = err.response?.data?.detail
-                || err.response?.data?.roles?.[0]
-                || err.response?.data?.non_field_errors?.[0]
+            const detail = err?.response?.data?.error?.message
+                || err?.response?.data?.error?.details?.roles?.[0]
                 || 'Failed to update roles';
             setError(detail);
         } finally {

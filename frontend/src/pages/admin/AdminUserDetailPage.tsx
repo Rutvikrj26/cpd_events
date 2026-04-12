@@ -95,9 +95,8 @@ export function AdminUserDetailPage() {
             fetchDetail();
         } catch (err: any) {
             const detailMsg =
-                err?.response?.data?.roles?.[0] ||
-                err?.response?.data?.non_field_errors?.[0] ||
-                err?.response?.data?.detail ||
+                err?.response?.data?.error?.message ||
+                err?.response?.data?.error?.details?.roles?.[0] ||
                 "Failed to update roles";
             setRoleError(detailMsg);
         } finally {
