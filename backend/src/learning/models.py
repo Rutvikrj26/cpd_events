@@ -848,7 +848,7 @@ class Course(BaseModel):
         """Check if user can manage this course."""
         if not user or not getattr(user, "is_authenticated", False):
             return False
-        if user.is_staff:
+        if user.groups.filter(name="admin").exists():
             return True
         return self.created_by_id == user.id
 

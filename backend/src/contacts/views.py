@@ -57,7 +57,7 @@ class TagViewSet(BaseModelViewSet):
     permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
 
     def get_queryset(self):
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             return Tag.objects.all()
         return Tag.objects.filter(owner=self.request.user)
 
@@ -112,7 +112,7 @@ class ContactListViewSet(BaseModelViewSet):
     permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
 
     def get_queryset(self):
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             return ContactList.objects.all()
         return ContactList.objects.filter(owner=self.request.user)
 
@@ -251,7 +251,7 @@ class ContactViewSet(BaseModelViewSet):
         return ContactList.get_or_create_for_user(self.request.user)
 
     def get_queryset(self):
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             return Contact.objects.all().prefetch_related('tags')
         contact_list = self._get_user_list()
         return Contact.objects.filter(contact_list=contact_list).prefetch_related('tags')

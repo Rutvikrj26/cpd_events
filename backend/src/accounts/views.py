@@ -279,6 +279,204 @@ class PasswordChangeView(generics.GenericAPIView):
 
 
 # =============================================================================
+# Email Change (Self-service)
+# =============================================================================
+
+
+EMAIL_CHANGE_TOKEN_HOURS = 24
+
+
+@roles("learner", "educator", "course_manager", "admin", route_name="email_change_request")
+class EmailChangeRequestView(generics.GenericAPIView):
+    """POST /api/v1/users/me/email-change/request/
+
+    Starts a self-service email change. Requires current-password reauth.
+    Stores the desired email on the user as `pending_email` and sends a
+    confirmation link to that new address. Also notifies the old address so
+    the user can react if the request wasn't them.
+    """
+
+    serializer_class = serializers.EmailChangeRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .audit import log_audit_event
+        from common.utils import generate_verification_code
+
+        serializer = self.get_serializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        user = request.user
+        new_email = serializer.validated_data["new_email"]
+
+        user.pending_email = new_email
+        user.email_change_token = generate_verification_code(48)
+        user.email_change_requested_at = timezone.now()
+        user.save(update_fields=[
+            "pending_email",
+            "email_change_token",
+            "email_change_requested_at",
+            "updated_at",
+        ])
+
+        confirm_url = f"{settings.FRONTEND_URL}/auth/confirm-email-change?token={user.email_change_token}"
+
+        print("\n" + "=" * 80)
+        print("📧 EMAIL CHANGE CONFIRMATION LINK:")
+        print(f"   {confirm_url}")
+        print("=" * 80 + "\n")
+
+        # Confirmation to the NEW address
+        try:
+            send_mail(
+                subject=f"Confirm your new email for {INSTITUTION_NAME}",
+                message=(
+                    f"Hello {user.full_name},\n\n"
+                    f"A request was made to change your {INSTITUTION_NAME} email "
+                    f"to this address. Click the link below to confirm:\n\n"
+                    f"{confirm_url}\n\n"
+                    f"This link expires in {EMAIL_CHANGE_TOKEN_HOURS} hours.\n\n"
+                    f"If you didn't request this, you can ignore this email."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[new_email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+
+        # Notification to the OLD address
+        try:
+            send_mail(
+                subject=f"Email change requested on your {INSTITUTION_NAME} account",
+                message=(
+                    f"Hello {user.full_name},\n\n"
+                    f"A request was made to change your {INSTITUTION_NAME} email "
+                    f"from {user.email} to {new_email}.\n\n"
+                    f"If this wasn't you, contact your institution administrator "
+                    f"immediately — someone may have access to your account."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+
+        log_audit_event(
+            actor=user,
+            action="email_change_requested",
+            object_type="User",
+            object_uuid=str(user.uuid),
+            metadata={"from": user.email, "to": new_email},
+            request=request,
+        )
+
+        return Response(
+            {
+                "message": f"Confirmation link sent to {new_email}.",
+                "pending_email": new_email,
+            }
+        )
+
+
+@roles("public", route_name="email_change_confirm")
+class EmailChangeConfirmView(generics.GenericAPIView):
+    """POST /api/v1/auth/email-change/confirm/
+
+    Public endpoint. Validates the token, swaps `email` with `pending_email`,
+    re-links any guest Registrations for the new address, and invalidates
+    all refresh tokens so every device must log in again.
+    """
+
+    serializer_class = serializers.EmailChangeConfirmSerializer
+    permission_classes = [AllowAny]
+    throttle_classes = [AuthThrottle]
+
+    def post(self, request):
+        from django.db import transaction
+        from rest_framework_simplejwt.tokens import OutstandingToken, BlacklistedToken
+
+        from .audit import log_audit_event
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        token = serializer.validated_data["token"]
+
+        try:
+            user = User.objects.get(email_change_token=token)
+        except User.DoesNotExist:
+            return error_response("Invalid or expired token.", code="INVALID_TOKEN")
+
+        if not user.pending_email or not user.email_change_requested_at:
+            return error_response("No email change is pending.", code="NO_PENDING_CHANGE")
+
+        expiry = user.email_change_requested_at + timezone.timedelta(hours=EMAIL_CHANGE_TOKEN_HOURS)
+        if timezone.now() > expiry:
+            return error_response("This email change link has expired.", code="TOKEN_EXPIRED")
+
+        new_email = user.pending_email
+
+        with transaction.atomic():
+            # Race check: another user may have claimed this email in the meantime.
+            if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
+                user.pending_email = ""
+                user.email_change_token = ""
+                user.email_change_requested_at = None
+                user.save(update_fields=[
+                    "pending_email",
+                    "email_change_token",
+                    "email_change_requested_at",
+                    "updated_at",
+                ])
+                return error_response(
+                    "This email is now in use by another account.",
+                    code="EMAIL_TAKEN",
+                )
+
+            old_email = user.email
+            user.email = new_email
+            user.pending_email = ""
+            user.email_change_token = ""
+            user.email_change_requested_at = None
+            user.email_verified = True
+            user.email_verified_at = timezone.now()
+            user.save(update_fields=[
+                "email",
+                "pending_email",
+                "email_change_token",
+                "email_change_requested_at",
+                "email_verified",
+                "email_verified_at",
+                "updated_at",
+            ])
+
+            # Link any guest registrations whose email now matches.
+            from registrations.models import Registration
+
+            Registration.link_registrations_for_user(user)
+
+            # Invalidate all outstanding refresh tokens for this user so every
+            # device has to log in again with the new email.
+            try:
+                for ot in OutstandingToken.objects.filter(user=user):
+                    BlacklistedToken.objects.get_or_create(token=ot)
+            except Exception:
+                pass
+
+        log_audit_event(
+            actor=user,
+            action="email_change_confirmed",
+            object_type="User",
+            object_uuid=str(user.uuid),
+            metadata={"from": old_email, "to": new_email},
+            request=request,
+        )
+
+        return Response({"message": "Email address updated. Please log in again."})
+
+
+# =============================================================================
 # Session Management Views
 # =============================================================================
 
@@ -652,7 +850,6 @@ class ManifestView(generics.GenericAPIView):
             "user": {
                 "roles": user.role_names,
                 "primary_role": user.primary_role,
-                "is_staff": user.is_staff,
             },
             "deployment": {
                 "mode": DEPLOYMENT_MODE,
@@ -663,6 +860,32 @@ class ManifestView(generics.GenericAPIView):
         }
 
         return Response(data)
+
+
+# =============================================================================
+# Public Deployment Config
+# =============================================================================
+
+
+@roles("public", route_name="deployment_config")
+class DeploymentConfigView(generics.GenericAPIView):
+    """GET /api/v1/auth/deployment/ - Public deployment metadata.
+
+    Exposed to unauthenticated clients so login/signup pages can gate UI
+    (e.g. hide the signup form when the institution is invite-only).
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response(
+            {
+                "mode": DEPLOYMENT_MODE,
+                "registration_mode": REGISTRATION_MODE,
+                "institution_name": INSTITUTION_NAME,
+                "institution_logo_url": INSTITUTION_LOGO_URL,
+            }
+        )
 
 
 # =============================================================================
@@ -789,11 +1012,18 @@ class GoogleCallbackView(generics.GenericAPIView):
                         ]
                     )
                 else:
-                    # Check registration mode
+                    # Check registration mode — redirect back to frontend with a
+                    # structured error code so the UI can surface a friendly message.
                     if REGISTRATION_MODE == "invite_only":
-                        return error_response(
-                            "Registration is by invitation only. Contact your administrator.",
-                            code="REGISTRATION_DISABLED",
+                        from django.http import HttpResponseRedirect
+
+                        frontend_url = (
+                            settings.CORS_ALLOWED_ORIGINS[0]
+                            if settings.CORS_ALLOWED_ORIGINS
+                            else "http://localhost:5173"
+                        )
+                        return HttpResponseRedirect(
+                            f"{frontend_url}/auth/callback?error=invite_only"
                         )
 
                     # Create new user with Google OAuth
@@ -837,18 +1067,16 @@ class GoogleCallbackView(generics.GenericAPIView):
 
 
 @roles("admin", route_name="admin_users")
-class AdminUserListCreateView(generics.ListCreateAPIView):
+class AdminUserListView(generics.ListAPIView):
     """
-    GET /api/v1/admin/users/ - List all users (admin only)
-    POST /api/v1/admin/users/ - Create user directly (admin only)
+    GET /api/v1/admin/users/ - List all users (admin only).
+
+    POST is intentionally not supported — use the invitation flow instead
+    (`POST /admin/users/invite/` or `POST /admin/users/bulk-invite/`).
     """
 
     permission_classes = [IsAuthenticated]
-
-    def get_serializer_class(self):
-        if self.request.method == "POST":
-            return serializers.AdminUserCreateSerializer
-        return serializers.AdminUserListSerializer
+    serializer_class = serializers.AdminUserListSerializer
 
     def get_queryset(self):
         qs = User.objects.filter(deleted_at__isnull=True).order_by("-created_at")
@@ -866,6 +1094,135 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
         if is_active is not None:
             qs = qs.filter(is_active=is_active.lower() == "true")
         return qs.distinct()
+
+
+@roles("admin", route_name="admin_user_detail_full")
+class AdminUserDetailView(generics.GenericAPIView):
+    """GET /api/v1/admin/users/{uuid}/detail/
+
+    Aggregated detail view for the admin user management UI. Returns profile,
+    group memberships, per-course staff assignments, owned events and courses,
+    recent certificates, recent activity, and pending invitation (if any) in
+    a single response so the admin user detail page can render without N+1s.
+    """
+
+    permission_classes = [IsAuthenticated]
+    lookup_field = "uuid"
+
+    def get(self, request, uuid):
+        from certificates.models import Certificate
+        from events.models import Event
+        from learning.models import Course, CourseStaff
+        from .models import AuditLog, UserInvitation, UserRoleChange
+
+        try:
+            user = User.objects.filter(deleted_at__isnull=True).get(uuid=uuid)
+        except User.DoesNotExist:
+            return error_response("User not found.", code="NOT_FOUND", status_code=status.HTTP_404_NOT_FOUND)
+
+        profile = serializers.AdminUserListSerializer(user).data
+
+        course_staff_rows = CourseStaff.objects.filter(user=user).select_related("course")[:50]
+        course_staff = [
+            {
+                "uuid": str(row.uuid),
+                "course_uuid": str(row.course.uuid),
+                "course_title": row.course.title,
+                "role": row.role,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in course_staff_rows
+        ]
+
+        owned_events = [
+            {
+                "uuid": str(e.uuid),
+                "title": e.title,
+                "status": e.status,
+                "starts_at": e.starts_at.isoformat() if e.starts_at else None,
+            }
+            for e in Event.objects.filter(owner=user, deleted_at__isnull=True).order_by("-created_at")[:10]
+        ]
+
+        owned_courses = [
+            {
+                "uuid": str(c.uuid),
+                "title": c.title,
+                "status": c.status,
+            }
+            for c in Course.objects.filter(created_by=user).order_by("-created_at")[:10]
+        ]
+
+        certificates = [
+            {
+                "uuid": str(c.uuid),
+                "short_code": getattr(c, "short_code", "") or "",
+                "title": (
+                    c.registration.event.title
+                    if c.registration and c.registration.event
+                    else (c.course_enrollment.course.title if c.course_enrollment else "")
+                ),
+                "issued_at": c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in Certificate.objects.filter(
+                models.Q(registration__user=user) | models.Q(course_enrollment__user=user),
+                deleted_at__isnull=True,
+            ).select_related("registration__event", "course_enrollment__course").order_by("-created_at")[:10]
+        ]
+
+        # Role changes + audit log rows targeting this user, merged and sorted.
+        role_rows = UserRoleChange.objects.filter(user=user).select_related("changed_by").order_by("-created_at")[:20]
+        audit_rows = AuditLog.objects.filter(object_uuid=str(user.uuid)).select_related("actor").order_by("-created_at")[:20]
+
+        recent_activity = []
+        for row in role_rows:
+            recent_activity.append(
+                {
+                    "type": "role_change",
+                    "at": row.created_at.isoformat(),
+                    "changed_by_name": row.changed_by.full_name if row.changed_by else None,
+                    "summary": f"Roles changed from {row.from_roles or '[]'} to {row.to_roles or '[]'}",
+                    "metadata": {"from": row.from_roles, "to": row.to_roles, "reason": row.reason},
+                }
+            )
+        for row in audit_rows:
+            recent_activity.append(
+                {
+                    "type": row.action,
+                    "at": row.created_at.isoformat(),
+                    "changed_by_name": row.actor.full_name if row.actor else None,
+                    "summary": row.action.replace("_", " ").capitalize(),
+                    "metadata": row.metadata or {},
+                }
+            )
+        recent_activity.sort(key=lambda r: r["at"], reverse=True)
+        recent_activity = recent_activity[:20]
+
+        pending_invitation = None
+        pending = UserInvitation.objects.filter(
+            email__iexact=user.email,
+            is_used=False,
+            revoked_at__isnull=True,
+        ).order_by("-created_at").first()
+        if pending:
+            pending_invitation = {
+                "uuid": str(pending.uuid),
+                "status": pending.status,
+                "expires_at": pending.expires_at.isoformat(),
+            }
+
+        return Response(
+            {
+                "profile": profile,
+                "groups": user.role_names,
+                "course_staff": course_staff,
+                "owned_events": owned_events,
+                "owned_courses": owned_courses,
+                "certificates": certificates,
+                "recent_activity": recent_activity,
+                "pending_invitation": pending_invitation,
+            }
+        )
 
 
 @roles("admin", route_name="admin_user_detail")
@@ -898,12 +1255,39 @@ class AdminUserDeactivateView(generics.GenericAPIView):
         return User.objects.filter(deleted_at__isnull=True)
 
     def post(self, request, uuid):
+        from .audit import log_audit_event
+
         user = self.get_queryset().get(uuid=uuid)
         if user == request.user:
             return error_response("You cannot deactivate your own account.", code="SELF_DEACTIVATE")
+
+        # If this action would *deactivate* the last active admin, block it.
+        will_deactivate = user.is_active
+        if will_deactivate and user.groups.filter(name="admin").exists():
+            other_admin_exists = User.objects.filter(
+                groups__name="admin",
+                is_active=True,
+                deleted_at__isnull=True,
+            ).exclude(pk=user.pk).exists()
+            if not other_admin_exists:
+                return error_response(
+                    "Cannot deactivate the last active admin.",
+                    code="LAST_ADMIN",
+                )
+
         user.is_active = not user.is_active
         user.save(update_fields=["is_active", "updated_at"])
         action = "activated" if user.is_active else "deactivated"
+
+        log_audit_event(
+            actor=request.user,
+            action=f"user_{action}",
+            object_type="User",
+            object_uuid=str(user.uuid),
+            metadata={"target_email": user.email},
+            request=request,
+        )
+
         return Response({"message": f"User {action} successfully.", "is_active": user.is_active})
 
 
@@ -918,42 +1302,30 @@ class AdminInviteUserView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        from .emails import send_invitation_email
         from .models import UserInvitation
 
+        email = serializer.validated_data["email"]
+        pending = UserInvitation.objects.filter(
+            email__iexact=email,
+            is_used=False,
+            expires_at__gt=timezone.now(),
+        ).exists()
+        if pending:
+            return error_response(
+                "An invitation is already pending for this email.",
+                code="INVITATION_PENDING",
+            )
+
         invitation = UserInvitation.create_invitation(
-            email=serializer.validated_data["email"],
+            email=email,
             full_name=serializer.validated_data["full_name"],
             role=serializer.validated_data["role"],
             invited_by=request.user,
             message=serializer.validated_data.get("message", ""),
         )
 
-        # Send invitation email
-        try:
-            invite_url = f"{settings.FRONTEND_URL}/auth/accept-invitation?token={invitation.token}"
-
-            print("\n" + "=" * 80)
-            print("📧 INVITATION LINK (copy this, NOT the email body below):")
-            print(f"   {invite_url}")
-            print("=" * 80 + "\n")
-
-            send_mail(
-                subject=f"You've been invited to {INSTITUTION_NAME}",
-                message=(
-                    f"Hello {invitation.full_name},\n\n"
-                    f"You've been invited to join {INSTITUTION_NAME}.\n\n"
-                    f"Click the following link to set up your account:\n{invite_url}\n\n"
-                    f"This invitation expires in 7 days.\n\n"
-                    f"{invitation.message}"
-                ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[invitation.email],
-                fail_silently=False,
-            )
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to send invitation email to {invitation.email}: {e}")
+        send_invitation_email(invitation, fail_silently=True)
 
         return Response(
             {
@@ -975,50 +1347,164 @@ class AdminBulkInviteView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        from .emails import send_invitation_email
         from .models import UserInvitation
 
-        results = []
+        invited = 0
+        errors = []
+        now = timezone.now()
+
         for invite_data in serializer.validated_data["invitations"]:
-            # Skip if user already exists
-            if User.objects.filter(email__iexact=invite_data["email"]).exists():
-                results.append({"email": invite_data["email"], "status": "skipped", "reason": "User already exists"})
+            email = invite_data["email"]
+
+            if User.objects.filter(email__iexact=email).exists():
+                errors.append({"email": email, "error": "A user with this email already exists."})
+                continue
+
+            pending = UserInvitation.objects.filter(
+                email__iexact=email,
+                is_used=False,
+                expires_at__gt=now,
+            ).exists()
+            if pending:
+                errors.append({"email": email, "error": "An invitation is already pending for this email."})
                 continue
 
             invitation = UserInvitation.create_invitation(
-                email=invite_data["email"],
+                email=email,
                 full_name=invite_data["full_name"],
                 role=invite_data.get("role", "learner"),
                 invited_by=request.user,
                 message=invite_data.get("message", ""),
             )
 
-            # Send email (best effort)
-            try:
-                invite_url = f"{settings.FRONTEND_URL}/auth/accept-invitation?token={invitation.token}"
-                send_mail(
-                    subject=f"You've been invited to {INSTITUTION_NAME}",
-                    message=f"Hello {invitation.full_name},\n\nYou've been invited to join {INSTITUTION_NAME}.\n\nSet up your account: {invite_url}\n\nThis invitation expires in 7 days.",
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[invitation.email],
-                    fail_silently=True,
-                )
-                results.append({"email": invite_data["email"], "status": "sent"})
-            except Exception:
-                results.append({"email": invite_data["email"], "status": "created", "reason": "Email failed"})
+            send_invitation_email(invitation, fail_silently=True)
+            invited += 1
 
-        return Response({"results": results, "total": len(results)}, status=status.HTTP_201_CREATED)
+        return Response(
+            {"invited": invited, "errors": errors},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 @roles("admin", route_name="admin_invitations")
 class AdminInvitationListView(generics.ListAPIView):
-    """GET /api/v1/admin/invitations/ - List all invitations."""
+    """GET /api/v1/admin/users/invitations/ - List invitations with filters.
+
+    Query params:
+    - status: pending | accepted | expired | revoked
+    - search: matches email or full_name
+    - include_revoked: if 'true', includes revoked rows (otherwise excluded)
+    """
 
     serializer_class = serializers.UserInvitationSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         from .models import UserInvitation
-        return UserInvitation.objects.all().order_by("-created_at")
+
+        qs = UserInvitation.objects.all().order_by("-created_at")
+        now = timezone.now()
+
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                models.Q(email__icontains=search) | models.Q(full_name__icontains=search)
+            )
+
+        status_filter = self.request.query_params.get("status")
+        include_revoked = self.request.query_params.get("include_revoked", "").lower() == "true"
+
+        if status_filter == "pending":
+            qs = qs.filter(is_used=False, revoked_at__isnull=True, expires_at__gt=now)
+        elif status_filter == "accepted":
+            qs = qs.filter(is_used=True)
+        elif status_filter == "expired":
+            qs = qs.filter(is_used=False, revoked_at__isnull=True, expires_at__lte=now)
+        elif status_filter == "revoked":
+            qs = qs.filter(revoked_at__isnull=False)
+        elif not include_revoked:
+            # Default list hides revoked rows unless explicitly requested or a
+            # status filter narrows the view itself.
+            qs = qs.filter(revoked_at__isnull=True)
+
+        return qs
+
+
+@roles("admin", route_name="admin_invitation_resend")
+class AdminInvitationResendView(generics.GenericAPIView):
+    """POST /api/v1/admin/users/invitations/{uuid}/resend/"""
+
+    permission_classes = [IsAuthenticated]
+    lookup_field = "uuid"
+
+    def post(self, request, uuid):
+        from .emails import send_invitation_email
+        from .models import UserInvitation
+
+        try:
+            invitation = UserInvitation.objects.get(uuid=uuid)
+        except UserInvitation.DoesNotExist:
+            return error_response("Invitation not found.", code="NOT_FOUND", status_code=status.HTTP_404_NOT_FOUND)
+
+        if invitation.is_used:
+            return error_response(
+                "Cannot resend an invitation that has already been accepted.",
+                code="INVITATION_ALREADY_ACCEPTED",
+            )
+        if invitation.is_revoked:
+            return error_response(
+                "Cannot resend a revoked invitation.",
+                code="INVITATION_REVOKED",
+            )
+
+        expires_days = getattr(settings, "INVITATION_EXPIRY_DAYS", 30)
+        now = timezone.now()
+        invitation.last_sent_at = now
+        invitation.expires_at = now + timezone.timedelta(days=expires_days)
+        invitation.resent_count = models.F("resent_count") + 1
+        invitation.save(update_fields=["last_sent_at", "expires_at", "resent_count", "updated_at"])
+        invitation.refresh_from_db()
+
+        send_invitation_email(invitation, fail_silently=True)
+
+        return Response(
+            {
+                "message": f"Invitation re-sent to {invitation.email}.",
+                "invitation": serializers.UserInvitationSerializer(invitation).data,
+            }
+        )
+
+
+@roles("admin", route_name="admin_invitation_revoke")
+class AdminInvitationRevokeView(generics.GenericAPIView):
+    """POST /api/v1/admin/users/invitations/{uuid}/revoke/"""
+
+    permission_classes = [IsAuthenticated]
+    lookup_field = "uuid"
+
+    def post(self, request, uuid):
+        from .models import UserInvitation
+
+        try:
+            invitation = UserInvitation.objects.get(uuid=uuid)
+        except UserInvitation.DoesNotExist:
+            return error_response("Invitation not found.", code="NOT_FOUND", status_code=status.HTTP_404_NOT_FOUND)
+
+        if invitation.is_used:
+            return error_response(
+                "Cannot revoke an invitation that has already been accepted.",
+                code="INVITATION_ALREADY_ACCEPTED",
+            )
+
+        invitation.revoke()
+
+        return Response(
+            {
+                "message": f"Invitation for {invitation.email} revoked.",
+                "invitation": serializers.UserInvitationSerializer(invitation).data,
+            }
+        )
 
 
 # =============================================================================
@@ -1054,6 +1540,8 @@ class AcceptInvitationView(generics.GenericAPIView):
         if not invitation.is_valid:
             if invitation.is_used:
                 return error_response("This invitation has already been used.", code="INVITATION_USED")
+            if invitation.is_revoked:
+                return error_response("This invitation has been revoked.", code="INVITATION_REVOKED")
             return error_response("This invitation has expired.", code="INVITATION_EXPIRED")
 
         # Check if user already exists
@@ -1068,11 +1556,22 @@ class AcceptInvitationView(generics.GenericAPIView):
             email_verified=True,
         )
 
-        # Assign role from invitation
-        user.assign_role(invitation.role)
+        # Assign role from invitation via set_roles so the change is audited.
+        user.set_roles([invitation.role], changed_by=invitation.invited_by, reason="invitation_accepted")
 
         # Mark invitation as accepted
         invitation.accept(user)
+
+        from .audit import log_audit_event
+
+        log_audit_event(
+            actor=invitation.invited_by,
+            action="invitation_accepted",
+            object_type="User",
+            object_uuid=str(user.uuid),
+            metadata={"email": user.email, "role": invitation.role},
+            request=request,
+        )
 
         # Generate JWT tokens
         from rest_framework_simplejwt.tokens import RefreshToken

@@ -32,11 +32,23 @@ const formSchema = z.object({
 export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login } = useAuth();
+  const { login, deployment } = useAuth();
   const [isLoading, setIsLoading] = React.useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const returnUrl = searchParams.get('returnUrl');
+  const oauthError = searchParams.get('error');
+  const inviteOnly = deployment?.registration_mode === 'invite_only';
+
+  React.useEffect(() => {
+    if (oauthError === 'invite_only') {
+      toast.error(
+        'Registration is by invitation only. Contact your institution administrator for access.'
+      );
+    } else if (oauthError === 'oauth_failed') {
+      toast.error('Google sign-in failed. Please try again.');
+    }
+  }, [oauthError]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema) as any,
@@ -85,12 +97,18 @@ export function LoginPage() {
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
           Sign in to your account
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Or{" "}
-          <Link to={returnUrl ? `/signup?returnUrl=${encodeURIComponent(returnUrl)}` : "/signup"} className="font-medium text-primary hover:text-primary/80">
-            create a new account
-          </Link>
-        </p>
+        {inviteOnly ? (
+          <p className="text-sm text-muted-foreground">
+            Accounts on this platform are created by invitation only.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Or{" "}
+            <Link to={returnUrl ? `/signup?returnUrl=${encodeURIComponent(returnUrl)}` : "/signup"} className="font-medium text-primary hover:text-primary/80">
+              create a new account
+            </Link>
+          </p>
+        )}
       </div>
 
       <Form {...form}>

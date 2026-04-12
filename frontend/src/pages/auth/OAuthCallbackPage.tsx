@@ -20,8 +20,11 @@ export function OAuthCallbackPage() {
             const error = searchParams.get('error');
 
             if (error) {
-                console.error('OAuth error:', error);
-                navigate('/login?error=oauth_failed');
+                // Bubble up structured error codes so the login page can render
+                // a friendly message for known cases (e.g. invite_only).
+                const known = new Set(['invite_only']);
+                const code = known.has(error) ? error : 'oauth_failed';
+                navigate(`/login?error=${code}`);
                 return;
             }
 

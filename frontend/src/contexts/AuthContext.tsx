@@ -2,13 +2,14 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { setToken, getToken, removeToken, isTokenValid, getUserFromToken } from '@/lib/auth';
 import { login as apiLogin, signup as apiSignup, getCurrentUser } from '@/api/accounts';
 import { User, LoginRequest, SignupRequest } from '@/api/accounts/types';
-import { getManifest, Manifest } from '@/api/auth/manifest';
+import { getManifest, getDeploymentConfig, Manifest, DeploymentConfig } from '@/api/auth/manifest';
 
 interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     isLoading: boolean;
     manifest: Manifest | null;
+    deployment: DeploymentConfig | null;
     login: (data: LoginRequest) => Promise<void>;
     register: (data: SignupRequest) => Promise<void>;
     logout: () => void;
@@ -29,14 +30,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [manifest, setManifest] = useState<Manifest | null>(null);
+    const [deployment, setDeployment] = useState<DeploymentConfig | null>(null);
 
-    // Fetch manifest from backend
+    // Fetch manifest from backend (also populates deployment config)
     const fetchManifest = async () => {
         try {
             const data = await getManifest();
             setManifest(data);
+            setDeployment(data.deployment);
         } catch (error) {
             console.error('Failed to fetch manifest', error);
+        }
+    };
+
+    // Fetch public deployment config (no auth required)
+    const fetchDeployment = async () => {
+        try {
+            const data = await getDeploymentConfig();
+            setDeployment(data);
+        } catch (error) {
+            console.error('Failed to fetch deployment config', error);
         }
     };
 
@@ -88,6 +101,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     console.error("Auth initialization failed", error);
                     removeToken();
                 }
+            } else {
+                // Unauthenticated: still fetch public deployment config so
+                // login / signup pages can gate UI on registration_mode.
+                await fetchDeployment();
             }
             setIsLoading(false);
         };
@@ -147,6 +164,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             isAuthenticated,
             isLoading,
             manifest,
+            deployment,
             login,
             register,
             logout,

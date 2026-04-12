@@ -73,7 +73,7 @@ class EventModuleViewSet(viewsets.ModelViewSet):
         from events.models import Event
 
         event_uuid = self.kwargs.get('event_uuid')
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             return get_object_or_404(Event, uuid=event_uuid)
         return get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
 
@@ -137,7 +137,7 @@ class ModuleContentViewSet(viewsets.ModelViewSet):
         event_uuid = self.kwargs.get('event_uuid')
         module_uuid = self.kwargs.get('module_uuid')
 
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             event = get_object_or_404(Event, uuid=event_uuid)
         else:
             event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
@@ -162,7 +162,7 @@ def _get_event_for_user(user, event_uuid):
     """Helper: get event, allowing admin to access any event."""
     from events.models import Event
 
-    if user.is_staff:
+    if user.groups.filter(name="admin").exists():
         return get_object_or_404(Event, uuid=event_uuid)
     return get_object_or_404(Event, uuid=event_uuid, owner=user)
 
@@ -307,7 +307,7 @@ class OrganizerSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = AssignmentSubmission.objects.select_related('assignment', 'registration', 'registration__user')
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             return qs
         return qs.filter(assignment__module__event__owner=self.request.user)
 
@@ -529,7 +529,7 @@ class CourseViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(slug=slug)
 
         # Admin sees everything (regardless of owned param)
-        if user.is_staff:
+        if user.groups.filter(name="admin").exists():
             return queryset.distinct()
 
         # Public visibility logic for non-authenticated users
@@ -570,7 +570,7 @@ class CourseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         from rest_framework.exceptions import PermissionDenied
 
-        if not self.request.user.is_staff:
+        if not self.request.user.groups.filter(name="admin").exists():
             raise PermissionDenied("Only admins can create courses.")
 
         # Subscription gate — best-effort in institutional mode. If the user's

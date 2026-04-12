@@ -19,7 +19,7 @@ class BadgeTemplateViewSet(viewsets.ModelViewSet):
     lookup_field = 'uuid'
 
     def get_queryset(self):
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             return BadgeTemplate.objects.all()
         return BadgeTemplate.objects.filter(owner=self.request.user)
 

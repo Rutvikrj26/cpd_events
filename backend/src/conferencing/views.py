@@ -277,7 +277,7 @@ class VideoRoomViewSet(viewsets.ReadOnlyModelViewSet):
 
         ct = ContentType.objects.get_for_model(Event)
 
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             return VideoRoom.objects.filter(content_type=ct)
 
         user_event_ids = Event.objects.filter(
@@ -342,7 +342,7 @@ class VideoRecordingViewSet(viewsets.ReadOnlyModelViewSet):
             is_published=True,
             status=VideoRecording.Status.AVAILABLE,
         )
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             return qs
         # Scope to recordings from the user's own events
         from django.contrib.contenttypes.models import ContentType

@@ -23,7 +23,7 @@ class EventFeedbackViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff:
+        if user.groups.filter(name="admin").exists():
             queryset = EventFeedback.objects.all()
         else:
             # Combined query:

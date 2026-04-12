@@ -46,6 +46,22 @@ export const changePassword = async (data: PasswordChangeRequest): Promise<void>
     await client.post('/auth/password-change/', data);
 };
 
+// Email change (self-service)
+export interface EmailChangeRequestPayload {
+    current_password: string;
+    new_email: string;
+}
+
+export const requestEmailChange = async (data: EmailChangeRequestPayload): Promise<{ pending_email: string; message: string }> => {
+    const response = await client.post('/users/me/email-change/request/', data);
+    return response.data;
+};
+
+export const confirmEmailChange = async (token: string): Promise<{ message: string }> => {
+    const response = await client.post('/auth/email-change/confirm/', { token });
+    return response.data;
+};
+
 // Resend verification email
 export const resendVerificationEmail = async (email: string): Promise<{ message: string }> => {
     const response = await client.post<{ message: string }>('/auth/resend-verification/', { email });
@@ -107,14 +123,120 @@ export interface BulkInviteResponse {
     errors: Array<{ email: string; error: string }>;
 }
 
-export const bulkInviteUsers = async (users: BulkInviteUser[]): Promise<BulkInviteResponse> => {
-    const response = await client.post<BulkInviteResponse>('/admin/users/bulk-invite/', { users });
+export const bulkInviteUsers = async (invitations: BulkInviteUser[]): Promise<BulkInviteResponse> => {
+    const response = await client.post<BulkInviteResponse>('/admin/users/bulk-invite/', { invitations });
     return response.data;
+};
+
+// Admin: Invite a single user
+export interface InviteUserRequest {
+    email: string;
+    full_name: string;
+    role: string;
+    message?: string;
+}
+
+export interface UserInvitation {
+    uuid: string;
+    email: string;
+    full_name: string;
+    role: string;
+    invited_by_name: string | null;
+    status: 'pending' | 'accepted' | 'expired' | 'revoked';
+    is_used: boolean;
+    is_expired: boolean;
+    expires_at: string;
+    accepted_at: string | null;
+    created_at: string;
+    last_sent_at: string;
+    resent_count: number;
+    revoked_at: string | null;
+}
+
+export const inviteUser = async (data: InviteUserRequest): Promise<{ invitation: UserInvitation; message: string }> => {
+    const response = await client.post<{ invitation: UserInvitation; message: string }>(
+        '/admin/users/invite/',
+        data,
+    );
+    return response.data;
+};
+
+// Admin: Invitation management
+export interface ListInvitationsParams {
+    status?: 'pending' | 'accepted' | 'expired' | 'revoked';
+    search?: string;
+    include_revoked?: boolean;
+}
+
+export const listInvitations = async (params: ListInvitationsParams = {}): Promise<UserInvitation[]> => {
+    const response = await client.get('/admin/users/invitations/', { params });
+    const data = response.data;
+    return Array.isArray(data) ? data : (data.results || []);
+};
+
+export const resendInvitation = async (uuid: string): Promise<UserInvitation> => {
+    const response = await client.post<{ invitation: UserInvitation }>(
+        `/admin/users/invitations/${uuid}/resend/`,
+    );
+    return response.data.invitation;
+};
+
+export const revokeInvitation = async (uuid: string): Promise<UserInvitation> => {
+    const response = await client.post<{ invitation: UserInvitation }>(
+        `/admin/users/invitations/${uuid}/revoke/`,
+    );
+    return response.data.invitation;
 };
 
 // Admin: Update User
 export const updateAdminUser = async (uuid: string, data: { roles?: string[]; full_name?: string; is_active?: boolean }): Promise<any> => {
     const response = await client.patch(`/admin/users/${uuid}/`, data);
+    return response.data;
+};
+
+// Admin: Aggregated detail view
+export interface AdminUserDetail {
+    profile: {
+        uuid: string;
+        email: string;
+        full_name: string;
+        professional_title: string | null;
+        organization_name: string | null;
+        roles: string[];
+        primary_role: 'learner' | 'educator' | 'course_manager' | 'admin';
+        is_active: boolean;
+        email_verified: boolean;
+        last_login_at: string | null;
+        created_at: string;
+    };
+    groups: string[];
+    course_staff: Array<{
+        uuid: string;
+        course_uuid: string;
+        course_title: string;
+        role: string;
+        created_at: string;
+    }>;
+    owned_events: Array<{ uuid: string; title: string; status: string; starts_at: string | null }>;
+    owned_courses: Array<{ uuid: string; title: string; status: string }>;
+    certificates: Array<{ uuid: string; short_code: string; title: string; issued_at: string | null }>;
+    recent_activity: Array<{
+        type: string;
+        at: string;
+        changed_by_name: string | null;
+        summary: string;
+        metadata: Record<string, unknown>;
+    }>;
+    pending_invitation: { uuid: string; status: string; expires_at: string } | null;
+}
+
+export const getAdminUserDetail = async (uuid: string): Promise<AdminUserDetail> => {
+    const response = await client.get<AdminUserDetail>(`/admin/users/${uuid}/detail/`);
+    return response.data;
+};
+
+export const deactivateAdminUser = async (uuid: string): Promise<{ is_active: boolean }> => {
+    const response = await client.post(`/admin/users/${uuid}/deactivate/`);
     return response.data;
 };
 

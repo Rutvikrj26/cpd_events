@@ -151,6 +151,10 @@ ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', 'YWJjZGVmZ2hpamtsbW5vcHFyc3R1d
 SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
 
+# User invitation expiry (days). Used by UserInvitation.create_invitation
+# and the resend-invitation endpoint.
+INVITATION_EXPIRY_DAYS = int(os.environ.get('INVITATION_EXPIRY_DAYS', '30'))
+
 # =============================================================================
 # Django REST Framework
 # =============================================================================

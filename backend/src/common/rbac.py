@@ -10,7 +10,7 @@ Groups (created via data migration):
 - learner: Can attend events, view courses, earn certificates
 - educator: Can create/manage events, issue certificates, manage contacts
 - course_manager: Can create/manage courses, manage LMS content
-- admin: Full system access (also uses is_staff)
+- admin: Full institution administrator access (admin group membership)
 
 Users can belong to multiple groups simultaneously.
 
@@ -95,11 +95,8 @@ class RoleBasedPermission(permissions.BasePermission):
         if not request.user.is_authenticated:
             return False
 
-        # Admin/staff always have access when 'admin' is in allowed roles
-        if request.user.is_staff and "admin" in allowed_roles:
-            return True
-
-        # Check user's groups against allowed roles
+        # Check user's groups against allowed roles. `admin` group membership
+        # is the only gate for admin-only routes; `is_staff` is not consulted.
         user_groups = set(request.user.groups.values_list("name", flat=True))
         return bool(user_groups & allowed_roles)
 
@@ -117,7 +114,6 @@ def get_allowed_routes_for_user(user) -> list[str]:
     if not user.is_authenticated:
         return [route for route, config in ROUTE_REGISTRY.items() if "public" in config["roles"]]
 
-    is_admin = user.is_staff
     user_groups = set(user.groups.values_list("name", flat=True))
 
     allowed = []
@@ -125,8 +121,6 @@ def get_allowed_routes_for_user(user) -> list[str]:
         route_roles = config["roles"]
 
         if "public" in route_roles:
-            allowed.append(route)
-        elif is_admin and "admin" in route_roles:
             allowed.append(route)
         elif user_groups & route_roles:
             allowed.append(route)
@@ -163,8 +157,8 @@ def get_features_for_user(user) -> dict[str, bool]:
             "view_own_certificates": True,
         }
 
-    is_educator = user.is_staff or user.groups.filter(name__in=["educator", "admin"]).exists()
-    is_creator = user.is_staff or user.groups.filter(name__in=["educator", "course_manager", "admin"]).exists()
+    is_educator = user.groups.filter(name__in=["educator", "admin"]).exists()
+    is_creator = user.groups.filter(name__in=["educator", "course_manager", "admin"]).exists()
 
     return {
         "create_events": user.has_perm("events.can_create_event"),

@@ -154,12 +154,19 @@ def other_organizer(db):
 
 @pytest.fixture
 def admin_user(db):
-    """A Django superuser/admin."""
-    return User.objects.create_superuser(
+    """A Django superuser AND institution admin.
+
+    Post-Phase-3, application RBAC gates on `admin` group membership rather
+    than `is_staff`, so fixtures that want admin power in the app must also
+    be added to the admin group.
+    """
+    user = User.objects.create_superuser(
         email='admin@example.com',
         password='adminpass123',
         full_name='Admin User',
     )
+    user.assign_role("admin")
+    return user
 
 
 # =============================================================================

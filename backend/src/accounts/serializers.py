@@ -208,6 +208,7 @@ class UserSerializer(SoftDeleteModelSerializer):
             'email_verified',
             'onboarding_completed',
             'timezone',
+            'pending_email',
             # Notification preferences
             'notify_event_reminders',
             'notify_certificate_issued',
@@ -222,6 +223,7 @@ class UserSerializer(SoftDeleteModelSerializer):
             'primary_role',
             'email_verified',
             'onboarding_completed',
+            'pending_email',
             'created_at',
             'updated_at',
         ]
@@ -304,7 +306,7 @@ class AdminUserListSerializer(serializers.ModelSerializer):
         fields = [
             'uuid', 'email', 'full_name', 'professional_title',
             'organization_name', 'roles', 'primary_role',
-            'is_active', 'is_staff', 'email_verified',
+            'is_active', 'email_verified',
             'last_login_at', 'created_at',
         ]
         read_only_fields = fields
@@ -314,39 +316,6 @@ class AdminUserListSerializer(serializers.ModelSerializer):
 
     def get_primary_role(self, obj):
         return obj.primary_role
-
-
-class AdminUserCreateSerializer(serializers.ModelSerializer):
-    """Create a user directly (admin action)."""
-
-    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-    roles = serializers.ListField(child=serializers.CharField(), required=False, default=["learner"])
-
-    class Meta:
-        model = User
-        fields = ['email', 'full_name', 'professional_title', 'organization_name', 'password', 'roles']
-
-    def validate_roles(self, value):
-        valid_roles = {"learner", "educator", "course_manager", "admin"}
-        for role in value:
-            if role not in valid_roles:
-                raise serializers.ValidationError(f"Invalid role: {role}. Valid roles: {valid_roles}")
-        return value
-
-    def create(self, validated_data):
-        roles = validated_data.pop('roles', ['learner'])
-        password = validated_data.pop('password')
-
-        user = User(**validated_data)
-        user.set_password(password)
-        user.email_verified = True  # Admin-created users are auto-verified
-        user.save()
-
-        # Assign roles
-        for role_name in roles:
-            user.assign_role(role_name)
-
-        return user
 
 
 class AdminUserUpdateSerializer(serializers.ModelSerializer):
@@ -359,18 +328,60 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
         fields = ['full_name', 'professional_title', 'organization_name', 'is_active', 'roles']
 
     def validate_roles(self, value):
+        if not value:
+            raise serializers.ValidationError("A user must have at least one role.")
         valid_roles = {"learner", "educator", "course_manager", "admin"}
-        for role in value:
-            if role not in valid_roles:
-                raise serializers.ValidationError(f"Invalid role: {role}. Valid roles: {valid_roles}")
-        return value
+        unknown = [r for r in value if r not in valid_roles]
+        if unknown:
+            raise serializers.ValidationError(
+                f"Unknown role(s): {', '.join(unknown)}. Valid roles: {sorted(valid_roles)}"
+            )
+        # Deduplicate while preserving order
+        return list(dict.fromkeys(value))
+
+    def _ensure_admin_remains(self, *, losing_admin: bool, deactivating: bool):
+        """Block any change that would leave the institution without an active admin."""
+        if not (losing_admin or deactivating):
+            return
+
+        instance = self.instance
+        if instance is None:
+            return
+
+        other_admin_exists = User.objects.filter(
+            groups__name="admin",
+            is_active=True,
+            deleted_at__isnull=True,
+        ).exclude(pk=instance.pk).exists()
+
+        if other_admin_exists:
+            return
+
+        is_current_admin = instance.groups.filter(name="admin").exists() and instance.is_active
+        if is_current_admin:
+            raise serializers.ValidationError("Cannot remove the last active admin.")
 
     def update(self, instance, validated_data):
         roles = validated_data.pop('roles', None)
+
+        losing_admin = (
+            roles is not None
+            and instance.groups.filter(name="admin").exists()
+            and "admin" not in roles
+        )
+        deactivating = (
+            "is_active" in validated_data
+            and validated_data["is_active"] is False
+            and instance.is_active
+        )
+        self._ensure_admin_remains(losing_admin=losing_admin, deactivating=deactivating)
+
         instance = super().update(instance, validated_data)
 
         if roles is not None:
-            instance.set_roles(roles)
+            request = self.context.get("request")
+            actor = request.user if request and request.user.is_authenticated else None
+            instance.set_roles(roles, changed_by=actor)
 
         return instance
 
@@ -392,11 +403,27 @@ class InviteUserSerializer(serializers.Serializer):
         return value.lower()
 
 
+class BulkInviteItemSerializer(serializers.Serializer):
+    """Single invitation row inside a bulk invite. No existence checks —
+    the view handles duplicates row-by-row so the whole batch doesn't fail."""
+
+    email = serializers.EmailField(required=True)
+    full_name = serializers.CharField(required=True, max_length=255)
+    role = serializers.ChoiceField(
+        choices=["learner", "educator", "course_manager", "admin"],
+        default="learner",
+    )
+    message = serializers.CharField(required=False, allow_blank=True, max_length=1000, default="")
+
+    def validate_email(self, value):
+        return value.lower()
+
+
 class BulkInviteSerializer(serializers.Serializer):
     """Bulk invite users via list of invitations."""
 
     invitations = serializers.ListField(
-        child=InviteUserSerializer(),
+        child=BulkInviteItemSerializer(),
         min_length=1,
         max_length=100,
     )
@@ -418,21 +445,56 @@ class AcceptInvitationSerializer(serializers.Serializer):
 class UserInvitationSerializer(serializers.ModelSerializer):
     """Serializer for UserInvitation list/detail."""
 
-    from accounts.models import UserInvitation
-
     invited_by_name = serializers.SerializerMethodField()
+    status = serializers.CharField(read_only=True)
 
     class Meta:
         from accounts.models import UserInvitation
         model = UserInvitation
         fields = [
             'uuid', 'email', 'full_name', 'role', 'invited_by_name',
-            'is_used', 'is_expired', 'expires_at', 'accepted_at', 'created_at',
+            'status', 'is_used', 'is_expired', 'expires_at', 'accepted_at',
+            'created_at', 'last_sent_at', 'resent_count', 'revoked_at',
         ]
         read_only_fields = fields
 
     def get_invited_by_name(self, obj):
         return obj.invited_by.full_name if obj.invited_by else None
+
+
+# =============================================================================
+# Email Change Serializers
+# =============================================================================
+
+
+class EmailChangeRequestSerializer(serializers.Serializer):
+    """Authenticated user requests a change to a new email."""
+
+    current_password = serializers.CharField(required=True, write_only=True)
+    new_email = serializers.EmailField(required=True)
+
+    def validate_current_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Current password is incorrect.")
+        return value
+
+    def validate_new_email(self, value):
+        value = value.lower()
+        user = self.context['request'].user
+        if value == user.email:
+            raise serializers.ValidationError("New email must be different from your current email.")
+        if User.objects.filter(email__iexact=value).exclude(pk=user.pk).exists():
+            raise serializers.ValidationError("An account with this email already exists.")
+        if User.objects.filter(pending_email__iexact=value).exclude(pk=user.pk).exists():
+            raise serializers.ValidationError("This email is already pending confirmation on another account.")
+        return value
+
+
+class EmailChangeConfirmSerializer(serializers.Serializer):
+    """Public: confirms the change using the token sent to the NEW address."""
+
+    token = serializers.CharField(required=True)
 
 
 # =============================================================================

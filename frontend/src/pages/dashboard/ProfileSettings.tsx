@@ -41,6 +41,15 @@ import {
    CardHeader,
    CardTitle
 } from "@/components/ui/card";
+import {
+   Dialog,
+   DialogContent,
+   DialogDescription,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -48,7 +57,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { getPaymentMethods, deletePaymentMethod, getSubscription, getBillingPortal } from "@/api/billing";
-import { getCurrentUser, updateProfile, changePassword, getNotificationPreferences, updateNotificationPreferences, exportUserData, deleteAccount } from "@/api/accounts";
+import { getCurrentUser, updateProfile, changePassword, getNotificationPreferences, updateNotificationPreferences, exportUserData, deleteAccount, requestEmailChange } from "@/api/accounts";
 import { PaymentMethod, Subscription } from "@/api/billing/types";
 import { User as UserType, NotificationPreferences } from "@/api/accounts/types";
 import { toast } from "sonner";
@@ -98,6 +107,40 @@ export function ProfileSettings() {
    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
    const [deletingAccount, setDeletingAccount] = useState(false);
    const [exportingData, setExportingData] = useState(false);
+
+   // Email change
+   const [emailChangeOpen, setEmailChangeOpen] = useState(false);
+   const [emailChangeLoading, setEmailChangeLoading] = useState(false);
+   const [emailChangePassword, setEmailChangePassword] = useState("");
+   const [emailChangeNewEmail, setEmailChangeNewEmail] = useState("");
+   const [emailChangeError, setEmailChangeError] = useState<string | null>(null);
+
+   const handleRequestEmailChange = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setEmailChangeError(null);
+      setEmailChangeLoading(true);
+      try {
+         const res = await requestEmailChange({
+            current_password: emailChangePassword,
+            new_email: emailChangeNewEmail,
+         });
+         toast.success(`Confirmation link sent to ${res.pending_email}`);
+         setEmailChangeOpen(false);
+         setEmailChangePassword("");
+         setEmailChangeNewEmail("");
+         const fresh = await getCurrentUser();
+         setUser(fresh);
+      } catch (err: any) {
+         const detail =
+            err?.response?.data?.current_password?.[0] ||
+            err?.response?.data?.new_email?.[0] ||
+            err?.response?.data?.detail ||
+            "Failed to request email change";
+         setEmailChangeError(detail);
+      } finally {
+         setEmailChangeLoading(false);
+      }
+   };
 
    // Payouts state
    const { user: authUser, logout, manifest } = useAuth();
@@ -501,6 +544,38 @@ export function ProfileSettings() {
                                  </div>
                               </form>
                            </Form>
+                        </CardContent>
+                     </Card>
+
+                     {/* Email Address */}
+                     <Card>
+                        <CardHeader>
+                           <CardTitle>Email Address</CardTitle>
+                           <CardDescription>
+                              Your login email. Changing it requires confirmation from the new address.
+                           </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                           {user?.pending_email && (
+                              <Alert>
+                                 <AlertCircle className="h-4 w-4" />
+                                 <AlertDescription>
+                                    A change to <strong>{user.pending_email}</strong> is pending.
+                                    Check that inbox for a confirmation link. Once confirmed, you'll need to log in again.
+                                 </AlertDescription>
+                              </Alert>
+                           )}
+                           <div className="flex items-center justify-between gap-4">
+                              <div>
+                                 <div className="font-medium">{user?.email}</div>
+                                 <div className="text-sm text-muted-foreground">
+                                    {user?.email_verified ? "Verified" : "Not verified"}
+                                 </div>
+                              </div>
+                              <Button variant="outline" onClick={() => setEmailChangeOpen(true)}>
+                                 Change email
+                              </Button>
+                           </div>
                         </CardContent>
                      </Card>
                   </TabsContent>
@@ -916,7 +991,57 @@ export function ProfileSettings() {
             </div>
          </Tabs>
 
-
+         <Dialog open={emailChangeOpen} onOpenChange={(v) => {
+            setEmailChangeOpen(v);
+            if (!v) {
+               setEmailChangePassword("");
+               setEmailChangeNewEmail("");
+               setEmailChangeError(null);
+            }
+         }}>
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>Change email address</DialogTitle>
+                  <DialogDescription>
+                     We'll send a confirmation link to the new address. The change only takes effect after you click that link.
+                  </DialogDescription>
+               </DialogHeader>
+               <form onSubmit={handleRequestEmailChange} className="space-y-4">
+                  {emailChangeError && (
+                     <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
+                        {emailChangeError}
+                     </div>
+                  )}
+                  <div className="space-y-2">
+                     <Label htmlFor="ec-password">Current password</Label>
+                     <Input
+                        id="ec-password"
+                        type="password"
+                        value={emailChangePassword}
+                        onChange={(e) => setEmailChangePassword(e.target.value)}
+                        required
+                        autoComplete="current-password"
+                     />
+                  </div>
+                  <div className="space-y-2">
+                     <Label htmlFor="ec-email">New email</Label>
+                     <Input
+                        id="ec-email"
+                        type="email"
+                        value={emailChangeNewEmail}
+                        onChange={(e) => setEmailChangeNewEmail(e.target.value)}
+                        required
+                     />
+                  </div>
+                  <DialogFooter>
+                     <Button type="submit" disabled={emailChangeLoading}>
+                        {emailChangeLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Send confirmation link
+                     </Button>
+                  </DialogFooter>
+               </form>
+            </DialogContent>
+         </Dialog>
       </div>
    );
 }

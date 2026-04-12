@@ -44,7 +44,7 @@ def _get_writable_event(event_uuid, user):
     from events.models import Event
 
     qs = Event.objects.filter(uuid=event_uuid, deleted_at__isnull=True)
-    if user.is_staff or user.groups.filter(name__in=INSTITUTION_CONTENT_GROUPS).exists():
+    if user.groups.filter(name__in=INSTITUTION_CONTENT_GROUPS).exists():
         return qs.first()
     return qs.filter(owner=user).first()
 
@@ -54,7 +54,7 @@ def _get_writable_course(course_uuid, user):
     from learning.models import Course
 
     qs = Course.objects.filter(uuid=course_uuid, deleted_at__isnull=True)
-    if user.is_staff or user.groups.filter(name__in=INSTITUTION_CONTENT_GROUPS).exists():
+    if user.groups.filter(name__in=INSTITUTION_CONTENT_GROUPS).exists():
         return qs.first()
     return qs.filter(owner=user).first()
 
@@ -81,7 +81,7 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
 
     def get_queryset(self):
         qs = CertificateTemplate.objects.filter(deleted_at__isnull=True, is_active=True)
-        if not self.request.user.is_staff:
+        if not self.request.user.groups.filter(name="admin").exists():
             qs = qs.filter(owner=self.request.user)
         return qs.select_related('owner')
 
@@ -304,7 +304,7 @@ class OrganizationCertificateListView(generics.ListAPIView):
             'registration', 'registration__event', 'course_enrollment', 'course_enrollment__course', 'template'
         )
         if not (
-            user.is_staff or user.groups.filter(name__in=INSTITUTION_CONTENT_GROUPS).exists()
+            user.groups.filter(name__in=INSTITUTION_CONTENT_GROUPS).exists()
         ):
             qs = qs.filter(
                 Q(registration__event__owner=user) | Q(course_enrollment__course__owner=user)

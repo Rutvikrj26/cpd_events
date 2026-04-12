@@ -22,15 +22,13 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
 
 
 class IsEducatorOrAdmin(permissions.BasePermission):
-    """Educators or admins (checks educator/admin group or is_staff)."""
+    """Educators or admins (group membership is the source of truth)."""
 
     message = "Educator or admin role required."
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
-        if request.user.is_staff:
-            return True
         return request.user.groups.filter(name__in=["educator", "admin"]).exists()
 
 
@@ -42,8 +40,6 @@ class IsContentCreator(permissions.BasePermission):
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
-        if request.user.is_staff:
-            return True
         return request.user.groups.filter(name__in=["educator", "course_manager", "admin"]).exists()
 
 
@@ -114,19 +110,22 @@ def has_perm(perm_string: str):
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):
-    """Admin users can write, others can only read."""
+    """Institution admins can write, others can only read."""
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
             return True
-        return request.user.is_authenticated and request.user.is_staff
+        return (
+            request.user.is_authenticated
+            and request.user.groups.filter(name="admin").exists()
+        )
 
 
 class IsSelfOrAdmin(permissions.BasePermission):
-    """User can only access their own data, unless admin."""
+    """User can only access their own data, unless institution admin."""
 
     def has_object_permission(self, request, view, obj):
-        if request.user.is_staff:
+        if request.user.is_authenticated and request.user.groups.filter(name="admin").exists():
             return True
 
         if hasattr(obj, "user"):

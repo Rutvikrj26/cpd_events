@@ -122,6 +122,13 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     password_reset_sent_at = models.DateTimeField(null=True, blank=True, help_text="When password reset was requested")
 
     # =========================================
+    # Email Change (self-service)
+    # =========================================
+    pending_email = LowercaseEmailField(blank=True, help_text="New email awaiting confirmation")
+    email_change_token = models.CharField(max_length=100, blank=True, help_text="Token for confirming email change")
+    email_change_requested_at = models.DateTimeField(null=True, blank=True, help_text="When the email change was requested")
+
+    # =========================================
     # Notification Preferences
     # =========================================
     notify_event_reminders = models.BooleanField(default=True, help_text="Receive event reminders")
@@ -165,10 +172,27 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     # =========================================
     # Role Properties (via Django Groups)
     # =========================================
+    #
+    # `is_staff` is NOT considered here. Django's own admin site continues to
+    # gate on `is_staff` (it checks in `django.contrib.admin`, which we do not
+    # override), but our application authorization is driven exclusively by
+    # Group membership. Use `is_institution_admin` below as the single source
+    # of truth for "can administer the institution".
+
+    @property
+    def is_institution_admin(self):
+        """True iff the user belongs to the `admin` group.
+
+        This is the authoritative check for institution administrator power
+        inside our application. Django's own `/admin/` UI continues to gate
+        on `is_staff`, which is tracked separately.
+        """
+        return self.groups.filter(name="admin").exists()
+
     @property
     def is_educator(self):
-        """Check if user is in the educator group."""
-        return self.is_staff or self.groups.filter(name="educator").exists()
+        """Check if user is in the educator or admin group."""
+        return self.groups.filter(name__in=["educator", "admin"]).exists()
 
     @property
     def is_learner(self):
@@ -177,13 +201,13 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
 
     @property
     def is_course_manager(self):
-        """Check if user is in the course_manager group."""
-        return self.is_staff or self.groups.filter(name="course_manager").exists()
+        """Check if user is in the course_manager or admin group."""
+        return self.groups.filter(name__in=["course_manager", "admin"]).exists()
 
     @property
     def is_admin(self):
-        """Check if user is staff or in the admin group."""
-        return self.is_staff or self.groups.filter(name="admin").exists()
+        """Alias for institution admin (kept for call-site compatibility)."""
+        return self.is_institution_admin
 
     @property
     def role_names(self):
@@ -194,7 +218,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     def primary_role(self):
         """Get the highest-priority role for display purposes."""
         roles = set(self.role_names)
-        if self.is_staff or "admin" in roles:
+        if "admin" in roles:
             return "admin"
         if "educator" in roles:
             return "educator"
@@ -236,12 +260,32 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         except Group.DoesNotExist:
             pass
 
-    def set_roles(self, role_names: list[str]):
-        """Replace all roles with the given list."""
+    def set_roles(self, role_names: list[str], *, changed_by=None, reason: str = ""):
+        """Replace all roles with the given list and record an audit row.
+
+        Pass `changed_by` (a User) and optional `reason` when the change
+        originates from an admin action, so the audit trail has attribution.
+        """
         from django.contrib.auth.models import Group
 
-        groups = Group.objects.filter(name__in=role_names)
+        before = self.role_names
+        # get_or_create so callers can pass role names that haven't yet been
+        # materialised as Group rows (parity with assign_role).
+        groups = []
+        for name in role_names:
+            group, _ = Group.objects.get_or_create(name=name)
+            groups.append(group)
         self.groups.set(groups)
+        after = self.role_names
+
+        if set(before) != set(after):
+            UserRoleChange.objects.create(
+                user=self,
+                changed_by=changed_by,
+                from_roles=list(before),
+                to_roles=list(after),
+                reason=reason,
+            )
 
     def generate_email_verification_token(self):
         """Generate and save email verification token."""
@@ -356,6 +400,9 @@ class UserInvitation(BaseModel):
     expires_at = models.DateTimeField(help_text="When the invitation expires")
     is_used = models.BooleanField(default=False, help_text="Whether the invitation has been used")
     message = models.TextField(blank=True, help_text="Optional personal message from admin")
+    resent_count = models.PositiveIntegerField(default=0, help_text="How many times this invitation has been resent")
+    last_sent_at = models.DateTimeField(default=timezone.now, help_text="When the invitation was last sent")
+    revoked_at = models.DateTimeField(null=True, blank=True, help_text="When the invitation was revoked by an admin")
 
     class Meta:
         db_table = "user_invitations"
@@ -376,8 +423,23 @@ class UserInvitation(BaseModel):
         return timezone.now() >= self.expires_at
 
     @property
+    def is_revoked(self):
+        return self.revoked_at is not None
+
+    @property
     def is_valid(self):
-        return not self.is_used and not self.is_expired
+        return not self.is_used and not self.is_expired and not self.is_revoked
+
+    @property
+    def status(self):
+        """Derived status: pending / accepted / expired / revoked."""
+        if self.is_used:
+            return "accepted"
+        if self.is_revoked:
+            return "revoked"
+        if self.is_expired:
+            return "expired"
+        return "pending"
 
     def accept(self, user):
         """Mark invitation as accepted."""
@@ -385,16 +447,29 @@ class UserInvitation(BaseModel):
         self.accepted_at = timezone.now()
         self.save(update_fields=["is_used", "accepted_at", "updated_at"])
 
+    def revoke(self):
+        """Mark invitation as revoked. Idempotent."""
+        if self.revoked_at is None:
+            self.revoked_at = timezone.now()
+            self.save(update_fields=["revoked_at", "updated_at"])
+
     @classmethod
-    def create_invitation(cls, email, full_name, role, invited_by, message="", expires_days=7):
+    def create_invitation(cls, email, full_name, role, invited_by, message="", expires_days=None):
         """Create a new invitation with a unique token."""
+        from django.conf import settings
+
+        if expires_days is None:
+            expires_days = getattr(settings, "INVITATION_EXPIRY_DAYS", 30)
+
+        now = timezone.now()
         return cls.objects.create(
             email=email,
             full_name=full_name,
             role=role,
             invited_by=invited_by,
             token=generate_verification_code(48),
-            expires_at=timezone.now() + timezone.timedelta(days=expires_days),
+            expires_at=now + timezone.timedelta(days=expires_days),
+            last_sent_at=now,
             message=message,
         )
 
@@ -631,3 +706,39 @@ class AuditLog(BaseModel):
     def __str__(self):
         actor = self.actor.email if self.actor else "system"
         return f"{actor} - {self.action}"
+
+
+class UserRoleChange(BaseModel):
+    """
+    Audit row for a role change on a User.
+
+    Written by `User.set_roles()` whenever the set of role names actually
+    changes. `from_roles` / `to_roles` are JSON lists of group-name strings.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="role_changes",
+    )
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="role_changes_made",
+    )
+    from_roles = models.JSONField(default=list)
+    to_roles = models.JSONField(default=list)
+    reason = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "user_role_changes"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["changed_by", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email}: {self.from_roles} -> {self.to_roles}"

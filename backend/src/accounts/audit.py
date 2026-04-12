@@ -24,13 +24,11 @@ def log_audit_event(
     action: str,
     object_type: str = '',
     object_uuid: str = '',
-    organization=None,
     metadata: dict[str, Any] | None = None,
     request=None,
 ) -> AuditLog:
     return AuditLog.objects.create(
         actor=actor,
-        organization=organization,
         action=action,
         object_type=object_type,
         object_uuid=object_uuid,

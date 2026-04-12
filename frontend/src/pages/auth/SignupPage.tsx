@@ -16,7 +16,7 @@ import {
   FormMessage,
   FormDescription
 } from "@/components/ui/form";
-import { Loader2, Crown, Award } from "lucide-react";
+import { Loader2, Crown, Award, Mail } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { initiateGoogleSignIn } from "@/api/auth/googleAuth";
@@ -44,7 +44,7 @@ const formSchema = z.object({
 export function SignupPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { register } = useAuth();
+  const { register, deployment } = useAuth();
   const [isLoading, setIsLoading] = React.useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
   const [trialDays, setTrialDays] = React.useState<number | null>(null);
@@ -141,6 +141,30 @@ export function SignupPage() {
     if (Object.keys(errors).length > 0) {
       toast.error("Please fix the errors in the form before continuing.");
     }
+  }
+
+  if (deployment?.registration_mode === 'invite_only') {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-2 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+            <Mail className="h-6 w-6 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Registration by invitation only
+          </h1>
+          <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+            {deployment.institution_name
+              ? `${deployment.institution_name} only accepts new accounts through invitations.`
+              : 'This platform only accepts new accounts through invitations.'}{' '}
+            Contact your institution administrator for access.
+          </p>
+        </div>
+        <Button asChild className="w-full">
+          <Link to="/login">Back to login</Link>
+        </Button>
+      </div>
+    );
   }
 
   return (

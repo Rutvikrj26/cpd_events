@@ -67,7 +67,7 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
         qs_filter = {'event__uuid': event_uuid, 'deleted_at__isnull': True}
-        if not self.request.user.is_staff:
+        if not self.request.user.groups.filter(name="admin").exists():
             qs_filter['event__owner'] = self.request.user
         return (
             Registration.objects.filter(**qs_filter)

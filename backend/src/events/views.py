@@ -33,16 +33,16 @@ from .models import Event, EventCustomField, Speaker
 def _event_access_q(user, prefix: str = '') -> Q:
     """Return Q filter for events accessible by this user.
 
-    Admin users (is_staff) get access to all events.
+    Institution admins see all events.
     """
-    if user.is_staff:
-        return Q()  # No filter — admin sees everything
+    if user.groups.filter(name="admin").exists():
+        return Q()
     owner_key = f'{prefix}owner'
     return Q(**{owner_key: user})
 
 
 def _user_can_manage_event(user, event) -> bool:
-    return user.is_staff or event.owner_id == user.id
+    return user.groups.filter(name="admin").exists() or event.owner_id == user.id
 
 
 # =============================================================================
@@ -855,7 +855,7 @@ class SpeakerViewSet(BaseModelViewSet):
     def get_queryset(self):
         user = self.request.user
         qs = Speaker.objects.filter(is_active=True)
-        if user.is_staff:
+        if user.groups.filter(name="admin").exists():
             return qs
         return qs.filter(owner=user)
 

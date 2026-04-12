@@ -30,6 +30,7 @@ import { ForgotPasswordPage } from "@/pages/auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "@/pages/auth/ResetPasswordPage";
 import { OAuthCallbackPage } from "@/pages/auth/OAuthCallbackPage";
 import { AcceptInvitationPage } from "@/pages/auth/AcceptInvitationPage";
+import { ConfirmEmailChangePage } from "@/pages/auth/ConfirmEmailChangePage";
 
 // Dashboard Pages
 import { DashboardPage } from './pages/dashboard/DashboardPage';
@@ -70,6 +71,7 @@ import { CourseManagementPage } from './pages/organizations/courses/CourseManage
 
 // Admin Pages
 import { UserManagementPage } from './pages/admin/UserManagementPage';
+import { AdminUserDetailPage } from './pages/admin/AdminUserDetailPage';
 
 // Onboarding
 import { OnboardingWizard } from './pages/onboarding';
@@ -142,6 +144,7 @@ export default function App() {
               } />
 
               <Route path="/auth/callback" element={<OAuthCallbackPage />} />
+              <Route path="/auth/confirm-email-change" element={<ConfirmEmailChangePage />} />
 
               {/* Protected Routes - Dashboard */}
               <Route element={<ProtectedRoute />}>
@@ -232,6 +235,11 @@ export default function App() {
                   <Route path="/admin/users" element={
                     <ProtectedRoute requiredFeature="manage_users">
                       <UserManagementPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/admin/users/:uuid" element={
+                    <ProtectedRoute requiredFeature="manage_users">
+                      <AdminUserDetailPage />
                     </ProtectedRoute>
                   } />
 

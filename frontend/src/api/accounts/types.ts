@@ -13,6 +13,7 @@ export interface User {
     professional_title?: string;
     bio?: string;
     timezone?: string;
+    pending_email?: string;
 }
 
 

@@ -45,7 +45,7 @@ class PromoCodeViewSet(viewsets.ModelViewSet):
         """Filter to codes owned by current user or their organization."""
         user = self.request.user
 
-        if user.is_staff:
+        if user.groups.filter(name="admin").exists():
             return PromoCode.objects.all().prefetch_related('events').distinct()
 
         queryset = PromoCode.objects.filter(owner=user)

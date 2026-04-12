@@ -184,7 +184,10 @@ GROUP_PERMISSIONS = {
         # Badges
         "view_issuedbadge",
     ],
-    "admin": [],  # Admins use is_staff=True which bypasses permission checks
+    # Admin group inherits the union of every other group's permissions.
+    # Resolved at runtime in handle() below — the sentinel "__all__" triggers
+    # the merge so new permissions added to any other group propagate.
+    "admin": "__all__",
 }
 
 
@@ -192,27 +195,34 @@ class Command(BaseCommand):
     help = "Create institutional role groups with permissions"
 
     def handle(self, *args, **options):
+        # Materialise the union for the admin group before iterating, so we
+        # capture the final state of every other group.
+        admin_codenames: set[str] = set()
+        for group_name, perm_codenames in GROUP_PERMISSIONS.items():
+            if perm_codenames != "__all__":
+                admin_codenames.update(perm_codenames)
+
         for group_name, perm_codenames in GROUP_PERMISSIONS.items():
             group, created = Group.objects.get_or_create(name=group_name)
             action = "Created" if created else "Updated"
 
-            if perm_codenames:
-                perms = Permission.objects.filter(codename__in=perm_codenames)
-                found_codenames = set(perms.values_list("codename", flat=True))
-                missing = set(perm_codenames) - found_codenames
-
-                if missing:
-                    self.stdout.write(
-                        self.style.WARNING(f"  Missing permissions for {group_name}: {missing}")
-                    )
-
-                group.permissions.set(perms)
-                self.stdout.write(
-                    self.style.SUCCESS(f"{action} group '{group_name}' with {perms.count()} permissions")
-                )
+            if perm_codenames == "__all__":
+                resolved = sorted(admin_codenames)
             else:
+                resolved = perm_codenames
+
+            perms = Permission.objects.filter(codename__in=resolved)
+            found_codenames = set(perms.values_list("codename", flat=True))
+            missing = set(resolved) - found_codenames
+
+            if missing:
                 self.stdout.write(
-                    self.style.SUCCESS(f"{action} group '{group_name}' (admin uses is_staff)")
+                    self.style.WARNING(f"  Missing permissions for {group_name}: {missing}")
                 )
+
+            group.permissions.set(perms)
+            self.stdout.write(
+                self.style.SUCCESS(f"{action} group '{group_name}' with {perms.count()} permissions")
+            )
 
         self.stdout.write(self.style.SUCCESS("\nAll groups set up successfully."))
