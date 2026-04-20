@@ -212,12 +212,13 @@ export function ProfileSettings() {
    };
 
    useEffect(() => {
+      if (!manifest) return;
       if (isSingleTenant) {
          setLoadingPayment(false);
          return;
       }
       loadPaymentData();
-   }, [isSingleTenant]);
+   }, [manifest, isSingleTenant]);
 
    // Load notification preferences
    useEffect(() => {
@@ -236,6 +237,7 @@ export function ProfileSettings() {
 
    // Load payouts status (organizers only, not in single-tenant mode)
    useEffect(() => {
+      if (!manifest) return;
       if (!isCreator || isSingleTenant) {
          setLoadingPayouts(false);
          return;
@@ -251,7 +253,7 @@ export function ProfileSettings() {
          }
       };
       loadPayouts();
-   }, [isCreator]);
+   }, [manifest, isCreator, isSingleTenant]);
 
    const handleDeletePaymentMethod = async (uuid: string) => {
       setDeletingId(uuid);

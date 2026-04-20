@@ -119,3 +119,32 @@ def send_email_batch(template: str, recipients: list, common_context: dict = Non
     from integrations.services import email_service
 
     return email_service.send_bulk_emails(template=template, recipients=recipients, common_context=common_context)
+
+
+@task()
+def dispatch_scheduled_emails(limit: int = 500):
+    """
+    Dispatch ScheduledEmails whose send_at is due. Invoked on a periodic
+    schedule (e.g., every minute). Staggering is handled at scheduling time by
+    spacing out send_at values across recipients.
+    """
+    from integrations.models import ScheduledEmail
+
+    now = timezone.now()
+    due_qs = ScheduledEmail.objects.filter(status=ScheduledEmail.Status.PENDING, send_at__lte=now).order_by('send_at')[:limit]
+
+    dispatched = 0
+    failed = 0
+    for scheduled in due_qs:
+        try:
+            if scheduled.dispatch() is not None:
+                dispatched += 1
+        except Exception as e:
+            logger.error("Failed to dispatch ScheduledEmail %s: %s", scheduled.id, e)
+            scheduled.status = ScheduledEmail.Status.FAILED
+            scheduled.error_message = str(e)[:500]
+            scheduled.save(update_fields=['status', 'error_message', 'updated_at'])
+            failed += 1
+
+    logger.info("Dispatched %s scheduled emails (%s failed)", dispatched, failed)
+    return {'dispatched': dispatched, 'failed': failed}

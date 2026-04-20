@@ -1,7 +1,6 @@
 // Auth service - re-exports from api/accounts
 export {
     login,
-    signup,
     getCurrentUser,
     updateProfile,
     refreshToken,

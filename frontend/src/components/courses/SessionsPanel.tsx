@@ -1,5 +1,5 @@
 import React from 'react';
-import { Video, Calendar, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Video, Calendar, Clock, CheckCircle2, AlertCircle, PlayCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,6 +38,11 @@ export function SessionsPanel({ sessions, courseTitle, courseUuid }: SessionsPan
     };
 
     const getSessionStatus = (session: CourseSession) => {
+        // Backend status takes precedence (cancelled/completed are explicit)
+        if (session.status === 'cancelled') {
+            return { status: 'cancelled', label: 'Cancelled' };
+        }
+
         const now = new Date();
         const start = new Date(session.starts_at);
         const end = session.ends_at ? new Date(session.ends_at) : new Date(start.getTime() + (session.duration_minutes || 60) * 60000);
@@ -76,16 +81,18 @@ export function SessionsPanel({ sessions, courseTitle, courseUuid }: SessionsPan
                 return <Badge variant="outline" className="text-blue-600 border-blue-300">{label}</Badge>;
             case 'past':
                 return <Badge variant="secondary">{label}</Badge>;
+            case 'cancelled':
+                return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />{label}</Badge>;
             default:
                 return null;
         }
     };
 
-    // Sort sessions: live first, then upcoming, then past
+    // Sort sessions: live first, then upcoming, then past, then cancelled
     const sortedSessions = [...sessions].sort((a, b) => {
         const statusA = getSessionStatus(a).status;
         const statusB = getSessionStatus(b).status;
-        const order = { live: 0, upcoming: 1, past: 2 };
+        const order = { live: 0, upcoming: 1, past: 2, cancelled: 3 };
         return (order[statusA as keyof typeof order] ?? 2) - (order[statusB as keyof typeof order] ?? 2);
     });
 
@@ -148,8 +155,27 @@ export function SessionsPanel({ sessions, courseTitle, courseUuid }: SessionsPan
                                     </div>
 
                                     <div className="flex-shrink-0">
-                                        {status === 'past' ? (
-                                            <Badge variant="secondary">Completed</Badge>
+                                        {status === 'cancelled' ? (
+                                            <Badge variant="destructive">Cancelled</Badge>
+                                        ) : status === 'past' ? (
+                                            session.published_recording ? (
+                                                <Button
+                                                    asChild
+                                                    size="sm"
+                                                    variant="secondary"
+                                                >
+                                                    <a
+                                                        href={session.published_recording.storage_path}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        <PlayCircle className="mr-1 h-4 w-4" />
+                                                        Watch recording
+                                                    </a>
+                                                </Button>
+                                            ) : (
+                                                <Badge variant="secondary">Completed</Badge>
+                                            )
                                         ) : (
                                             <JoinButton
                                                 courseUuid={courseUuid}

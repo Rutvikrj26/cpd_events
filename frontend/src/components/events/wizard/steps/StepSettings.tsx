@@ -86,8 +86,14 @@ export const StepSettings = () => {
             try {
                 const status = await getPayoutsStatus();
                 setUserPayoutsEnabled(status.charges_enabled);
-            } catch (error) {
-                console.error('Failed to fetch user payouts status', error);
+            } catch (error: any) {
+                // 404 is expected on institutional deployments where the
+                // payouts endpoint doesn't exist. The toast is already
+                // suppressed via `silent: true` — don't add console noise
+                // for the known shape either. Other failures still log.
+                if (error?.response?.status !== 404) {
+                    console.error('Failed to fetch user payouts status', error);
+                }
             } finally {
                 setLoadingUserPayouts(false);
             }
@@ -127,6 +133,40 @@ export const StepSettings = () => {
                                 onChange={(e) => updateFormData({ max_attendees: e.target.value ? parseInt(e.target.value) : undefined })}
                             />
                             <p className="text-xs text-muted-foreground">Leave blank for unlimited capacity.</p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="registration_opens_at">Registration opens</Label>
+                                <Input
+                                    id="registration_opens_at"
+                                    type="datetime-local"
+                                    value={formData.registration_opens_at ?? ''}
+                                    onChange={(e) =>
+                                        updateFormData({
+                                            registration_opens_at: e.target.value || undefined,
+                                        })
+                                    }
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Leave blank to open registration immediately.
+                                </p>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="registration_closes_at">Registration closes</Label>
+                                <Input
+                                    id="registration_closes_at"
+                                    type="datetime-local"
+                                    value={formData.registration_closes_at ?? ''}
+                                    onChange={(e) =>
+                                        updateFormData({
+                                            registration_closes_at: e.target.value || undefined,
+                                        })
+                                    }
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Leave blank to allow registration until the event starts.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -451,9 +491,30 @@ export const StepSettings = () => {
                                 onCheckedChange={(checked) =>
                                     updateFormData({
                                         video_settings: {
+                                            ...formData.video_settings,
                                             enabled: true,
-                                            recording_enabled: formData.video_settings?.recording_enabled ?? false,
                                             screen_share: checked,
+                                        },
+                                    })
+                                }
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between max-w-sm">
+                            <div className="space-y-0.5">
+                                <Label className="text-sm">Waiting room</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Hold attendees until the host admits them. The host can admit or deny from the room controls.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={!!formData.video_settings?.waiting_room_enabled}
+                                onCheckedChange={(checked) =>
+                                    updateFormData({
+                                        video_settings: {
+                                            ...formData.video_settings,
+                                            enabled: true,
+                                            waiting_room_enabled: checked,
                                         },
                                     })
                                 }

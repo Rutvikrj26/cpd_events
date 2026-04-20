@@ -12,7 +12,7 @@ class CustomFieldResponseInline(admin.TabularInline):
 class AttendanceRecordInline(admin.TabularInline):
     model = AttendanceRecord
     extra = 0
-    readonly_fields = ('join_time', 'leave_time', 'duration_minutes', 'zoom_user_email')
+    readonly_fields = ('join_time', 'leave_time', 'duration_minutes', 'participant_email')
 
 
 @admin.register(Registration)
@@ -35,4 +35,4 @@ class RegistrationAdmin(admin.ModelAdmin):
 class AttendanceRecordAdmin(admin.ModelAdmin):
     list_display = ('display_name', 'event', 'join_time', 'duration_minutes', 'is_matched')
     list_filter = ('is_matched', 'matched_manually')
-    search_fields = ('zoom_user_email', 'zoom_user_name', 'event__title')
+    search_fields = ('participant_email', 'participant_name', 'event__title')

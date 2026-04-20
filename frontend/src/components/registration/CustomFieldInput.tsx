@@ -1,7 +1,8 @@
-import React from 'react';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
     Select,
     SelectContent,
@@ -18,13 +19,11 @@ interface CustomFieldInputProps {
     error?: string;
 }
 
-/**
- * Renders a form input for a custom registration field.
- * Supports: text, number, date, select, checkbox field types.
- */
 export function CustomFieldInput({ field, value, onChange, error }: CustomFieldInputProps) {
-    const { name, field_type, is_required, options } = field;
+    const { label, field_type, required, placeholder, help_text, options, min_value, max_value } =
+        field;
     const fieldId = `custom-field-${field.uuid}`;
+    const selectOptions = normalizeOptions(options);
 
     const renderInput = () => {
         switch (field_type) {
@@ -33,10 +32,21 @@ export function CustomFieldInput({ field, value, onChange, error }: CustomFieldI
                     <Input
                         id={fieldId}
                         type="text"
-                        value={value || ''}
+                        value={value ?? ''}
                         onChange={(e) => onChange(e.target.value)}
-                        required={is_required}
-                        placeholder={`Enter ${name.toLowerCase()}`}
+                        required={required}
+                        placeholder={placeholder}
+                    />
+                );
+
+            case 'textarea':
+                return (
+                    <Textarea
+                        id={fieldId}
+                        value={value ?? ''}
+                        onChange={(e) => onChange(e.target.value)}
+                        required={required}
+                        placeholder={placeholder}
                     />
                 );
 
@@ -45,10 +55,14 @@ export function CustomFieldInput({ field, value, onChange, error }: CustomFieldI
                     <Input
                         id={fieldId}
                         type="number"
-                        value={value || ''}
-                        onChange={(e) => onChange(e.target.valueAsNumber || '')}
-                        required={is_required}
-                        placeholder={`Enter ${name.toLowerCase()}`}
+                        value={value ?? ''}
+                        min={min_value ?? undefined}
+                        max={max_value ?? undefined}
+                        onChange={(e) =>
+                            onChange(e.target.value === '' ? '' : Number(e.target.value))
+                        }
+                        required={required}
+                        placeholder={placeholder}
                     />
                 );
 
@@ -57,29 +71,76 @@ export function CustomFieldInput({ field, value, onChange, error }: CustomFieldI
                     <Input
                         id={fieldId}
                         type="date"
-                        value={value || ''}
+                        value={value ?? ''}
                         onChange={(e) => onChange(e.target.value)}
-                        required={is_required}
+                        required={required}
                     />
                 );
 
-            case 'select': {
-                const selectOptions = parseOptions(options);
+            case 'select':
                 return (
-                    <Select value={value || ''} onValueChange={onChange}>
-                        <SelectTrigger>
-                            <SelectValue placeholder={`Select ${name.toLowerCase()}`} />
+                    <Select value={value ?? ''} onValueChange={onChange}>
+                        <SelectTrigger id={fieldId}>
+                            <SelectValue
+                                placeholder={placeholder || `Select ${label.toLowerCase()}`}
+                            />
                         </SelectTrigger>
                         <SelectContent>
                             {selectOptions.map((opt) => (
-                                <SelectItem key={opt.value} value={opt.value}>
-                                    {opt.label}
+                                <SelectItem key={opt} value={opt}>
+                                    {opt}
                                 </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
                 );
+
+            case 'multiselect': {
+                const current: string[] = Array.isArray(value) ? value : [];
+                return (
+                    <div className="space-y-2">
+                        {selectOptions.map((opt) => {
+                            const optId = `${fieldId}-${opt}`;
+                            const checked = current.includes(opt);
+                            return (
+                                <div key={opt} className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id={optId}
+                                        checked={checked}
+                                        onCheckedChange={(next) => {
+                                            onChange(
+                                                next
+                                                    ? [...current, opt]
+                                                    : current.filter((v) => v !== opt),
+                                            );
+                                        }}
+                                    />
+                                    <Label htmlFor={optId} className="font-normal cursor-pointer">
+                                        {opt}
+                                    </Label>
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
             }
+
+            case 'radio':
+                return (
+                    <RadioGroup value={value ?? ''} onValueChange={onChange}>
+                        {selectOptions.map((opt) => {
+                            const optId = `${fieldId}-${opt}`;
+                            return (
+                                <div key={opt} className="flex items-center space-x-2">
+                                    <RadioGroupItem id={optId} value={opt} />
+                                    <Label htmlFor={optId} className="font-normal cursor-pointer">
+                                        {opt}
+                                    </Label>
+                                </div>
+                            );
+                        })}
+                    </RadioGroup>
+                );
 
             case 'checkbox':
                 return (
@@ -87,10 +148,11 @@ export function CustomFieldInput({ field, value, onChange, error }: CustomFieldI
                         <Checkbox
                             id={fieldId}
                             checked={!!value}
-                            onCheckedChange={(checked) => onChange(checked)}
+                            onCheckedChange={(checked) => onChange(!!checked)}
                         />
                         <Label htmlFor={fieldId} className="text-sm font-normal cursor-pointer">
-                            {name}
+                            {label}
+                            {required && <span className="text-red-500 ml-1">*</span>}
                         </Label>
                     </div>
                 );
@@ -100,19 +162,19 @@ export function CustomFieldInput({ field, value, onChange, error }: CustomFieldI
                     <Input
                         id={fieldId}
                         type="text"
-                        value={value || ''}
+                        value={value ?? ''}
                         onChange={(e) => onChange(e.target.value)}
-                        required={is_required}
+                        required={required}
                     />
                 );
         }
     };
 
-    // Checkbox has its own label inline
     if (field_type === 'checkbox') {
         return (
             <div className="space-y-1">
                 {renderInput()}
+                {help_text && <p className="text-xs text-muted-foreground">{help_text}</p>}
                 {error && <p className="text-sm text-red-500">{error}</p>}
             </div>
         );
@@ -121,39 +183,26 @@ export function CustomFieldInput({ field, value, onChange, error }: CustomFieldI
     return (
         <div className="space-y-2">
             <Label htmlFor={fieldId}>
-                {name}
-                {is_required && <span className="text-red-500 ml-1">*</span>}
+                {label}
+                {required && <span className="text-red-500 ml-1">*</span>}
             </Label>
             {renderInput()}
+            {help_text && <p className="text-xs text-muted-foreground">{help_text}</p>}
             {error && <p className="text-sm text-red-500">{error}</p>}
         </div>
     );
 }
 
-/**
- * Parse options from various formats into a consistent array.
- */
-function parseOptions(options: any): { value: string; label: string }[] {
+function normalizeOptions(options: unknown): string[] {
     if (!options) return [];
-
-    // Already an array of objects
     if (Array.isArray(options)) {
-        return options.map((opt) => {
-            if (typeof opt === 'string') {
-                return { value: opt, label: opt };
-            }
-            return { value: opt.value || opt, label: opt.label || opt.value || opt };
-        });
+        return options.map((opt) =>
+            typeof opt === 'string' ? opt : String((opt as any)?.value ?? (opt as any)?.label ?? ''),
+        ).filter(Boolean);
     }
-
-    // Object with key-value pairs
     if (typeof options === 'object') {
-        return Object.entries(options).map(([key, val]) => ({
-            value: key,
-            label: String(val),
-        }));
+        return Object.values(options as Record<string, unknown>).map((v) => String(v));
     }
-
     return [];
 }
 
@@ -164,18 +213,16 @@ interface CustomFieldsFormProps {
     errors?: Record<string, string>;
 }
 
-/**
- * Renders all custom fields for an event registration form.
- */
 export function CustomFieldsForm({ fields, values, onChange, errors = {} }: CustomFieldsFormProps) {
     if (!fields || fields.length === 0) {
         return null;
     }
 
+    const ordered = [...fields].sort((a, b) => a.order - b.order);
     return (
         <div className="space-y-4">
             <h4 className="font-medium text-foreground">Additional Information</h4>
-            {fields.map((field) => (
+            {ordered.map((field) => (
                 <CustomFieldInput
                     key={field.uuid}
                     field={field}

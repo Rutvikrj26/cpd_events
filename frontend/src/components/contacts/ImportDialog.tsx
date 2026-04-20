@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -8,9 +8,13 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, Upload, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Download, FileText, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import { bulkImportContacts, BulkImportParams } from '@/api/contacts';
+import {
+    downloadContactsImportTemplate,
+    importContactsCsv,
+    ImportCsvResult,
+} from '@/api/contacts';
 
 interface ImportDialogProps {
     open: boolean;
@@ -18,111 +22,64 @@ interface ImportDialogProps {
     onSuccess?: () => void;
 }
 
-interface ParsedContact {
-    email: string;
-    full_name: string;
-    professional_title?: string;
-    organization_name?: string;
-    phone?: string;
-    notes?: string;
-}
-
-export function ImportDialog({
-    open,
-    onOpenChange,
-    onSuccess
-}: ImportDialogProps) {
+export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProps) {
     const [loading, setLoading] = useState(false);
     const [file, setFile] = useState<File | null>(null);
-    const [parsedContacts, setParsedContacts] = useState<ParsedContact[]>([]);
-    const [parseError, setParseError] = useState<string | null>(null);
+    const [result, setResult] = useState<ImportCsvResult | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
-    const resetState = () => {
-        setFile(null);
-        setParsedContacts([]);
-        setParseError(null);
-    };
-
-    React.useEffect(() => {
+    useEffect(() => {
         if (open) {
-            resetState();
+            setFile(null);
+            setResult(null);
+            setError(null);
         }
     }, [open]);
 
-    const parseCSV = (text: string): ParsedContact[] => {
-        const lines = text.trim().split('\n');
-        if (lines.length < 2) {
-            throw new Error('CSV must have at least a header row and one data row');
-        }
-
-        // Parse header
-        const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
-
-        // Find column indices
-        const emailIdx = header.findIndex(h => h.includes('email'));
-        const nameIdx = header.findIndex(h => h.includes('name') && !h.includes('organization'));
-        const titleIdx = header.findIndex(h => h.includes('title') || h.includes('professional'));
-        const orgIdx = header.findIndex(h => h.includes('organization') || h.includes('company'));
-        const phoneIdx = header.findIndex(h => h.includes('phone'));
-        const notesIdx = header.findIndex(h => h.includes('notes'));
-
-        if (emailIdx === -1) {
-            throw new Error('CSV must have an "email" column');
-        }
-
-        const contacts: ParsedContact[] = [];
-        for (let i = 1; i < lines.length; i++) {
-            const values = lines[i].split(',').map(v => v.trim().replace(/^["']|["']$/g, ''));
-            const email = values[emailIdx]?.trim();
-
-            if (!email) continue; // Skip empty rows
-
-            contacts.push({
-                email,
-                full_name: nameIdx >= 0 ? values[nameIdx] || email : email,
-                professional_title: titleIdx >= 0 ? values[titleIdx] : undefined,
-                organization_name: orgIdx >= 0 ? values[orgIdx] : undefined,
-                phone: phoneIdx >= 0 ? values[phoneIdx] : undefined,
-                notes: notesIdx >= 0 ? values[notesIdx] : undefined,
-            });
-        }
-
-        return contacts;
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const selected = e.target.files?.[0] ?? null;
+        setFile(selected);
+        setResult(null);
+        setError(null);
     };
 
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const selectedFile = e.target.files?.[0];
-        if (!selectedFile) return;
-
-        setFile(selectedFile);
-        setParseError(null);
-        setParsedContacts([]);
-
+    const handleDownloadTemplate = async () => {
         try {
-            const text = await selectedFile.text();
-            const contacts = parseCSV(text);
-            setParsedContacts(contacts);
-        } catch (error) {
-            setParseError(error instanceof Error ? error.message : 'Failed to parse CSV');
+            await downloadContactsImportTemplate();
+        } catch {
+            toast.error('Failed to download template');
         }
     };
 
-    const handleImport = async () => {
-        if (parsedContacts.length === 0) return;
-
+    const handleUpload = async () => {
+        if (!file) return;
         setLoading(true);
+        setError(null);
+        setResult(null);
         try {
-            const data: BulkImportParams = { contacts: parsedContacts };
-            const result = await bulkImportContacts(data);
-
-            toast.success(`Imported ${result.created} contacts`, {
-                description: result.skipped > 0 ? `${result.skipped} duplicates skipped` : undefined
-            });
-
-            onSuccess?.();
-            onOpenChange(false);
-        } catch (error) {
-            console.error('Failed to import contacts:', error);
+            const res = await importContactsCsv(file);
+            setResult(res);
+            if (res.created > 0) {
+                toast.success(
+                    `Imported ${res.created} contact${res.created === 1 ? '' : 's'}`,
+                    {
+                        description:
+                            res.skipped > 0 ? `${res.skipped} duplicate(s) skipped` : undefined,
+                    },
+                );
+            }
+            if (res.errors.length === 0 && res.created > 0) {
+                onSuccess?.();
+                setTimeout(() => onOpenChange(false), 400);
+            } else if (res.created > 0) {
+                onSuccess?.();
+            }
+        } catch (err: any) {
+            setError(
+                err?.response?.data?.error ??
+                    err?.message ??
+                    'Failed to import. Check the file format against the template.',
+            );
         } finally {
             setLoading(false);
         }
@@ -130,16 +87,29 @@ export function ImportDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Import Contacts</DialogTitle>
                     <DialogDescription>
-                        Upload a CSV file with contacts. Required column: email. Optional: name, title, organization, phone, notes.
+                        Upload a CSV using the required columns: <code>email</code>,{' '}
+                        <code>full_name</code>. Optional: professional_title, organization_name,
+                        phone, notes. Download the template to see the expected format.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 py-4">
-                    {/* File upload */}
+                <div className="space-y-4 py-2">
+                    <div className="flex items-center justify-end">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleDownloadTemplate}
+                        >
+                            <Download className="h-4 w-4 mr-2" />
+                            Download template
+                        </Button>
+                    </div>
+
                     <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
                         <input
                             type="file"
@@ -166,18 +136,50 @@ export function ImportDialog({
                         </label>
                     </div>
 
-                    {/* Parse result */}
-                    {parseError && (
+                    {error && (
                         <div className="flex items-start gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
-                            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                            <span>{parseError}</span>
+                            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                            <span>{error}</span>
                         </div>
                     )}
 
-                    {parsedContacts.length > 0 && (
-                        <div className="flex items-start gap-2 p-3 bg-primary/10 text-primary rounded-lg text-sm">
-                            <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                            <span>Found {parsedContacts.length} contacts ready to import</span>
+                    {result && (
+                        <div className="space-y-2">
+                            <div className="flex items-start gap-2 p-3 bg-primary/10 text-primary rounded-lg text-sm">
+                                <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                                <span>
+                                    Imported {result.created} · skipped {result.skipped} ·
+                                    errors {result.errors.length}
+                                </span>
+                            </div>
+                            {result.errors.length > 0 && (
+                                <div className="border rounded-lg max-h-48 overflow-auto text-xs">
+                                    <table className="min-w-full">
+                                        <thead className="bg-muted sticky top-0">
+                                            <tr>
+                                                <th className="text-left px-3 py-2">Row</th>
+                                                <th className="text-left px-3 py-2">Email</th>
+                                                <th className="text-left px-3 py-2">Error</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {result.errors.map((err, i) => (
+                                                <tr key={i} className="border-t">
+                                                    <td className="px-3 py-1.5 font-mono">
+                                                        {err.row}
+                                                    </td>
+                                                    <td className="px-3 py-1.5">
+                                                        {err.email || '—'}
+                                                    </td>
+                                                    <td className="px-3 py-1.5 text-destructive">
+                                                        {err.error}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -189,14 +191,11 @@ export function ImportDialog({
                         onClick={() => onOpenChange(false)}
                         disabled={loading}
                     >
-                        Cancel
+                        Close
                     </Button>
-                    <Button
-                        onClick={handleImport}
-                        disabled={loading || parsedContacts.length === 0}
-                    >
+                    <Button onClick={handleUpload} disabled={loading || !file}>
                         {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Import {parsedContacts.length > 0 && `(${parsedContacts.length})`}
+                        Upload & Import
                     </Button>
                 </DialogFooter>
             </DialogContent>

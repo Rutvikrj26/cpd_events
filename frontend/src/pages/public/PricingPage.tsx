@@ -136,8 +136,8 @@ export function PricingPage() {
                 "Manage your profile",
                 "Email notifications",
             ],
-            cta: "Get Started",
-            ctaLink: "/signup",
+            cta: "Sign In",
+            ctaLink: "/login",
             variant: "outline" as const,
             trialDays: 0,
             showContactSales: false,
@@ -157,10 +157,10 @@ export function PricingPage() {
                     ...features,
                     ...(product.trial_days > 0 ? [`${product.trial_days}-day free trial`] : []),
                 ],
-                cta: product.show_contact_sales ? "Contact Sales" : "Start Free Trial",
+                cta: product.show_contact_sales ? "Contact Sales" : "Contact Sales",
                 ctaLink: product.show_contact_sales
                     ? "/contact"
-                    : `/signup?role=${product.plan === 'lms' ? 'course_manager' : 'organizer'}&plan=${product.plan}`,
+                    : "/contact",
                 variant: index === 0 ? ("default" as const) : ("secondary" as const),
                 trialDays: product.trial_days,
                 showContactSales: product.show_contact_sales,
@@ -380,8 +380,8 @@ export function PricingPage() {
                     </p>
                     <div className="flex gap-4 justify-center">
                         <Button asChild size="lg" variant="secondary">
-                            <Link to="/signup">
-                                Start Free Trial
+                            <Link to="/login">
+                                Access Portal
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
                         </Button>

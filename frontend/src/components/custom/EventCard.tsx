@@ -55,7 +55,7 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
             <div className="text-sm font-medium text-foreground">
               {event.price === "Free" ? "Free" : `$${event.price}`}
             </div>
-            <Link to={`/events/${event.id}`}>
+            <Link to={`/events/${event.id}/details`}>
               <Button size="sm" variant="outline">View Details</Button>
             </Link>
           </div>
@@ -113,7 +113,7 @@ export function EventCard({ event, variant = "default", showStatus = false }: Ev
         <span className="font-semibold text-foreground">
           {event.price === "Free" ? "Free" : `$${event.price}`}
         </span>
-        <Link to={`/events/${event.id}`}>
+        <Link to={`/events/${event.id}/details`}>
           <Button size="sm" className="bg-gray-900 text-white hover:bg-gray-800">
             Details
           </Button>

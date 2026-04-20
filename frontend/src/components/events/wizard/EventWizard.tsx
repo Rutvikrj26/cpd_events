@@ -42,6 +42,12 @@ const WizardContent = () => {
             // Extract frontend-only fields from form data
             const { _imageFile, _sessions, _isImageRemoved, ...eventData } = formData;
 
+            // Blank out descriptions that are just empty rich-text scaffolding (e.g. "<p></p>")
+            const descText = (eventData.description ?? '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
+            if (!descText) {
+                eventData.description = '';
+            }
+
             let savedEvent;
             if (isEditMode && formData.uuid) {
                 // For update, we use the UUID and Partial data

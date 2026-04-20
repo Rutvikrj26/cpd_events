@@ -20,6 +20,7 @@ urlpatterns = [
     path('auth/token/', views.CustomTokenObtainPairView.as_view(), name='token_obtain'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/verify-email/', views.EmailVerificationView.as_view(), name='verify_email'),
+    path('auth/resend-verification/', views.ResendVerificationEmailView.as_view(), name='resend_verification'),
     path('auth/password-reset/', views.PasswordResetRequestView.as_view(), name='password_reset'),
     path('auth/password-reset/confirm/', views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('auth/password-change/', views.PasswordChangeView.as_view(), name='password_change'),
@@ -27,12 +28,10 @@ urlpatterns = [
     path('auth/manifest/', views.ManifestView.as_view(), name='manifest'),
     path('auth/deployment/', views.DeploymentConfigView.as_view(), name='deployment_config'),
     path('auth/accept-invitation/', views.AcceptInvitationView.as_view(), name='accept_invitation'),
-    # OAuth
-    path('auth/google/login/', views.GoogleAuthView.as_view(), name='google_auth'),
-    path('auth/google/callback/', views.GoogleCallbackView.as_view(), name='google_callback'),
     # Current user
     path('users/me/', views.CurrentUserView.as_view(), name='current_user'),
     path('users/me/notifications/', views.NotificationPreferencesView.as_view(), name='notifications'),
+    path('users/me/accreditations/', views.MyAccreditationsView.as_view(), name='my_accreditations'),
     path('users/me/delete-account/', views.DeleteAccountView.as_view(), name='delete_account'),
     path('users/me/export-data/', views.DataExportView.as_view(), name='export_data'),
     path('users/me/onboarding/complete/', views.CompleteOnboardingView.as_view(), name='complete_onboarding'),

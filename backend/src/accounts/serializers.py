@@ -330,7 +330,7 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
     def validate_roles(self, value):
         if not value:
             raise serializers.ValidationError("A user must have at least one role.")
-        valid_roles = {"learner", "educator", "course_manager", "admin"}
+        valid_roles = {"learner", "educator", "course_manager", "instructor", "admin"}
         unknown = [r for r in value if r not in valid_roles]
         if unknown:
             raise serializers.ValidationError(
@@ -392,7 +392,7 @@ class InviteUserSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     full_name = serializers.CharField(required=True, max_length=255)
     role = serializers.ChoiceField(
-        choices=["learner", "educator", "course_manager", "admin"],
+        choices=["learner", "educator", "course_manager", "instructor", "admin"],
         default="learner",
     )
     message = serializers.CharField(required=False, allow_blank=True, max_length=1000, default="")
@@ -410,7 +410,7 @@ class BulkInviteItemSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     full_name = serializers.CharField(required=True, max_length=255)
     role = serializers.ChoiceField(
-        choices=["learner", "educator", "course_manager", "admin"],
+        choices=["learner", "educator", "course_manager", "instructor", "admin"],
         default="learner",
     )
     message = serializers.CharField(required=False, allow_blank=True, max_length=1000, default="")

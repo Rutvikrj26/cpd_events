@@ -301,13 +301,12 @@ def _create_event_attendance(video_room, participant_identity, participant_name)
         logger.info("No registration found for participant %s in event %s", participant_identity, event.uuid)
         return 0
 
-    # Create attendance record
-    # Field names are zoom_* for now — will be renamed in migration
     AttendanceRecord.objects.create(
+        event=event,
         registration=registration,
-        zoom_participant_id=participant_identity,
-        zoom_user_email=registration.user.email if registration.user else '',
-        zoom_user_name=participant_name,
+        participant_id=participant_identity,
+        participant_email=registration.user.email if registration.user else '',
+        participant_name=participant_name,
         join_time=timezone.now(),
         is_matched=True,
     )
@@ -325,7 +324,7 @@ def _update_event_attendance(video_room, participant_identity):
     # Find the open attendance record
     record = AttendanceRecord.objects.filter(
         registration__event=event,
-        zoom_participant_id=participant_identity,
+        participant_id=participant_identity,
         leave_time__isnull=True,
     ).order_by('-join_time').first()
 
@@ -359,16 +358,16 @@ def _create_session_attendance(video_room, participant_identity, participant_nam
         session=session,
         enrollment=enrollment,
         defaults={
-            'zoom_participant_id': participant_identity,
-            'zoom_user_email': enrollment.user.email if enrollment.user else '',
-            'zoom_join_time': timezone.now(),
+            'participant_id': participant_identity,
+            'participant_email': enrollment.user.email if enrollment.user else '',
+            'join_time': timezone.now(),
             'attendance_minutes': 0,
         },
     )
     if not created:
         # Re-joining: update join time for a new segment
-        attendance.zoom_join_time = timezone.now()
-        attendance.save(update_fields=['zoom_join_time', 'updated_at'])
+        attendance.join_time = timezone.now()
+        attendance.save(update_fields=['join_time', 'updated_at'])
 
     return 1 if created else 0
 
@@ -383,23 +382,18 @@ def _update_session_attendance(video_room, participant_identity):
 
     attendance = CourseSessionAttendance.objects.filter(
         session=session,
-        zoom_participant_id=participant_identity,
+        participant_id=participant_identity,
     ).first()
 
-    if attendance and attendance.zoom_join_time:
+    if attendance and attendance.join_time:
         now = timezone.now()
-        segment_minutes = int((now - attendance.zoom_join_time).total_seconds() / 60)
+        segment_minutes = int((now - attendance.join_time).total_seconds() / 60)
         attendance.attendance_minutes = (attendance.attendance_minutes or 0) + segment_minutes
-        attendance.zoom_leave_time = now
-
-        # Calculate eligibility
-        if session.duration_minutes and session.duration_minutes > 0:
-            attendance.attendance_percent = (attendance.attendance_minutes / session.duration_minutes) * 100
-            min_pct = getattr(session, 'minimum_attendance_percent', 80) or 80
-            attendance.is_eligible = attendance.attendance_percent >= min_pct
+        attendance.leave_time = now
+        attendance.calculate_eligibility()
 
         attendance.save(update_fields=[
-            'attendance_minutes', 'zoom_leave_time', 'attendance_percent',
+            'attendance_minutes', 'leave_time',
             'is_eligible', 'updated_at',
         ])
 
@@ -417,12 +411,19 @@ def _handle_recording_ended(video_room, payload):
     try:
         recording = VideoRecording.objects.get(egress_id=egress_id)
     except VideoRecording.DoesNotExist:
-        # Create a new recording record if it wasn't pre-created
-        recording = VideoRecording.objects.create(
-            video_room=video_room,
-            egress_id=egress_id,
-            provider='livekit',
-        )
+        # Create a new recording record if it wasn't pre-created.
+        defaults = {'video_room': video_room, 'egress_id': egress_id, 'provider': 'livekit'}
+        owner = video_room.content_object
+        if owner is not None:
+            from events.models import Event
+            from learning.models import CourseSession
+
+            if isinstance(owner, Event):
+                defaults['event'] = owner
+            elif isinstance(owner, CourseSession):
+                defaults['course_session'] = owner
+
+        recording = VideoRecording.objects.create(**defaults)
 
     recording.status = VideoRecording.Status.AVAILABLE
     recording.recording_end = timezone.now()
@@ -444,3 +445,91 @@ def _handle_recording_ended(video_room, payload):
         recording.publish()
 
     logger.info("Recording completed for room %s, egress_id=%s", video_room.room_name, egress_id)
+
+
+@CloudTask
+def start_course_session_recording(session_id: int):
+    """Start a LiveKit room-composite egress for the given course session."""
+    from conferencing.models import VideoRecording, VideoRoom
+    from conferencing.service import get_video_provider
+    from learning.models import CourseSession
+
+    try:
+        session = CourseSession.objects.get(id=session_id)
+    except CourseSession.DoesNotExist:
+        logger.warning("start_course_session_recording: session %s not found", session_id)
+        return
+
+    ct = ContentType.objects.get_for_model(CourseSession)
+    video_room = VideoRoom.objects.filter(content_type=ct, object_id=session.id).first()
+    if not video_room:
+        logger.info("start_course_session_recording: no VideoRoom for session %s", session_id)
+        return
+
+    if VideoRecording.objects.filter(
+        video_room=video_room,
+        status__in=[VideoRecording.Status.RECORDING, VideoRecording.Status.PROCESSING],
+    ).exists():
+        logger.info("Recording already in flight for session %s", session_id)
+        return
+
+    provider = get_video_provider()
+    if not provider.is_configured():
+        logger.warning("Video provider not configured; skipping recording start")
+        return
+
+    try:
+        egress_id = provider.start_recording(
+            room_name=video_room.room_name,
+            output_path=f"recordings/{video_room.room_name}.mp4",
+        )
+    except Exception:
+        logger.exception("Failed to start recording for session %s", session_id)
+        return
+
+    VideoRecording.objects.create(
+        video_room=video_room,
+        course_session=session,
+        egress_id=egress_id,
+        provider='livekit',
+        status=VideoRecording.Status.RECORDING,
+        recording_start=timezone.now(),
+        access_level=VideoRecording.AccessLevel.REGISTRANTS,
+        auto_publish=session.recording_auto_publish,
+    )
+    logger.info("Recording started for course session %s (egress=%s)", session_id, egress_id)
+
+
+@CloudTask
+def stop_course_session_recording(session_id: int):
+    """Stop the in-flight egress for the given course session, if any."""
+    from conferencing.models import VideoRecording
+    from conferencing.service import get_video_provider
+
+    recording = (
+        VideoRecording.objects.filter(
+            course_session_id=session_id,
+            status=VideoRecording.Status.RECORDING,
+        )
+        .order_by('-created_at')
+        .first()
+    )
+    if not recording:
+        logger.info("stop_course_session_recording: no in-flight recording for session %s", session_id)
+        return
+
+    provider = get_video_provider()
+    if not provider.is_configured():
+        logger.warning("Video provider not configured; cannot stop recording")
+        return
+
+    try:
+        provider.stop_recording(recording.egress_id)
+    except Exception:
+        logger.exception("Failed to stop recording for session %s", session_id)
+        recording.status = VideoRecording.Status.ERROR
+        recording.save(update_fields=['status', 'updated_at'])
+        return
+
+    recording.status = VideoRecording.Status.PROCESSING
+    recording.save(update_fields=['status', 'updated_at'])

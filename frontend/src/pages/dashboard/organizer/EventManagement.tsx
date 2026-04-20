@@ -49,6 +49,8 @@ import {
 import { EditAttendanceDialog } from "@/components/events/EditAttendanceDialog";
 import { AttendanceReconciliation } from "@/components/events/AttendanceReconciliation";
 import { CustomFieldResponsesDialog } from "@/components/events/CustomFieldResponsesDialog";
+import { RegistrationFormBuilder } from "@/components/events/RegistrationFormBuilder";
+import { FeedbackFormBuilder } from "@/components/events/FeedbackFormBuilder";
 import { FeedbackCard, FeedbackSummary } from "@/components/feedback";
 import { getEventFeedback, calculateFeedbackSummary } from "@/api/feedback";
 import { EventFeedback } from "@/api/feedback/types";
@@ -422,6 +424,7 @@ export function EventManagement() {
    );
 
    const feedbackSummary = calculateFeedbackSummary(feedback);
+   const primaryRating = feedbackSummary.per_field.find((f) => f.field_type === 'rating');
 
    const stats = {
       registered: attendees.filter(a => a.status !== "cancelled").length,
@@ -429,14 +432,14 @@ export function EventManagement() {
       cancelled: attendees.filter(a => a.status === "cancelled").length,
       issued: attendees.filter(a => a.certificate_uuid).length,
       feedbackCount: feedback.length,
-      avgRating: feedbackSummary.average_rating,
+      avgRating: primaryRating?.average ?? 0,
    };
 
    return (
       <div className="space-y-8">
          <PageHeader
             title={event.title}
-            description={`Manage registrations and attendance for your ${event.format || 'event'}.`}
+            description={`Manage registrations and attendance for your ${event.format ? `${event.format} event` : 'event'}.`}
             actions={
                <div className="flex gap-2">
                   {event.status === 'draft' && !hasStarted && (
@@ -465,7 +468,7 @@ export function EventManagement() {
                         <Button variant="outline">Edit Event</Button>
                      </Link>
                   )}
-                  <Link to={`/events/${event.slug}`}>
+                  <Link to={`/events/${event.slug || event.uuid}/details`}>
                      <Button>View Public Page</Button>
                   </Link>
                   <AlertDialog>
@@ -563,6 +566,9 @@ export function EventManagement() {
                <TabsTrigger value="registrations" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
                   Registrations
                </TabsTrigger>
+               <TabsTrigger value="registration-form" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
+                  Registration form
+               </TabsTrigger>
                <TabsTrigger value="attendance" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
                   Attendance
                </TabsTrigger>
@@ -576,6 +582,9 @@ export function EventManagement() {
                      Badges
                   </TabsTrigger>
                )}
+               <TabsTrigger value="feedback-form" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
+                  Feedback form
+               </TabsTrigger>
                <TabsTrigger value="feedback" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
                   <MessageSquare className="h-4 w-4 mr-2" />
                   Feedback
@@ -701,6 +710,16 @@ export function EventManagement() {
                      </table>
                   </div>
                </Card>
+            </TabsContent>
+
+            {/* REGISTRATION FORM BUILDER TAB */}
+            <TabsContent value="registration-form" className="mt-0">
+               {uuid && <RegistrationFormBuilder eventUuid={uuid} />}
+            </TabsContent>
+
+            {/* FEEDBACK FORM BUILDER TAB */}
+            <TabsContent value="feedback-form" className="mt-0">
+               {uuid && <FeedbackFormBuilder eventUuid={uuid} />}
             </TabsContent>
 
             {/* Attendance Dialog */}

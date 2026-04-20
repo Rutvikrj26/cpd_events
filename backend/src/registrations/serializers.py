@@ -27,7 +27,7 @@ from .models import AttendanceRecord, CustomFieldResponse, Registration
 
 
 class AttendanceRecordSerializer(BaseModelSerializer):
-    """Individual Zoom join/leave record."""
+    """Individual join/leave record from the video provider."""
 
     class Meta:
         model = AttendanceRecord
@@ -38,8 +38,8 @@ class AttendanceRecordSerializer(BaseModelSerializer):
             'duration_minutes',
             'join_method',
             'device_type',
-            'zoom_user_name',
-            'zoom_user_email',
+            'participant_name',
+            'participant_email',
             'is_matched',
             'created_at',
         ]
@@ -47,7 +47,7 @@ class AttendanceRecordSerializer(BaseModelSerializer):
 
 
 class UnmatchedAttendanceRecordSerializer(BaseModelSerializer):
-    """Unmatched Zoom attendance record with fuzzy match suggestions."""
+    """Unmatched attendance record with fuzzy match suggestions."""
 
     match_suggestions = serializers.SerializerMethodField()
 
@@ -55,8 +55,8 @@ class UnmatchedAttendanceRecordSerializer(BaseModelSerializer):
         model = AttendanceRecord
         fields = [
             'uuid',
-            'zoom_user_name',
-            'zoom_user_email',
+            'participant_name',
+            'participant_email',
             'join_time',
             'leave_time',
             'duration_minutes',
@@ -78,16 +78,16 @@ class UnmatchedAttendanceRecordSerializer(BaseModelSerializer):
         ).only('uuid', 'full_name', 'email')
 
         suggestions = []
-        zoom_email = (obj.zoom_user_email or '').lower()
-        zoom_name = (obj.zoom_user_name or '').lower()
+        attendee_email = (obj.participant_email or '').lower()
+        attendee_name = (obj.participant_name or '').lower()
 
         for reg in registrations:
             reg_email = (reg.email or '').lower()
             reg_name = (reg.full_name or '').lower()
 
             # Calculate similarity scores
-            email_score = SequenceMatcher(None, zoom_email, reg_email).ratio() if zoom_email and reg_email else 0
-            name_score = SequenceMatcher(None, zoom_name, reg_name).ratio() if zoom_name and reg_name else 0
+            email_score = SequenceMatcher(None, attendee_email, reg_email).ratio() if attendee_email and reg_email else 0
+            name_score = SequenceMatcher(None, attendee_name, reg_name).ratio() if attendee_name and reg_name else 0
 
             # Use best score
             best_score = max(email_score, name_score)
@@ -331,7 +331,7 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
     """Registration from attendee's perspective."""
 
     event = MinimalEventSerializer(read_only=True)
-    zoom_join_url = serializers.SerializerMethodField()
+    meeting_join_url = serializers.SerializerMethodField()
     can_join = serializers.SerializerMethodField()
     certificate_url = serializers.SerializerMethodField()
     attendance_percent = serializers.IntegerField(read_only=True)
@@ -356,7 +356,7 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
             'allow_public_verification',
             'waitlist_position',
             'promoted_from_waitlist_at',
-            'zoom_join_url',
+            'meeting_join_url',
             'can_join',
             'certificate_url',
             'created_at',
@@ -371,8 +371,8 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_zoom_join_url(self, obj):
-        """Return video join URL if available. Zoom fields removed; always returns None."""
+    def get_meeting_join_url(self, obj):
+        """Return video join URL if available. Clients should use the in-app /join-video endpoint instead."""
         return None
 
     def get_can_join(self, obj):

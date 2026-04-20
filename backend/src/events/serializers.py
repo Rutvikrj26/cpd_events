@@ -330,6 +330,7 @@ class EventListSerializer(SoftDeleteModelSerializer):
             'title',
             'status',
             'event_type',
+            'format',
             'starts_at',
             'ends_at',
             'timezone',
@@ -749,6 +750,9 @@ class PublicEventListSerializer(serializers.ModelSerializer):
             'registration_deadline',
             'registration_count',
             'capacity',
+            'price',
+            'currency',
+            'is_free',
         ]
 
     def get_organizer_name(self, obj):
@@ -782,6 +786,7 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
 
     class Meta(PublicEventListSerializer.Meta):
         fields = PublicEventListSerializer.Meta.fields + [
+            'status',
             'description',
             'custom_fields',
             'organizer',
@@ -837,7 +842,7 @@ class EventStatusHistorySerializer(BaseModelSerializer):
         ]
 
 class UnmatchedParticipantSerializer(serializers.Serializer):
-    """Zoom participant not matched to any registration."""
+    """Video participant not matched to any registration."""
 
     user_id = serializers.CharField(required=False, allow_null=True)
     user_name = serializers.CharField()
@@ -852,8 +857,8 @@ class MatchParticipantSerializer(serializers.Serializer):
 
     registration_uuid = serializers.UUIDField()
     # Alternatively accept just one
-    zoom_user_email = serializers.EmailField(required=False)
-    zoom_user_name = serializers.CharField(required=False)
-    zoom_join_time = serializers.DateTimeField(required=False)
-    zoom_leave_time = serializers.DateTimeField(required=False)
+    participant_email = serializers.EmailField(required=False)
+    participant_name = serializers.CharField(required=False)
+    join_time = serializers.DateTimeField(required=False)
+    leave_time = serializers.DateTimeField(required=False)
     attendance_minutes = serializers.IntegerField(required=False)

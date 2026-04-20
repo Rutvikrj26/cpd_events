@@ -43,6 +43,7 @@ class Event(SoftDeleteModel):
         WORKSHOP = 'workshop', 'Workshop'
         TRAINING = 'training', 'Training Session'
         LECTURE = 'lecture', 'Lecture'
+        SEMINAR = 'seminar', 'Seminar / Series'
         OTHER = 'other', 'Other'
 
     # Valid status transitions
@@ -380,9 +381,12 @@ class Event(SoftDeleteModel):
         Raises:
             ValueError: If paid event but no payouts are connected.
         """
-        # Block publishing paid events without connected payouts
+        # Block publishing paid events without connected payouts.
+        # On single-tenant / institutional deployments the User model may not
+        # carry Stripe Connect fields — treat a missing attribute as "not connected"
+        # rather than raising AttributeError.
         if self.price > 0:
-            if not self.owner.stripe_charges_enabled:
+            if not getattr(self.owner, 'stripe_charges_enabled', False):
                 raise ValueError(
                     "Cannot publish a paid event without connected payouts. "
                     "Please link a bank account in your profile settings."

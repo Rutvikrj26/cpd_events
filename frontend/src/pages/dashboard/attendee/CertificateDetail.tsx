@@ -129,7 +129,7 @@ export function CertificateDetail() {
             </CardHeader>
             <CardContent className="space-y-4">
                <h4 className="font-medium text-foreground">{cert.eventTitle}</h4>
-               <Link to={`/events/${cert.eventId}`}>
+               <Link to={`/events/${cert.eventId}/details`}>
                  <Button variant="link" className="p-0 h-auto text-info">View Event Details</Button>
                </Link>
             </CardContent>

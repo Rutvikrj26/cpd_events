@@ -43,6 +43,7 @@ import {
     updateAdminUser,
     UserInvitation,
 } from '@/api/accounts';
+import { formatRoleLabel } from '@/lib/role-utils';
 
 interface AdminUser extends User {
     last_login_at: string | null;
@@ -161,6 +162,7 @@ export const UserManagementPage: React.FC = () => {
                                 <SelectItem value="learner">Learner</SelectItem>
                                 <SelectItem value="educator">Educator</SelectItem>
                                 <SelectItem value="course_manager">Course Manager</SelectItem>
+                                <SelectItem value="instructor">Instructor</SelectItem>
                                 <SelectItem value="admin">Admin</SelectItem>
                             </SelectContent>
                         </Select>
@@ -196,7 +198,7 @@ export const UserManagementPage: React.FC = () => {
                                                     <div className="flex gap-1 flex-wrap">
                                                         {u.roles?.map((role) => (
                                                             <Badge key={role} variant="secondary" className="text-xs">
-                                                                {role}
+                                                                {formatRoleLabel(role)}
                                                             </Badge>
                                                         ))}
                                                     </div>
@@ -384,7 +386,7 @@ function InvitationsTab({
                                                 </div>
                                             </td>
                                             <td className="p-4">
-                                                <Badge variant="secondary" className="text-xs">{inv.role}</Badge>
+                                                <Badge variant="secondary" className="text-xs">{formatRoleLabel(inv.role)}</Badge>
                                             </td>
                                             <td className="p-4 text-sm text-muted-foreground">{inv.invited_by_name || '—'}</td>
                                             <td className="p-4 text-sm text-muted-foreground">
@@ -587,7 +589,7 @@ function ChangeRoleDialog({ open, onOpenChange, user, onSuccess }: { open: boole
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const allRoles = ['learner', 'educator', 'course_manager', 'admin'];
+    const allRoles = ['learner', 'educator', 'course_manager', 'instructor', 'admin'];
 
     const toggleRole = (role: string) => {
         setSelectedRoles(prev =>
@@ -754,6 +756,7 @@ function InviteDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpen
                                 <SelectItem value="learner">Learner</SelectItem>
                                 <SelectItem value="educator">Educator</SelectItem>
                                 <SelectItem value="course_manager">Course Manager</SelectItem>
+                                <SelectItem value="instructor">Instructor</SelectItem>
                                 <SelectItem value="admin">Admin</SelectItem>
                             </SelectContent>
                         </Select>

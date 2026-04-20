@@ -4,6 +4,7 @@ Registrations app models - Registration, AttendanceRecord, CustomFieldResponse.
 
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -303,8 +304,7 @@ class Registration(SoftDeleteModel):
             context={
                 'user_name': self.full_name,
                 'event_title': self.event.title,
-                # Assuming standard frontend route structure
-                'action_url': f"https://cpdevents.com/events/{self.event.slug}",
+                'action_url': f"{settings.FRONTEND_URL}/events/{self.event.slug or self.event.uuid}/details",
             },
         )
 
@@ -320,7 +320,7 @@ class Registration(SoftDeleteModel):
         total_minutes = sum(r.duration_minutes for r in records)
         self.total_attendance_minutes = total_minutes
 
-        # Attended if joined Zoom OR checked in physically (Hybrid support)
+        # Attended if joined the video room OR checked in physically (hybrid support)
         self.attended = (total_minutes > 0) or (self.check_in_time is not None)
 
         if records.exists():
@@ -407,10 +407,10 @@ class Registration(SoftDeleteModel):
 
 class AttendanceRecord(BaseModel):
     """
-    Individual attendance record from Zoom.
+    Individual attendance record from the video conferencing provider.
 
     A registration can have multiple records (join → leave → rejoin → leave).
-    Records are created from Zoom webhook events or participant reports.
+    Records are created from video webhook events or participant reports.
     """
 
     event = models.ForeignKey('events.Event', on_delete=models.CASCADE, related_name='attendance_records')
@@ -425,14 +425,18 @@ class AttendanceRecord(BaseModel):
     )
 
     # =========================================
-    # Zoom Participant Info
+    # Participant Info
     # =========================================
-    zoom_participant_id = models.CharField(
-        max_length=100, blank=True, help_text="Zoom participant ID (unique per meeting session)"
+    participant_id = models.CharField(
+        max_length=100, blank=True, help_text="Provider participant ID (unique per meeting session)"
     )
-    zoom_user_id = models.CharField(max_length=100, blank=True, help_text="Zoom user ID (for registered Zoom users)")
-    zoom_user_email = LowercaseEmailField(blank=True, db_index=True, help_text="Email from Zoom (for matching)")
-    zoom_user_name = models.CharField(max_length=255, blank=True, help_text="Display name in Zoom")
+    external_user_id = models.CharField(
+        max_length=100, blank=True, help_text="External user id (for registered provider users)"
+    )
+    participant_email = LowercaseEmailField(
+        blank=True, db_index=True, help_text="Email from the video provider (for matching)"
+    )
+    participant_name = models.CharField(max_length=255, blank=True, help_text="Display name in the meeting")
 
     # =========================================
     # Join Method
@@ -470,15 +474,15 @@ class AttendanceRecord(BaseModel):
         indexes = [
             models.Index(fields=['event', 'registration']),
             models.Index(fields=['event', 'is_matched']),
-            models.Index(fields=['zoom_user_email']),
-            models.Index(fields=['zoom_participant_id']),
+            models.Index(fields=['participant_email']),
+            models.Index(fields=['participant_id']),
             models.Index(fields=['join_time']),
         ]
         verbose_name = 'Attendance Record'
         verbose_name_plural = 'Attendance Records'
 
     def __str__(self):
-        name = self.zoom_user_name or self.zoom_user_email or 'Unknown'
+        name = self.participant_name or self.participant_email or 'Unknown'
         return f"{name} @ {self.event.title}"
 
     @property
@@ -489,7 +493,7 @@ class AttendanceRecord(BaseModel):
     @property
     def display_name(self):
         """Best available name for display."""
-        return self.zoom_user_name or self.zoom_user_email or 'Unknown Participant'
+        return self.participant_name or self.participant_email or 'Unknown Participant'
 
     def calculate_duration(self):
         """Calculate and update duration from join/leave times."""

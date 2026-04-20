@@ -25,6 +25,9 @@ from .models import (
     EventModule,
     ModuleContent,
     ModuleProgress,
+    Program,
+    ProgramCourse,
+    ProgramEnrollment,
     SubmissionReview,
 )
 from .serializers import (
@@ -50,6 +53,11 @@ from .serializers import (
     ModuleContentCreateSerializer,
     ModuleContentSerializer,
     ModuleProgressSerializer,
+    ProgramCourseEntrySerializer,
+    ProgramCreateSerializer,
+    ProgramEnrollmentSerializer,
+    ProgramListSerializer,
+    ProgramSerializer,
     SubmissionGradeSerializer,
 )
 
@@ -510,7 +518,7 @@ class ContentProgressView(views.APIView):
         return Response(ContentProgressSerializer(progress).data)
 
 
-@roles('learner', 'educator', 'course_manager', 'admin', route_name='courses')
+@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='courses')
 class CourseViewSet(viewsets.ModelViewSet):
     """
     Course management.
@@ -527,6 +535,14 @@ class CourseViewSet(viewsets.ModelViewSet):
         slug = self.request.query_params.get('slug')
         if slug:
             queryset = queryset.filter(slug=slug)
+
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                models.Q(title__icontains=search)
+                | models.Q(short_description__icontains=search)
+                | models.Q(description__icontains=search)
+            )
 
         # Admin sees everything (regardless of owned param)
         if user.groups.filter(name="admin").exists():
@@ -570,8 +586,8 @@ class CourseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         from rest_framework.exceptions import PermissionDenied
 
-        if not self.request.user.groups.filter(name="admin").exists():
-            raise PermissionDenied("Only admins can create courses.")
+        if not self.request.user.has_perm("learning.can_create_course"):
+            raise PermissionDenied("You do not have permission to create courses.")
 
         # Subscription gate — best-effort in institutional mode. If the user's
         # subscription exposes limits, respect them; otherwise let staff proceed.
@@ -587,13 +603,13 @@ class CourseViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         from rest_framework.exceptions import PermissionDenied
         if not serializer.instance.can_manage(self.request.user):
-            raise PermissionDenied("Only admins can update course settings.")
+            raise PermissionDenied("You do not have permission to update this course.")
         serializer.save()
 
     def perform_destroy(self, instance):
         from rest_framework.exceptions import PermissionDenied
         if not instance.can_manage(self.request.user):
-            raise PermissionDenied("Only admins can delete courses.")
+            raise PermissionDenied("You do not have permission to delete this course.")
         instance.delete()
 
     @action(detail=True, methods=['post'])
@@ -601,7 +617,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         from rest_framework.exceptions import PermissionDenied
         course = self.get_object()
         if not course.can_manage(request.user):
-            raise PermissionDenied("Only admins can publish courses.")
+            raise PermissionDenied("You do not have permission to publish this course.")
         course.publish()
         return Response(CourseSerializer(course).data)
 
@@ -711,7 +727,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         })
 
 
-@roles('admin', route_name='course_staff')
+@roles('educator', 'course_manager', 'admin', route_name='course_staff')
 class CourseStaffViewSet(viewsets.ModelViewSet):
     """
     Manage course staff assignments.
@@ -732,7 +748,7 @@ class CourseStaffViewSet(viewsets.ModelViewSet):
         course = get_object_or_404(Course, uuid=course_uuid)
         if not course.can_manage(self.request.user):
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Only admins can manage course staff.")
+            raise PermissionDenied("You do not have permission to manage course staff.")
         return CourseStaff.objects.filter(course=course).select_related('user')
 
     def create(self, request, course_uuid=None):
@@ -742,7 +758,7 @@ class CourseStaffViewSet(viewsets.ModelViewSet):
         course = get_object_or_404(Course, uuid=course_uuid)
         if not course.can_manage(request.user):
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Only admins can manage course staff.")
+            raise PermissionDenied("You do not have permission to manage course staff.")
 
         serializer = CourseStaffCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -762,7 +778,7 @@ class CourseStaffViewSet(viewsets.ModelViewSet):
         course = instance.course
         if not course.can_manage(self.request.user):
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Only admins can manage course staff.")
+            raise PermissionDenied("You do not have permission to manage course staff.")
         instance.delete()
 
 
@@ -780,13 +796,17 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
         return CourseEnrollment.objects.filter(user=self.request.user).select_related('course')
 
     def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+
         course_uuid = self.request.data.get('course_uuid')
         course = get_object_or_404(Course, uuid=course_uuid)
 
         if not course.is_free:
-            from rest_framework.exceptions import PermissionDenied
-
             raise PermissionDenied("This course requires payment. Please initiate checkout.")
+
+        ok, code, message = course.check_enrollable()
+        if not ok:
+            raise ValidationError({'error': message, 'code': code})
 
         serializer.save(user=self.request.user, course=course)
 
@@ -880,12 +900,9 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check if course is full
-        if course.is_full:
-            return Response(
-                {'error': 'Course enrollment is full'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        ok, code, message = course.check_enrollable()
+        if not ok:
+            return Response({'error': message, 'code': code}, status=status.HTTP_400_BAD_REQUEST)
 
         # Free courses don't need checkout
         if course.is_free:
@@ -1548,7 +1565,7 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
 
         # 1. Get matched participant identities from attendance records
         matched_records = CourseSessionAttendance.objects.filter(session=session)
-        matched_identities = set(r.zoom_participant_id for r in matched_records if r.zoom_participant_id)
+        matched_identities = set(r.participant_id for r in matched_records if r.participant_id)
 
         # 2. Get participant join events from webhook logs
         join_logs = VideoWebhookLog.objects.filter(
@@ -1601,15 +1618,17 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
              session=session,
              enrollment=enrollment,
              defaults={
-                 'zoom_user_email': data.get('zoom_user_email'),
-                 'zoom_user_name': data.get('zoom_user_name'),
-                 'zoom_join_time': data.get('zoom_join_time'),
+                 'participant_email': data.get('participant_email', ''),
+                 'join_time': data.get('join_time'),
+                 'leave_time': data.get('leave_time'),
                  'attendance_minutes': data.get('attendance_minutes', 0),
                  'is_manual_override': True,
                  'override_reason': 'Manual reconciliation',
                  'override_by': request.user,
              }
         )
+        record.calculate_eligibility()
+        record.save(update_fields=['is_eligible', 'updated_at'])
 
         return Response({'status': 'matched'})
 
@@ -1678,3 +1697,258 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
         session.is_published = False
         session.save()
         return Response(CourseSessionSerializer(session).data)
+
+    @action(detail=True, methods=['post'])
+    def start(self, request, course_uuid=None, uuid=None):
+        """Mark a session as live (kicks off recording if enabled)."""
+        from rest_framework.exceptions import PermissionDenied
+
+        from .serializers import CourseSessionSerializer
+
+        session = self.get_object()
+        if not self._is_course_staff(self.get_course()):
+            raise PermissionDenied("You do not have permission to start this session.")
+        try:
+            session.start()
+        except ValueError as exc:
+            return error_response(str(exc), code='INVALID_TRANSITION', status_code=400)
+        return Response(CourseSessionSerializer(session).data)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, course_uuid=None, uuid=None):
+        """Mark a session as completed (stops recording if enabled)."""
+        from rest_framework.exceptions import PermissionDenied
+
+        from .serializers import CourseSessionSerializer
+
+        session = self.get_object()
+        if not self._is_course_staff(self.get_course()):
+            raise PermissionDenied("You do not have permission to complete this session.")
+        try:
+            session.complete()
+        except ValueError as exc:
+            return error_response(str(exc), code='INVALID_TRANSITION', status_code=400)
+        return Response(CourseSessionSerializer(session).data)
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, course_uuid=None, uuid=None):
+        """Cancel a session and notify enrolled learners."""
+        from rest_framework.exceptions import PermissionDenied
+
+        from .serializers import CourseSessionSerializer
+
+        session = self.get_object()
+        if not self._is_course_staff(self.get_course()):
+            raise PermissionDenied("You do not have permission to cancel this session.")
+        reason = request.data.get('reason', '')
+        try:
+            session.cancel(reason=reason, user=request.user)
+        except ValueError as exc:
+            return error_response(str(exc), code='INVALID_TRANSITION', status_code=400)
+        from .tasks import notify_course_session_cancelled
+
+        notify_course_session_cancelled.delay(session.id)
+        return Response(CourseSessionSerializer(session).data)
+
+    @action(detail=True, methods=['get'], url_path='calendar.ics')
+    def calendar(self, request, course_uuid=None, uuid=None):
+        """Return an .ics calendar invite for this session."""
+        from django.http import HttpResponse
+
+        from .services import build_session_ics
+
+        session = self.get_object()
+        ics = build_session_ics(session, user=request.user)
+        response = HttpResponse(ics, content_type='text/calendar; charset=utf-8')
+        response['Content-Disposition'] = (
+            f'attachment; filename="course-session-{session.uuid}.ics"'
+        )
+        return response
+
+    @action(detail=True, methods=['post'])
+    def reschedule(self, request, course_uuid=None, uuid=None):
+        """Move a session to a new start time / duration."""
+        from rest_framework.exceptions import PermissionDenied
+
+        from .serializers import CourseSessionSerializer
+
+        session = self.get_object()
+        if not self._is_course_staff(self.get_course()):
+            raise PermissionDenied("You do not have permission to reschedule this session.")
+        new_starts_at = request.data.get('starts_at')
+        new_duration = request.data.get('duration_minutes')
+        if not new_starts_at:
+            return error_response('starts_at is required', code='MISSING_FIELD', status_code=400)
+        from django.utils.dateparse import parse_datetime
+
+        parsed = parse_datetime(new_starts_at)
+        if parsed is None:
+            return error_response('starts_at must be a valid datetime', code='INVALID_FORMAT', status_code=400)
+        try:
+            session.reschedule(new_starts_at=parsed, new_duration_minutes=new_duration)
+        except ValueError as exc:
+            return error_response(str(exc), code='INVALID_TRANSITION', status_code=400)
+        return Response(CourseSessionSerializer(session).data)
+
+
+# =============================================================================
+# Programs
+# =============================================================================
+
+
+@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='programs')
+class ProgramViewSet(viewsets.ModelViewSet):
+    """
+    Program (course bundle) management.
+
+    Mirrors CourseViewSet's public-vs-owner visibility pattern.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
+
+    def get_queryset(self):
+        queryset = Program.objects.all()
+        user = self.request.user
+
+        slug = self.request.query_params.get('slug')
+        if slug:
+            queryset = queryset.filter(slug=slug)
+
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                models.Q(title__icontains=search)
+                | models.Q(short_description__icontains=search)
+                | models.Q(description__icontains=search)
+            )
+
+        if user.is_authenticated and user.groups.filter(name='admin').exists():
+            return queryset.distinct()
+
+        if not user.is_authenticated:
+            return queryset.filter(is_public=True, status=Program.Status.PUBLISHED)
+
+        owned = self.request.query_params.get('owned')
+        if owned:
+            return queryset.filter(created_by=user).distinct()
+
+        if self.action in ['list', 'retrieve']:
+            return queryset.filter(
+                models.Q(is_public=True, status=Program.Status.PUBLISHED)
+                | models.Q(created_by=user)
+            ).distinct()
+
+        return queryset.filter(created_by=user)
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [permissions.IsAuthenticatedOrReadOnly()]
+        return [permissions.IsAuthenticated()]
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ProgramListSerializer
+        if self.action in ['create', 'update', 'partial_update']:
+            return ProgramCreateSerializer
+        return ProgramSerializer
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        if not self.request.user.has_perm('learning.can_create_course'):
+            raise PermissionDenied('You do not have permission to create programs.')
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        if not serializer.instance.can_manage(self.request.user):
+            raise PermissionDenied('You do not have permission to update this program.')
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+
+        if not instance.can_manage(self.request.user):
+            raise PermissionDenied('You do not have permission to delete this program.')
+        instance.delete()
+
+    @action(detail=True, methods=['post'])
+    def publish(self, request, uuid=None):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self.get_object()
+        if not program.can_manage(request.user):
+            raise PermissionDenied('You do not have permission to publish this program.')
+        try:
+            program.publish()
+        except DjangoValidationError as exc:
+            return Response(
+                exc.message_dict if hasattr(exc, 'message_dict') else {'detail': exc.messages},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(ProgramSerializer(program).data)
+
+
+@roles('learner', 'educator', 'course_manager', 'admin', route_name='program_courses')
+class ProgramCourseViewSet(viewsets.ModelViewSet):
+    """
+    Manage the courses in a program (add, remove, reorder).
+
+    GET /programs/{program_uuid}/courses/
+    POST /programs/{program_uuid}/courses/   body: {course_uuid, order, is_required}
+    PATCH /programs/{program_uuid}/courses/{uuid}/  body: {order, is_required}
+    DELETE /programs/{program_uuid}/courses/{uuid}/
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ProgramCourseEntrySerializer
+    lookup_field = 'uuid'
+
+    def _get_program(self):
+        return get_object_or_404(Program, uuid=self.kwargs['program_uuid'])
+
+    def get_queryset(self):
+        return ProgramCourse.objects.filter(
+            program__uuid=self.kwargs['program_uuid']
+        ).select_related('course')
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self._get_program()
+        if not program.can_manage(self.request.user):
+            raise PermissionDenied('You do not have permission to modify this program.')
+        serializer.save(program=program)
+        program.update_counts()
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self._get_program()
+        if not program.can_manage(self.request.user):
+            raise PermissionDenied('You do not have permission to modify this program.')
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self._get_program()
+        if not program.can_manage(self.request.user):
+            raise PermissionDenied('You do not have permission to modify this program.')
+        instance.delete()
+        program.update_counts()
+
+
+@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='program_enrollments')
+class ProgramEnrollmentViewSet(viewsets.ReadOnlyModelViewSet):
+    """A learner's own program enrollments."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ProgramEnrollmentSerializer
+    lookup_field = 'uuid'
+
+    def get_queryset(self):
+        return ProgramEnrollment.objects.filter(user=self.request.user).select_related('program')

@@ -898,22 +898,34 @@ export function CoursePlayerPage() {
                 ) : (
                     <div className="flex-1 overflow-y-auto p-6">
                         <div className="max-w-4xl mx-auto">
-                            {/* Show sessions for hybrid courses */}
-                            {course.format === 'hybrid' && sessions.length > 0 && (
+                            {/* Show sessions for live and hybrid courses */}
+                            {(course.format === 'live' || course.format === 'hybrid') && sessions.length > 0 && (
                                 <SessionsPanel sessions={sessions} courseTitle={course.title} courseUuid={course.uuid} />
                             )}
 
-                            <div className="text-center py-12">
-                                <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                                <h3 className="text-lg font-medium mb-2">
-                                    {sessions.length > 0 ? 'Continue Learning' : 'No content selected'}
-                                </h3>
-                                <p className="text-muted-foreground">
-                                    {sessions.length > 0
-                                        ? 'Join a live session above or select a lesson from the sidebar.'
-                                        : 'Select a lesson from the sidebar to begin.'}
-                                </p>
-                            </div>
+                            {course.format === 'live' && sessions.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
+                                    <h3 className="text-lg font-medium mb-2">No sessions scheduled yet</h3>
+                                    <p className="text-muted-foreground">
+                                        Live sessions will appear here once the instructor schedules them.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="text-center py-12">
+                                    <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
+                                    <h3 className="text-lg font-medium mb-2">
+                                        {sessions.length > 0 ? 'Continue Learning' : 'No content selected'}
+                                    </h3>
+                                    <p className="text-muted-foreground">
+                                        {course.format === 'live'
+                                            ? 'Join an upcoming live session above, or watch a past recording.'
+                                            : sessions.length > 0
+                                                ? 'Join a live session above or select a lesson from the sidebar.'
+                                                : 'Select a lesson from the sidebar to begin.'}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

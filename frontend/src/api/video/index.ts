@@ -40,3 +40,23 @@ export async function stopRoomRecording(roomUuid: string): Promise<{ status: str
   const response = await api.post(`/video/rooms/${roomUuid}/stop_recording/`);
   return response.data;
 }
+
+export async function admitParticipant(
+  roomUuid: string,
+  identity: string
+): Promise<{ status: string; identity: string }> {
+  const response = await api.post(`/video/rooms/${roomUuid}/admit_participant/`, {
+    identity,
+  });
+  return response.data;
+}
+
+export async function denyParticipant(
+  roomUuid: string,
+  identity: string
+): Promise<{ status: string; identity: string }> {
+  const response = await api.post(`/video/rooms/${roomUuid}/deny_participant/`, {
+    identity,
+  });
+  return response.data;
+}

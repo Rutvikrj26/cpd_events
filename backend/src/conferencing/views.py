@@ -17,7 +17,9 @@ import uuid as uuid_lib
 from django.conf import settings
 from django.http import JsonResponse
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -78,11 +80,14 @@ class JoinVideoView(generics.GenericAPIView):
         except VideoRoom.DoesNotExist:
             return Response({'error': 'No video room for this event'}, status=status.HTTP_404_NOT_FOUND)
 
-        if video_room.status == VideoRoom.Status.ENDED:
-            return Response({'error': 'Video room has ended'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Check user has registration (or is the event owner)
         is_owner = event.owner_id == request.user.id
+
+        if video_room.status == VideoRoom.Status.ENDED:
+            if is_owner:
+                video_room.reopen()
+            else:
+                return Response({'error': 'Video room has ended'}, status=status.HTTP_400_BAD_REQUEST)
+
         if not is_owner:
             from registrations.models import Registration
 
@@ -98,19 +103,35 @@ class JoinVideoView(generics.GenericAPIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
+        video_settings = event.video_settings or {}
+        waiting_room_enabled = bool(video_settings.get('waiting_room_enabled', False))
+        recording_default = bool(video_settings.get('recording_enabled', False))
+        waiting = waiting_room_enabled and not is_owner
+
         provider = get_video_provider()
         token = provider.generate_join_token(
             room_name=video_room.room_name,
             participant_identity=str(request.user.uuid),
             participant_name=request.user.full_name or request.user.email,
             is_host=is_owner,
+            waiting=waiting,
         )
+
+        recording_active = VideoRecording.objects.filter(
+            video_room=video_room, status=VideoRecording.Status.RECORDING
+        ).exists()
 
         ws_url = getattr(settings, 'LIVEKIT_WS_URL', '')
         data = {
             'token': token,
             'ws_url': ws_url,
             'room_name': video_room.room_name,
+            'room_uuid': str(video_room.uuid),
+            'is_host': is_owner,
+            'waiting': waiting,
+            'waiting_room_enabled': waiting_room_enabled,
+            'recording_enabled_default': recording_default,
+            'recording_active': recording_active,
         }
         return Response(JoinVideoResponseSerializer(data).data)
 
@@ -178,19 +199,35 @@ class JoinVideoGuestView(generics.GenericAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        video_settings = event.video_settings or {}
+        waiting_room_enabled = bool(video_settings.get('waiting_room_enabled', False))
+        recording_default = bool(video_settings.get('recording_enabled', False))
+        waiting = waiting_room_enabled
+
         provider = get_video_provider()
         token = provider.generate_join_token(
             room_name=video_room.room_name,
             participant_identity=f"guest-{registration.uuid}",
             participant_name=registration.full_name or registration.email,
             is_host=False,
+            waiting=waiting,
         )
+
+        recording_active = VideoRecording.objects.filter(
+            video_room=video_room, status=VideoRecording.Status.RECORDING
+        ).exists()
 
         ws_url = getattr(settings, 'LIVEKIT_WS_URL', '')
         data = {
             'token': token,
             'ws_url': ws_url,
             'room_name': video_room.room_name,
+            'room_uuid': str(video_room.uuid),
+            'is_host': False,
+            'waiting': waiting,
+            'waiting_room_enabled': waiting_room_enabled,
+            'recording_enabled_default': recording_default,
+            'recording_active': recording_active,
         }
         return Response(JoinVideoResponseSerializer(data).data)
 
@@ -226,11 +263,14 @@ class JoinCourseSessionVideoView(generics.GenericAPIView):
         except VideoRoom.DoesNotExist:
             return Response({'error': 'No video room for this session'}, status=status.HTTP_404_NOT_FOUND)
 
-        if video_room.status == VideoRoom.Status.ENDED:
-            return Response({'error': 'Video room has ended'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Check enrollment
         is_instructor = course.created_by_id == request.user.id
+
+        if video_room.status == VideoRoom.Status.ENDED:
+            if is_instructor:
+                video_room.reopen()
+            else:
+                return Response({'error': 'Video room has ended'}, status=status.HTTP_400_BAD_REQUEST)
+
         if not is_instructor:
             from learning.models import CourseEnrollment
 
@@ -253,11 +293,21 @@ class JoinCourseSessionVideoView(generics.GenericAPIView):
             is_host=is_instructor,
         )
 
+        recording_active = VideoRecording.objects.filter(
+            video_room=video_room, status=VideoRecording.Status.RECORDING
+        ).exists()
+
         ws_url = getattr(settings, 'LIVEKIT_WS_URL', '')
         data = {
             'token': token,
             'ws_url': ws_url,
             'room_name': video_room.room_name,
+            'room_uuid': str(video_room.uuid),
+            'is_host': is_instructor,
+            'waiting': False,
+            'waiting_room_enabled': False,
+            'recording_enabled_default': False,
+            'recording_active': recording_active,
         }
         return Response(JoinVideoResponseSerializer(data).data)
 
@@ -265,38 +315,62 @@ class JoinCourseSessionVideoView(generics.GenericAPIView):
 @roles('educator', 'admin', route_name='video_rooms')
 class VideoRoomViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    GET /api/v1/video/rooms/ — List video rooms for the authenticated user's events.
+    GET /api/v1/video/rooms/ — List video rooms for the authenticated user's
+    events and course sessions.
     """
 
     serializer_class = VideoRoomSerializer
     permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
 
     def get_queryset(self):
         from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Q
         from events.models import Event
+        from learning.models import Course, CourseSession
 
-        ct = ContentType.objects.get_for_model(Event)
+        event_ct = ContentType.objects.get_for_model(Event)
+        session_ct = ContentType.objects.get_for_model(CourseSession)
 
         if self.request.user.groups.filter(name="admin").exists():
-            return VideoRoom.objects.filter(content_type=ct)
+            return VideoRoom.objects.filter(content_type__in=[event_ct, session_ct])
 
         user_event_ids = Event.objects.filter(
             owner=self.request.user, deleted_at__isnull=True
         ).values_list('id', flat=True)
 
+        staff_course_ids = Course.objects.filter(
+            Q(created_by=self.request.user)
+            | Q(staff_assignments__user=self.request.user)
+        ).values_list('id', flat=True).distinct()
+        user_session_ids = CourseSession.objects.filter(
+            course_id__in=staff_course_ids,
+        ).values_list('id', flat=True)
+
         return VideoRoom.objects.filter(
-            content_type=ct, object_id__in=user_event_ids
+            Q(content_type=event_ct, object_id__in=user_event_ids)
+            | Q(content_type=session_ct, object_id__in=user_session_ids)
         )
 
     @action(detail=True, methods=['post'])
-    def start_recording(self, request, pk=None):
+    def start_recording(self, request, pk=None, uuid=None):
         room = self.get_object()
         if room.status != VideoRoom.Status.ACTIVE:
             return Response({'error': 'Room is not active'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Give each recording a predictable path on the egress container's
+        # mounted volume so we can surface it to users after processing.
+        # LiveKit's {room_id} / {time} template variables are expanded by
+        # the egress service at recording start.
+        output_path = getattr(
+            settings,
+            'LIVEKIT_RECORDING_OUTPUT_PATH_TEMPLATE',
+            '/out/{room_name}-{time}.mp4',
+        )
+
         provider = get_video_provider()
         try:
-            egress_id = provider.start_recording(room.room_name)
+            egress_id = provider.start_recording(room.room_name, output_path=output_path)
             VideoRecording.objects.create(
                 video_room=room,
                 egress_id=egress_id,
@@ -309,7 +383,7 @@ class VideoRoomViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'])
-    def stop_recording(self, request, pk=None):
+    def stop_recording(self, request, pk=None, uuid=None):
         room = self.get_object()
         active_recording = VideoRecording.objects.filter(
             video_room=room, status=VideoRecording.Status.RECORDING
@@ -327,11 +401,62 @@ class VideoRoomViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response({'error': 'Failed to stop recording'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=True, methods=['post'])
+    def admit_participant(self, request, pk=None, uuid=None):
+        """Grant publish + subscribe permissions to a waiting participant.
+
+        Body: {"identity": "<participant-identity>"}
+        """
+        room = self.get_object()
+        identity = (request.data or {}).get('identity') if isinstance(request.data, dict) else None
+        if not identity:
+            return Response({'error': 'identity is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        provider = get_video_provider()
+        ok = provider.update_participant(
+            room.room_name, identity, can_publish=True, can_subscribe=True
+        )
+        if ok:
+            return Response({'status': 'admitted', 'identity': identity})
+        return Response(
+            {'error': 'Failed to admit participant'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    @action(detail=True, methods=['post'])
+    def deny_participant(self, request, pk=None, uuid=None):
+        """Revoke publish + subscribe permissions from a participant.
+
+        Body: {"identity": "<participant-identity>"}
+        """
+        room = self.get_object()
+        identity = (request.data or {}).get('identity') if isinstance(request.data, dict) else None
+        if not identity:
+            return Response({'error': 'identity is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        provider = get_video_provider()
+        ok = provider.update_participant(
+            room.room_name, identity, can_publish=False, can_subscribe=False
+        )
+        if ok:
+            return Response({'status': 'denied', 'identity': identity})
+        return Response(
+            {'error': 'Failed to update participant'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
 
 @roles('educator', 'admin', route_name='video_recordings')
 class VideoRecordingViewSet(viewsets.ReadOnlyModelViewSet):
     """
     GET /api/v1/video/recordings/ — List published recordings accessible to the user.
+
+    Scope:
+    - Admins see all published+available recordings.
+    - Event owners see recordings for their own events.
+    - Course staff see recordings for sessions of courses they own/staff.
+    - Enrolled learners see recordings for sessions of courses they are
+      actively enrolled in.
     """
 
     serializer_class = VideoRecordingSerializer
@@ -342,22 +467,36 @@ class VideoRecordingViewSet(viewsets.ReadOnlyModelViewSet):
             is_published=True,
             status=VideoRecording.Status.AVAILABLE,
         )
-        if self.request.user.groups.filter(name="admin").exists():
+        user = self.request.user
+        if user.groups.filter(name="admin").exists():
             return qs
-        # Scope to recordings from the user's own events
-        from django.contrib.contenttypes.models import ContentType
-        from events.models import Event
 
-        ct = ContentType.objects.get_for_model(Event)
+        from django.db.models import Q
+        from events.models import Event
+        from learning.models import Course, CourseEnrollment, CourseSession
+
         user_event_ids = Event.objects.filter(
-            owner=self.request.user, deleted_at__isnull=True
+            owner=user, deleted_at__isnull=True
         ).values_list('id', flat=True)
+
+        staff_course_ids = Course.objects.filter(
+            Q(created_by=user) | Q(staff_assignments__user=user)
+        ).values_list('id', flat=True).distinct()
+        enrolled_course_ids = CourseEnrollment.objects.filter(
+            user=user,
+            status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
+        ).values_list('course_id', flat=True)
+        accessible_session_ids = CourseSession.objects.filter(
+            course_id__in=list(staff_course_ids) + list(enrolled_course_ids),
+        ).values_list('id', flat=True)
+
         return qs.filter(
-            video_room__content_type=ct,
-            video_room__object_id__in=user_event_ids,
+            Q(event_id__in=user_event_ids)
+            | Q(course_session_id__in=accessible_session_ids)
         )
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class VideoWebhookView(View):
     """
     POST /api/v1/webhooks/video/

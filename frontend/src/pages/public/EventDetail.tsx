@@ -30,6 +30,7 @@ import { getMyRegistrations } from "@/api/registrations";
 import { Event } from "@/api/events/types";
 import { Registration } from "@/api/registrations/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { sanitizeHtml, hasVisibleContent } from "@/lib/sanitize";
 
 export function EventDetail() {
   const { id } = useParams<{ id: string }>();
@@ -137,7 +138,9 @@ export function EventDetail() {
   }
 
   // Derive states from event data
-  const isPast = new Date(event.starts_at) < new Date();
+  const isPast = event.ends_at
+    ? new Date(event.ends_at) < new Date()
+    : new Date(event.starts_at) < new Date();
   const isRegistrationOpen = event.is_registration_open ?? event.registration_enabled;
   const organizerName = event.organizer?.display_name || event.organizer_name || event.owner?.display_name || "Unknown Organizer";
 
@@ -180,7 +183,11 @@ export function EventDetail() {
     }
 
     if (isPast) {
-      return <Button disabled>Event Ended</Button>;
+      return (
+        <Button disabled>
+          {event.status === 'completed' ? 'Event Completed' : 'Event Ended'}
+        </Button>
+      );
     }
 
     if (hasRegistration) {
@@ -386,9 +393,16 @@ export function EventDetail() {
               <TabsContent value="about" className="pt-6 space-y-6">
                 <div>
                   <h3 className="text-xl font-semibold text-foreground mb-3">Event Description</h3>
-                  <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
-                    {event.description || event.short_description || "No description available."}
-                  </p>
+                  {hasVisibleContent(event.description) ? (
+                    <div
+                      className="text-muted-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(event.description) }}
+                    />
+                  ) : event.short_description ? (
+                    <p className="text-muted-foreground leading-relaxed">{event.short_description}</p>
+                  ) : (
+                    <p className="text-muted-foreground leading-relaxed italic">No description available.</p>
+                  )}
                 </div>
 
                 {event.cpd_credits && Number(event.cpd_credits) > 0 && (
@@ -640,10 +654,10 @@ export function EventDetail() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Link to={`/organizations/${event.organization_info.slug}/public`}>
+                      <Link to="/discover/events">
                         <Button variant="outline" className="w-full text-xs h-8">
                           <Building2 className="h-3 w-3 mr-1" />
-                          View Profile
+                          Browse Events
                         </Button>
                       </Link>
                     </div>
@@ -676,10 +690,21 @@ export function EventDetail() {
                       <Video className="h-4 w-4 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="font-medium text-foreground">Online Event</p>
-                        {isConfirmedRegistration ? (
+                        {isPast ? (
+                          <div className="mt-1 space-y-1">
+                            <p className="text-muted-foreground">This session has ended.</p>
+                            {isConfirmedRegistration && (
+                              <p className="text-xs text-muted-foreground">
+                                If the organizer recorded the session, it will appear here once it's ready.
+                              </p>
+                            )}
+                          </div>
+                        ) : (isConfirmedRegistration || isEventOwner) ? (
                           <div className="mt-2 space-y-2">
-                            <JoinButton eventUuid={event.uuid} size="sm" label="Join Video" />
-                            <p className="text-xs text-muted-foreground">Check your email for meeting details</p>
+                            <JoinButton eventUuid={event.uuid} size="sm" label={isEventOwner ? "Start Meeting" : "Join Video"} />
+                            <p className="text-xs text-muted-foreground">
+                              {isEventOwner ? "You'll join as host" : "Check your email for meeting details"}
+                            </p>
                           </div>
                         ) : isPendingPayment ? (
                           <div className="mt-1 space-y-1">
@@ -700,10 +725,12 @@ export function EventDetail() {
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="font-medium text-foreground">Hybrid Event</p>
-                        {isConfirmedRegistration ? (
+                        {(isConfirmedRegistration || isEventOwner) ? (
                           <div className="mt-2 space-y-2">
-                            <JoinButton eventUuid={event.uuid} size="sm" label="Join Online" />
-                            <p className="text-xs text-muted-foreground">Check your email for meeting details</p>
+                            <JoinButton eventUuid={event.uuid} size="sm" label={isEventOwner ? "Start Meeting" : "Join Online"} />
+                            <p className="text-xs text-muted-foreground">
+                              {isEventOwner ? "You'll join as host" : "Check your email for meeting details"}
+                            </p>
                           </div>
                         ) : isPendingPayment ? (
                           <div className="mt-1 space-y-1">
@@ -754,7 +781,7 @@ export function EventDetail() {
                   Explore other events from this organization
                 </p>
               </div>
-              <Link to={`/organizations/${event.organization_info.slug}/public`}>
+              <Link to="/discover/events">
                 <Button variant="outline">
                   View All
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -805,7 +832,7 @@ export function EventDetail() {
                             {relatedEvent.cpd_credits} CPD
                           </Badge>
                         )}
-                        <Link to={`/events/${relatedEvent.slug || relatedEvent.uuid}`} className="ml-auto">
+                        <Link to={`/events/${relatedEvent.slug || relatedEvent.uuid}/details`} className="ml-auto">
                           <Button variant="ghost" size="sm" className="text-xs">
                             View Details
                             <ArrowRight className="ml-1 h-3 w-3" />

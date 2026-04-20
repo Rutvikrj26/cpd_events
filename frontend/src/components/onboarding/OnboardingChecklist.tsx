@@ -43,7 +43,10 @@ const getInitialDismissed = () => {
 };
 
 export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingChecklistProps) {
-    const { user } = useAuth();
+    const { user, hasFeature, deployment } = useAuth();
+    // "Set up billing" is a SaaS-era trial prompt; on single-tenant deploys
+    // billing is pre-configured by the operator so the item is just noise.
+    const showBillingItem = deployment?.mode === 'saas' && hasFeature('configure_billing');
     const [items, setItems] = useState<ChecklistItem[]>([]);
     const [loading, setLoading] = useState(() => !getInitialDismissed());
     const [dismissed, setDismissed] = useState(getInitialDismissed);
@@ -133,20 +136,8 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
                 }
             }
 
-            // 5. Set up Billing
-            try {
-                const hasBilling = subscription?.status === 'active' ||
-                    subscription?.status === 'trialing';
-                checklistItems.push({
-                    id: 'billing',
-                    title: 'Set up billing',
-                    description: 'Add a payment method for when your trial ends',
-                    icon: CreditCard,
-                    completed: hasBilling,
-                    href: '/billing',
-                    action: 'Set Up Billing'
-                });
-            } catch {
+            // 5. Set up Billing — only on SaaS deploys where trials apply.
+            if (showBillingItem) {
                 checklistItems.push({
                     id: 'billing',
                     title: 'Set up billing',

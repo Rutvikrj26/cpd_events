@@ -200,3 +200,90 @@ class EmailService:
 
 # Singleton instance
 email_service = EmailService()
+
+
+def schedule_email(
+    *,
+    recipient_email: str,
+    template_key: str,
+    send_at,
+    subject: str | None = None,
+    context: dict | None = None,
+    recipient_name: str = '',
+    recipient_user=None,
+    event=None,
+    registration=None,
+    batch_key: str = '',
+):
+    """Create a ScheduledEmail. Subject is rendered from EmailService.SUBJECTS if not passed."""
+    from integrations.models import ScheduledEmail
+
+    ctx = context or {}
+    if subject is None:
+        subject_template = email_service.SUBJECTS.get(template_key, 'Notification')
+        try:
+            subject = subject_template.format(**ctx)
+        except (KeyError, IndexError):
+            subject = subject_template
+
+    return ScheduledEmail.objects.create(
+        recipient_email=recipient_email,
+        recipient_name=recipient_name,
+        recipient_user=recipient_user,
+        template_key=template_key,
+        subject=subject,
+        context=ctx,
+        event=event,
+        registration=registration,
+        send_at=send_at,
+        batch_key=batch_key,
+    )
+
+
+def schedule_bulk_emails(
+    *,
+    recipients: list[dict],
+    template_key: str,
+    send_at,
+    stagger_seconds: int = 0,
+    common_context: dict | None = None,
+    event=None,
+    batch_key: str = '',
+):
+    """
+    Schedule emails for many recipients. Space them out by `stagger_seconds`
+    starting at `send_at` to avoid rate-limit spikes and to look more human.
+
+    recipients: list of dicts with keys: email, name (opt), user (opt),
+                registration (opt), context (opt).
+    """
+    from integrations.models import ScheduledEmail
+
+    ctx_base = common_context or {}
+    rows = []
+    for idx, r in enumerate(recipients):
+        if not r.get('email'):
+            continue
+        ctx = {**ctx_base, **(r.get('context') or {})}
+        subject_template = email_service.SUBJECTS.get(template_key, 'Notification')
+        try:
+            subject = subject_template.format(**ctx)
+        except (KeyError, IndexError):
+            subject = subject_template
+        rows.append(
+            ScheduledEmail(
+                recipient_email=r['email'],
+                recipient_name=r.get('name', ''),
+                recipient_user=r.get('user'),
+                template_key=template_key,
+                subject=subject,
+                context=ctx,
+                event=event,
+                registration=r.get('registration'),
+                send_at=send_at + timezone.timedelta(seconds=idx * stagger_seconds),
+                batch_key=batch_key,
+            )
+        )
+    if rows:
+        ScheduledEmail.objects.bulk_create(rows)
+    return len(rows)

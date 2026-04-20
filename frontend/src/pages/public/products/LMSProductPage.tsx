@@ -122,9 +122,9 @@ export default function LMSProductPage() {
                                 Quizzes, certificates, and drip content included.
                             </p>
                             <div className="flex flex-col sm:flex-row gap-4">
-                                <Link to="/signup?role=course_manager&plan=lms">
+                                <Link to="/contact">
                                     <Button size="lg" className="h-12 px-8 text-base shadow-lg shadow-accent/20 bg-accent hover:bg-accent/90 w-full sm:w-auto">
-                                        Create Course
+                                        Request Demo
                                         <ArrowRight className="ml-2 h-4 w-4" />
                                     </Button>
                                 </Link>
@@ -193,9 +193,9 @@ export default function LMSProductPage() {
                     <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
                         Turn your expertise into a scalable revenue stream with Accredit LMS.
                     </p>
-                    <Link to="/signup?role=course_manager&plan=lms">
+                    <Link to="/contact">
                         <Button size="lg" className="h-14 px-10 text-lg shadow-xl shadow-accent/20 bg-accent hover:bg-accent/90">
-                            Start Building for Free
+                            Talk to Sales
                         </Button>
                     </Link>
                 </div>

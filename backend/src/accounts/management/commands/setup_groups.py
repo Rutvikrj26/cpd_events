@@ -3,7 +3,7 @@ Management command to create Django Groups with their permissions.
 
 Usage: python manage.py setup_groups
 
-This creates the four institutional roles (learner, educator, course_manager, admin)
+This creates the five institutional roles (learner, educator, course_manager, instructor, admin)
 and assigns the appropriate Django permissions to each group.
 
 Run this after migrations to ensure groups and permissions are set up.
@@ -183,6 +183,31 @@ GROUP_PERMISSIONS = {
         "view_eventfeedback",
         # Badges
         "view_issuedbadge",
+    ],
+    "instructor": [
+        # Courses (assigned-course instructional access only)
+        "view_course",
+        "view_coursemodule",
+        "view_eventmodule",
+        # Content
+        "view_modulecontent",
+        # Assignments and grading
+        "view_assignment",
+        "view_assignmentsubmission",
+        "add_submissionreview",
+        "change_submissionreview",
+        "view_submissionreview",
+        # Announcements
+        "add_courseannouncement",
+        "change_courseannouncement",
+        "view_courseannouncement",
+        # Enrollments and progress
+        "view_courseenrollment",
+        "view_contentprogress",
+        "view_moduleprogress",
+        # Related read access
+        "view_event",
+        "view_registration",
     ],
     # Admin group inherits the union of every other group's permissions.
     # Resolved at runtime in handle() below — the sentinel "__all__" triggers

@@ -576,18 +576,49 @@ class StripeWebhookView(View):
     def _handle_checkout_session_completed(self, data):
         """
         Handle checkout.session.completed.
-        Used for Course Enrollments (and potentially other one-time purchases).
+        Used for Course Enrollments and Program (bundle) Enrollments.
         """
         from django.contrib.auth import get_user_model
 
-        from learning.models import Course, CourseEnrollment
+        from learning.models import Course, CourseEnrollment, Program, ProgramEnrollment
 
         session_id = data.get('id', 'unknown')
         metadata = data.get('metadata', {})
         txn_type = metadata.get('type')
 
+        if txn_type == 'program_enrollment':
+            program_uuid = metadata.get('program_uuid')
+            user_id = metadata.get('user_id')
+            if not program_uuid or not user_id:
+                logger.error(f"Checkout {session_id}: Missing program_uuid or user_id in metadata")
+                return
+            User = get_user_model()
+            try:
+                user = User.objects.get(pk=user_id)
+                program = Program.objects.get(uuid=program_uuid)
+                enrollment, created = ProgramEnrollment.objects.get_or_create(
+                    user=user,
+                    program=program,
+                    defaults={'stripe_checkout_session_id': session_id},
+                )
+                if not enrollment.stripe_checkout_session_id:
+                    enrollment.stripe_checkout_session_id = session_id
+                enrollment.activate()
+                program.update_counts()
+                logger.info(
+                    f"Checkout {session_id}: Program enrollment {'created' if created else 'activated'} "
+                    f"for user_id={user_id} program={program.title}"
+                )
+            except User.DoesNotExist:
+                logger.error(f"Checkout {session_id}: User {user_id} not found")
+            except Program.DoesNotExist:
+                logger.error(f"Checkout {session_id}: Program {program_uuid} not found")
+            except Exception as e:
+                logger.error(f"Checkout {session_id}: Error processing program enrollment: {e}")
+            return
+
         if txn_type != 'course_enrollment':
-            # Not a course enrollment, skip (may be subscription checkout handled elsewhere)
+            # Not a course or program enrollment, skip (may be subscription checkout handled elsewhere)
             return
 
         course_uuid = metadata.get('course_uuid')

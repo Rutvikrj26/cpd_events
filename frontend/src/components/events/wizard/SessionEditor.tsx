@@ -11,6 +11,16 @@ import { Switch } from '@/components/ui/switch';
 import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { SessionFormData } from '@/api/events/types';
 
+function isEmptyRichText(html: string | null | undefined): boolean {
+    if (!html) return true;
+    const plain = html
+        .replace(/<br\s*\/?>/gi, '')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/g, '')
+        .trim();
+    return plain.length === 0;
+}
+
 interface SessionEditorProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -63,7 +73,11 @@ export const SessionEditor = ({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSave(formData);
+        const cleaned = {
+            ...formData,
+            description: isEmptyRichText(formData.description) ? '' : formData.description,
+        };
+        onSave(cleaned);
         onOpenChange(false);
     };
 

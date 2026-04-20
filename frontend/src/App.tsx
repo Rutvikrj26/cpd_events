@@ -13,14 +13,18 @@ import { AuthLayout } from './components/layout/AuthLayout';
 import ScrollToTop from './components/layout/ScrollToTop';
 
 // Legal Pages
+import { NotFoundPage } from './pages/NotFoundPage';
 import { TermsPage } from './pages/public/TermsPage';
 import { PrivacyPage } from './pages/public/PrivacyPage';
 import { CookiePolicyPage } from './pages/public/CookiePolicyPage';
 
 // Learner browsing (reused from public pages, now behind auth)
 import { EventDetail } from './pages/public/EventDetail';
+import { EventDiscovery } from './pages/public/EventDiscovery';
 import { EventRegistration } from './pages/public/EventRegistration';
 import { PublicCourseDetailPage } from './pages/courses/PublicCourseDetailPage';
+import { ProgramDiscoveryPage } from './pages/public/ProgramDiscoveryPage';
+import { PublicProgramDetailPage } from './pages/programs/PublicProgramDetailPage';
 
 // Auth Pages
 import { LoginPage } from "@/pages/auth/LoginPage";
@@ -28,10 +32,8 @@ import { VerifyEmailPage } from "@/pages/auth/VerifyEmailPage";
 import { CheckEmailPage } from "@/pages/auth/CheckEmailPage";
 import { ForgotPasswordPage } from "@/pages/auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "@/pages/auth/ResetPasswordPage";
-import { OAuthCallbackPage } from "@/pages/auth/OAuthCallbackPage";
 import { AcceptInvitationPage } from "@/pages/auth/AcceptInvitationPage";
 import { ConfirmEmailChangePage } from "@/pages/auth/ConfirmEmailChangePage";
-import { SignupPage } from "@/pages/auth/SignupPage";
 
 // Dashboard Pages
 import { DashboardPage } from './pages/dashboard/DashboardPage';
@@ -54,6 +56,8 @@ import { CoursePlayerPage } from './pages/courses/CoursePlayerPage';
 
 // Educator Pages
 import { ContactsPage } from './pages/dashboard/organizer/ContactsPage';
+// TAGGING-DISABLED: restore TagLibraryPage import when re-enabling tag UI.
+// import { TagLibraryPage } from './pages/dashboard/organizer/TagLibraryPage';
 import { ReportsPage } from './pages/dashboard/organizer/ReportsPage';
 import { EventManagement } from './pages/dashboard/organizer/EventManagement';
 import { OrganizerCertificatesPage } from './pages/dashboard/organizer/OrganizerCertificatesPage';
@@ -63,12 +67,17 @@ import PromoCodesPage from './pages/dashboard/organizer/PromoCodesPage';
 import SpeakersPage from './pages/dashboard/organizer/SpeakersPage';
 import { PublicBadgePage } from './pages/badges/PublicBadgePage';
 import { MyBadgesPage } from './pages/badges/MyBadgesPage';
+import { MyAccreditationsPage } from './pages/accreditations/MyAccreditationsPage';
+import { MyProgramsPage } from './pages/programs/MyProgramsPage';
 
 // Course Pages
 import { CourseCatalogPage } from './pages/courses';
 import OrgCoursesPage from './pages/organizations/courses/OrgCoursesPage';
 import CreateCoursePage from './pages/organizations/courses/CreateCoursePage';
 import { CourseManagementPage } from './pages/organizations/courses/CourseManagementPage';
+import OrgProgramsPage from './pages/organizations/programs/OrgProgramsPage';
+import CreateProgramPage from './pages/organizations/programs/CreateProgramPage';
+import ProgramManagementPage from './pages/organizations/programs/ProgramManagementPage';
 
 // Admin Pages
 import { UserManagementPage } from './pages/admin/UserManagementPage';
@@ -116,10 +125,14 @@ export default function App() {
               <Route path="/verify/:code" element={<CertificateVerify />} />
               <Route path="/badges/verify/:code" element={<PublicBadgePage />} />
 
-              {/* Public event & course pages */}
+              {/* Public event, course & program pages */}
+              <Route path="/discover/events" element={<EventDiscovery />} />
+              <Route path="/discover/courses" element={<CourseCatalogPage />} />
               <Route path="/events/:id/details" element={<EventDetail />} />
               <Route path="/events/:id/register" element={<EventRegistration />} />
               <Route path="/courses/:slug" element={<PublicCourseDetailPage />} />
+              <Route path="/programs" element={<ProgramDiscoveryPage />} />
+              <Route path="/programs/:slug" element={<PublicProgramDetailPage />} />
 
               {/* Auth Routes */}
               <Route path="/login" element={
@@ -127,11 +140,7 @@ export default function App() {
                   <LoginPage />
                 </AuthLayout>
               } />
-              <Route path="/signup" element={
-                <AuthLayout>
-                  <SignupPage />
-                </AuthLayout>
-              } />
+              <Route path="/signup" element={<Navigate to="/login" replace />} />
 
               <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
               <Route path="/auth/check-email" element={<CheckEmailPage />} />
@@ -149,7 +158,7 @@ export default function App() {
                 </AuthLayout>
               } />
 
-              <Route path="/auth/callback" element={<OAuthCallbackPage />} />
+              <Route path="/auth/callback" element={<Navigate to="/login" replace />} />
               <Route path="/auth/confirm-email-change" element={<ConfirmEmailChangePage />} />
 
               {/* Protected Routes - Dashboard */}
@@ -178,6 +187,8 @@ export default function App() {
 
                   {/* Learner pages */}
                   <Route path="/registrations" element={<MyLearningPage />} />
+                  <Route path="/accreditations" element={<MyAccreditationsPage />} />
+                  <Route path="/my-programs" element={<MyProgramsPage />} />
                   <Route path="/certificates" element={<CertificatesPage />} />
                   <Route path="/my-events" element={<MyEvents />} />
                   <Route path="/courses" element={<CourseCatalogPage />} />
@@ -195,12 +206,28 @@ export default function App() {
                   } />
                   <Route path="/courses/manage/:courseSlug" element={<CourseManagementPage />} />
 
+                  {/* Program management */}
+                  <Route path="/programs/manage" element={<OrgProgramsPage />} />
+                  <Route path="/programs/manage/new" element={
+                    <ProtectedRoute requiredFeature="create_courses">
+                      <CreateProgramPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/programs/manage/:programSlug" element={<ProgramManagementPage />} />
+
                   {/* Educator pages */}
                   <Route path="/organizer/contacts" element={
                     <ProtectedRoute requiredFeature="manage_contacts">
                       <ContactsPage />
                     </ProtectedRoute>
                   } />
+                  {/* TAGGING-DISABLED: restore /organizer/contacts/tags route when re-enabling.
+                  <Route path="/organizer/contacts/tags" element={
+                    <ProtectedRoute requiredFeature="manage_contacts">
+                      <TagLibraryPage />
+                    </ProtectedRoute>
+                  } />
+                  */}
                   <Route path="/organizer/reports" element={
                     <ProtectedRoute requiredFeature="create_events">
                       <ReportsPage />
@@ -265,8 +292,8 @@ export default function App() {
 
               </Route>
 
-              {/* Fallback — redirect unknown routes to login */}
-              <Route path="*" element={<Navigate to="/login" replace />} />
+              {/* Fallback — show a real 404 page that preserves auth state */}
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </AuthProvider>
           <Toaster />

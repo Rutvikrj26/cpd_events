@@ -21,7 +21,7 @@ vi.mock("@/contexts/AuthContext", () => ({
 
 const renderEventDetail = (id = "test-event-id") => {
     return render(
-        <MemoryRouter initialEntries={[`/events/${id}`]}>
+        <MemoryRouter initialEntries={[`/events/${id}/details`]}>
             <Routes>
                 <Route path="/events/:id" element={<EventDetail />} />
             </Routes>

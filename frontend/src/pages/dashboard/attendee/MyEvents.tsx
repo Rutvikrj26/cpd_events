@@ -203,7 +203,7 @@ function RegistrationCard({ registration, isPast = false }: { registration: Regi
         )}
 
         <div className="flex gap-2 pt-2">
-          <Link to={`/events/${event.slug || event.uuid}`} className="flex-1">
+          <Link to={`/events/${event.slug || event.uuid}/details`} className="flex-1">
             <Button variant="outline" size="sm" className="w-full">
               View Event
             </Button>

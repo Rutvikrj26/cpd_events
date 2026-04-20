@@ -34,6 +34,11 @@ export function JoinButton({
     token: string;
     ws_url: string;
     room_name: string;
+    room_uuid?: string;
+    is_host?: boolean;
+    waiting?: boolean;
+    waiting_room_enabled?: boolean;
+    recording_active?: boolean;
   } | null>(null);
 
   const handleJoin = async () => {
@@ -85,13 +90,18 @@ export function JoinButton({
           if (!open) setVideoSession(null);
         }}
       >
-        <DialogContent className="max-w-6xl h-[85vh] p-0">
+        <DialogContent className="max-w-6xl h-[85vh] p-0" hideCloseButton>
           <DialogTitle className="sr-only">Video Room</DialogTitle>
           {videoSession && (
             <VideoRoom
               token={videoSession.token}
               serverUrl={videoSession.ws_url}
               roomName={videoSession.room_name}
+              roomUuid={videoSession.room_uuid}
+              isHost={videoSession.is_host}
+              waiting={videoSession.waiting}
+              waitingRoomEnabled={videoSession.waiting_room_enabled}
+              recordingActive={videoSession.recording_active}
               onDisconnected={() => setVideoSession(null)}
             />
           )}

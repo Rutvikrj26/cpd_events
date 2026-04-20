@@ -36,8 +36,11 @@ export const getPayoutsDashboardLink = async (): Promise<PayoutsConnectResponse>
 
 /**
  * Get the current user's Stripe Connect payouts status.
+ * Silent: the endpoint is absent on institutional deployments; we don't want a 404 toast.
  */
 export const getPayoutsStatus = async (): Promise<PayoutsStatus> => {
-    const response = await client.get<PayoutsStatus>('/users/me/payouts/status/');
+    const response = await client.get<PayoutsStatus>('/users/me/payouts/status/', {
+        silent: true,
+    });
     return response.data;
 };

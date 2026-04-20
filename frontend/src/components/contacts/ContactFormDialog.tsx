@@ -17,9 +17,13 @@ import {
     Contact,
     CreateContactParams,
     UpdateContactParams,
+    // Tag, // TAGGING-DISABLED: restore when tagging UI is re-enabled
     createContact,
-    updateContact
+    // getTags, // TAGGING-DISABLED
+    updateContact,
 } from '@/api/contacts';
+// TAGGING-DISABLED: UI hidden while feature is deferred — backend still supports it.
+// import { TagPicker } from './TagPicker';
 
 interface ContactFormDialogProps {
     open: boolean;
@@ -44,6 +48,9 @@ export function ContactFormDialog({
     const [organizationName, setOrganizationName] = useState('');
     const [phone, setPhone] = useState('');
     const [notes, setNotes] = useState('');
+    // TAGGING-DISABLED: restore tag state + tag fetch when re-enabling.
+    // const [tagUuids, setTagUuids] = useState<string[]>([]);
+    // const [availableTags, setAvailableTags] = useState<Tag[]>([]);
 
     // Reset form when contact changes or dialog opens
     useEffect(() => {
@@ -55,6 +62,7 @@ export function ContactFormDialog({
                 setOrganizationName(contact.organization_name || '');
                 setPhone(contact.phone || '');
                 setNotes(contact.notes || '');
+                // setTagUuids((contact.tags ?? []).map((t) => t.uuid));
             } else {
                 // Reset for new contact
                 setEmail('');
@@ -63,7 +71,10 @@ export function ContactFormDialog({
                 setOrganizationName('');
                 setPhone('');
                 setNotes('');
+                // setTagUuids([]);
             }
+            // TAGGING-DISABLED: fetch removed.
+            // getTags().then((resp) => setAvailableTags(resp.results)).catch(() => {});
         }
     }, [open, contact]);
 
@@ -87,6 +98,7 @@ export function ContactFormDialog({
                     organization_name: organizationName.trim() || undefined,
                     phone: phone.trim() || undefined,
                     notes: notes.trim() || undefined,
+                    // tag_uuids: tagUuids, // TAGGING-DISABLED
                 };
                 result = await updateContact(contact.uuid, data);
                 toast.success('Contact updated successfully');
@@ -98,6 +110,7 @@ export function ContactFormDialog({
                     organization_name: organizationName.trim() || undefined,
                     phone: phone.trim() || undefined,
                     notes: notes.trim() || undefined,
+                    // tag_uuids: tagUuids, // TAGGING-DISABLED
                 };
                 result = await createContact(data);
                 toast.success('Contact added successfully');
@@ -188,6 +201,19 @@ export function ContactFormDialog({
                                 disabled={loading}
                             />
                         </div>
+
+                        {/* TAGGING-DISABLED: restore TagPicker block when re-enabling tag UI.
+                        <div className="grid gap-2">
+                            <Label>Tags</Label>
+                            <TagPicker
+                                tags={availableTags}
+                                selectedUuids={tagUuids}
+                                onChange={setTagUuids}
+                                onTagsChange={setAvailableTags}
+                                disabled={loading}
+                            />
+                        </div>
+                        */}
 
                         <div className="grid gap-2">
                             <Label htmlFor="notes">Notes</Label>

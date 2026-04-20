@@ -2,6 +2,7 @@
 Serializers for learning API.
 """
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from badges.models import BadgeTemplate
@@ -18,6 +19,9 @@ from .models import (
     CourseSession,
     CourseSessionAttendance,
     EventModule,
+    Program,
+    ProgramCourse,
+    ProgramEnrollment,
     ModuleContent,
     ModuleProgress,
     SubmissionReview,
@@ -406,6 +410,24 @@ class CourseSerializer(serializers.ModelSerializer):
 
     modules = CourseModuleSerializer(many=True, read_only=True)
     user_role = serializers.SerializerMethodField()
+    programs = serializers.SerializerMethodField()
+
+    def get_programs(self, obj):
+        """Public-visible programs that include this course."""
+        published_programs = obj.programs.filter(
+            status=Program.Status.PUBLISHED, is_public=True,
+        ).only('uuid', 'title', 'slug', 'short_description', 'price_cents', 'currency')
+        return [
+            {
+                'uuid': str(p.uuid),
+                'title': p.title,
+                'slug': p.slug,
+                'short_description': p.short_description,
+                'price_cents': p.price_cents,
+                'currency': p.currency,
+            }
+            for p in published_programs
+        ]
     certificate_template = serializers.SlugRelatedField(
         slug_field='uuid',
         queryset=CertificateTemplate.objects.filter(deleted_at__isnull=True, is_active=True),
@@ -454,6 +476,10 @@ class CourseSerializer(serializers.ModelSerializer):
             'enrollment_open',
             'max_enrollments',
             'enrollment_requires_approval',
+            'enrollment_opens_at',
+            'enrollment_closes_at',
+            'enrollment_window_state',
+            'is_enrollable',
             'estimated_hours',
             'passing_score',
             'hybrid_completion_criteria',
@@ -471,6 +497,7 @@ class CourseSerializer(serializers.ModelSerializer):
             'module_count',
             'modules',
             'user_role',
+            'programs',
             'created_at',
             'updated_at',
         ]
@@ -479,6 +506,7 @@ class CourseSerializer(serializers.ModelSerializer):
             'enrollment_count',
             'completion_count',
             'module_count',
+            'programs',
             'created_at',
             'updated_at',
         ]
@@ -590,6 +618,7 @@ class CourseCreateSerializer(serializers.ModelSerializer):
             'currency',
             # Format & Virtual settings
             'format',
+            'video_settings',
             'live_session_start',
             'live_session_end',
             'live_session_timezone',
@@ -597,6 +626,8 @@ class CourseCreateSerializer(serializers.ModelSerializer):
             # Other settings
             'enrollment_open',
             'max_enrollments',
+            'enrollment_opens_at',
+            'enrollment_closes_at',
             'estimated_hours',
             'passing_score',
             'hybrid_completion_criteria',
@@ -613,7 +644,45 @@ class CourseCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         attrs = _validate_certificate_settings(attrs, self.instance)
         attrs = _validate_badge_settings(attrs, self.instance)
+        attrs = _apply_format_defaults(attrs, self.instance)
+        attrs = _validate_publish_transition(attrs, self.instance)
         return attrs
+
+
+def _apply_format_defaults(attrs, instance=None):
+    """Set sensible default completion criteria per format on create."""
+    if instance is not None:
+        return attrs
+    fmt = attrs.get('format', Course.CourseFormat.ONLINE)
+    if 'hybrid_completion_criteria' in attrs:
+        return attrs
+    if fmt == Course.CourseFormat.ONLINE:
+        attrs['hybrid_completion_criteria'] = Course.HybridCompletionCriteria.MODULES_ONLY
+    elif fmt == Course.CourseFormat.LIVE:
+        attrs['hybrid_completion_criteria'] = Course.HybridCompletionCriteria.SESSIONS_ONLY
+    return attrs
+
+
+def _validate_publish_transition(attrs, instance=None):
+    """If transitioning to PUBLISHED, enforce structural validation."""
+    new_status = attrs.get('status')
+    if new_status != Course.Status.PUBLISHED:
+        return attrs
+    if instance is None:
+        # Cannot evaluate sessions/modules on a yet-to-be-created course.
+        # Force draft on initial create; explicit publish goes through CourseViewSet.publish action.
+        attrs['status'] = Course.Status.DRAFT
+        return attrs
+    if instance.status == Course.Status.PUBLISHED:
+        return attrs
+    # Apply pending changes before validation
+    fmt = attrs.get('format', instance.format)
+    instance.format = fmt
+    try:
+        instance.validate_for_publish()
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError(exc.message_dict if hasattr(exc, 'message_dict') else {'detail': exc.messages})
+    return attrs
 
 
 class CourseStaffSerializer(serializers.ModelSerializer):
@@ -633,7 +702,7 @@ class CourseStaffCreateSerializer(serializers.Serializer):
     """Create a course staff assignment."""
 
     user_uuid = serializers.UUIDField()
-    role = serializers.CharField(default='course_manager')
+    role = serializers.ChoiceField(choices=['course_manager', 'instructor'], default='course_manager')
 
 
 class CourseEnrollmentSerializer(serializers.ModelSerializer):
@@ -720,6 +789,28 @@ class CourseSessionSerializer(serializers.ModelSerializer):
     is_upcoming = serializers.BooleanField(read_only=True)
     is_live = serializers.BooleanField(read_only=True)
     is_past = serializers.BooleanField(read_only=True)
+    published_recording = serializers.SerializerMethodField()
+
+    def get_published_recording(self, obj):
+        from conferencing.models import VideoRecording
+
+        rec = (
+            VideoRecording.objects.filter(
+                course_session=obj,
+                is_published=True,
+                status=VideoRecording.Status.AVAILABLE,
+            )
+            .order_by('-recording_start')
+            .first()
+        )
+        if not rec:
+            return None
+        return {
+            'uuid': str(rec.uuid),
+            'storage_path': rec.storage_path,
+            'duration_seconds': rec.duration_seconds,
+            'recording_end': rec.recording_end.isoformat() if rec.recording_end else None,
+        }
 
     class Meta:
         model = CourseSession
@@ -734,18 +825,33 @@ class CourseSessionSerializer(serializers.ModelSerializer):
             'ends_at',
             'duration_minutes',
             'timezone',
+            'video_settings',
+            'recording_enabled',
+            'recording_auto_publish',
             'cpd_credits',
             'is_mandatory',
             'minimum_attendance_percent',
             'is_published',
+            'status',
+            'cancelled_reason',
+            'cancelled_at',
+            'actual_start_at',
+            'actual_end_at',
             'is_upcoming',
             'is_live',
             'is_past',
+            'published_recording',
             'created_at',
             'updated_at',
         ]
         read_only_fields = [
             'uuid',
+            'status',
+            'cancelled_reason',
+            'cancelled_at',
+            'actual_start_at',
+            'actual_end_at',
+            'published_recording',
             'created_at',
             'updated_at',
         ]
@@ -774,10 +880,40 @@ class CourseSessionListSerializer(serializers.ModelSerializer):
             'cpd_credits',
             'is_mandatory',
             'is_published',
+            'status',
+            'recording_enabled',
+            'recording_auto_publish',
+            'cancelled_reason',
+            'cancelled_at',
+            'actual_start_at',
+            'actual_end_at',
             'is_upcoming',
             'is_live',
             'is_past',
+            'published_recording',
         ]
+
+    published_recording = serializers.SerializerMethodField()
+
+    def get_published_recording(self, obj):
+        from conferencing.models import VideoRecording
+
+        rec = (
+            VideoRecording.objects.filter(
+                course_session=obj,
+                is_published=True,
+                status=VideoRecording.Status.AVAILABLE,
+            )
+            .order_by('-recording_start')
+            .first()
+        )
+        if not rec:
+            return None
+        return {
+            'uuid': str(rec.uuid),
+            'storage_path': rec.storage_path,
+            'duration_seconds': rec.duration_seconds,
+        }
 
 
 class CourseSessionCreateSerializer(serializers.ModelSerializer):
@@ -793,6 +929,9 @@ class CourseSessionCreateSerializer(serializers.ModelSerializer):
             'starts_at',
             'duration_minutes',
             'timezone',
+            'video_settings',
+            'recording_enabled',
+            'recording_auto_publish',
             'cpd_credits',
             'is_mandatory',
             'minimum_attendance_percent',
@@ -820,9 +959,9 @@ class CourseSessionAttendanceSerializer(serializers.ModelSerializer):
             'attendance_minutes',
             'attendance_percent',
             'is_eligible',
-            'zoom_user_email',
-            'zoom_join_time',
-            'zoom_leave_time',
+            'participant_email',
+            'join_time',
+            'leave_time',
             'is_manual_override',
             'override_reason',
             'created_at',
@@ -832,14 +971,16 @@ class CourseSessionAttendanceSerializer(serializers.ModelSerializer):
             'uuid',
             'session',
             'enrollment',
-            'zoom_user_email',
-            'zoom_join_time',
-            'zoom_leave_time',
+            'participant_email',
+            'join_time',
+            'leave_time',
             'created_at',
             'updated_at',
         ]
+
+
 class UnmatchedParticipantSerializer(serializers.Serializer):
-    """Zoom participant not matched to any enrollment."""
+    """Video participant not matched to any enrollment."""
     user_id = serializers.CharField(required=False, allow_null=True)
     user_name = serializers.CharField()
     user_email = serializers.EmailField(required=False, allow_null=True)
@@ -853,8 +994,192 @@ class MatchParticipantSerializer(serializers.Serializer):
     enrollment_uuid = serializers.UUIDField()
     participants = UnmatchedParticipantSerializer(many=True, required=False)
     # Alternatively accept just one
-    zoom_user_email = serializers.EmailField(required=False)
-    zoom_user_name = serializers.CharField(required=False)
-    zoom_join_time = serializers.DateTimeField(required=False)
-    zoom_leave_time = serializers.DateTimeField(required=False)
+    participant_email = serializers.EmailField(required=False)
+    join_time = serializers.DateTimeField(required=False)
+    leave_time = serializers.DateTimeField(required=False)
     attendance_minutes = serializers.IntegerField(required=False)
+
+
+# =============================================================================
+# Programs
+# =============================================================================
+
+
+class ProgramCourseEntrySerializer(serializers.ModelSerializer):
+    """A course as it appears inside a program (with order/required flags)."""
+
+    course = CourseListSerializer(read_only=True)
+    course_uuid = serializers.UUIDField(write_only=True)
+
+    class Meta:
+        model = ProgramCourse
+        fields = ['uuid', 'course', 'course_uuid', 'order', 'is_required', 'created_at']
+        read_only_fields = ['uuid', 'course', 'created_at']
+
+    def create(self, validated_data):
+        course_uuid = validated_data.pop('course_uuid')
+        try:
+            course = Course.objects.get(uuid=course_uuid)
+        except Course.DoesNotExist:
+            raise serializers.ValidationError({'course_uuid': 'Course not found.'})
+        validated_data['course'] = course
+        return super().create(validated_data)
+
+
+class ProgramListSerializer(serializers.ModelSerializer):
+    """Brief program info for listings."""
+
+    effective_image_url = serializers.CharField(read_only=True)
+    is_free = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Program
+        fields = [
+            'uuid',
+            'title',
+            'slug',
+            'short_description',
+            'effective_image_url',
+            'status',
+            'is_public',
+            'price_cents',
+            'currency',
+            'is_free',
+            'course_count',
+            'enrollment_count',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+
+class ProgramSerializer(serializers.ModelSerializer):
+    """Full program details with member courses + bundle savings."""
+
+    effective_image_url = serializers.CharField(read_only=True)
+    is_free = serializers.BooleanField(read_only=True)
+    program_courses = ProgramCourseEntrySerializer(many=True, read_only=True)
+    sum_individual_price_cents = serializers.SerializerMethodField()
+    bundle_savings_cents = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Program
+        fields = [
+            'uuid',
+            'title',
+            'slug',
+            'description',
+            'short_description',
+            'featured_image_url',
+            'effective_image_url',
+            'status',
+            'is_public',
+            'price_cents',
+            'currency',
+            'is_free',
+            'sum_individual_price_cents',
+            'bundle_savings_cents',
+            'stripe_price_id',
+            'course_count',
+            'enrollment_count',
+            'program_courses',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'uuid',
+            'effective_image_url',
+            'is_free',
+            'sum_individual_price_cents',
+            'bundle_savings_cents',
+            'course_count',
+            'enrollment_count',
+            'program_courses',
+            'created_at',
+            'updated_at',
+        ]
+
+    def get_sum_individual_price_cents(self, obj):
+        return obj.sum_individual_price_cents()
+
+    def get_bundle_savings_cents(self, obj):
+        sum_individual = obj.sum_individual_price_cents()
+        return max(0, sum_individual - (obj.price_cents or 0))
+
+
+class ProgramCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Program
+        fields = [
+            'uuid',
+            'title',
+            'slug',
+            'description',
+            'short_description',
+            'featured_image',
+            'featured_image_url',
+            'status',
+            'is_public',
+            'price_cents',
+            'currency',
+        ]
+        read_only_fields = ['uuid']
+
+    def validate(self, attrs):
+        new_status = attrs.get('status')
+        if new_status == Program.Status.PUBLISHED and self.instance is not None:
+            try:
+                self.instance.validate_for_publish()
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(
+                    exc.message_dict if hasattr(exc, 'message_dict') else {'detail': exc.messages}
+                )
+        elif new_status == Program.Status.PUBLISHED and self.instance is None:
+            attrs['status'] = Program.Status.DRAFT
+        return attrs
+
+
+class ProgramEnrollmentSerializer(serializers.ModelSerializer):
+    program = ProgramListSerializer(read_only=True)
+    courses = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProgramEnrollment
+        fields = [
+            'uuid',
+            'program',
+            'status',
+            'enrolled_at',
+            'started_at',
+            'completed_at',
+            'course_enrollments_seeded',
+            'courses',
+        ]
+        read_only_fields = fields
+
+    def get_courses(self, obj):
+        """Per-course breakdown showing order + the learner's enrollment status."""
+        from learning.models import CourseEnrollment, ProgramCourse
+
+        members = (
+            ProgramCourse.objects.filter(program=obj.program)
+            .select_related('course')
+            .order_by('order')
+        )
+        enrollments = {
+            ce.course_id: ce
+            for ce in CourseEnrollment.objects.filter(user=obj.user, course__in=[m.course_id for m in members])
+        }
+        out = []
+        for m in members:
+            ce = enrollments.get(m.course_id)
+            out.append({
+                'uuid': str(m.course.uuid),
+                'title': m.course.title,
+                'slug': m.course.slug,
+                'order': m.order,
+                'is_required': m.is_required,
+                'enrollment_status': ce.status if ce else None,
+                'progress_percent': float(ce.progress_percent) if ce and ce.progress_percent is not None else 0,
+                'completed_at': ce.completed_at.isoformat() if ce and ce.completed_at else None,
+            })
+        return out

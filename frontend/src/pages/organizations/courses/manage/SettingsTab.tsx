@@ -63,6 +63,8 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
         is_public: course.is_public ?? true,
         enrollment_open: course.enrollment_open ?? true,
         max_enrollments: course.max_enrollments ?? 0,
+        enrollment_opens_at: course.enrollment_opens_at ?? '',
+        enrollment_closes_at: course.enrollment_closes_at ?? '',
         certificates_enabled: course.certificates_enabled ?? false,
         certificate_template: course.certificate_template || null,
         auto_issue_certificates: course.auto_issue_certificates ?? true,
@@ -105,7 +107,12 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
     const handleSave = async () => {
         setSaving(true);
         try {
-            const updated = await updateCourse(course.uuid, formData);
+            const payload = {
+                ...formData,
+                enrollment_opens_at: formData.enrollment_opens_at || null,
+                enrollment_closes_at: formData.enrollment_closes_at || null,
+            };
+            const updated = await updateCourse(course.uuid, payload);
             onCourseUpdated(updated);
             toast({
                 title: 'Settings saved',
@@ -152,7 +159,7 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
                 title: 'Course deleted',
                 description: 'The course has been deleted.',
             });
-            navigate(organizationSlug ? `/org/${organizationSlug}/courses` : '/courses/manage');
+            navigate('/courses/manage');
         } catch (error: any) {
             console.error('Failed to delete:', error);
             toast({
@@ -433,6 +440,38 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
                                     onChange={(e) => setFormData({ ...formData, max_enrollments: parseInt(e.target.value) || 0 })}
                                 />
                                 <p className="text-xs text-muted-foreground">0 = Unlimited</p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 pt-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="enrollment_opens_at">Enrollment opens</Label>
+                                    <Input
+                                        id="enrollment_opens_at"
+                                        type="datetime-local"
+                                        value={formData.enrollment_opens_at ? formData.enrollment_opens_at.slice(0, 16) : ''}
+                                        onChange={(e) =>
+                                            setFormData({
+                                                ...formData,
+                                                enrollment_opens_at: e.target.value ? new Date(e.target.value).toISOString() : '',
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="enrollment_closes_at">Enrollment closes</Label>
+                                    <Input
+                                        id="enrollment_closes_at"
+                                        type="datetime-local"
+                                        value={formData.enrollment_closes_at ? formData.enrollment_closes_at.slice(0, 16) : ''}
+                                        onChange={(e) =>
+                                            setFormData({
+                                                ...formData,
+                                                enrollment_closes_at: e.target.value ? new Date(e.target.value).toISOString() : '',
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <p className="col-span-2 text-xs text-muted-foreground">Leave blank to accept enrollments anytime.</p>
                             </div>
                         </CardContent>
                     </Card>

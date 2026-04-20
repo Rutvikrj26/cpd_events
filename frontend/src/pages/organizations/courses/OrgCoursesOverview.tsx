@@ -21,8 +21,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getOrganizationCoursesOverview } from '@/api/organizations';
-import { Course } from '@/api/courses';
+import { Course, getOwnedCourses } from '@/api/courses';
 import { format } from 'date-fns';
 
 interface OrgCoursesOverviewProps {
@@ -47,7 +46,7 @@ const OrgCoursesOverview: React.FC<OrgCoursesOverviewProps> = ({
             if (!orgUuid) return;
             setIsLoading(true);
             try {
-                const data = await getOrganizationCoursesOverview(orgUuid);
+                const data = await getOwnedCourses();
                 setCourses(data);
             } catch (error) {
                 console.error('Failed to load organization courses', error);
@@ -87,11 +86,11 @@ const OrgCoursesOverview: React.FC<OrgCoursesOverviewProps> = ({
                     <CardDescription>All courses across course managers in this organization.</CardDescription>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <Button variant="outline" onClick={() => navigate(`/org/${orgSlug}/courses`)}>
+                    <Button variant="outline" onClick={() => navigate(`/courses/manage`)}>
                         Manage Courses
                     </Button>
                     {canCreateCourses && (
-                        <Button onClick={() => navigate(`/org/${orgSlug}/courses/new`)}>
+                        <Button onClick={() => navigate(`/courses/manage/new`)}>
                             Create Course
                         </Button>
                     )}
@@ -195,7 +194,7 @@ const OrgCoursesOverview: React.FC<OrgCoursesOverviewProps> = ({
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onClick={() => navigate(`/org/${orgSlug}/courses/${course.slug}`)}>
+                                                            <DropdownMenuItem onClick={() => navigate(`/courses/manage/${course.slug}`)}>
                                                                 Manage Course
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => navigate(`/courses/${course.slug}`)}>

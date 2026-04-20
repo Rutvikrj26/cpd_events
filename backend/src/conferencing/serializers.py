@@ -51,6 +51,12 @@ class JoinVideoResponseSerializer(serializers.Serializer):
     token = serializers.CharField()
     ws_url = serializers.CharField()
     room_name = serializers.CharField()
+    room_uuid = serializers.CharField()
+    is_host = serializers.BooleanField()
+    waiting = serializers.BooleanField()
+    waiting_room_enabled = serializers.BooleanField()
+    recording_enabled_default = serializers.BooleanField()
+    recording_active = serializers.BooleanField()
 
 
 class VideoStatusSerializer(serializers.Serializer):

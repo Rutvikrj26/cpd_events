@@ -7,6 +7,12 @@ export interface JoinVideoResponse {
   token: string;
   ws_url: string;
   room_name: string;
+  room_uuid: string;
+  is_host: boolean;
+  waiting: boolean;
+  waiting_room_enabled: boolean;
+  recording_enabled_default: boolean;
+  recording_active: boolean;
 }
 
 export interface VideoRoom {

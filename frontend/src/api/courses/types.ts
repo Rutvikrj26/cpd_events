@@ -1,4 +1,4 @@
-export type CourseFormat = 'online' | 'hybrid';
+export type CourseFormat = 'online' | 'live' | 'hybrid';
 
 export interface Course {
     uuid: string;
@@ -37,6 +37,10 @@ export interface Course {
     enrollment_open: boolean;
     max_enrollments?: number | null;
     enrollment_requires_approval: boolean;
+    enrollment_opens_at?: string | null;
+    enrollment_closes_at?: string | null;
+    enrollment_window_state?: 'upcoming' | 'open' | 'closed' | 'unbounded';
+    is_enrollable?: boolean;
 
     // Completion
     estimated_hours: string | number;
@@ -63,11 +67,21 @@ export interface Course {
     updated_at?: string;
 
     // Permission
-    user_role?: 'admin' | 'course_manager' | null;
+    user_role?: 'admin' | 'course_manager' | 'instructor' | null;
 
     // Relations
     organization_slug?: string;
     modules?: CourseModule[];
+    programs?: CourseProgramSummary[];
+}
+
+export interface CourseProgramSummary {
+    uuid: string;
+    title: string;
+    slug: string;
+    short_description: string;
+    price_cents: number;
+    currency: string;
 }
 
 export interface CourseStaffMember {
@@ -92,6 +106,8 @@ export interface CourseCreateRequest {
     price_cents?: number;
     enrollment_open?: boolean;
     max_enrollments?: number;
+    enrollment_opens_at?: string | null;
+    enrollment_closes_at?: string | null;
     estimated_hours?: number;
     passing_score?: number;
     hybrid_completion_criteria?: 'modules_only' | 'sessions_only' | 'both' | 'either' | 'min_sessions';
@@ -105,6 +121,7 @@ export interface CourseCreateRequest {
     auto_issue_badges?: boolean;
     // Format & Virtual fields
     format?: CourseFormat;
+    video_settings?: Record<string, any>;
     live_session_start?: string;
     live_session_end?: string;
     live_session_timezone?: string;
@@ -195,8 +212,16 @@ export interface CourseEnrollment {
     certificate_issued_at?: string;
 }
 
-// Course Sessions (for hybrid courses with multiple live sessions)
+// Course Sessions (for live and hybrid courses with multiple live lectures)
 export type SessionType = 'live' | 'recorded' | 'hybrid';
+export type CourseSessionStatus = 'scheduled' | 'live' | 'completed' | 'cancelled';
+
+export interface PublishedSessionRecording {
+    uuid: string;
+    storage_path: string;
+    duration_seconds: number;
+    recording_end?: string | null;
+}
 
 export interface CourseSession {
     uuid: string;
@@ -209,13 +234,22 @@ export interface CourseSession {
     ends_at?: string;
     duration_minutes: number;
     timezone: string;
+    video_settings?: Record<string, any>;
+    recording_enabled?: boolean;
+    recording_auto_publish?: boolean;
     cpd_credits: number | string;
     is_mandatory: boolean;
     minimum_attendance_percent: number;
     is_published: boolean;
+    status?: CourseSessionStatus;
+    cancelled_reason?: string;
+    cancelled_at?: string;
+    actual_start_at?: string;
+    actual_end_at?: string;
     is_upcoming?: boolean;
     is_live?: boolean;
     is_past?: boolean;
+    published_recording?: PublishedSessionRecording | null;
     created_at?: string;
     updated_at?: string;
 }
@@ -228,6 +262,9 @@ export interface CourseSessionCreateRequest {
     starts_at: string;
     duration_minutes?: number;
     timezone?: string;
+    video_settings?: Record<string, any>;
+    recording_enabled?: boolean;
+    recording_auto_publish?: boolean;
     cpd_credits?: number;
     is_mandatory?: boolean;
     minimum_attendance_percent?: number;

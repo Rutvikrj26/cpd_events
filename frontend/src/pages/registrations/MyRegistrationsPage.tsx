@@ -217,7 +217,7 @@ export const MyLearningPage = () => {
                                             <td className="px-6 py-4">{getPaymentBadge(reg.payment_status)}</td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
-                                                    <Link to={`/events/${reg.event.slug || reg.event.uuid}`} className="text-primary hover:text-primary/80 font-medium text-xs">
+                                                    <Link to={`/events/${reg.event.slug || reg.event.uuid}/details`} className="text-primary hover:text-primary/80 font-medium text-xs">
                                                         View Event
                                                     </Link>
                                                     {reg.status === 'pending' && (reg.payment_status === 'pending' || reg.payment_status === 'refunded') && (

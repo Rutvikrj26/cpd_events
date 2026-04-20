@@ -3,7 +3,7 @@ export interface User {
     email: string;
     full_name: string;
     roles: string[];
-    primary_role: 'learner' | 'educator' | 'course_manager' | 'admin';
+    primary_role: 'learner' | 'educator' | 'course_manager' | 'instructor' | 'admin';
     email_verified?: boolean;
     onboarding_completed?: boolean;
     is_active: boolean;
@@ -14,19 +14,13 @@ export interface User {
     bio?: string;
     timezone?: string;
     pending_email?: string;
+    gst_hst_number?: string;
 }
 
 
 export interface LoginRequest {
     email: string;
     password: string;
-}
-
-export interface SignupRequest {
-    email: string;
-    password: string;
-    password_confirm: string;
-    full_name: string;
 }
 
 export interface RefreshTokenRequest {

@@ -346,12 +346,9 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
             except ContactList.DoesNotExist:
                 return error_response('Contact list not found.', code='LIST_NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
         else:
-            # Get or create default list
-            target_list = ContactList.objects.filter(owner=organizer, is_default=True).first()
+            target_list = ContactList.objects.filter(owner=organizer).order_by('created_at').first()
             if not target_list:
-                target_list = ContactList.objects.filter(owner=organizer).first()
-            if not target_list:
-                target_list = ContactList.objects.create(owner=organizer, name="Default", is_default=True)
+                target_list = ContactList.objects.create(owner=organizer, name="My Contacts")
 
         # Check if contact already exists
         existing = Contact.objects.filter(contact_list__owner=organizer, email__iexact=registration.email).first()
@@ -389,12 +386,12 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 
     @swagger_auto_schema(
         operation_summary="List unmatched attendance",
-        operation_description="Get Zoom attendance records not matched to any registration.",
+        operation_description="Get attendance records not matched to any registration.",
         responses={200: serializers.UnmatchedAttendanceRecordSerializer(many=True)},
     )
     @action(detail=False, methods=['get'], url_path='unmatched-attendance')
     def unmatched_attendance(self, request, event_uuid=None):
-        """Get unmatched Zoom attendance records for reconciliation."""
+        """Get unmatched attendance records for reconciliation."""
         from events.models import Event
 
         from .models import AttendanceRecord
@@ -420,7 +417,7 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 
     @swagger_auto_schema(
         operation_summary="Match attendance to registration",
-        operation_description="Manually match an unmatched Zoom attendance record to a registration.",
+        operation_description="Manually match an unmatched attendance record to a registration.",
         request_body=serializers.AttendanceMatchSerializer,
         responses={
             200: serializers.AttendanceRecordSerializer,
@@ -430,7 +427,7 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
     )
     @action(detail=False, methods=['post'], url_path='match-attendance/(?P<record_uuid>[^/.]+)')
     def match_attendance(self, request, event_uuid=None, record_uuid=None):
-        """Match unmatched Zoom attendance record to a registration."""
+        """Match unmatched attendance record to a registration."""
         from events.models import Event
 
         from .models import AttendanceRecord

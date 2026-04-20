@@ -1,7 +1,6 @@
 import client from '../client';
 import {
     LoginRequest,
-    SignupRequest,
     AuthResponse,
     SignupResponse,
     User,
@@ -12,12 +11,6 @@ import {
     PasswordChangeRequest,
     NotificationPreferences
 } from './types';
-
-// Authentication
-export const signup = async (data: SignupRequest): Promise<SignupResponse> => {
-    const response = await client.post<SignupResponse>('/auth/signup/', data);
-    return response.data;
-};
 
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     const response = await client.post<AuthResponse>('/auth/token/', data);
@@ -203,7 +196,7 @@ export interface AdminUserDetail {
         professional_title: string | null;
         organization_name: string | null;
         roles: string[];
-        primary_role: 'learner' | 'educator' | 'course_manager' | 'admin';
+        primary_role: 'learner' | 'educator' | 'course_manager' | 'instructor' | 'admin';
         is_active: boolean;
         email_verified: boolean;
         last_login_at: string | null;
@@ -213,12 +206,13 @@ export interface AdminUserDetail {
     course_staff: Array<{
         uuid: string;
         course_uuid: string;
+        course_slug?: string;
         course_title: string;
         role: string;
         created_at: string;
     }>;
     owned_events: Array<{ uuid: string; title: string; status: string; starts_at: string | null }>;
-    owned_courses: Array<{ uuid: string; title: string; status: string }>;
+    owned_courses: Array<{ uuid: string; slug?: string; title: string; status: string }>;
     certificates: Array<{ uuid: string; short_code: string; title: string; issued_at: string | null }>;
     recent_activity: Array<{
         type: string;
@@ -248,4 +242,28 @@ export const exportUserData = async (): Promise<Blob> => {
 
 export const deleteAccount = async (): Promise<void> => {
     await client.post('/users/me/delete-account/');
+};
+
+// Unified learner accreditations feed (certificates + badges)
+export interface AccreditationItem {
+    kind: 'certificate' | 'badge';
+    uuid: string;
+    title: string;
+    source_title: string;
+    source_kind: 'event' | 'course' | null;
+    issued_at: string;
+    verification_code: string;
+    verify_url: string | null;
+    artifact_url: string | null;
+    short_code: string;
+}
+
+export interface AccreditationsResponse {
+    count: number;
+    results: AccreditationItem[];
+}
+
+export const getMyAccreditations = async (): Promise<AccreditationsResponse> => {
+    const response = await client.get<AccreditationsResponse>('/users/me/accreditations/');
+    return response.data;
 };

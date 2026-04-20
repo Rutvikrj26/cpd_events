@@ -6,6 +6,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getMyCertificates, downloadCertificate } from '@/api/certificates';
 import { Certificate } from '@/api/certificates/types';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { getRoleFlags } from '@/lib/role-utils';
 import {
     Table,
     TableBody,
@@ -18,6 +20,9 @@ import { Badge } from '@/components/ui/badge';
 
 export const CertificatesPage = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const { isCreator, isAdmin } = getRoleFlags(user);
+    const isStaffView = isCreator || isAdmin;
     const [certificates, setCertificates] = useState<Certificate[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(true);
@@ -104,8 +109,14 @@ export const CertificatesPage = () => {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-foreground">My Certificates</h1>
-                    <p className="text-muted-foreground mt-1">Your earned certificates and credentials</p>
+                    <h1 className="text-3xl font-bold text-foreground">
+                        {isStaffView ? 'Certificates' : 'My Certificates'}
+                    </h1>
+                    <p className="text-muted-foreground mt-1">
+                        {isStaffView
+                            ? 'Certificates you have earned personally. For all certificates across the platform, see each event or course.'
+                            : 'Your earned certificates and credentials'}
+                    </p>
                 </div>
                 {certificates.length > 0 && (
                     <Badge variant="secondary" className="text-sm">
@@ -248,9 +259,21 @@ export const CertificatesPage = () => {
                         <p className="text-muted-foreground text-center max-w-sm">
                             {searchTerm
                                 ? "Try adjusting your search terms to find what you're looking for."
-                                : "Complete events or courses to earn certificates. They will appear here once issued."
+                                : isStaffView
+                                    ? "You haven't earned any certificates yourself yet. To review certificates issued to learners, open the specific event or course and check its Certificates tab."
+                                    : "Complete events or courses to earn certificates. They will appear here once issued."
                             }
                         </p>
+                        {!searchTerm && isStaffView && (
+                            <div className="mt-6 flex flex-wrap gap-2 justify-center">
+                                <Button variant="outline" size="sm" onClick={() => navigate('/events')}>
+                                    Go to Events
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={() => navigate('/courses/manage')}>
+                                    Go to Courses
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 )
             }

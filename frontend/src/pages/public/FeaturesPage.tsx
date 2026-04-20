@@ -47,9 +47,9 @@ export function FeaturesPage() {
                             A comprehensive platform for hosting professional development events, tracking attendance automatically, and issuing verifiable certificates.
                         </p>
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                            <Link to="/signup">
+                            <Link to="/login">
                                 <Button size="lg" className="h-12 px-8 glow-primary">
-                                    Get Started Free
+                                    Access Portal
                                     <ArrowRight className="ml-2 h-4 w-4" />
                                 </Button>
                             </Link>
@@ -118,8 +118,8 @@ export function FeaturesPage() {
                 ]}
                 visual={<EventManagementVisual />}
                 reversed={false}
-                ctaLink="/signup?role=organizer"
-                ctaText="Start Creating Events"
+                ctaLink="/contact"
+                ctaText="Request Demo"
             />
 
             {/* Feature Highlight 2: Course Management */}
@@ -137,8 +137,8 @@ export function FeaturesPage() {
                 ]}
                 visual={<CourseManagementVisual />}
                 reversed={true}
-                ctaLink="/signup?role=course_manager"
-                ctaText="Start Building Courses"
+                ctaLink="/contact"
+                ctaText="Talk to Sales"
             />
 
             {/* Feature Highlight 3: Video Conferencing */}
@@ -156,8 +156,8 @@ export function FeaturesPage() {
                 ]}
                 visual={<ZoomIntegrationVisual />}
                 reversed={false}
-                ctaLink="/signup?role=organizer"
-                ctaText="Start Hosting Events"
+                ctaLink="/contact"
+                ctaText="Request Demo"
             />
 
             {/* Feature Highlight 4: Certificates */}
@@ -194,8 +194,8 @@ export function FeaturesPage() {
                 ]}
                 visual={<CRMVisual />}
                 reversed={false}
-                ctaLink="/signup?role=organizer"
-                ctaText="Start Managing Contacts"
+                ctaLink="/contact"
+                ctaText="Talk to Sales"
             />
 
             {/* Feature Highlight 6: Team Management */}
@@ -258,9 +258,9 @@ export function FeaturesPage() {
                             Start hosting professional development events and issuing verifiable certificates today.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Link to="/signup">
+                            <Link to="/contact">
                                 <Button size="lg" className="bg-white text-primary hover:bg-white/90 min-w-[180px] h-14 text-lg font-semibold">
-                                    Get Started Free
+                                    Request Demo
                                     <ArrowRight className="ml-2 h-5 w-5" />
                                 </Button>
                             </Link>

@@ -64,6 +64,26 @@ class EventService:
                 field_data['position'] = position
                 EventCustomField.objects.create(event=event, **field_data)
 
+            # Seed the default feedback form — admins can edit/remove afterwards.
+            from feedback.models import FeedbackField
+
+            default_feedback_fields = [
+                ('Overall rating', 'rating', True, 0, 1, 5),
+                ('Content quality', 'rating', True, 1, 1, 5),
+                ('Speaker rating', 'rating', True, 2, 1, 5),
+                ('Comments', 'textarea', False, 3, None, None),
+            ]
+            for label, ftype, required, order, mn, mx in default_feedback_fields:
+                FeedbackField.objects.create(
+                    event=event,
+                    label=label,
+                    field_type=ftype,
+                    required=required,
+                    order=order,
+                    min_value=mn,
+                    max_value=mx,
+                )
+
             if speakers_data:
                 event.speakers.set(speakers_data)
 

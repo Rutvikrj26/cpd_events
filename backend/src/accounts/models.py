@@ -57,7 +57,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     """
     Custom user model for the CPD Events platform.
 
-    Roles are managed via Django Groups (learner, educator, course_manager, admin).
+    Roles are managed via Django Groups (learner, educator, course_manager, instructor, admin).
     Users can belong to multiple groups simultaneously.
 
     Key Features:
@@ -224,6 +224,8 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
             return "educator"
         if "course_manager" in roles:
             return "course_manager"
+        if "instructor" in roles:
+            return "instructor"
         return "learner"
 
     @property
@@ -388,6 +390,7 @@ class UserInvitation(BaseModel):
         ("learner", "Learner"),
         ("educator", "Educator"),
         ("course_manager", "Course Manager"),
+        ("instructor", "Instructor"),
         ("admin", "Admin"),
     ]
 

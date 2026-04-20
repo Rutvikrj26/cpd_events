@@ -23,7 +23,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from '@/components/ui/skeleton';
-import { getOrganizationCourses, getOwnedCourses, deleteCourse, Course } from '@/api/courses';
+import { getOwnedCourses, deleteCourse, Course } from '@/api/courses';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import {
@@ -41,10 +41,9 @@ const OrgCoursesPage = () => {
     const { slug } = useParams<{ slug: string }>();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { isAdmin } = getRoleFlags(user);
+    const { isAdmin, isCourseManager, isInstructor } = getRoleFlags(user);
     const isPersonal = !slug;
-    // Legacy: was used to gate instructor-only views; kept false until removed everywhere
-    const isInstructor = false;
+    const canCreateCourses = isAdmin || isCourseManager;
 
     const [courses, setCourses] = useState<Course[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -59,11 +58,7 @@ const OrgCoursesPage = () => {
     const loadCourses = async () => {
         setIsLoading(true);
         try {
-            if (!isPersonal && isInstructor) {
-                setCourses([]);
-                return;
-            }
-            const data = isPersonal ? await getOwnedCourses() : await getOrganizationCourses(slug as string);
+            const data = await getOwnedCourses();
             setCourses(data);
         } catch (error) {
             console.error('Failed to load courses', error);
@@ -116,42 +111,22 @@ const OrgCoursesPage = () => {
         );
     }
 
-    if (isInstructor) {
-        return (
-            <div className="container mx-auto py-8 px-4">
-                <Card>
-                    <CardContent className="py-12 text-center">
-                        <BookOpen className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                        <p className="text-muted-foreground mb-4">
-                            Instructors manage their assigned course from the instructor dashboard.
-                        </p>
-                        {slug && (
-                            <Button variant="outline" onClick={() => navigate(`/org/${slug}/instructor`)}>
-                                Go to Instructor Dashboard
-                            </Button>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
-        );
-    }
-
     return (
         <div className="container mx-auto py-8 px-4">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">
-                        {isAdmin ? 'My Courses' : 'Assigned Courses'}
+                        {canCreateCourses ? 'My Courses' : 'Assigned Courses'}
                     </h1>
                     <p className="text-muted-foreground">
-                        {isAdmin
-                            ? 'Manage your course catalog and content.'
-                            : 'Courses you have been assigned to manage.'}
+                        {canCreateCourses
+                            ? 'Create and manage the courses you own.'
+                            : 'Courses you have been assigned to teach.'}
                     </p>
                 </div>
 
-                {isAdmin && (
-                    <Button onClick={() => navigate(isPersonal ? `/courses/manage/new` : `/org/${slug}/courses/new`)}>
+                {canCreateCourses && (
+                    <Button onClick={() => navigate(`/courses/manage/new`)}>
                         <Plus className="mr-2 h-4 w-4" />
                         Create Course
                     </Button>
@@ -257,13 +232,13 @@ const OrgCoursesPage = () => {
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onClick={() => navigate(isPersonal ? `/courses/manage/${course.slug}` : `/org/${slug}/courses/${course.slug}`)}>
+                                                            <DropdownMenuItem onClick={() => navigate(`/courses/manage/${course.slug}`)}>
                                                                 Manage Course
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => navigate(`/courses/${course.slug}`)}>
                                                                 View Public Page
                                                             </DropdownMenuItem>
-                                                            {isAdmin && course.status === 'draft' && (
+                                                            {course.user_role !== 'instructor' && course.status === 'draft' && (
                                                                 <DropdownMenuItem
                                                                     className="text-destructive focus:text-destructive"
                                                                     onClick={() => setCourseToDelete(course)}

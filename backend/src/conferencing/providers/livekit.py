@@ -198,8 +198,13 @@ class LiveKitProvider(VideoProvider):
         participant_identity: str,
         participant_name: str,
         is_host: bool = False,
+        waiting: bool = False,
     ) -> str:
         lk = _get_livekit_api_module()
+        # Waiting participants still join the room (so hosts can see & admit
+        # them) but cannot publish or subscribe until upgraded.
+        can_publish = True if is_host else (not waiting)
+        can_subscribe = True if is_host else (not waiting)
         token = (
             lk.AccessToken(self._api_key, self._api_secret)
             .with_identity(participant_identity)
@@ -208,20 +213,66 @@ class LiveKitProvider(VideoProvider):
                 lk.VideoGrants(
                     room_join=True,
                     room=room_name,
-                    can_publish=True,
-                    can_subscribe=True,
+                    can_publish=can_publish,
+                    can_subscribe=can_subscribe,
                     room_admin=is_host,
                 )
             )
         )
         jwt_str = token.to_jwt()
         logger.debug(
-            "Generated join token for %s in room %s (host=%s)",
+            "Generated join token for %s in room %s (host=%s, waiting=%s)",
             participant_identity,
             room_name,
             is_host,
+            waiting,
         )
         return jwt_str
+
+    async def _update_participant_async(
+        self,
+        room_name: str,
+        identity: str,
+        can_publish: bool | None,
+        can_subscribe: bool | None,
+        metadata: str | None,
+    ) -> bool:
+        lk = _get_livekit_api_module()
+        api = await self._create_api()
+        try:
+            kwargs: dict = {"room": room_name, "identity": identity}
+            if metadata is not None:
+                kwargs["metadata"] = metadata
+            if can_publish is not None or can_subscribe is not None:
+                perm_kwargs: dict = {}
+                if can_publish is not None:
+                    perm_kwargs["can_publish"] = can_publish
+                    perm_kwargs["can_publish_data"] = can_publish
+                if can_subscribe is not None:
+                    perm_kwargs["can_subscribe"] = can_subscribe
+                kwargs["permission"] = lk.ParticipantPermission(**perm_kwargs)
+            await api.room.update_participant(lk.UpdateParticipantRequest(**kwargs))
+            return True
+        except Exception:
+            logger.exception(
+                "Failed to update participant %s in room %s", identity, room_name
+            )
+            return False
+        finally:
+            await api.aclose()
+
+    def update_participant(
+        self,
+        room_name: str,
+        identity: str,
+        *,
+        can_publish: bool | None = None,
+        can_subscribe: bool | None = None,
+        metadata: str | None = None,
+    ) -> bool:
+        return async_to_sync(self._update_participant_async)(
+            room_name, identity, can_publish, can_subscribe, metadata
+        )
 
     def verify_webhook(self, body: bytes, auth_header: str) -> bool:
         lk = _get_livekit_api_module()

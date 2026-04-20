@@ -58,6 +58,7 @@ const initialFormData: Partial<EventCreateRequest> = {
         enabled: false,
         recording_enabled: false,
         screen_share: true,
+        waiting_room_enabled: true,
     },
 
     // Payment Settings

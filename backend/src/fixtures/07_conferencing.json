@@ -216,7 +216,7 @@
       "file_name": "acls-workshop-2025-02-15-video",
       "file_extension": "mp4",
       "file_size_bytes": 512000000,
-      "storage_url": "gs://mededhub-recordings/acls-workshop-2025-02-15/video.mp4",
+      "storage_url": "gs://utoronto-recordings/acls-workshop-2025-02-15/video.mp4",
       "is_visible": true,
       "uuid": "00000000-0000-4000-a000-000000000708"
     }
@@ -232,7 +232,7 @@
       "file_name": "acls-workshop-2025-02-15-chat",
       "file_extension": "json",
       "file_size_bytes": 12288,
-      "storage_url": "gs://mededhub-recordings/acls-workshop-2025-02-15/chat.json",
+      "storage_url": "gs://utoronto-recordings/acls-workshop-2025-02-15/chat.json",
       "is_visible": true,
       "uuid": "00000000-0000-4000-a000-000000000709"
     }

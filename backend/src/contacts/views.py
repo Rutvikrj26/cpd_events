@@ -378,3 +378,122 @@ class ContactViewSet(BaseModelViewSet):
             )
 
         return response
+
+    IMPORT_COLUMNS = [
+        'email',
+        'full_name',
+        'professional_title',
+        'organization_name',
+        'phone',
+        'notes',
+    ]
+
+    @swagger_auto_schema(
+        operation_summary="Download import template",
+        operation_description="Download a CSV template with the expected columns for /import-csv/.",
+    )
+    @action(detail=False, methods=['get'], url_path='import-template')
+    def import_template(self, request):
+        """Empty CSV template for the CSV import flow."""
+        import csv
+
+        from django.http import HttpResponse
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="contacts_import_template.csv"'
+        writer = csv.writer(response)
+        writer.writerow(self.IMPORT_COLUMNS)
+        writer.writerow([
+            'attendee@example.com',
+            'Jane Doe',
+            'MD',
+            'Example Clinic',
+            '+1 555 0123',
+            'Met at conference',
+        ])
+        return response
+
+    @swagger_auto_schema(
+        operation_summary="Import contacts from CSV",
+        operation_description="Upload a CSV file (multipart/form-data, field name 'file') with columns from /import-template/.",
+    )
+    @action(detail=False, methods=['post'], url_path='import-csv')
+    def import_csv(self, request):
+        """Parse an uploaded CSV into contacts with row-level error reporting."""
+        import csv
+        import io
+
+        upload = request.FILES.get('file')
+        if not upload:
+            return Response({'error': 'No file uploaded under the "file" field.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        skip_duplicates = request.data.get('skip_duplicates', 'true')
+        skip_duplicates = str(skip_duplicates).lower() not in ('false', '0', 'no')
+
+        try:
+            decoded = upload.read().decode('utf-8-sig')
+        except UnicodeDecodeError:
+            return Response({'error': 'File must be UTF-8 encoded.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        reader = csv.DictReader(io.StringIO(decoded))
+        if not reader.fieldnames:
+            return Response({'error': 'CSV is empty.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        normalized = [(name or '').strip().lower() for name in reader.fieldnames]
+        missing = [col for col in ('email', 'full_name') if col not in normalized]
+        if missing:
+            return Response(
+                {'error': f'Missing required column(s): {", ".join(missing)}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        contact_list = self._get_user_list()
+        created: list[str] = []
+        skipped: list[dict] = []
+        errors: list[dict] = []
+
+        for index, raw_row in enumerate(reader, start=2):  # row 1 = header
+            row = {(k or '').strip().lower(): (v or '').strip() for k, v in raw_row.items()}
+            email = row.get('email', '').lower()
+            full_name = row.get('full_name', '')
+
+            if not email or '@' not in email:
+                errors.append({'row': index, 'email': email, 'error': 'Invalid email'})
+                continue
+            if not full_name:
+                errors.append({'row': index, 'email': email, 'error': 'full_name is required'})
+                continue
+
+            if Contact.objects.filter(contact_list=contact_list, email__iexact=email).exists():
+                if skip_duplicates:
+                    skipped.append({'row': index, 'email': email})
+                    continue
+                errors.append({'row': index, 'email': email, 'error': 'Duplicate email'})
+                continue
+
+            try:
+                contact = Contact.objects.create(
+                    contact_list=contact_list,
+                    email=email,
+                    full_name=full_name,
+                    professional_title=row.get('professional_title', ''),
+                    organization_name=row.get('organization_name', ''),
+                    phone=row.get('phone', ''),
+                    notes=row.get('notes', ''),
+                    source='import',
+                )
+                created.append(str(contact.uuid))
+            except Exception as e:
+                errors.append({'row': index, 'email': email, 'error': str(e)[:200]})
+
+        contact_list.update_contact_count()
+
+        return Response(
+            {
+                'created': len(created),
+                'skipped': len(skipped),
+                'errors': errors,
+                'skipped_rows': skipped,
+            },
+            status=status.HTTP_200_OK if errors else status.HTTP_201_CREATED,
+        )

@@ -12,45 +12,56 @@ logger = logging.getLogger(__name__)
 
 
 @task()
-def send_event_reminders(hours_before: int = 24):
+def send_event_reminders(hours_before: int = 24, stagger_seconds: int = 2):
     """
-    Send reminders for upcoming events.
+    Queue reminder emails for upcoming events. Reminders are scheduled
+    (not sent immediately) and staggered to avoid provider rate limits.
 
     Args:
-        hours_before: Hours before event to send reminder
+        hours_before: Reminder is targeted this many hours before start.
+        stagger_seconds: Gap between scheduled sends within an event's batch.
     """
     from events.models import Event
-    from integrations.services import email_service
+    from integrations.services import schedule_bulk_emails
     from registrations.models import Registration
 
     now = timezone.now()
     target_time = now + timezone.timedelta(hours=hours_before)
 
-    # Find events starting in the target window
     events = Event.objects.filter(
         status__in=['published', 'live'], starts_at__gt=now, starts_at__lte=target_time + timezone.timedelta(minutes=30)
     )
 
-    count = 0
+    total = 0
     for event in events:
-        # Get confirmed registrations
         registrations = Registration.objects.filter(event=event, status='confirmed').select_related('user')
-
-        for reg in registrations:
-            email_service.send_email(
-                template='event_reminder',
-                recipient=reg.user.email,
-                context={
+        recipients = [
+            {
+                'email': reg.user.email,
+                'name': reg.user.full_name,
+                'user': reg.user,
+                'registration': reg,
+                'context': {
                     'user_name': reg.user.full_name,
                     'event_title': event.title,
                     'event_date': event.starts_at.strftime('%B %d, %Y at %I:%M %p'),
                     'join_url': '',
                 },
-            )
-            count += 1
+            }
+            for reg in registrations
+            if reg.user and reg.user.email
+        ]
+        total += schedule_bulk_emails(
+            recipients=recipients,
+            template_key='event_reminder',
+            send_at=now,
+            stagger_seconds=stagger_seconds,
+            event=event,
+            batch_key=f'event_reminder:{event.id}:{hours_before}h',
+        )
 
-    logger.info(f"Sent {count} event reminders")
-    return count
+    logger.info("Queued %s reminder emails across %s events", total, events.count())
+    return total
 
 
 @task()

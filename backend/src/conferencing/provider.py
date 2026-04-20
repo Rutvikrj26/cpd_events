@@ -69,8 +69,31 @@ class VideoProvider(ABC):
         participant_identity: str,
         participant_name: str,
         is_host: bool = False,
+        waiting: bool = False,
     ) -> str:
-        """Generate a join token for a participant. Returns JWT string."""
+        """Generate a join token for a participant. Returns JWT string.
+
+        When ``waiting`` is True, the token is issued with publish/subscribe
+        grants disabled — the participant lands in the room but cannot send
+        or receive media until a host upgrades their permissions via
+        ``update_participant``.
+        """
+
+    @abstractmethod
+    def update_participant(
+        self,
+        room_name: str,
+        identity: str,
+        *,
+        can_publish: bool | None = None,
+        can_subscribe: bool | None = None,
+        metadata: str | None = None,
+    ) -> bool:
+        """Update a participant's track permissions or metadata in-place.
+
+        Unspecified permission fields are left unchanged. Returns True on
+        success.
+        """
 
     @abstractmethod
     def list_participants(self, room_name: str) -> list[ParticipantInfo]:

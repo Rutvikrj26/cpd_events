@@ -68,17 +68,24 @@ class PublicEventFilter(filters.FilterSet):
     """Filter for public event discovery."""
 
     event_type = filters.MultipleChoiceFilter(choices=Event.EventType.choices)
+    format = filters.MultipleChoiceFilter(choices=Event.EventFormat.choices)
     cpd_type = filters.CharFilter()
+    is_free = filters.BooleanFilter(method='filter_is_free')
     starts_after = filters.DateTimeFilter(field_name='starts_at', lookup_expr='gte')
     starts_before = filters.DateTimeFilter(field_name='starts_at', lookup_expr='lte')
     search = filters.CharFilter(method='filter_search')
 
     class Meta:
         model = Event
-        fields = ['event_type', 'cpd_type']
+        fields = ['event_type', 'format', 'cpd_type', 'is_free']
 
     def filter_search(self, queryset, name, value):
         return queryset.filter(Q(title__icontains=value) | Q(description__icontains=value))
+
+    def filter_is_free(self, queryset, name, value):
+        if value:
+            return queryset.filter(price=0)
+        return queryset.exclude(price=0)
 
 
 # =============================================================================
@@ -300,24 +307,20 @@ class EventViewSet(SoftDeleteModelViewSet):
 
     @action(detail=True, methods=['post'])
     def sync_attendance(self, request, uuid=None):
-        """Trigger background sync of attendance."""
-        from .tasks import sync_zoom_attendance
+        """No-op: attendance is populated live by the video webhook.
 
-        event = self.get_object()
-        task = sync_zoom_attendance.delay(event.id)
-        # task might be a dict if CLOUD_TASKS_SYNC=True or in emulator mode
-        task_id = getattr(task, 'id', None) or (task.get('id') if isinstance(task, dict) else None)
-        # fallback to name if it's a CloudTasks response from create_task
-        if not task_id and hasattr(task, 'name'):
-            task_id = task.name
-
-        return Response({'task_id': task_id, 'status': 'queued'})
+        Kept as a stable endpoint for the frontend 'refresh attendance'
+        button. Returns success immediately — the client can re-fetch
+        attendance after this call.
+        """
+        self.get_object()  # permission + 404 check via queryset
+        return Response({'status': 'ok', 'source': 'webhook'})
 
     @action(detail=True, methods=['get'])
     def unmatched_participants(self, request, uuid=None):
         """
-        Get Zoom participants that are not yet matched to any registration.
-        Uses local AttendanceRecord data populated via Zoom webhooks.
+        Get video participants that are not yet matched to any registration.
+        Uses local AttendanceRecord data populated via the video provider's webhook.
         """
         event = self.get_object()
 
@@ -332,8 +335,8 @@ class EventViewSet(SoftDeleteModelViewSet):
             unmatched_records = (
                 AttendanceRecord.objects
                 .filter(event=event, is_matched=False)
-                .exclude(zoom_user_email='')
-                .values('zoom_user_email', 'zoom_user_name')
+                .exclude(participant_email='')
+                .values('participant_email', 'participant_name')
                 .annotate(
                     first_join=Max('join_time'),
                     total_duration=Coalesce(Sum('duration_minutes'), 0)
@@ -343,8 +346,8 @@ class EventViewSet(SoftDeleteModelViewSet):
 
             unmatched = [
                 {
-                    'user_email': record['zoom_user_email'],
-                    'user_name': record['zoom_user_name'] or 'Unknown',
+                    'user_email': record['participant_email'],
+                    'user_name': record['participant_name'] or 'Unknown',
                     'join_time': record['first_join'].isoformat() if record['first_join'] else None,
                     'duration': record['total_duration'] or 0,
                 }
@@ -382,10 +385,10 @@ class EventViewSet(SoftDeleteModelViewSet):
         record, created = AttendanceRecord.objects.update_or_create(
             event=event,
             registration=registration,
-            zoom_user_email=data.get('zoom_user_email'),
+            participant_email=data.get('participant_email'),
             defaults={
-                'zoom_user_name': data.get('zoom_user_name'),
-                'join_time': data.get('zoom_join_time') or timezone.now(),
+                'participant_name': data.get('participant_name'),
+                'join_time': data.get('join_time') or timezone.now(),
                 'duration_minutes': data.get('attendance_minutes', 0),
                 'is_matched': True,
                 'matched_at': timezone.now(),
@@ -513,13 +516,21 @@ class EventViewSet(SoftDeleteModelViewSet):
             },
         ]
 
-        avg_rating = EventFeedback.objects.filter(
-            event__in=events,
-            created_at__gte=start,
-            created_at__lte=now,
-        ).aggregate(
-            avg=Avg('rating')
-        )['avg']
+        # Average rating is computed over every 'rating'-type FeedbackField response.
+        from django.db.models import FloatField
+        from django.db.models.functions import Cast
+
+        from feedback.models import FeedbackFieldResponse
+
+        avg_rating = FeedbackFieldResponse.objects.filter(
+            feedback__event__in=events,
+            feedback__created_at__gte=start,
+            feedback__created_at__lte=now,
+            field__field_type='rating',
+            value__isnull=False,
+        ).annotate(
+            value_float=Cast('value', output_field=FloatField()),
+        ).aggregate(avg=Avg('value_float'))['avg']
 
         recent_transactions = [
             {
@@ -622,20 +633,21 @@ class PublicEventDetailView(generics.RetrieveAPIView):
         raise Http404("Event not found")
 
     def get_queryset(self):
-        # Allow owners to see their events regardless of status
+        # Allow owners to see their events regardless of status. Completed
+        # events are also visible publicly so attendees can still see event
+        # metadata, their registration, and (eventually) the recording.
         user = self.request.user
         queryset = Event.objects.select_related('owner').prefetch_related('custom_fields')
+        public_statuses = ['published', 'live', 'completed']
 
         if user.is_authenticated:
-            # If user is authenticated, they can see published/live public events OR any event they own
             return queryset.filter(
-                Q(status__in=['published', 'live'], is_public=True, deleted_at__isnull=True)
+                Q(status__in=public_statuses, is_public=True, deleted_at__isnull=True)
                 | Q(owner=user, deleted_at__isnull=True)
             ).distinct()
 
-        # Public users only see published/live public events
         return queryset.filter(
-            status__in=['published', 'live'],
+            status__in=public_statuses,
             is_public=True,
             deleted_at__isnull=True,
         )

@@ -15,12 +15,17 @@ export interface DeploymentConfig {
     registration_mode: 'invite_only' | 'admin_approval' | 'open';
     institution_name: string;
     institution_logo_url: string;
+    institution_favicon_url?: string;
+    institution_primary_color?: string;
+    institution_support_email?: string;
+    institution_footer_text?: string;
+    institution_website_url?: string;
 }
 
 export interface Manifest {
     user: {
         roles: string[];
-        primary_role: 'learner' | 'educator' | 'course_manager' | 'admin';
+        primary_role: 'learner' | 'educator' | 'course_manager' | 'instructor' | 'admin';
     };
     routes: string[];
     features: {
@@ -51,7 +56,7 @@ export const getManifest = async (): Promise<Manifest> => {
 
 /**
  * Fetch the public deployment config (no auth required).
- * Used by login / signup / OAuth callback pages to gate UI on registration_mode.
+ * Used by login pages to gate UI on registration_mode.
  */
 export const getDeploymentConfig = async (): Promise<DeploymentConfig> => {
     const response = await client.get<DeploymentConfig>('/auth/deployment/');

@@ -26,6 +26,7 @@ from common.utils import error_response
 
 from . import cpd_serializers, serializers
 from .models import CPDRequirement, Notification, UserSession
+from .tasks import send_email_verification
 
 User = get_user_model()
 
@@ -48,72 +49,49 @@ class AuthThrottle(AnonRateThrottle):
 
 @roles("public", route_name="signup")
 class SignupView(generics.CreateAPIView):
-    """POST /api/v1/auth/signup/ - Create new user account."""
+    """POST /api/v1/auth/signup/ - Disabled self-service signup endpoint."""
 
     serializer_class = serializers.SignupSerializer
     permission_classes = [AllowAny]
     throttle_classes = [AuthThrottle]
 
     def create(self, request, *args, **kwargs):
-        # Gate self-service registration based on deployment mode
-        if REGISTRATION_MODE == "invite_only":
-            return Response(
-                {"error": {"code": "REGISTRATION_DISABLED", "message": "Registration is by invitation only. Contact your administrator."}},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        if REGISTRATION_MODE == "admin_approval":
-            # Create user but set inactive until admin approves
-            user = serializer.save()
-            user.is_active = False
-            user.save(update_fields=["is_active"])
-            return Response(
-                {"message": "Registration submitted. An administrator will review and activate your account."},
-                status=status.HTTP_201_CREATED,
-            )
-
-        user = serializer.save()
-
-        # Generate verification token
-        token = user.generate_email_verification_token()
-
-        # Send verification email
-        try:
-            verification_url = f"{settings.FRONTEND_URL}/auth/verify-email?token={token}"
-
-            print("\n" + "=" * 80)
-            print("📧 VERIFICATION LINK (copy this, NOT the email body below):")
-            print(f"   {verification_url}")
-            print("=" * 80 + "\n")
-
-            send_mail(
-                subject="Verify your email address",
-                message=f"Please click the following link to verify your email address: {verification_url}",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=False,
-            )
-        except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to send verification email to {user.email}: {e}")
-
         return Response(
             {
-                "message": "Account created successfully. Please check your email to verify your account.",
-                "user": {
-                    "uuid": str(user.uuid),
-                    "email": user.email,
-                    "full_name": user.full_name,
-                    "roles": user.role_names,
-                },
+                "error": {
+                    "code": "REGISTRATION_DISABLED",
+                    "message": "Registration is by invitation only. Contact your administrator.",
+                }
             },
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_403_FORBIDDEN,
         )
+
+
+@roles("public", route_name="resend_verification")
+class ResendVerificationEmailView(generics.GenericAPIView):
+    """POST /api/v1/auth/resend-verification/ - Resend email verification link."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [AuthThrottle]
+
+    def post(self, request):
+        email = (request.data.get("email") or "").strip().lower()
+        generic_response = {
+            "message": "If an unverified account exists for that email, a new verification link has been sent."
+        }
+
+        if not email:
+            return error_response("Email is required.", code="EMAIL_REQUIRED", status_code=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email).first()
+        if user is None or user.email_verified:
+            return Response(generic_response, status=status.HTTP_200_OK)
+
+        token = user.generate_email_verification_token()
+        verification_url = f"{settings.FRONTEND_URL}/auth/verify-email?token={token}"
+        send_email_verification(user.uuid, verification_url)
+
+        return Response(generic_response, status=status.HTTP_200_OK)
 
 
 @roles("public", route_name="token_obtain")
@@ -411,6 +389,16 @@ class EmailChangeConfirmView(generics.GenericAPIView):
         except User.DoesNotExist:
             return error_response("Invalid or expired token.", code="INVALID_TOKEN")
 
+        # Atomic claim: blank the token in a single UPDATE that still matches
+        # the incoming value. If two requests arrive concurrently (React
+        # double-submit, client retry), only the first UPDATE affects a row;
+        # the loser sees rowcount 0 and bails instead of duplicating the email
+        # swap and the audit log entry.
+        claimed = User.objects.filter(pk=user.pk, email_change_token=token).update(email_change_token="")
+        if claimed == 0:
+            return error_response("Invalid or expired token.", code="INVALID_TOKEN")
+        user.email_change_token = ""
+
         if not user.pending_email or not user.email_change_requested_at:
             return error_response("No email change is pending.", code="NO_PENDING_CHANGE")
 
@@ -558,6 +546,91 @@ class NotificationPreferencesView(generics.RetrieveUpdateAPIView):
 
     serializer_class = serializers.NotificationPreferencesSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
+
+@roles("learner", "educator", "course_manager", "admin", route_name="my_accreditations")
+class MyAccreditationsView(generics.GenericAPIView):
+    """GET /api/v1/users/me/accreditations/
+
+    Unified list of a learner's earned artifacts — certificates and badges —
+    normalized into a common envelope so the UI can render them side by side
+    without issuing two round-trips and reconciling schemas.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Q
+
+        from badges.models import IssuedBadge
+        from certificates.models import Certificate
+
+        user = request.user
+
+        certs = (
+            Certificate.objects.filter(
+                Q(registration__user=user) | Q(course_enrollment__user=user),
+                deleted_at__isnull=True,
+                status=Certificate.Status.ACTIVE,
+            )
+            .select_related(
+                'template',
+                'registration__event',
+                'course_enrollment__course',
+            )
+        )
+
+        badges = (
+            IssuedBadge.objects.filter(
+                recipient=user,
+                deleted_at__isnull=True,
+                status=IssuedBadge.Status.ACTIVE,
+            )
+            .select_related('template', 'registration__event', 'course_enrollment__course')
+        )
+
+        items = []
+        for cert in certs:
+            event = cert.registration.event if cert.registration_id else None
+            course = cert.course_enrollment.course if cert.course_enrollment_id else None
+            items.append(
+                {
+                    'kind': 'certificate',
+                    'uuid': str(cert.uuid),
+                    'title': cert.template.name if cert.template_id else 'Certificate',
+                    'source_title': event.title if event else (course.title if course else ''),
+                    'source_kind': 'event' if event else ('course' if course else None),
+                    'issued_at': cert.created_at.isoformat(),
+                    'verification_code': cert.verification_code,
+                    'verify_url': cert.get_verification_url() if hasattr(cert, 'get_verification_url') else None,
+                    'artifact_url': cert.file_url or None,
+                    'short_code': cert.short_code,
+                }
+            )
+
+        for badge in badges:
+            event = badge.registration.event if badge.registration_id else None
+            course = badge.course_enrollment.course if badge.course_enrollment_id else None
+            items.append(
+                {
+                    'kind': 'badge',
+                    'uuid': str(badge.uuid),
+                    'title': badge.template.name if badge.template_id else 'Badge',
+                    'source_title': event.title if event else (course.title if course else ''),
+                    'source_kind': 'event' if event else ('course' if course else None),
+                    'issued_at': badge.issued_at.isoformat(),
+                    'verification_code': badge.verification_code,
+                    'verify_url': None,
+                    'artifact_url': badge.image_url or None,
+                    'short_code': badge.short_code,
+                }
+            )
+
+        items.sort(key=lambda item: item['issued_at'], reverse=True)
+        return Response({'count': len(items), 'results': items})
 
     def get_object(self):
         return self.request.user
@@ -858,6 +931,8 @@ class ManifestView(generics.GenericAPIView):
 
         user = request.user
 
+        from common.config.deployment import get_branding
+
         data = {
             "routes": get_allowed_routes_for_user(user),
             "features": get_features_for_user(user),
@@ -868,8 +943,7 @@ class ManifestView(generics.GenericAPIView):
             "deployment": {
                 "mode": DEPLOYMENT_MODE,
                 "registration_mode": REGISTRATION_MODE,
-                "institution_name": INSTITUTION_NAME,
-                "institution_logo_url": INSTITUTION_LOGO_URL,
+                **get_branding(),
             },
         }
 
@@ -885,194 +959,22 @@ class ManifestView(generics.GenericAPIView):
 class DeploymentConfigView(generics.GenericAPIView):
     """GET /api/v1/auth/deployment/ - Public deployment metadata.
 
-    Exposed to unauthenticated clients so login/signup pages can gate UI
+    Exposed to unauthenticated clients so login pages can gate UI
     (e.g. hide the signup form when the institution is invite-only).
     """
 
     permission_classes = [AllowAny]
 
     def get(self, request):
+        from common.config.deployment import get_branding
+
         return Response(
             {
                 "mode": DEPLOYMENT_MODE,
                 "registration_mode": REGISTRATION_MODE,
-                "institution_name": INSTITUTION_NAME,
-                "institution_logo_url": INSTITUTION_LOGO_URL,
+                **get_branding(),
             }
         )
-
-
-# =============================================================================
-# Google OAuth Views
-# =============================================================================
-
-
-@roles("public", route_name="google_auth")
-class GoogleAuthView(generics.GenericAPIView):
-    """
-    GET /api/v1/auth/google/login/
-
-    Returns the Google OAuth authorization URL for user to authenticate.
-    """
-
-    permission_classes = [AllowAny]
-    throttle_classes = [AuthThrottle]
-
-    def get(self, request):
-        import secrets
-
-        from django.core.cache import cache
-
-        from .google_oauth import get_google_auth_url
-
-        state = secrets.token_urlsafe(32)
-        cache.set(f"oauth_state:{state}", True, timeout=600)  # valid for 10 minutes
-        url = get_google_auth_url(state=state)
-        return Response({"url": url})
-
-
-@roles("public", route_name="google_callback")
-class GoogleCallbackView(generics.GenericAPIView):
-    """
-    GET /api/v1/auth/google/callback/
-
-    Handles the OAuth callback from Google.
-    Exchanges code for tokens, gets user info, logs in or creates user.
-    """
-
-    permission_classes = [AllowAny]
-    throttle_classes = [AuthThrottle]
-
-    def get(self, request):
-        from django.core.cache import cache
-
-        code = request.query_params.get("code")
-        state = request.query_params.get("state")
-        error = request.query_params.get("error")
-
-        if error:
-            return error_response(f"Google OAuth error: {error}", code="GOOGLE_AUTH_ERROR")
-
-        if not code:
-            return error_response("Authorization code missing.", code="MISSING_CODE")
-
-        # Validate CSRF state parameter
-        if not state or not cache.get(f"oauth_state:{state}"):
-            return error_response("Invalid or expired state parameter.", code="INVALID_STATE")
-        cache.delete(f"oauth_state:{state}")  # single-use
-
-        from django.conf import settings
-        from django.db import transaction
-        from rest_framework_simplejwt.tokens import RefreshToken
-
-        from .google_oauth import exchange_code_for_token, get_google_user_info
-        from .models import User
-
-        # 1. Exchange code for tokens
-        token_data = exchange_code_for_token(code)
-        if not token_data:
-            return error_response("Failed to exchange code for token.", code="TOKEN_EXCHANGE_FAILED")
-
-        access_token = token_data.get("access_token")
-
-        # 2. Get user info from Google
-        user_info = get_google_user_info(access_token)
-        if not user_info:
-            return error_response("Failed to fetch user info from Google.", code="USER_INFO_FAILED")
-
-        google_user_id = user_info.get("id")
-        email = user_info.get("email", "").lower()
-        name = user_info.get("name", "")
-        given_name = user_info.get("given_name", "")
-        family_name = user_info.get("family_name", "")
-        picture = user_info.get("picture", "")
-        email_verified = user_info.get("verified_email", False)
-
-        if not email:
-            return error_response("Google account must have an email address.", code="MISSING_EMAIL")
-
-        if not email_verified:
-            return error_response("Google email must be verified.", code="EMAIL_NOT_VERIFIED")
-
-        full_name = name or f"{given_name} {family_name}".strip() or email.split("@")[0]
-
-        # 3. Find or create user
-        with transaction.atomic():
-            user = User.objects.filter(google_user_id=google_user_id).first()
-
-            if user:
-                pass  # Existing Google user - just log them in
-            else:
-                user = User.objects.filter(email=email).first()
-
-                if user:
-                    # Link Google account to existing user
-                    user.google_user_id = google_user_id
-                    if not user.email_verified:
-                        user.email_verified = True
-                        user.email_verified_at = timezone.now()
-                    if user.auth_provider == "local":
-                        user.auth_provider = "google"
-                    if picture and not user.profile_photo_url:
-                        user.profile_photo_url = picture
-                    user.save(
-                        update_fields=[
-                            "google_user_id",
-                            "email_verified",
-                            "email_verified_at",
-                            "auth_provider",
-                            "profile_photo_url",
-                            "updated_at",
-                        ]
-                    )
-                else:
-                    # Check registration mode — redirect back to frontend with a
-                    # structured error code so the UI can surface a friendly message.
-                    if REGISTRATION_MODE == "invite_only":
-                        from django.http import HttpResponseRedirect
-
-                        frontend_url = (
-                            settings.CORS_ALLOWED_ORIGINS[0]
-                            if settings.CORS_ALLOWED_ORIGINS
-                            else "http://localhost:5173"
-                        )
-                        return HttpResponseRedirect(
-                            f"{frontend_url}/auth/callback?error=invite_only"
-                        )
-
-                    # Create new user with Google OAuth
-                    user = User.objects.create_user(
-                        email=email,
-                        full_name=full_name,
-                        email_verified=True,
-                        password=None,
-                        google_user_id=google_user_id,
-                        auth_provider="google",
-                        profile_photo_url=picture,
-                    )
-                    # Assign default learner role
-                    user.assign_role("learner")
-
-            if not user.is_active:
-                return error_response("Account is disabled.", code="ACCOUNT_DISABLED")
-
-            # Link any guest registrations
-            from registrations.models import Registration
-
-            Registration.link_registrations_for_user(user)
-
-            user.record_login()
-
-            # 4. Generate JWT tokens
-            refresh = RefreshToken.for_user(user)
-
-            # 5. Redirect to frontend with tokens
-            frontend_url = settings.CORS_ALLOWED_ORIGINS[0] if settings.CORS_ALLOWED_ORIGINS else "http://localhost:5173"
-            redirect_url = f"{frontend_url}/auth/callback?access={str(refresh.access_token)}&refresh={str(refresh)}"
-
-            from django.http import HttpResponseRedirect
-
-            return HttpResponseRedirect(redirect_url)
 
 
 # =============================================================================
@@ -1141,6 +1043,7 @@ class AdminUserDetailView(generics.GenericAPIView):
             {
                 "uuid": str(row.uuid),
                 "course_uuid": str(row.course.uuid),
+                "course_slug": row.course.slug,
                 "course_title": row.course.title,
                 "role": row.role,
                 "created_at": row.created_at.isoformat(),
@@ -1161,6 +1064,7 @@ class AdminUserDetailView(generics.GenericAPIView):
         owned_courses = [
             {
                 "uuid": str(c.uuid),
+                "slug": c.slug,
                 "title": c.title,
                 "status": c.status,
             }
@@ -1188,6 +1092,23 @@ class AdminUserDetailView(generics.GenericAPIView):
         role_rows = UserRoleChange.objects.filter(user=user).select_related("changed_by").order_by("-created_at")[:20]
         audit_rows = AuditLog.objects.filter(object_uuid=str(user.uuid)).select_related("actor").order_by("-created_at")[:20]
 
+        def _role_label(slug):
+            return (slug or "").replace("_", " ").title()
+
+        def _summarize_role_change(from_roles, to_roles):
+            before = set(from_roles or [])
+            after = set(to_roles or [])
+            added = sorted(_role_label(r) for r in after - before)
+            removed = sorted(_role_label(r) for r in before - after)
+            if added and removed:
+                return f"Added {', '.join(added)}; removed {', '.join(removed)}"
+            if added:
+                return f"Added role: {', '.join(added)}"
+            if removed:
+                return f"Removed role: {', '.join(removed)}"
+            current = sorted(_role_label(r) for r in after) or ["None"]
+            return f"Roles unchanged ({', '.join(current)})"
+
         recent_activity = []
         for row in role_rows:
             recent_activity.append(
@@ -1195,7 +1116,7 @@ class AdminUserDetailView(generics.GenericAPIView):
                     "type": "role_change",
                     "at": row.created_at.isoformat(),
                     "changed_by_name": row.changed_by.full_name if row.changed_by else None,
-                    "summary": f"Roles changed from {row.from_roles or '[]'} to {row.to_roles or '[]'}",
+                    "summary": _summarize_role_change(row.from_roles, row.to_roles),
                     "metadata": {"from": row.from_roles, "to": row.to_roles, "reason": row.reason},
                 }
             )

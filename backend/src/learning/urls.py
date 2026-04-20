@@ -5,7 +5,7 @@ app_name = 'learning'
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .payment_views import CourseCheckoutView
+from .payment_views import CourseCheckoutView, ProgramCheckoutView
 from .views import (
     AssignmentViewSet,
     AttendeeSubmissionViewSet,
@@ -23,6 +23,9 @@ from .views import (
     ModuleContentViewSet,
     MyLearningViewSet,
     OrganizerSubmissionsViewSet,
+    ProgramCourseViewSet,
+    ProgramEnrollmentViewSet,
+    ProgramViewSet,
 )
 
 # Main router
@@ -32,6 +35,8 @@ router.register(r'organizer/submissions', OrganizerSubmissionsViewSet, basename=
 router.register(r'learning', MyLearningViewSet, basename='my-learning')
 router.register(r'courses', CourseViewSet, basename='course')
 router.register(r'enrollments', CourseEnrollmentViewSet, basename='course-enrollment')
+router.register(r'programs', ProgramViewSet, basename='program')
+router.register(r'program-enrollments', ProgramEnrollmentViewSet, basename='program-enrollment')
 
 urlpatterns = [
     # Learning routes
@@ -148,6 +153,18 @@ urlpatterns = [
     path('learning/progress/content/<uuid:content_uuid>/', ContentProgressView.as_view(), name='content-progress'),
     # Payments
     path('courses/<uuid:uuid>/checkout/', CourseCheckoutView.as_view(), name='course-checkout'),
+    # Programs — member-course management (nested)
+    path(
+        'programs/<uuid:program_uuid>/courses/',
+        ProgramCourseViewSet.as_view({'get': 'list', 'post': 'create'}),
+        name='program-course-list',
+    ),
+    path(
+        'programs/<uuid:program_uuid>/courses/<uuid:uuid>/',
+        ProgramCourseViewSet.as_view({'patch': 'partial_update', 'delete': 'destroy'}),
+        name='program-course-detail',
+    ),
+    path('programs/<uuid:uuid>/checkout/', ProgramCheckoutView.as_view(), name='program-checkout'),
 ]
 
 

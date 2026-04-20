@@ -52,7 +52,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     const [billingChecked, setBillingChecked] = useState(false);
     const [addingPayment, setAddingPayment] = useState(false);
 
-    const isLmsOnly = subscription?.plan === 'lms' || (!subscription && user?.primary_role === 'course_manager');
+    const isLmsOnly = subscription?.plan === 'lms' || (!subscription && ['course_manager', 'instructor'].includes(user?.primary_role || ''));
     const isLearner = user?.primary_role === 'learner';
     const planLabel = subscription?.plan_display || (isLmsOnly ? 'LMS' : isLearner ? 'Free' : 'Educator');
 

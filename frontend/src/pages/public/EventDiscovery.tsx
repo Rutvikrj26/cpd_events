@@ -19,9 +19,19 @@ import { Pagination } from "@/components/ui/pagination";
 import { getPublicEvents, PublicEventListParams } from "@/api/events";
 import { Event } from "@/api/events/types";
 import { PaginatedResponse } from "@/api/types";
+import { stripHtml } from "@/lib/sanitize";
 
 // Define filter options
-const EVENT_TYPES = ["Webinar", "Workshop", "Course", "Conference"];
+const EVENT_TYPES = [
+  { value: "webinar", label: "Webinar" },
+  { value: "workshop", label: "Workshop" },
+  { value: "training", label: "Training Session" },
+  { value: "lecture", label: "Lecture" },
+  { value: "other", label: "Other" },
+] as const;
+const EVENT_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  EVENT_TYPES.map(({ value, label }) => [value, label])
+);
 const FORMATS = ["online", "in-person", "hybrid"] as const;
 const FORMAT_LABELS: Record<string, string> = {
   online: "Online",
@@ -121,9 +131,24 @@ export function EventDiscovery() {
     return count;
   }, [filters]);
 
-  // Sort events client-side (filters are now applied server-side)
+  // Apply format and pricing filters client-side and sort the result.
   const filteredEvents = useMemo(() => {
-    const result = [...events];
+    const result = [...events]
+      .filter((event) => {
+        if (filters.formats.length > 0 && !filters.formats.includes(event.format)) {
+          return false;
+        }
+
+        const price = Number(event.price || 0);
+        if (filters.freeOnly && !filters.paidOnly && price > 0) {
+          return false;
+        }
+        if (filters.paidOnly && !filters.freeOnly && price <= 0) {
+          return false;
+        }
+
+        return true;
+      });
 
     result.sort((a, b) => {
       switch (sortBy) {
@@ -139,7 +164,7 @@ export function EventDiscovery() {
     });
 
     return result;
-  }, [events, sortBy]);
+  }, [events, filters.formats, filters.freeOnly, filters.paidOnly, sortBy]);
 
   // Filter sidebar content (reused for desktop and mobile)
   const FilterContent = () => (
@@ -147,18 +172,18 @@ export function EventDiscovery() {
       <div>
         <h4 className="text-sm font-medium mb-3">Event Type</h4>
         <div className="space-y-2">
-          {EVENT_TYPES.map((type) => (
-            <div key={type} className="flex items-center space-x-2">
+          {EVENT_TYPES.map(({ value, label }) => (
+            <div key={value} className="flex items-center space-x-2">
               <Checkbox
-                id={`type-${type}`}
-                checked={filters.eventTypes.includes(type)}
-                onCheckedChange={() => toggleEventType(type)}
+                id={`type-${value}`}
+                checked={filters.eventTypes.includes(value)}
+                onCheckedChange={() => toggleEventType(value)}
               />
               <label
-                htmlFor={`type-${type}`}
+                htmlFor={`type-${value}`}
                 className="text-sm text-muted-foreground leading-none cursor-pointer font-medium"
               >
-                {type}
+                {label}
               </label>
             </div>
           ))}
@@ -336,7 +361,7 @@ export function EventDiscovery() {
               <div className="flex flex-wrap gap-2 mb-6">
                 {filters.eventTypes.map((type) => (
                   <Badge key={type} variant="secondary" className="gap-1">
-                    {type}
+                    {EVENT_TYPE_LABELS[type] || type}
                     <X
                       className="h-3 w-3 cursor-pointer"
                       onClick={() => toggleEventType(type)}
@@ -467,7 +492,7 @@ function EventCard({ event }: { event: Event }) {
           </h3>
 
           <p className="text-sm text-muted-foreground line-clamp-2 mb-4 flex-1">
-            {event.short_description || event.description}
+            {event.short_description || stripHtml(event.description || '')}
           </p>
 
           <div className="flex items-center justify-between pt-4 border-t border-border/50 mt-auto">

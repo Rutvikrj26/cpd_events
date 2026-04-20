@@ -47,6 +47,7 @@ export const StepBasicInfo = () => {
                                 <SelectItem value="workshop">Workshop</SelectItem>
                                 <SelectItem value="training">Training Session</SelectItem>
                                 <SelectItem value="lecture">Lecture</SelectItem>
+                                <SelectItem value="seminar">Seminar / Series</SelectItem>
                                 <SelectItem value="other">Other</SelectItem>
                             </SelectContent>
                         </Select>

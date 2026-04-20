@@ -99,7 +99,10 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                           Webinars, workshops, and conferences
                         </ListItem>
                         <ListItem href="/courses/browse" title="Courses">
-                          Self-paced professional development
+                          Self-paced and live professional development
+                        </ListItem>
+                        <ListItem href="/programs" title="Programs">
+                          Curated bundles of courses at a discount
                         </ListItem>
                       </ul>
                     </NavigationMenuContent>
@@ -272,6 +275,13 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Courses
+                </Link>
+                <Link
+                  to="/programs"
+                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Programs
                 </Link>
               </div>
 

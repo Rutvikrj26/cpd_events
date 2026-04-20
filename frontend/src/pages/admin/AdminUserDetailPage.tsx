@@ -13,6 +13,7 @@ import {
     UserX,
     UserCheck,
 } from "lucide-react";
+import { formatRoleLabel } from "@/lib/role-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +35,7 @@ import {
     updateAdminUser,
 } from "@/api/accounts";
 
-const ALL_ROLES = ["learner", "educator", "course_manager", "admin"];
+const ALL_ROLES = ["learner", "educator", "course_manager", "instructor", "admin"];
 
 export function AdminUserDetailPage() {
     const { uuid } = useParams<{ uuid: string }>();
@@ -223,8 +224,8 @@ export function AdminUserDetailPage() {
                                         <span className="text-sm text-muted-foreground">None</span>
                                     ) : (
                                         groups.map((g) => (
-                                            <Badge key={g} variant="secondary" className="capitalize">
-                                                {g.replace("_", " ")}
+                                            <Badge key={g} variant="secondary">
+                                                {formatRoleLabel(g)}
                                             </Badge>
                                         ))
                                     )}
@@ -238,7 +239,7 @@ export function AdminUserDetailPage() {
                                     <div className="space-y-1 text-sm">
                                         {course_staff.map((row) => (
                                             <div key={row.uuid} className="flex items-center justify-between gap-2">
-                                                <Link to={`/organizer/courses/${row.course_uuid}/manage`} className="hover:underline truncate">
+                                                <Link to={`/courses/manage/${row.course_slug || row.course_uuid}`} className="hover:underline truncate">
                                                     {row.course_title}
                                                 </Link>
                                                 <Badge variant="outline" className="text-xs capitalize">
@@ -291,7 +292,7 @@ export function AdminUserDetailPage() {
                                     <ul className="space-y-1 text-sm">
                                         {owned_courses.map((c) => (
                                             <li key={c.uuid} className="flex items-center justify-between gap-2">
-                                                <Link to={`/organizer/courses/${c.uuid}/manage`} className="hover:underline truncate">
+                                                <Link to={`/courses/manage/${c.slug || c.uuid}`} className="hover:underline truncate">
                                                     {c.title}
                                                 </Link>
                                                 <Badge variant="outline" className="text-xs">{c.status}</Badge>

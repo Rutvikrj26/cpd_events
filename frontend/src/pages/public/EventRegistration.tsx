@@ -24,7 +24,6 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { getPublicEvent } from "@/api/events";
 import { confirmRegistrationPayment, getRegistrationPaymentIntent, registerForEvent } from "@/api/registrations";
-import { signup } from "@/api/accounts";
 import { validatePromoCode } from "@/api/promo-codes";
 import { Event } from "@/api/events/types";
 import { RegistrationCreateRequest, RegistrationResponse } from "@/api/registrations/types";
@@ -64,8 +63,6 @@ export function EventRegistration() {
         billingState: "",
         billingPostalCode: "",
         billingCity: "",
-        createAccount: false,
-        password: "",
     });
 
     // Custom fields state
@@ -217,7 +214,6 @@ export function EventRegistration() {
                 toast.info("Add billing details to calculate taxes, then complete payment.");
             } else {
                 // Free event - registration complete
-                await handleAccountCreation();
                 setStep('success');
                 toast.success("Successfully registered for the event!");
             }
@@ -265,22 +261,6 @@ export function EventRegistration() {
         }
     };
 
-    const handleAccountCreation = async () => {
-        if (formData.createAccount && formData.password) {
-            try {
-                await signup({
-                    email: formData.email,
-                    full_name: `${formData.firstName} ${formData.lastName}`.trim(),
-                    password: formData.password,
-                    password_confirm: formData.password,
-                });
-                toast.success("Account created! Check your email for verification.");
-            } catch (signupError: any) {
-                toast.warning("Registered successfully, but account creation failed. You can create an account later.");
-            }
-        }
-    };
-
     const handlePaymentSuccess = async () => {
         const registrationUuid = registrationData?.registration_uuid || registrationData?.uuid;
         if (!registrationUuid) {
@@ -291,7 +271,6 @@ export function EventRegistration() {
         try {
             const result = await confirmRegistrationPayment(registrationUuid);
             if (result.status === 'paid') {
-                await handleAccountCreation();
                 setStep('success');
                 toast.success("Payment successful! You're registered.");
             } else if (result.status === 'processing') {
@@ -334,7 +313,7 @@ export function EventRegistration() {
                 <div className="text-center">
                     <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
                     <h2 className="text-xl font-semibold text-foreground">{error}</h2>
-                    <Link to="/events">
+                    <Link to="/discover/events">
                         <Button className="mt-4">Browse Events</Button>
                     </Link>
                 </div>
@@ -356,10 +335,10 @@ export function EventRegistration() {
                             Check your email for confirmation details and event information.
                         </p>
                         <div className="space-y-3">
-                            <Link to={`/events/${event?.slug || id}`}>
+                            <Link to={`/events/${event?.slug || id}/details`}>
                                 <Button className="w-full">View Event Details</Button>
                             </Link>
-                            <Link to="/events">
+                            <Link to="/discover/events">
                                 <Button variant="outline" className="w-full">Browse More Events</Button>
                             </Link>
                         </div>
@@ -559,12 +538,27 @@ export function EventRegistration() {
                                         minute: '2-digit',
                                     })}
                                 </p>
-                                {event?.cpd_credits && Number(event.cpd_credits) > 0 && (
-                                    <div className="flex items-center gap-1 mt-2 text-warning">
-                                        <Award className="h-4 w-4" />
-                                        <span className="text-sm font-medium">{event.cpd_credits} CPD Credits</span>
-                                    </div>
-                                )}
+                                <div className="flex items-center gap-4 mt-2">
+                                    {event?.cpd_credits && Number(event.cpd_credits) > 0 && (
+                                        <div className="flex items-center gap-1 text-warning">
+                                            <Award className="h-4 w-4" />
+                                            <span className="text-sm font-medium">{event.cpd_credits} CPD Credits</span>
+                                        </div>
+                                    )}
+                                    {isPaidEvent ? (
+                                        <div className="flex items-center gap-1 text-primary">
+                                            <CreditCard className="h-4 w-4" />
+                                            <span className="text-sm font-semibold">
+                                                {formatPrice(event?.price, event?.currency)}
+                                            </span>
+                                        </div>
+                                    ) : event && (
+                                        <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                                            <Tag className="h-4 w-4" />
+                                            <span className="text-sm font-medium">Free</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </CardContent>
@@ -727,38 +721,10 @@ export function EventRegistration() {
                                             <Separator />
 
                                             <div className="bg-info-subtle border border-info rounded-lg p-4">
-                                                <div className="flex items-start space-x-3">
-                                                    <Checkbox
-                                                        id="createAccount"
-                                                        checked={formData.createAccount}
-                                                        onCheckedChange={(checked) =>
-                                                            setFormData({ ...formData, createAccount: checked as boolean })
-                                                        }
-                                                    />
-                                                    <div className="flex-1">
-                                                        <Label htmlFor="createAccount" className="font-medium cursor-pointer">
-                                                            Create an account to track my CPD credits
-                                                        </Label>
-                                                        <p className="text-sm text-muted-foreground mt-1">
-                                                            Get access to your CPD dashboard, certificates, and event history.
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {formData.createAccount && (
-                                                    <div className="mt-4 space-y-2">
-                                                        <Label htmlFor="password">Create Password *</Label>
-                                                        <Input
-                                                            id="password"
-                                                            type="password"
-                                                            placeholder="At least 8 characters"
-                                                            value={formData.password}
-                                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                                            required={formData.createAccount}
-                                                            minLength={8}
-                                                        />
-                                                    </div>
-                                                )}
+                                                <p className="font-medium text-foreground">Invitation-only platform</p>
+                                                <p className="text-sm text-muted-foreground mt-1">
+                                                    If your institution invites you later, this registration can still be linked to your account by email.
+                                                </p>
                                             </div>
                                         </>
                                     )}

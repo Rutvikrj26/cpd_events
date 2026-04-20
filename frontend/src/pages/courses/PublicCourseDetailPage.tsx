@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Loader2, CheckCircle, Clock, BookOpen, Award, Users, Building2, ArrowRight } from 'lucide-react';
+import { Loader2, CheckCircle, Clock, BookOpen, Award, Users, Building2, ArrowRight, Layers } from 'lucide-react';
 
 export const PublicCourseDetailPage = () => {
     const { slug } = useParams<{ slug: string }>();
@@ -30,7 +30,7 @@ export const PublicCourseDetailPage = () => {
             try {
                 const data = await getCourseBySlug(slug);
                 if (!data) {
-                    navigate('/404'); // Or handle not found
+                    navigate('/discover/courses');
                 } else {
                     setCourse(data);
                 }
@@ -55,13 +55,14 @@ export const PublicCourseDetailPage = () => {
             if (!course?.organization_slug) return;
 
             try {
-                const allCourses = await getPublicCourses({ org: course.organization_slug });
+                const allCourses = await getPublicCourses();
                 // Filter published and public courses, exclude current course
                 const orgCourses = allCourses.results
                     .filter(c =>
                         c.status === 'published' &&
                         c.is_public &&
-                        c.uuid !== course.uuid
+                        c.uuid !== course.uuid &&
+                        c.organization_slug === course.organization_slug
                     )
                     .slice(0, 3); // Show up to 3 related courses
                 setRelatedCourses(orgCourses);
@@ -166,9 +167,9 @@ export const PublicCourseDetailPage = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                         <div className="lg:col-span-2 space-y-4">
                             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                                <Link to="/courses" className="hover:underline">Browse</Link>
+                                <Link to="/discover/courses" className="hover:underline">Browse</Link>
                                 <span>/</span>
-                                <Link to={`/organizations/${course.organization_slug}/public`} className="hover:underline text-foreground font-medium">
+                                <Link to="/discover/courses" className="hover:underline text-foreground font-medium">
                                     {course.organization_name}
                                 </Link>
                                 <span>/</span>
@@ -196,6 +197,30 @@ export const PublicCourseDetailPage = () => {
                                     {course.module_count} Modules
                                 </Badge>
                             </div>
+
+                            {course.programs && course.programs.length > 0 && (
+                                <div className="mt-6 p-4 rounded-lg bg-primary/5 border border-primary/10">
+                                    <p className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                                        <Layers className="h-4 w-4 text-primary" />
+                                        Part of {course.programs.length} program{course.programs.length === 1 ? '' : 's'}
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {course.programs.map(p => (
+                                            <Link
+                                                key={p.uuid}
+                                                to={`/programs/${p.slug}`}
+                                                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                                            >
+                                                {p.title}
+                                                <ArrowRight className="h-3 w-3" />
+                                            </Link>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        Buy a program bundle to get this course at a discount.
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
                         {/* Enrollment Card */}
@@ -209,20 +234,44 @@ export const PublicCourseDetailPage = () => {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <Button
-                                    size="lg"
-                                    className="w-full text-lg"
-                                    onClick={handleEnroll}
-                                    disabled={isEnrolling || (!course.enrollment_open && !isEnrolled)}
-                                >
-                                    {isEnrolling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                    {!course.enrollment_open
-                                        ? 'Enrollment Closed'
-                                        : isEnrolled
-                                            ? 'Continue Course'
-                                            : 'Enroll Now'}
-                                </Button>
-
+                                {(() => {
+                                    const windowState = course.enrollment_window_state;
+                                    const isWindowBlocked = windowState === 'upcoming' || windowState === 'closed';
+                                    const disabled = !isEnrolled && (isEnrolling || !course.enrollment_open || isWindowBlocked);
+                                    let label = 'Enroll Now';
+                                    if (isEnrolled) label = 'Continue Course';
+                                    else if (!course.enrollment_open) label = 'Enrollment Closed';
+                                    else if (windowState === 'upcoming') label = 'Opens Soon';
+                                    else if (windowState === 'closed') label = 'Enrollment Closed';
+                                    return (
+                                        <>
+                                            <Button
+                                                size="lg"
+                                                className="w-full text-lg"
+                                                onClick={handleEnroll}
+                                                disabled={disabled}
+                                            >
+                                                {isEnrolling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                                {label}
+                                            </Button>
+                                            {windowState === 'upcoming' && course.enrollment_opens_at && (
+                                                <p className="text-xs text-muted-foreground text-center">
+                                                    Enrollment opens {new Date(course.enrollment_opens_at).toLocaleString()}
+                                                </p>
+                                            )}
+                                            {windowState === 'closed' && course.enrollment_closes_at && (
+                                                <p className="text-xs text-muted-foreground text-center">
+                                                    Enrollment closed {new Date(course.enrollment_closes_at).toLocaleString()}
+                                                </p>
+                                            )}
+                                            {windowState === 'open' && course.enrollment_closes_at && (
+                                                <p className="text-xs text-muted-foreground text-center">
+                                                    Closes {new Date(course.enrollment_closes_at).toLocaleString()}
+                                                </p>
+                                            )}
+                                        </>
+                                    );
+                                })()}
                             </CardContent>
                         </Card>
                     </div>
@@ -305,10 +354,10 @@ export const PublicCourseDetailPage = () => {
                                     </div>
                                 </div>
                                 {course.organization_slug && (
-                                    <Link to={`/organizations/${course.organization_slug}/public`}>
+                                    <Link to="/discover/courses">
                                         <Button variant="outline" className="w-full text-xs h-8">
                                             <Building2 className="h-3 w-3 mr-1" />
-                                            View Profile
+                                            Browse Courses
                                         </Button>
                                     </Link>
                                 )}
@@ -360,7 +409,7 @@ export const PublicCourseDetailPage = () => {
                             </p>
                         </div>
                         {course.organization_slug && (
-                            <Link to={`/organizations/${course.organization_slug}/public`}>
+                            <Link to="/discover/courses">
                                 <Button variant="outline">
                                     View All
                                     <ArrowRight className="ml-2 h-4 w-4" />

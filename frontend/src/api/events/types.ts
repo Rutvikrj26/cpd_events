@@ -91,7 +91,7 @@ export interface EventCreateRequest {
     starts_at: string;
     duration_minutes: number;
     timezone: string;
-    event_type: 'webinar' | 'workshop' | 'training' | 'lecture' | 'other';
+    event_type: 'webinar' | 'workshop' | 'training' | 'lecture' | 'seminar' | 'other';
     format: 'online' | 'in-person' | 'hybrid';
 
     short_description?: string;
@@ -133,6 +133,7 @@ export interface EventCreateRequest {
         enabled: boolean;
         recording_enabled: boolean;
         screen_share: boolean;
+        waiting_room_enabled?: boolean;
     };
 
     // Branding
@@ -201,10 +202,38 @@ export interface SessionFormData {
     is_published: boolean;
 }
 
+export type EventCustomFieldType =
+    | 'text'
+    | 'textarea'
+    | 'select'
+    | 'multiselect'
+    | 'checkbox'
+    | 'radio'
+    | 'date'
+    | 'number';
+
 export interface EventCustomField {
     uuid: string;
-    name: string;
-    field_type: 'text' | 'number' | 'date' | 'select' | 'checkbox';
-    is_required: boolean;
-    options?: any; // JSON
+    label: string;
+    field_type: EventCustomFieldType;
+    required: boolean;
+    placeholder?: string;
+    help_text?: string;
+    options?: string[];
+    min_value?: number | null;
+    max_value?: number | null;
+    order: number;
+    created_at?: string;
+}
+
+export interface EventCustomFieldInput {
+    label: string;
+    field_type: EventCustomFieldType;
+    required?: boolean;
+    placeholder?: string;
+    help_text?: string;
+    options?: string[];
+    min_value?: number | null;
+    max_value?: number | null;
+    order?: number;
 }

@@ -147,6 +147,44 @@ export async function bulkImportContacts(data: BulkImportParams): Promise<{ crea
     return response.data;
 }
 
+export async function downloadContactsImportTemplate(): Promise<void> {
+    const response = await client.get('/contacts/import-template/', { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'contacts_import_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export interface ImportCsvError {
+    row: number;
+    email: string;
+    error: string;
+}
+
+export interface ImportCsvResult {
+    created: number;
+    skipped: number;
+    errors: ImportCsvError[];
+    skipped_rows: { row: number; email: string }[];
+}
+
+export async function importContactsCsv(
+    file: File,
+    skipDuplicates = true,
+): Promise<ImportCsvResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('skip_duplicates', skipDuplicates ? 'true' : 'false');
+    const response = await client.post<ImportCsvResult>('/contacts/import-csv/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+}
+
 // =============================================================================
 // Tags API
 // =============================================================================
@@ -158,6 +196,26 @@ export async function getTags(): Promise<PaginatedResponse<Tag>> {
 
 export async function createTag(data: CreateTagParams): Promise<Tag> {
     const response = await client.post("/tags/", data);
+    return response.data;
+}
+
+export interface UpdateTagParams {
+    name?: string;
+    color?: string;
+    description?: string;
+}
+
+export async function updateTag(uuid: string, data: UpdateTagParams): Promise<Tag> {
+    const response = await client.patch(`/tags/${uuid}/`, data);
+    return response.data;
+}
+
+export async function deleteTag(uuid: string): Promise<void> {
+    await client.delete(`/tags/${uuid}/`);
+}
+
+export async function mergeTag(uuid: string, targetUuid: string): Promise<Tag> {
+    const response = await client.post(`/tags/${uuid}/merge/`, { target_uuid: targetUuid });
     return response.data;
 }
 

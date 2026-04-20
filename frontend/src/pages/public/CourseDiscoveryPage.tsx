@@ -130,8 +130,8 @@ export function CourseDiscoveryPage() {
   const getEmptyStateCTA = () => {
     if (!isAuthenticated) {
       return {
-        text: "Create a Course",
-        link: "/signup?role=course_manager&plan=lms",
+        text: "Contact Sales",
+        link: "/contact",
         secondary: { text: "View Pricing", link: "/pricing" }
       };
     }

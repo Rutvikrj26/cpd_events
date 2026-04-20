@@ -16,33 +16,34 @@ import { Course } from '@/api/courses/types';
 import { Loader2 } from 'lucide-react';
 export function CourseManagementPage() {
     const { slug, courseSlug } = useParams<{ slug?: string; courseSlug?: string }>();
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [course, setCourse] = useState<Course | null>(null);
     const [loading, setLoading] = useState(true);
     // Course staff see limited tabs (no overview/settings)
-    const isStaffOnly = course?.user_role === 'course_manager';
+    const isStaffOnly = course?.user_role === 'course_manager' || course?.user_role === 'instructor';
 
-    // Determine if sessions tab should be shown
-    const showSessions = course?.format === 'hybrid';
+    // Sessions tab shows for live and hybrid; curriculum is hidden for live (no modules)
+    const showSessions = course?.format === 'hybrid' || course?.format === 'live';
+    const showCurriculum = course?.format !== 'live';
 
-    const requestedTab = searchParams.get('tab') || (isStaffOnly ? 'curriculum' : 'overview');
+    const requestedTab = searchParams.get('tab') || (isStaffOnly ? (showCurriculum ? 'curriculum' : 'sessions') : 'overview');
     const availableTabs = [
         ...(isStaffOnly ? [] : ['overview']),
         'enrollments',
-        'curriculum',
+        ...(showCurriculum ? ['curriculum'] : []),
         'announcements',
         'submissions',
         ...(showSessions ? ['sessions'] : []),
         'certificates',
         ...(isStaffOnly ? [] : ['settings']),
     ];
-    const defaultTab = availableTabs.includes(requestedTab) ? requestedTab : 'overview';
+    const defaultTab = availableTabs.includes(requestedTab) ? requestedTab : availableTabs[0];
 
     useEffect(() => {
         async function fetchCourse() {
             if (!courseSlug) return;
             try {
-                const data = await getCourseBySlug(courseSlug, slug ? { org: slug } : { owned: true });
+                const data = await getCourseBySlug(courseSlug, { owned: true });
                 setCourse(data);
             } catch (error) {
                 console.error(error);
@@ -75,14 +76,7 @@ export function CourseManagementPage() {
                 title={course.title}
                 description={`Manage course content and settings.`}
                 breadcrumbs={[
-                    ...(slug
-                        ? [
-                            { label: "Organization", href: `/org/${slug}` },
-                            { label: "Courses", href: `/org/${slug}/courses` },
-                        ]
-                        : [
-                            { label: "My Courses", href: `/courses/manage` },
-                        ]),
+                    { label: "My Courses", href: `/courses/manage` },
                     { label: course.title },
                 ]}
                 actions={
@@ -92,11 +86,19 @@ export function CourseManagementPage() {
                 }
             />
 
-            <Tabs defaultValue={defaultTab} className="w-full">
+            <Tabs
+                value={defaultTab}
+                onValueChange={(value) => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set('tab', value);
+                    setSearchParams(next, { replace: true });
+                }}
+                className="w-full"
+            >
                 <TabsList>
                     {!isStaffOnly && <TabsTrigger value="overview">Overview</TabsTrigger>}
                     {showSessions && <TabsTrigger value="sessions">Sessions</TabsTrigger>}
-                    <TabsTrigger value="curriculum">Curriculum</TabsTrigger>
+                    {showCurriculum && <TabsTrigger value="curriculum">Curriculum</TabsTrigger>}
                     <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
                     <TabsTrigger value="announcements">Announcements</TabsTrigger>
                     <TabsTrigger value="submissions">Submissions</TabsTrigger>
@@ -116,9 +118,11 @@ export function CourseManagementPage() {
                     </TabsContent>
                 )}
 
-                <TabsContent value="curriculum" className="mt-6">
-                    <CurriculumTab courseUuid={course.uuid} />
-                </TabsContent>
+                {showCurriculum && (
+                    <TabsContent value="curriculum" className="mt-6">
+                        <CurriculumTab courseUuid={course.uuid} />
+                    </TabsContent>
+                )}
 
                 <TabsContent value="enrollments" className="mt-6">
                     <EnrollmentsTab courseUuid={course.uuid} />

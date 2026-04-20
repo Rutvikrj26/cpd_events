@@ -3,6 +3,13 @@ import { getToken, getRefreshToken, setToken, removeToken } from '@/lib/auth';
 import { ApiErrorResponse } from './types';
 import { toast } from 'sonner';
 
+declare module 'axios' {
+    export interface AxiosRequestConfig {
+        // When true, suppress the global error toast for this request.
+        silent?: boolean;
+    }
+}
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 const client = axios.create({
@@ -14,7 +21,6 @@ const client = axios.create({
 
 // Public endpoints that should NOT include Authorization header or trigger refresh
 const PUBLIC_ENDPOINTS = [
-    '/auth/signup/',
     '/auth/token/',
     '/auth/token/refresh/',
     '/auth/verify-email/',
@@ -110,7 +116,9 @@ client.interceptors.response.use(
         }
 
         // --- Toast notifications for non-401 errors ---
-        if (error.response && !isPublicEndpoint(originalRequest?.url)) {
+        // Callers can opt out by setting `silent: true` on the axios config.
+        const silent = originalRequest?.silent === true;
+        if (error.response && !isPublicEndpoint(originalRequest?.url) && !silent) {
             const errorMessage = getApiErrorMessage(error);
 
             if (error.response.status >= 500) {

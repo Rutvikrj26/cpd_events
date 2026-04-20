@@ -33,6 +33,7 @@ type NavItemConfig = {
     learnerOnly?: boolean;
     educatorOnly?: boolean;
     courseManagerOnly?: boolean;
+    courseStaffOnly?: boolean;
     creatorOnly?: boolean;
     adminOnly?: boolean;
 };
@@ -40,7 +41,7 @@ type NavItemConfig = {
 export const Sidebar = () => {
     const { user, logout, hasRoute, hasFeature, manifest } = useAuth();
     const [isCollapsed, setIsCollapsed] = useState(false);
-    const { isEducator, isCourseManager, isLearner, isCreator, isAdmin } = getRoleFlags(user);
+    const { isEducator, isCourseManager, isInstructor, isLearner, isCreator, isAdmin } = getRoleFlags(user);
 
     const institutionName = manifest?.deployment?.institution_name || 'Accredit';
     const portalLabel = isAdmin
@@ -49,15 +50,17 @@ export const Sidebar = () => {
             ? 'Educator Portal'
             : isCourseManager
                 ? 'Course Manager Portal'
-                : 'Learner Portal';
+                : isInstructor
+                    ? 'Instructor Portal'
+                    : 'Learner Portal';
 
     const navItems: NavItemConfig[] = [
         { routeKey: 'dashboard', to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
 
         // Learner items
         { routeKey: 'registrations', to: '/registrations', icon: GraduationCap, label: 'My Learning', learnerOnly: true },
-        { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'My Certificates', learnerOnly: true },
-        { routeKey: 'badges', to: '/badges', icon: Award, label: 'My Badges', learnerOnly: true },
+        { routeKey: 'accreditations', to: '/accreditations', icon: Award, label: 'My Accreditations', learnerOnly: true },
+        { routeKey: 'my_programs', to: '/my-programs', icon: BookOpen, label: 'My Programs', learnerOnly: true },
         { routeKey: 'cpd_tracking', to: '/cpd', icon: TrendingUp, label: 'CPD Tracking', learnerOnly: true },
 
         // Educator items
@@ -71,7 +74,8 @@ export const Sidebar = () => {
         { routeKey: 'reports', to: '/organizer/reports', icon: BarChart3, label: 'Reports', educatorOnly: true },
 
         // Course Manager items
-        { routeKey: 'courses', to: '/courses/manage', icon: FileText, label: 'Manage Courses', courseManagerOnly: true },
+        { routeKey: 'courses', to: '/courses/manage', icon: FileText, label: 'Manage Courses', courseStaffOnly: true },
+        { routeKey: 'programs', to: '/programs/manage', icon: BookOpen, label: 'Manage Programs', courseManagerOnly: true },
         { routeKey: 'course_certificates', to: '/courses/certificates', icon: Award, label: 'Course Certificates', courseManagerOnly: true },
 
         // Admin items
@@ -86,6 +90,7 @@ export const Sidebar = () => {
         if (item.learnerOnly && !isLearner) return false;
         if (item.educatorOnly && !isEducator) return false;
         if (item.courseManagerOnly && !isCourseManager) return false;
+        if (item.courseStaffOnly && !(isCourseManager || isInstructor || isAdmin)) return false;
         if (item.creatorOnly && !isCreator) return false;
         if (item.adminOnly && !isAdmin) return false;
 
@@ -94,7 +99,7 @@ export const Sidebar = () => {
             // Items that don't need feature checks (basic navigation)
             // 'courses' is here because course_managers need access via CourseStaff assignments,
             // not via the create_courses feature flag.
-            const alwaysShow = ['dashboard', 'profile', 'cpd_tracking', 'badges', 'courses', 'course_certificates'];
+            const alwaysShow = ['dashboard', 'profile', 'cpd_tracking', 'badges', 'courses', 'course_certificates', 'accreditations', 'my_programs'];
             if (alwaysShow.includes(item.routeKey)) return true;
 
             // Map nav items to manifest features

@@ -165,7 +165,7 @@ export function AttendeeDashboard() {
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                            <Link to={`/events/${reg.event.slug || reg.event.uuid}`}>
+                            <Link to={`/events/${reg.event.slug || reg.event.uuid}/details`}>
                               <span className="absolute inset-0" aria-hidden="true" />
                               {reg.event.title}
                             </Link>
@@ -195,7 +195,7 @@ export function AttendeeDashboard() {
                           className="h-8 shadow-sm"
                         />
                         <Button variant="outline" size="sm" className="h-8" asChild>
-                          <Link to={`/events/${reg.event.slug || reg.event.uuid}`}>View Details</Link>
+                          <Link to={`/events/${reg.event.slug || reg.event.uuid}/details`}>View Details</Link>
                         </Button>
                       </div>
                     </div>
