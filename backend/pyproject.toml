@@ -53,6 +53,7 @@ dependencies = [
     "pypdf>=6.5.0,<7.0.0",
     "django-anymail[brevo]>=14.0,<15.0",
     "qrcode>=8.2,<9.0",
+    "bleach>=6.1,<7.0",
 
     # Video Conferencing (LiveKit)
     "livekit-api>=0.7.0,<1.0.0",

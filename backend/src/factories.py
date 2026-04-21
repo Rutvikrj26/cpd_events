@@ -350,3 +350,33 @@ class CourseEnrollmentFactory(DjangoModelFactory):
     course = factory.SubFactory(CourseFactory)
     user = factory.SubFactory(UserFactory)
     status = 'active'
+
+
+class DiscussionThreadFactory(DjangoModelFactory):
+    class Meta:
+        model = 'learning.DiscussionThread'
+
+    course = factory.SubFactory(CourseFactory)
+    author = factory.SubFactory(UserFactory)
+    title = factory.Sequence(lambda n: f'Thread {n}')
+    body_html = factory.Sequence(lambda n: f'<p>Body {n}</p>')
+    body_plain = factory.Sequence(lambda n: f'Body {n}')
+
+
+class DiscussionReplyFactory(DjangoModelFactory):
+    class Meta:
+        model = 'learning.DiscussionReply'
+
+    thread = factory.SubFactory(DiscussionThreadFactory)
+    author = factory.SubFactory(UserFactory)
+    body_html = factory.Sequence(lambda n: f'<p>Reply {n}</p>')
+    body_plain = factory.Sequence(lambda n: f'Reply {n}')
+
+
+class DiscussionFlagFactory(DjangoModelFactory):
+    class Meta:
+        model = 'learning.DiscussionFlag'
+
+    thread = factory.SubFactory(DiscussionThreadFactory)
+    reporter = factory.SubFactory(UserFactory)
+    reason = 'off_topic'

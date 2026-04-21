@@ -7,6 +7,7 @@ import { CurriculumTab } from "./manage/CurriculumTab";
 import { OverviewTab } from "./manage/OverviewTab";
 import { EnrollmentsTab } from "./manage/EnrollmentsTab";
 import { AnnouncementsTab } from "./manage/AnnouncementsTab";
+import { DiscussionTab } from "./manage/DiscussionTab";
 import { SubmissionsTab } from "./manage/SubmissionsTab";
 import { SessionsTab } from "./manage/SessionsTab";
 import { SettingsTab } from "./manage/SettingsTab";
@@ -101,6 +102,7 @@ export function CourseManagementPage() {
                     {showCurriculum && <TabsTrigger value="curriculum">Curriculum</TabsTrigger>}
                     <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
                     <TabsTrigger value="announcements">Announcements</TabsTrigger>
+                    <TabsTrigger value="discussion">Discussion</TabsTrigger>
                     <TabsTrigger value="submissions">Submissions</TabsTrigger>
                     <TabsTrigger value="certificates">Certificates</TabsTrigger>
                     {!isStaffOnly && <TabsTrigger value="settings">Settings</TabsTrigger>}
@@ -130,6 +132,10 @@ export function CourseManagementPage() {
 
                 <TabsContent value="announcements" className="mt-6">
                     <AnnouncementsTab courseUuid={course.uuid} />
+                </TabsContent>
+
+                <TabsContent value="discussion" className="mt-6">
+                    <DiscussionTab courseUuid={course.uuid} />
                 </TabsContent>
 
                 <TabsContent value="submissions" className="mt-6">

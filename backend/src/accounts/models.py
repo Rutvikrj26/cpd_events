@@ -641,6 +641,9 @@ class Notification(BaseModel):
         REFUND_PROCESSED = "refund_processed", "Refund Processed"
         INVITATION_SENT = "invitation_sent", "Invitation Sent"
         ACCOUNT_ACTIVATED = "account_activated", "Account Activated"
+        DISCUSSION_REPLY = "discussion_reply", "Discussion Reply"
+        DISCUSSION_MENTION = "discussion_mention", "Discussion Mention"
+        DISCUSSION_FLAG_RESOLVED = "discussion_flag_resolved", "Discussion Flag Resolved"
         SYSTEM = "system", "System"
 
     user = models.ForeignKey(

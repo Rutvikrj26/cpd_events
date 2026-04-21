@@ -179,6 +179,75 @@ export interface CourseAnnouncement {
     updated_at?: string;
 }
 
+// ============================================
+// Discussion Board
+// ============================================
+
+export interface CourseMemberMini {
+    uuid: string;
+    full_name: string;
+    email: string;
+    role: 'learner' | 'staff';
+}
+
+export type FlagReason = 'spam' | 'harassment' | 'off_topic' | 'other';
+export type FlagStatus = 'open' | 'resolved_kept' | 'resolved_hidden';
+export type FlagResolveAction = 'keep' | 'hide';
+
+export interface UserMini {
+    uuid: string;
+    full_name: string;
+    email: string;
+}
+
+export interface DiscussionThreadList {
+    uuid: string;
+    title: string;
+    author: UserMini | null;
+    is_pinned: boolean;
+    is_locked: boolean;
+    is_hidden: boolean;
+    reply_count: number;
+    last_activity_at: string;
+    open_flag_count: number;
+    created_at: string;
+}
+
+export interface DiscussionReply {
+    uuid: string;
+    thread: number | string;
+    author: UserMini | null;
+    body_html: string;
+    is_hidden: boolean;
+    mentions: UserMini[];
+    can_moderate: boolean;
+    created_at: string;
+    updated_at?: string;
+}
+
+export interface DiscussionThread extends DiscussionThreadList {
+    body_html: string;
+    mentions: UserMini[];
+    replies: DiscussionReply[];
+    can_moderate: boolean;
+    updated_at?: string;
+}
+
+export interface DiscussionFlag {
+    uuid: string;
+    reporter: UserMini | null;
+    reason: FlagReason;
+    note: string;
+    status: FlagStatus;
+    target_type: 'thread' | 'reply';
+    target_snippet: string;
+    thread_uuid: string | null;
+    thread: number | null;
+    reply: number | null;
+    resolved_at: string | null;
+    created_at: string;
+}
+
 export interface EventModule {
     uuid: string;
     title: string;

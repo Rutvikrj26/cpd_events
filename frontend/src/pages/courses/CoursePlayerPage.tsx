@@ -17,6 +17,8 @@ import { getCourseModules, getModuleContents } from '@/api/courses/modules';
 import { updateContentProgress } from '@/api/learning';
 import { Course, CourseModule, Assignment, AssignmentSubmission, CourseAnnouncement, CourseSession } from '@/api/courses/types';
 import { SessionsPanel } from '@/components/courses/SessionsPanel';
+import { DiscussionPanel } from '@/components/courses/discussion/DiscussionPanel';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -45,7 +47,8 @@ import {
     ExternalLink,
     ClipboardCheck,
     Info,
-    Lock
+    Lock,
+    MessageSquare
 } from 'lucide-react';
 
 interface ModuleContent {
@@ -97,6 +100,8 @@ export function CoursePlayerPage() {
     });
     const [announcements, setAnnouncements] = useState<CourseAnnouncement[]>([]);
     const [showAnnouncements, setShowAnnouncements] = useState(false);
+    const [showDiscussion, setShowDiscussion] = useState(false);
+    const { user } = useAuth();
     const [sessions, setSessions] = useState<CourseSession[]>([]);
 
     // Fetch course and modules on mount
@@ -718,6 +723,10 @@ export function CoursePlayerPage() {
                                 </div>
                             </div>
                             <div className="flex gap-2">
+                                <Button variant="outline" onClick={() => setShowDiscussion(true)}>
+                                    <MessageSquare className="mr-2 h-4 w-4" />
+                                    Discussion
+                                </Button>
                                 {announcements.length > 0 && (
                                     <Button variant="outline" onClick={() => setShowAnnouncements(true)}>
                                         <Info className="mr-2 h-4 w-4" />
@@ -956,6 +965,21 @@ export function CoursePlayerPage() {
                             ))
                         )}
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showDiscussion} onOpenChange={setShowDiscussion}>
+                <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Discussion</DialogTitle>
+                    </DialogHeader>
+                    {courseUuid && (
+                        <DiscussionPanel
+                            courseUuid={courseUuid}
+                            currentUserUuid={user?.uuid}
+                            isStaff={false}
+                        />
+                    )}
                 </DialogContent>
             </Dialog>
         </div>

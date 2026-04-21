@@ -11,6 +11,7 @@ import {
 import { PaginatedResponse, PaginationParams } from '../types';
 
 export * from './types';
+export * from './discussions';
 
 // ============================================
 // Organization Courses (Admin/Course Manager)

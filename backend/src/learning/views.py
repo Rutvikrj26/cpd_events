@@ -4,6 +4,7 @@ Learning API views.
 
 from django.db import models
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import parsers, permissions, serializers, status, views, viewsets
 from rest_framework.decorators import action
@@ -22,6 +23,9 @@ from .models import (
     CourseEnrollment,
     CourseModule,
     CourseStaff,
+    DiscussionFlag,
+    DiscussionReply,
+    DiscussionThread,
     EventModule,
     ModuleContent,
     ModuleProgress,
@@ -39,6 +43,15 @@ from .serializers import (
     ContentProgressSerializer,
     ContentProgressUpdateSerializer,
     CourseAnnouncementSerializer,
+    CourseMemberMiniSerializer,
+    DiscussionFlagCreateSerializer,
+    DiscussionFlagSerializer,
+    DiscussionReplyCreateSerializer,
+    DiscussionReplySerializer,
+    DiscussionThreadCreateSerializer,
+    DiscussionThreadDetailSerializer,
+    DiscussionThreadListSerializer,
+    DiscussionThreadUpdateSerializer,
     CourseCreateSerializer,
     CourseEnrollmentRosterSerializer,
     CourseEnrollmentSerializer,
@@ -1952,3 +1965,352 @@ class ProgramEnrollmentViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return ProgramEnrollment.objects.filter(user=self.request.user).select_related('program')
+
+
+# =============================================================================
+# Discussion Board
+# =============================================================================
+
+
+def _course_is_staff(course, user):
+    if not user or not user.is_authenticated:
+        return False
+    return course.can_manage(user) or course.can_instruct(user)
+
+
+def _course_is_enrollee(course, user):
+    if not user or not user.is_authenticated:
+        return False
+    return CourseEnrollment.objects.filter(
+        user=user,
+        course=course,
+        status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
+    ).exists()
+
+
+def _require_course_access(course, user):
+    from rest_framework.exceptions import PermissionDenied
+
+    if _course_is_staff(course, user) or _course_is_enrollee(course, user):
+        return
+    raise PermissionDenied('You do not have access to this course.')
+
+
+def _require_course_staff(course, user):
+    from rest_framework.exceptions import PermissionDenied
+
+    if not _course_is_staff(course, user):
+        raise PermissionDenied('Staff access required.')
+
+
+def _apply_mentions(post, cleaned_html):
+    """Parse mention UUIDs from sanitized HTML, resolve to allowed users, set M2M."""
+    from accounts.models import User as UserModel
+    from .sanitize import extract_mentions
+
+    uuids = extract_mentions(cleaned_html)
+    if not uuids:
+        post.mentions.clear()
+        return []
+    course = post.thread.course if isinstance(post, DiscussionReply) else post.course
+    allowed_ids = set(
+        UserModel.objects.filter(uuid__in=uuids)
+        .values_list('uuid', flat=True)
+    )
+    # Restrict mentions to users that are enrolled or staff on the course.
+    enrolled_uuids = set(
+        CourseEnrollment.objects.filter(
+            course=course,
+            user__uuid__in=allowed_ids,
+            status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
+        ).values_list('user__uuid', flat=True)
+    )
+    staff_uuids = set(
+        CourseStaff.objects.filter(course=course, user__uuid__in=allowed_ids)
+        .values_list('user__uuid', flat=True)
+    )
+    valid = enrolled_uuids | staff_uuids
+    users = list(UserModel.objects.filter(uuid__in=valid))
+    post.mentions.set(users)
+    return users
+
+
+@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_discussions')
+class DiscussionThreadViewSet(viewsets.ModelViewSet):
+    """Threads on a course discussion board."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
+
+    def get_course(self):
+        return get_object_or_404(Course, uuid=self.kwargs.get('course_uuid'))
+
+    def get_queryset(self):
+        course = self.get_course()
+        _require_course_access(course, self.request.user)
+        manager = DiscussionThread.all_objects if _course_is_staff(course, self.request.user) else DiscussionThread.objects
+        qs = manager.filter(course=course).select_related('author').prefetch_related('mentions')
+        if not _course_is_staff(course, self.request.user):
+            qs = qs.filter(is_hidden=False)
+        return qs
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return DiscussionThreadCreateSerializer
+        if self.action in ('update', 'partial_update'):
+            return DiscussionThreadUpdateSerializer
+        if self.action == 'retrieve':
+            return DiscussionThreadDetailSerializer
+        return DiscussionThreadListSerializer
+
+    def perform_create(self, serializer):
+        course = self.get_course()
+        _require_course_access(course, self.request.user)
+        thread = serializer.save(course=course, author=self.request.user)
+        mentioned = _apply_mentions(thread, thread.body_html)
+        from .discussions_service import notify_mentions
+
+        notify_mentions(thread, mentioned)
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        thread = self.get_object()
+        course = self.get_course()
+        is_author = thread.author_id == self.request.user.id
+        is_staff = _course_is_staff(course, self.request.user)
+        if not (is_author or is_staff):
+            raise PermissionDenied('Only the author or staff can edit this thread.')
+        if thread.is_locked and not is_staff:
+            raise PermissionDenied('Thread is locked.')
+        thread = serializer.save()
+        _apply_mentions(thread, thread.body_html)
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+
+        course = self.get_course()
+        is_author = instance.author_id == self.request.user.id
+        is_staff = _course_is_staff(course, self.request.user)
+        if not (is_author or is_staff):
+            raise PermissionDenied('Only the author or staff can delete this thread.')
+        instance.soft_delete()
+
+    def _set_flag(self, field: str, value: bool):
+        thread = self.get_object()
+        _require_course_staff(self.get_course(), self.request.user)
+        setattr(thread, field, value)
+        thread.save(update_fields=[field, 'updated_at'])
+        return Response(DiscussionThreadDetailSerializer(thread, context={'request': self.request}).data)
+
+    @action(detail=True, methods=['post'])
+    def pin(self, request, *args, **kwargs):
+        return self._set_flag('is_pinned', True)
+
+    @action(detail=True, methods=['post'])
+    def unpin(self, request, *args, **kwargs):
+        return self._set_flag('is_pinned', False)
+
+    @action(detail=True, methods=['post'])
+    def lock(self, request, *args, **kwargs):
+        return self._set_flag('is_locked', True)
+
+    @action(detail=True, methods=['post'])
+    def unlock(self, request, *args, **kwargs):
+        return self._set_flag('is_locked', False)
+
+    @action(detail=True, methods=['post'])
+    def hide(self, request, *args, **kwargs):
+        return self._set_flag('is_hidden', True)
+
+    @action(detail=True, methods=['post'])
+    def unhide(self, request, *args, **kwargs):
+        return self._set_flag('is_hidden', False)
+
+    @action(detail=True, methods=['post'])
+    def flag(self, request, *args, **kwargs):
+        thread = self.get_object()
+        _require_course_access(self.get_course(), self.request.user)
+        serializer = DiscussionFlagCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        flag = serializer.save(thread=thread, reporter=self.request.user)
+        return Response(DiscussionFlagSerializer(flag).data, status=status.HTTP_201_CREATED)
+
+
+@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_discussions')
+class DiscussionReplyViewSet(viewsets.ModelViewSet):
+    """Replies under a discussion thread."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
+    http_method_names = ['get', 'post', 'delete']
+
+    def get_course(self):
+        return get_object_or_404(Course, uuid=self.kwargs.get('course_uuid'))
+
+    def get_thread(self):
+        return get_object_or_404(
+            DiscussionThread.all_objects,
+            uuid=self.kwargs.get('thread_uuid'),
+            course__uuid=self.kwargs.get('course_uuid'),
+        )
+
+    def get_queryset(self):
+        course = self.get_course()
+        _require_course_access(course, self.request.user)
+        thread = self.get_thread()
+        manager = DiscussionReply.all_objects if _course_is_staff(course, self.request.user) else DiscussionReply.objects
+        qs = manager.filter(thread=thread).select_related('author').prefetch_related('mentions')
+        if not _course_is_staff(course, self.request.user):
+            qs = qs.filter(is_hidden=False)
+        return qs
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return DiscussionReplyCreateSerializer
+        return DiscussionReplySerializer
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        course = self.get_course()
+        _require_course_access(course, self.request.user)
+        thread = self.get_thread()
+        is_staff = _course_is_staff(course, self.request.user)
+        if thread.is_locked and not is_staff:
+            raise PermissionDenied('Thread is locked.')
+        reply = serializer.save(thread=thread, author=self.request.user)
+        mentioned = _apply_mentions(reply, reply.body_html)
+        DiscussionThread.objects.filter(pk=thread.pk).update(
+            reply_count=models.F('reply_count') + 1,
+            last_activity_at=timezone.now(),
+        )
+        from .discussions_service import notify_new_reply, notify_mentions
+
+        notify_new_reply(reply)
+        notify_mentions(reply, mentioned)
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+
+        course = self.get_course()
+        is_author = instance.author_id == self.request.user.id
+        is_staff = _course_is_staff(course, self.request.user)
+        if not (is_author or is_staff):
+            raise PermissionDenied('Only the author or staff can delete this reply.')
+        instance.soft_delete()
+
+    def _set_flag(self, field: str, value: bool):
+        reply = self.get_object()
+        _require_course_staff(self.get_course(), self.request.user)
+        setattr(reply, field, value)
+        reply.save(update_fields=[field, 'updated_at'])
+        return Response(DiscussionReplySerializer(reply, context={'request': self.request}).data)
+
+    @action(detail=True, methods=['post'])
+    def hide(self, request, *args, **kwargs):
+        return self._set_flag('is_hidden', True)
+
+    @action(detail=True, methods=['post'])
+    def unhide(self, request, *args, **kwargs):
+        return self._set_flag('is_hidden', False)
+
+    @action(detail=True, methods=['post'])
+    def flag(self, request, *args, **kwargs):
+        reply = self.get_object()
+        _require_course_access(self.get_course(), self.request.user)
+        serializer = DiscussionFlagCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        flag = serializer.save(reply=reply, reporter=self.request.user)
+        return Response(DiscussionFlagSerializer(flag).data, status=status.HTTP_201_CREATED)
+
+
+@roles('educator', 'course_manager', 'instructor', 'admin', route_name='course_discussion_flags')
+class DiscussionFlagViewSet(viewsets.GenericViewSet):
+    """Staff-only flag queue + resolve actions."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = DiscussionFlagSerializer
+    lookup_field = 'uuid'
+
+    def get_course(self):
+        return get_object_or_404(Course, uuid=self.kwargs.get('course_uuid'))
+
+    def get_queryset(self):
+        course = self.get_course()
+        _require_course_staff(course, self.request.user)
+        return DiscussionFlag.objects.filter(
+            models.Q(thread__course=course) | models.Q(reply__thread__course=course)
+        ).select_related('reporter', 'thread', 'reply', 'reply__thread').order_by('-created_at')
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset()
+        status_filter = request.query_params.get('status', DiscussionFlag.Status.OPEN)
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return Response(DiscussionFlagSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['post'])
+    def resolve(self, request, *args, **kwargs):
+        from django.utils import timezone as _tz
+        from rest_framework.exceptions import ValidationError
+
+        course = self.get_course()
+        _require_course_staff(course, self.request.user)
+        flag = get_object_or_404(self.get_queryset(), uuid=kwargs.get('uuid'))
+        action_kind = request.data.get('action')
+        if action_kind not in ('keep', 'hide'):
+            raise ValidationError({'action': 'Must be "keep" or "hide".'})
+        if action_kind == 'hide':
+            target = flag.thread if flag.thread_id else flag.reply
+            target.is_hidden = True
+            target.save(update_fields=['is_hidden', 'updated_at'])
+            flag.status = DiscussionFlag.Status.RESOLVED_HIDDEN
+        else:
+            flag.status = DiscussionFlag.Status.RESOLVED_KEPT
+        flag.resolved_by = request.user
+        flag.resolved_at = _tz.now()
+        flag.save(update_fields=['status', 'resolved_by', 'resolved_at', 'updated_at'])
+        from .discussions_service import notify_flag_resolved
+
+        notify_flag_resolved(flag)
+        return Response(DiscussionFlagSerializer(flag).data)
+
+
+@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_member_search')
+class CourseMemberSearchView(views.APIView):
+    """Search enrolled members + staff for @mention autocomplete."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, course_uuid):
+        course = get_object_or_404(Course, uuid=course_uuid)
+        _require_course_access(course, request.user)
+        q = (request.query_params.get('q') or '').strip()
+        from accounts.models import User as UserModel
+
+        enrolled = UserModel.objects.filter(
+            course_enrollments__course=course,
+            course_enrollments__status__in=[
+                CourseEnrollment.Status.ACTIVE,
+                CourseEnrollment.Status.COMPLETED,
+            ],
+        )
+        staff = UserModel.objects.filter(course_staff_assignments__course=course)
+        qs = (enrolled | staff).distinct()
+        if q:
+            qs = qs.filter(
+                models.Q(full_name__icontains=q) | models.Q(email__icontains=q)
+            )
+        qs = qs[:10]
+        staff_ids = set(CourseStaff.objects.filter(course=course).values_list('user_id', flat=True))
+        data = []
+        for u in qs:
+            data.append({
+                'uuid': u.uuid,
+                'full_name': u.full_name,
+                'email': u.email,
+                'role': 'staff' if u.id in staff_ids else 'learner',
+            })
+        return Response(CourseMemberMiniSerializer(data, many=True).data)
+

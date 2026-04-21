@@ -35,6 +35,8 @@ class EmailService:
         "refund_processed": "emails/refund_processed.html",
         "payment_method_expired": "emails/payment_method_expired.html",
         "trial_ending": "emails/trial_ending.html",
+        "discussion_reply": "emails/discussion_reply.html",
+        "discussion_mention": "emails/discussion_mention.html",
     }
 
     # Subject lines
@@ -53,6 +55,8 @@ class EmailService:
         "refund_processed": "Refund Processed: {event_title}",
         "payment_method_expired": "Payment Method Expired",
         "trial_ending": "Your Trial Is Ending Soon",
+        "discussion_reply": "New reply in {thread_title}",
+        "discussion_mention": "You were mentioned in {thread_title}",
     }
 
     def send_email(self, template: str, recipient: str, context: dict[str, Any], subject: str | None = None) -> bool:

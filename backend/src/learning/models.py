@@ -18,7 +18,7 @@ from django.db import models
 from django.utils import timezone
 
 from common.config import AssignmentDefaults, ModuleDefaults
-from common.models import BaseModel
+from common.models import BaseModel, SoftDeleteModel
 
 
 def validate_module_content_data(content_type: str, content_data):
@@ -1877,3 +1877,153 @@ class ProgramEnrollment(BaseModel):
     def drop(self):
         self.status = self.Status.DROPPED
         self.save(update_fields=["status", "updated_at"])
+
+
+class DiscussionThread(SoftDeleteModel):
+    """Top-level discussion thread on a course."""
+
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="discussion_threads")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="discussion_threads",
+    )
+    title = models.CharField(max_length=255)
+    body_html = models.TextField()
+    body_plain = models.TextField(blank=True)
+    is_pinned = models.BooleanField(default=False, db_index=True)
+    is_locked = models.BooleanField(default=False)
+    is_hidden = models.BooleanField(default=False, db_index=True)
+    last_activity_at = models.DateTimeField(default=timezone.now, db_index=True)
+    reply_count = models.PositiveIntegerField(default=0)
+    mentions = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="discussion_thread_mentions",
+    )
+
+    class Meta:
+        db_table = "discussion_threads"
+        ordering = ["-is_pinned", "-last_activity_at"]
+        indexes = [
+            models.Index(fields=["course", "-last_activity_at"]),
+            models.Index(fields=["course", "is_pinned"]),
+        ]
+        verbose_name = "Discussion Thread"
+        verbose_name_plural = "Discussion Threads"
+
+    def __str__(self):
+        return f"{self.course.title} — {self.title}"
+
+    def touch_activity(self):
+        self.last_activity_at = timezone.now()
+        self.save(update_fields=["last_activity_at", "updated_at"])
+
+
+class DiscussionReply(SoftDeleteModel):
+    """Flat (single-level) reply to a DiscussionThread."""
+
+    thread = models.ForeignKey(DiscussionThread, on_delete=models.CASCADE, related_name="replies")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="discussion_replies",
+    )
+    body_html = models.TextField()
+    body_plain = models.TextField(blank=True)
+    is_hidden = models.BooleanField(default=False, db_index=True)
+    mentions = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="discussion_reply_mentions",
+    )
+
+    class Meta:
+        db_table = "discussion_replies"
+        ordering = ["created_at"]
+        indexes = [models.Index(fields=["thread", "created_at"])]
+        verbose_name = "Discussion Reply"
+        verbose_name_plural = "Discussion Replies"
+
+    def __str__(self):
+        return f"Reply by {self.author} on {self.thread.title}"
+
+
+class DiscussionFlag(BaseModel):
+    """Learner-raised flag on a thread or reply; resolved by staff."""
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        RESOLVED_KEPT = "resolved_kept", "Resolved — Content Kept"
+        RESOLVED_HIDDEN = "resolved_hidden", "Resolved — Content Hidden"
+
+    class Reason(models.TextChoices):
+        SPAM = "spam", "Spam"
+        HARASSMENT = "harassment", "Harassment"
+        OFF_TOPIC = "off_topic", "Off-topic"
+        OTHER = "other", "Other"
+
+    thread = models.ForeignKey(
+        DiscussionThread,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="flags",
+    )
+    reply = models.ForeignKey(
+        DiscussionReply,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="flags",
+    )
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="discussion_flags_raised",
+    )
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    note = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.OPEN,
+        db_index=True,
+    )
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="discussion_flags_resolved",
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "discussion_flags"
+        indexes = [models.Index(fields=["status", "-created_at"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(thread__isnull=False, reply__isnull=True)
+                    | models.Q(thread__isnull=True, reply__isnull=False)
+                ),
+                name="discussion_flag_exactly_one_target",
+            ),
+        ]
+        verbose_name = "Discussion Flag"
+        verbose_name_plural = "Discussion Flags"
+
+    def __str__(self):
+        target = self.thread_id and f"thread {self.thread_id}" or f"reply {self.reply_id}"
+        return f"Flag on {target} ({self.reason}, {self.status})"
+
+    @property
+    def course(self):
+        return self.thread.course if self.thread_id else self.reply.thread.course

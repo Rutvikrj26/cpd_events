@@ -18,6 +18,9 @@ from .models import (
     CourseModule,
     CourseSession,
     CourseSessionAttendance,
+    DiscussionFlag,
+    DiscussionReply,
+    DiscussionThread,
     EventModule,
     Program,
     ProgramCourse,
@@ -1183,3 +1186,230 @@ class ProgramEnrollmentSerializer(serializers.ModelSerializer):
                 'completed_at': ce.completed_at.isoformat() if ce and ce.completed_at else None,
             })
         return out
+
+
+# =============================================================================
+# Discussion Board Serializers
+# =============================================================================
+
+
+class _UserMiniSerializer(serializers.Serializer):
+    """Minimal user representation used inside discussion payloads."""
+
+    uuid = serializers.UUIDField(read_only=True)
+    full_name = serializers.CharField(read_only=True)
+    email = serializers.EmailField(read_only=True)
+
+
+class CourseMemberMiniSerializer(_UserMiniSerializer):
+    """User mini + their role in the course (learner / instructor / course_manager)."""
+
+    role = serializers.CharField(read_only=True)
+
+
+class DiscussionReplySerializer(serializers.ModelSerializer):
+    """A reply within a discussion thread."""
+
+    author = _UserMiniSerializer(read_only=True)
+    mentions = _UserMiniSerializer(many=True, read_only=True)
+    can_moderate = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DiscussionReply
+        fields = [
+            'uuid',
+            'thread',
+            'author',
+            'body_html',
+            'is_hidden',
+            'mentions',
+            'can_moderate',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['uuid', 'thread', 'author', 'is_hidden', 'mentions', 'created_at', 'updated_at']
+
+    def get_can_moderate(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        course = obj.thread.course
+        return course.can_manage(request.user) or course.can_instruct(request.user)
+
+
+class DiscussionReplyCreateSerializer(serializers.ModelSerializer):
+    """Create a reply — accepts body_html (sanitized on save)."""
+
+    class Meta:
+        model = DiscussionReply
+        fields = ['body_html']
+
+    def validate_body_html(self, value):
+        from .sanitize import clean_discussion_html
+
+        cleaned, plain = clean_discussion_html(value or '')
+        if not plain:
+            raise serializers.ValidationError('Reply body cannot be empty.')
+        self._cleaned_pair = (cleaned, plain)
+        return cleaned
+
+    def save(self, **kwargs):
+        cleaned, plain = getattr(self, '_cleaned_pair', (self.validated_data['body_html'], ''))
+        kwargs['body_html'] = cleaned
+        kwargs['body_plain'] = plain
+        return super().save(**kwargs)
+
+
+class DiscussionThreadListSerializer(serializers.ModelSerializer):
+    """Thread summary row for lists."""
+
+    author = _UserMiniSerializer(read_only=True)
+    open_flag_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DiscussionThread
+        fields = [
+            'uuid',
+            'title',
+            'author',
+            'is_pinned',
+            'is_locked',
+            'is_hidden',
+            'reply_count',
+            'last_activity_at',
+            'open_flag_count',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_open_flag_count(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return 0
+        course = obj.course
+        if not (course.can_manage(request.user) or course.can_instruct(request.user)):
+            return 0
+        return obj.flags.filter(status=DiscussionFlag.Status.OPEN).count()
+
+
+class DiscussionThreadDetailSerializer(DiscussionThreadListSerializer):
+    """Thread detail — includes body and first page of replies."""
+
+    body_html = serializers.CharField(read_only=True)
+    mentions = _UserMiniSerializer(many=True, read_only=True)
+    replies = serializers.SerializerMethodField()
+    can_moderate = serializers.SerializerMethodField()
+
+    class Meta(DiscussionThreadListSerializer.Meta):
+        fields = DiscussionThreadListSerializer.Meta.fields + [
+            'body_html',
+            'mentions',
+            'replies',
+            'can_moderate',
+            'updated_at',
+        ]
+        read_only_fields = fields
+
+    def get_replies(self, obj):
+        request = self.context.get('request')
+        qs = obj.replies.all().select_related('author').prefetch_related('mentions')
+        if request and request.user.is_authenticated:
+            course = obj.course
+            if not (course.can_manage(request.user) or course.can_instruct(request.user)):
+                qs = qs.filter(is_hidden=False)
+        return DiscussionReplySerializer(qs, many=True, context=self.context).data
+
+    def get_can_moderate(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return obj.course.can_manage(request.user) or obj.course.can_instruct(request.user)
+
+
+class DiscussionThreadCreateSerializer(serializers.ModelSerializer):
+    """Create a thread."""
+
+    class Meta:
+        model = DiscussionThread
+        fields = ['title', 'body_html']
+
+    def validate_title(self, value):
+        value = (value or '').strip()
+        if not value:
+            raise serializers.ValidationError('Title is required.')
+        return value
+
+    def validate_body_html(self, value):
+        from .sanitize import clean_discussion_html
+
+        cleaned, plain = clean_discussion_html(value or '')
+        if not plain:
+            raise serializers.ValidationError('Body cannot be empty.')
+        self._cleaned_pair = (cleaned, plain)
+        return cleaned
+
+    def save(self, **kwargs):
+        cleaned, plain = getattr(self, '_cleaned_pair', (self.validated_data.get('body_html', ''), ''))
+        kwargs['body_html'] = cleaned
+        kwargs['body_plain'] = plain
+        return super().save(**kwargs)
+
+
+class DiscussionThreadUpdateSerializer(DiscussionThreadCreateSerializer):
+    """Author edit of their own thread."""
+
+    class Meta(DiscussionThreadCreateSerializer.Meta):
+        fields = ['title', 'body_html']
+
+
+class DiscussionFlagSerializer(serializers.ModelSerializer):
+    """Staff-facing flag row."""
+
+    reporter = _UserMiniSerializer(read_only=True)
+    target_type = serializers.SerializerMethodField()
+    target_snippet = serializers.SerializerMethodField()
+    thread_uuid = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DiscussionFlag
+        fields = [
+            'uuid',
+            'reporter',
+            'reason',
+            'note',
+            'status',
+            'target_type',
+            'target_snippet',
+            'thread_uuid',
+            'thread',
+            'reply',
+            'resolved_at',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_target_type(self, obj):
+        return 'thread' if obj.thread_id else 'reply'
+
+    def get_thread_uuid(self, obj):
+        thread = obj.thread if obj.thread_id else (obj.reply.thread if obj.reply_id else None)
+        return str(thread.uuid) if thread else None
+
+    def get_target_snippet(self, obj):
+        target = obj.thread if obj.thread_id else obj.reply
+        text = (getattr(target, 'body_plain', '') or '') if target else ''
+        return text[:240]
+
+
+class DiscussionFlagCreateSerializer(serializers.ModelSerializer):
+    """Learner-created flag."""
+
+    class Meta:
+        model = DiscussionFlag
+        fields = ['reason', 'note']
+
+    def validate_reason(self, value):
+        valid = {c for c, _ in DiscussionFlag.Reason.choices}
+        if value not in valid:
+            raise serializers.ValidationError('Invalid reason.')
+        return value
