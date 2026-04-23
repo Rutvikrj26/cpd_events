@@ -41,9 +41,9 @@ const OrgCoursesPage = () => {
     const { slug } = useParams<{ slug: string }>();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { isAdmin, isCourseManager, isInstructor } = getRoleFlags(user);
+    const { isAdmin, isInstructor } = getRoleFlags(user);
     const isPersonal = !slug;
-    const canCreateCourses = isAdmin || isCourseManager;
+    const canCreateCourses = isAdmin || isInstructor;
 
     const [courses, setCourses] = useState<Course[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -116,7 +116,7 @@ const OrgCoursesPage = () => {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">
-                        {canCreateCourses ? 'My Courses' : 'Assigned Courses'}
+                        {canCreateCourses ? 'Manage Courses' : 'Assigned Courses'}
                     </h1>
                     <p className="text-muted-foreground">
                         {canCreateCourses

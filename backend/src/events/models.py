@@ -376,22 +376,7 @@ class Event(SoftDeleteModel):
         )
 
     def publish(self, user=None):
-        """Publish the event.
-
-        Raises:
-            ValueError: If paid event but no payouts are connected.
-        """
-        # Block publishing paid events without connected payouts.
-        # On single-tenant / institutional deployments the User model may not
-        # carry Stripe Connect fields — treat a missing attribute as "not connected"
-        # rather than raising AttributeError.
-        if self.price > 0:
-            if not getattr(self.owner, 'stripe_charges_enabled', False):
-                raise ValueError(
-                    "Cannot publish a paid event without connected payouts. "
-                    "Please link a bank account in your profile settings."
-                )
-
+        """Publish the event."""
         self._change_status(self.Status.PUBLISHED, user, 'Event published')
 
     def start(self, user=None):

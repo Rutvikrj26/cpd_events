@@ -218,9 +218,9 @@ class TestCourseViewSet:
 
     endpoint = '/api/v1/courses/'
 
-    def test_list_courses(self, course_manager_client, course):
+    def test_list_courses(self, instructor_client, course):
         """Course manager can list their courses."""
-        response = course_manager_client.get(self.endpoint)
+        response = instructor_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
 
     def test_create_course(self, admin_client):
@@ -233,10 +233,10 @@ class TestCourseViewSet:
         response = admin_client.post(self.endpoint, data)
         assert response.status_code == status.HTTP_201_CREATED
 
-    def test_course_manager_can_create_course(self, course_manager_client):
+    def test_instructor_can_create_course(self, instructor_client):
         """Course managers can create courses."""
         data = {'title': 'Managed Course', 'slug': 'managed-course', 'description': ''}
-        response = course_manager_client.post(self.endpoint, data)
+        response = instructor_client.post(self.endpoint, data)
         assert response.status_code == status.HTTP_201_CREATED
 
     def test_publish_course(self, admin_client, course):

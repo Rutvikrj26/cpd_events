@@ -63,10 +63,10 @@ def organizer_client(organizer):
 
 
 @pytest.fixture
-def course_manager_client(course_manager):
-    """API client authenticated as a course manager."""
+def instructor_client(instructor):
+    """API client authenticated as an instructor."""
     client = APIClient()
-    client.force_authenticate(user=course_manager)
+    client.force_authenticate(user=instructor)
     return client
 
 
@@ -112,7 +112,7 @@ def unverified_user(db):
 
 @pytest.fixture
 def organizer(db):
-    """An organizer (educator) user with an active subscription."""
+    """An organizer user with an active subscription."""
     from billing.models import Subscription
 
     organizer = OrganizerFactory(
@@ -127,14 +127,14 @@ def organizer(db):
 
 
 @pytest.fixture
-def course_manager(db):
-    """A course manager user with an active subscription."""
+def instructor(db):
+    """An instructor user with an active subscription."""
     from billing.models import Subscription
 
     user = UserFactory(
-        email='course-manager@example.com',
-        full_name='Course Manager',
-        groups=['course_manager'],
+        email='instructor@example.com',
+        full_name='Test Instructor',
+        groups=['instructor'],
     )
     Subscription.objects.update_or_create(
         user=user,
@@ -406,10 +406,10 @@ def assignment(db, event_module):
 
 
 @pytest.fixture
-def course(db, course_manager):
-    """A course owned by the course manager."""
+def course(db, instructor):
+    """A course owned by the instructor."""
     return CourseFactory(
-        created_by=course_manager,
+        created_by=instructor,
         title='Test Course',
     )
 

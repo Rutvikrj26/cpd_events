@@ -89,7 +89,11 @@ export const PublicProgramDetailPage: React.FC = () => {
             toast({
                 variant: 'destructive',
                 title: 'Checkout error',
-                description: err?.response?.data?.error || 'Could not start checkout.',
+                description:
+                    err?.response?.data?.error?.message ||
+                    err?.response?.data?.detail ||
+                    err?.message ||
+                    'Could not start checkout.',
             });
         } finally {
             setCheckoutLoading(false);

@@ -8,12 +8,10 @@ import {
    Lock,
    Bell,
    Camera,
-   CreditCard,
    Trash2,
    Loader2,
    CheckCircle,
    AlertCircle,
-   Plus,
    Banknote,
    ExternalLink,
    Monitor,
@@ -56,9 +54,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageHeader } from "@/components/custom/PageHeader";
-import { getPaymentMethods, deletePaymentMethod, getSubscription, getBillingPortal } from "@/api/billing";
 import { getCurrentUser, updateProfile, changePassword, getNotificationPreferences, updateNotificationPreferences, exportUserData, deleteAccount, requestEmailChange } from "@/api/accounts";
-import { PaymentMethod, Subscription } from "@/api/billing/types";
 import { User as UserType, NotificationPreferences } from "@/api/accounts/types";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -90,13 +86,6 @@ export function ProfileSettings() {
    const [isSubmitting, setIsSubmitting] = useState(false);
    const [user, setUser] = useState<UserType | null>(null);
    const [loadingProfile, setLoadingProfile] = useState(true);
-
-   // Payment method state
-   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-   const [subscription, setSubscription] = useState<Subscription | null>(null);
-   const [loadingPayment, setLoadingPayment] = useState(true);
-   const [deletingId, setDeletingId] = useState<string | null>(null);
-   const [addingPayment, setAddingPayment] = useState(false);
 
    // Notification state
    const [notifications, setNotifications] = useState<NotificationPreferences | null>(null);
@@ -145,7 +134,9 @@ export function ProfileSettings() {
    // Payouts state
    const { user: authUser, logout, manifest } = useAuth();
    const isSingleTenant = manifest?.deployment?.mode === 'single_tenant';
-   const { isEducator, isCourseManager, isCreator } = getRoleFlags(authUser);
+   const { isOrganizer, isInstructor } = getRoleFlags(authUser);
+   // Whether the current user can create content (either event or course side).
+   const isContentCreator = isOrganizer || isInstructor;
    const [payoutsStatus, setPayoutsStatus] = useState<PayoutsStatus | null>(null);
    const [loadingPayouts, setLoadingPayouts] = useState(true);
    const [initiatingConnect, setInitiatingConnect] = useState(false);
@@ -194,32 +185,6 @@ export function ProfileSettings() {
       loadProfile();
    }, []);
 
-   // Load payment methods
-   const loadPaymentData = async () => {
-      setLoadingPayment(true);
-      try {
-         const [methods, sub] = await Promise.all([
-            getPaymentMethods(),
-            getSubscription(),
-         ]);
-         setPaymentMethods(methods);
-         setSubscription(sub);
-      } catch (error) {
-         console.error("Failed to load payment data:", error);
-      } finally {
-         setLoadingPayment(false);
-      }
-   };
-
-   useEffect(() => {
-      if (!manifest) return;
-      if (isSingleTenant) {
-         setLoadingPayment(false);
-         return;
-      }
-      loadPaymentData();
-   }, [manifest, isSingleTenant]);
-
    // Load notification preferences
    useEffect(() => {
       const loadNotifications = async () => {
@@ -238,7 +203,7 @@ export function ProfileSettings() {
    // Load payouts status (organizers only, not in single-tenant mode)
    useEffect(() => {
       if (!manifest) return;
-      if (!isCreator || isSingleTenant) {
+      if (!isContentCreator || isSingleTenant) {
          setLoadingPayouts(false);
          return;
       }
@@ -253,31 +218,7 @@ export function ProfileSettings() {
          }
       };
       loadPayouts();
-   }, [manifest, isCreator, isSingleTenant]);
-
-   const handleDeletePaymentMethod = async (uuid: string) => {
-      setDeletingId(uuid);
-      try {
-         await deletePaymentMethod(uuid);
-         setPaymentMethods(prev => prev.filter(m => m.uuid !== uuid));
-         toast.success("Payment method removed");
-      } catch (error: any) {
-         toast.error(error.message || "Failed to remove payment method");
-      } finally {
-         setDeletingId(null);
-      }
-   };
-
-   const handleManagePayments = async () => {
-      setAddingPayment(true);
-      try {
-         const { url } = await getBillingPortal(`${window.location.origin}/settings?tab=billing`);
-         window.location.href = url;
-      } catch (error: any) {
-         toast.error(error.message || "Failed to open billing portal");
-         setAddingPayment(false);
-      }
-   };
+   }, [manifest, isContentCreator, isSingleTenant]);
 
    const onProfileSubmit = async (data: z.infer<typeof profileSchema>) => {
       setIsSubmitting(true);
@@ -421,14 +362,6 @@ export function ProfileSettings() {
                      >
                         <User className="mr-2 h-4 w-4" /> General
                      </TabsTrigger>
-                     {!isSingleTenant && (
-                        <TabsTrigger
-                           value="billing"
-                           className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
-                        >
-                           <CreditCard className="mr-2 h-4 w-4" /> Billing
-                        </TabsTrigger>
-                     )}
                      <TabsTrigger
                         value="security"
                         className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
@@ -453,7 +386,7 @@ export function ProfileSettings() {
                      >
                         <Shield className="mr-2 h-4 w-4" /> Privacy
                      </TabsTrigger>
-                     {isCreator && !isSingleTenant && (
+                     {isContentCreator && !isSingleTenant && (
                         <TabsTrigger
                            value="payouts"
                            className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
@@ -525,7 +458,7 @@ export function ProfileSettings() {
                                        </FormItem>
                                     )}
                                  />
-                                 {isCreator && (
+                                 {isContentCreator && (
                                     <FormField
                                        control={profileForm.control}
                                        name="gst_hst_number"
@@ -581,152 +514,6 @@ export function ProfileSettings() {
                         </CardContent>
                      </Card>
                   </TabsContent>
-
-                  {/* BILLING TAB */}
-                  {!isSingleTenant && <TabsContent value="billing" className="mt-0 space-y-6">
-                     <Card>
-                        <CardHeader>
-                           <CardTitle>Payment Methods</CardTitle>
-                           <CardDescription>Manage your saved payment methods for billing.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                           {loadingPayment ? (
-                              <div className="flex items-center justify-center py-8">
-                                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                              </div>
-                           ) : paymentMethods.length === 0 ? (
-                              <div className="text-center py-8 space-y-4">
-                                 <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center">
-                                    <CreditCard className="h-6 w-6 text-muted-foreground" />
-                                 </div>
-                                 <div>
-                                    <p className="font-medium">No payment methods</p>
-                                    <p className="text-sm text-muted-foreground">
-                                       Add a payment method to continue after your trial ends.
-                                    </p>
-                                 </div>
-                                 <Button onClick={handleManagePayments} disabled={addingPayment}>
-                                    {addingPayment ? (
-                                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    ) : (
-                                       <Plus className="h-4 w-4 mr-2" />
-                                    )}
-                                    Add Payment Method
-                                 </Button>
-                              </div>
-                           ) : (
-                              <div className="space-y-3">
-                                 {paymentMethods.map((method) => (
-                                    <div
-                                       key={method.uuid}
-                                       className="flex items-center justify-between p-4 border rounded-lg bg-muted/30"
-                                    >
-                                       <div className="flex items-center gap-4">
-                                          <div className="w-10 h-10 bg-background rounded-md flex items-center justify-center border">
-                                             <CreditCard className="h-5 w-5 text-muted-foreground" />
-                                          </div>
-                                          <div>
-                                             <div className="flex items-center gap-2">
-                                                <span className="font-medium capitalize">{method.card_brand}</span>
-                                                <span className="text-muted-foreground">•••• {method.card_last4}</span>
-                                                {method.is_default && (
-                                                   <Badge variant="secondary" className="text-xs">Default</Badge>
-                                                )}
-                                                {method.is_expired && (
-                                                   <Badge variant="destructive" className="text-xs">Expired</Badge>
-                                                )}
-                                             </div>
-                                             <p className="text-sm text-muted-foreground">
-                                                Expires {method.card_exp_month}/{method.card_exp_year}
-                                             </p>
-                                          </div>
-                                       </div>
-                                       <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                          onClick={() => handleDeletePaymentMethod(method.uuid)}
-                                          disabled={deletingId === method.uuid}
-                                       >
-                                          {deletingId === method.uuid ? (
-                                             <Loader2 className="h-4 w-4 animate-spin" />
-                                          ) : (
-                                             <Trash2 className="h-4 w-4" />
-                                          )}
-                                       </Button>
-                                    </div>
-                                 ))}
-                                 <Button variant="outline" className="w-full" onClick={handleManagePayments} disabled={addingPayment}>
-                                    {addingPayment ? (
-                                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    ) : (
-                                       <Plus className="h-4 w-4 mr-2" />
-                                    )}
-                                    Add Another Payment Method
-                                 </Button>
-                              </div>
-                           )}
-                        </CardContent>
-                     </Card>
-
-                     {/* Subscription Status Card - Organizers Only */}
-                     {isCreator && (
-                        <Card>
-                           <CardHeader>
-                              <CardTitle>Subscription</CardTitle>
-                              <CardDescription>Your current plan and billing status.</CardDescription>
-                           </CardHeader>
-                           <CardContent>
-                              {subscription ? (
-                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                       <span className="text-muted-foreground">Current Plan</span>
-                                       <span className="font-medium capitalize">{subscription.plan}</span>
-                                    </div>
-                                    <Separator />
-                                    <div className="flex items-center justify-between">
-                                       <span className="text-muted-foreground">Status</span>
-                                       <Badge variant={subscription.is_active ? "default" : "secondary"}>
-                                          {subscription.status_display}
-                                       </Badge>
-                                    </div>
-                                    {subscription.is_trialing && subscription.days_until_trial_ends !== null && (
-                                       <>
-                                          <Separator />
-                                          <div className="flex items-center justify-between">
-                                             <span className="text-muted-foreground">Trial Ends</span>
-                                             <span className="font-medium">
-                                                {subscription.days_until_trial_ends} days remaining
-                                             </span>
-                                          </div>
-                                       </>
-                                    )}
-                                    {subscription.has_payment_method && (
-                                       <Alert className="bg-success/10 border-success/30">
-                                          <CheckCircle className="h-4 w-4 text-success" />
-                                          <AlertDescription className="text-success">
-                                             Billing is set up. You'll be charged automatically when your trial ends.
-                                          </AlertDescription>
-                                       </Alert>
-                                    )}
-                                    {!subscription.has_payment_method && subscription.is_trialing && (
-                                       <Alert className="bg-warning/10 border-warning/30">
-                                          <AlertCircle className="h-4 w-4 text-warning" />
-                                          <AlertDescription>
-                                             Add a payment method to continue using paid features after your trial.
-                                          </AlertDescription>
-                                       </Alert>
-                                    )}
-                                 </div>
-                              ) : (
-                                 <div className="text-center py-4 text-muted-foreground">
-                                    No subscription information available.
-                                 </div>
-                              )}
-                           </CardContent>
-                        </Card>
-                     )}
-                  </TabsContent>}
 
                   {/* SECURITY TAB */}
                   <TabsContent value="security" className="mt-0">
@@ -908,7 +695,7 @@ export function ProfileSettings() {
                   </TabsContent>
 
                   {/* PAYOUTS TAB */}
-                  {isCreator && !isSingleTenant && (
+                  {isContentCreator && !isSingleTenant && (
                      <TabsContent value="payouts" className="mt-0 space-y-6">
                         <Card>
                            <CardHeader>

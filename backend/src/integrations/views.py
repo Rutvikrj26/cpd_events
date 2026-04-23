@@ -17,7 +17,7 @@ from .models import EmailLog
 # =============================================================================
 
 
-@roles('educator', 'course_manager', 'admin', route_name='email_logs')
+@roles('organizer', 'instructor', 'admin', route_name='email_logs')
 class EmailLogViewSet(ReadOnlyModelViewSet):
     """
     View email logs for an event.

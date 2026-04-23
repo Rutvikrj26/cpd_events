@@ -35,7 +35,7 @@ import {
     updateAdminUser,
 } from "@/api/accounts";
 
-const ALL_ROLES = ["learner", "educator", "course_manager", "instructor", "admin"];
+const ALL_ROLES = ["learner", "organizer", "instructor", "admin"];
 
 export function AdminUserDetailPage() {
     const { uuid } = useParams<{ uuid: string }>();

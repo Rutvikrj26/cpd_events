@@ -85,10 +85,10 @@ class TestEventCertificateViewSet:
         certificate.refresh_from_db()
         assert certificate.status == 'revoked'
 
-    def test_educator_can_manage_any_institution_event_certificates(
+    def test_organizer_can_manage_any_institution_event_certificates(
         self, organizer_client, other_organizer_event
     ):
-        """Institutional model: any educator can manage certificates for any event in the institution."""
+        """Institutional model: any organizer can manage certificates for any event in the institution."""
         endpoint = self.get_endpoint(other_organizer_event)
         response = organizer_client.get(endpoint)
         assert response.status_code == status.HTTP_200_OK

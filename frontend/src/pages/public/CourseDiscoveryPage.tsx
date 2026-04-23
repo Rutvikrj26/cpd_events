@@ -137,7 +137,7 @@ export function CourseDiscoveryPage() {
     }
     
     // Check if user can create courses (from roles)
-    const canCreateCourses = user?.roles?.some(r => ['course_manager', 'admin'].includes(r));
+    const canCreateCourses = user?.roles?.some(r => ['instructor', 'admin'].includes(r));
     
     if (canCreateCourses) {
       return {

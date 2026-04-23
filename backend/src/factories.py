@@ -41,7 +41,7 @@ class UserFactory(DjangoModelFactory):
 
     @factory.post_generation
     def groups(self, create, extracted, **kwargs):
-        """Attach the user to one or more role groups (e.g. groups=['educator'])."""
+        """Attach the user to one or more role groups (e.g. groups=['organizer'])."""
         if not create or not extracted:
             return
         from django.contrib.auth.models import Group
@@ -57,7 +57,7 @@ class UserFactory(DjangoModelFactory):
 
 
 class OrganizerFactory(UserFactory):
-    """Factory for creating Organizer (educator) users."""
+    """Factory for creating Organizer users (events)."""
 
     @factory.post_generation
     def groups(self, create, extracted, **kwargs):
@@ -65,7 +65,7 @@ class OrganizerFactory(UserFactory):
             return
         from django.contrib.auth.models import Group
 
-        names = extracted or ['educator']
+        names = extracted or ['organizer']
         for name in names:
             group, _ = Group.objects.get_or_create(name=name)
             self.groups.add(group)

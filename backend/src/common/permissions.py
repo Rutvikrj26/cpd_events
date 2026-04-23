@@ -21,26 +21,37 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         return obj.owner == request.user
 
 
-class IsEducatorOrAdmin(permissions.BasePermission):
-    """Educators or admins (group membership is the source of truth)."""
+class IsOrganizerOrAdmin(permissions.BasePermission):
+    """Organizers or admins (group membership is the source of truth).
 
-    message = "Educator or admin role required."
+    Use on event-management views that require the user to be an event
+    organizer — promo codes, speakers, event certificates, contacts, etc.
+    Instructors do NOT pass this check (they manage courses, not events).
+    """
+
+    message = "Organizer or admin role required."
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
-        return request.user.groups.filter(name__in=["educator", "admin"]).exists()
+        return request.user.groups.filter(name__in=["organizer", "admin"]).exists()
 
 
 class IsContentCreator(permissions.BasePermission):
-    """Educators, course managers, or admins."""
+    """Organizers, instructors, or admins.
 
-    message = "Educator, course manager, or admin role required."
+    Use on views that are shared between event organizers and course
+    instructors (e.g. top-level event list includes both so instructors
+    can see events they're running sessions for; certificate templates
+    are shared; integrations are shared).
+    """
+
+    message = "Organizer, instructor, or admin role required."
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
-        return request.user.groups.filter(name__in=["educator", "course_manager", "admin"]).exists()
+        return request.user.groups.filter(name__in=["organizer", "instructor", "admin"]).exists()
 
 
 class IsEventOwner(permissions.BasePermission):

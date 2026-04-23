@@ -11,7 +11,7 @@
     "model": "auth.group",
     "pk": 2,
     "fields": {
-      "name": "educator",
+      "name": "organizer",
       "permissions": []
     }
   },
@@ -19,7 +19,7 @@
     "model": "auth.group",
     "pk": 3,
     "fields": {
-      "name": "course_manager",
+      "name": "instructor",
       "permissions": []
     }
   },

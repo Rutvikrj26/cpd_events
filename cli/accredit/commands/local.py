@@ -323,6 +323,29 @@ def seed(reset):
         console.print("[bold green]Demo data loaded successfully![/bold green]")
     else:
         console.print(f"[red]Failed to load fixtures:[/red]\n{result.stderr.strip()}")
+        return
+
+    # Fixtures create groups by pk but don't attach Django permissions.
+    # Run after loaddata so group→permission assignments match the code
+    # definition in accounts/management/commands/setup_groups.py.
+    console.print("[cyan]Syncing group permissions...[/cyan]")
+    subprocess.run(
+        ["uv", "run", "python", "src/manage.py", "setup_groups"],
+        cwd=BACKEND_DIR,
+    )
+
+    # Content fixtures are intentionally empty — `seed_demo` builds a rich,
+    # time-anchored demo graph using the ORM so dates stay current and every
+    # learner-facing UI branch has data to render.
+    console.print("[cyan]Seeding demo content...[/cyan]")
+    result = subprocess.run(
+        ["uv", "run", "python", "src/manage.py", "seed_demo"],
+        cwd=BACKEND_DIR,
+    )
+    if result.returncode != 0:
+        console.print("[red]seed_demo failed.[/red]")
+        return
+    console.print("[bold green]Demo data seeded successfully![/bold green]")
 
 
 @local.command()
@@ -452,6 +475,9 @@ def setup():
 
     console.print("[cyan]Backend: Running migrations...[/cyan]")
     subprocess.run(["uv", "run", "python", "src/manage.py", "migrate"], cwd=BACKEND_DIR)
+
+    console.print("[cyan]Backend: Syncing group permissions...[/cyan]")
+    subprocess.run(["uv", "run", "python", "src/manage.py", "setup_groups"], cwd=BACKEND_DIR)
 
     # Frontend Setup
     console.print("[cyan]Frontend: Installing dependencies...[/cyan]")

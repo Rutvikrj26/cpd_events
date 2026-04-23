@@ -2,6 +2,7 @@
 Contacts app views and viewsets.
 """
 
+from django.db.models import Count, Q
 from django_filters import rest_framework as filters
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
@@ -9,7 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from common.permissions import IsEducatorOrAdmin
+from common.permissions import IsOrganizerOrAdmin
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import BaseModelViewSet
@@ -42,7 +43,7 @@ class ContactFilter(filters.FilterSet):
 # =============================================================================
 
 
-@roles('educator', 'admin', route_name='tags')
+@roles('organizer', 'admin', route_name='tags')
 class TagViewSet(BaseModelViewSet):
     """
     Manage tags.
@@ -54,7 +55,7 @@ class TagViewSet(BaseModelViewSet):
     DELETE /api/v1/tags/{uuid}/
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
 
     def get_queryset(self):
         if self.request.user.groups.filter(name="admin").exists():
@@ -97,7 +98,7 @@ class TagViewSet(BaseModelViewSet):
 # =============================================================================
 
 
-@roles('educator', 'admin', route_name='contact_lists')
+@roles('organizer', 'admin', route_name='contact_lists')
 class ContactListViewSet(BaseModelViewSet):
     """
     Manage contact lists.
@@ -109,7 +110,7 @@ class ContactListViewSet(BaseModelViewSet):
     DELETE /api/v1/contact-lists/{uuid}/
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
 
     def get_queryset(self):
         if self.request.user.groups.filter(name="admin").exists():
@@ -225,7 +226,7 @@ class ContactListViewSet(BaseModelViewSet):
 # =============================================================================
 
 
-@roles('educator', 'admin', route_name='contacts')
+@roles('organizer', 'admin', route_name='contacts')
 class ContactViewSet(BaseModelViewSet):
     """
     Manage contacts.
@@ -240,7 +241,7 @@ class ContactViewSet(BaseModelViewSet):
     Tags are used for segmentation instead of multiple lists.
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
     filterset_class = ContactFilter
     search_fields = ['email', 'full_name', 'organization_name']
     ordering_fields = ['full_name', 'email', 'created_at', 'events_attended_count']
@@ -252,9 +253,20 @@ class ContactViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         if self.request.user.groups.filter(name="admin").exists():
-            return Contact.objects.all().prefetch_related('tags')
-        contact_list = self._get_user_list()
-        return Contact.objects.filter(contact_list=contact_list).prefetch_related('tags')
+            qs = Contact.objects.all()
+        else:
+            contact_list = self._get_user_list()
+            qs = Contact.objects.filter(contact_list=contact_list)
+        # Annotate course enrollment counts via the optional User link.
+        # distinct=True prevents double-counting through the tags prefetch join path.
+        return qs.prefetch_related('tags').annotate(
+            courses_enrolled_count=Count('user__course_enrollments', distinct=True),
+            courses_completed_count=Count(
+                'user__course_enrollments',
+                filter=Q(user__course_enrollments__status='completed'),
+                distinct=True,
+            ),
+        )
 
     def get_serializer_class(self):
         if self.action == 'create':

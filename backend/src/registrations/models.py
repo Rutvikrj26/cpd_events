@@ -92,37 +92,18 @@ class Registration(SoftDeleteModel):
     # Payment Tracking
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.NA, db_index=True)
     payment_intent_id = models.CharField(max_length=255, blank=True, db_index=True)
+    stripe_checkout_session_id = models.CharField(
+        max_length=255, blank=True, null=True, unique=True, db_index=True,
+        help_text="Stripe Checkout Session id (cs_...) that fulfilled this registration",
+    )
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    platform_fee_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, help_text="Platform service fee charged to attendee"
-    )
-    service_fee_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, help_text="Service fee charged to attendee"
-    )
-    processing_fee_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, help_text="Payment processing fee charged to attendee"
-    )
     tax_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, help_text="Tax amount charged on ticket and service fee"
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Tax reported by Stripe Checkout (automatic_tax)",
     )
     total_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, help_text="Total amount charged (ticket + fees + tax)"
+        max_digits=10, decimal_places=2, default=0, help_text="Total amount charged (ticket + tax)"
     )
-    stripe_tax_calculation_id = models.CharField(
-        max_length=255, blank=True, help_text="Stripe Tax Calculation ID used for this charge"
-    )
-    stripe_tax_transaction_id = models.CharField(
-        max_length=255, blank=True, help_text="Stripe Tax Transaction ID created from the tax calculation"
-    )
-    stripe_transfer_id = models.CharField(
-        max_length=255, blank=True, help_text="Stripe Transfer ID created for organizer payout"
-    )
-
-    # Billing address (for tax calculation)
-    billing_country = models.CharField(max_length=2, blank=True, help_text="Billing country code")
-    billing_state = models.CharField(max_length=100, blank=True, help_text="Billing state/province")
-    billing_postal_code = models.CharField(max_length=20, blank=True, help_text="Billing postal/ZIP code")
-    billing_city = models.CharField(max_length=100, blank=True, help_text="Billing city")
 
     source = models.CharField(
         max_length=20, choices=Source.choices, default=Source.SELF, help_text="How this registration was created"
@@ -257,7 +238,13 @@ class Registration(SoftDeleteModel):
             next_waitlisted.promote_from_waitlist()
 
     def promote_from_waitlist(self):
-        """Promote from waitlist to confirmed."""
+        """Promote from waitlist to confirmed.
+
+        Free event → CONFIRMED outright. Paid event → PENDING; the learner
+        then visits ``/start-checkout/`` (or a resume link in the promotion
+        email) to pay via Stripe Checkout, which flips the row to CONFIRMED
+        on ``checkout.session.completed``.
+        """
         if self.status != self.Status.WAITLISTED:
             return
 
@@ -269,9 +256,6 @@ class Registration(SoftDeleteModel):
             self.payment_status = self.PaymentStatus.PENDING
             ticket_price = Decimal(str(self.event.price or 0))
             self.amount_paid = ticket_price
-            self.platform_fee_amount = Decimal('0.00')
-            self.service_fee_amount = Decimal('0.00')
-            self.processing_fee_amount = Decimal('0.00')
             self.tax_amount = Decimal('0.00')
             self.total_amount = ticket_price
 
@@ -282,9 +266,6 @@ class Registration(SoftDeleteModel):
                 'status',
                 'payment_status',
                 'amount_paid',
-                'platform_fee_amount',
-                'service_fee_amount',
-                'processing_fee_amount',
                 'tax_amount',
                 'total_amount',
                 'promoted_from_waitlist_at',

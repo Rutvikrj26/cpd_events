@@ -75,7 +75,7 @@ from .serializers import (
 )
 
 
-@roles('educator', 'course_manager', 'admin', route_name='event_modules')
+@roles('organizer', 'instructor', 'admin', route_name='event_modules')
 class EventModuleViewSet(viewsets.ModelViewSet):
     """
     Event module management.
@@ -140,7 +140,7 @@ class EventModuleViewSet(viewsets.ModelViewSet):
         return Response(EventModuleSerializer(module).data)
 
 
-@roles('educator', 'course_manager', 'admin', route_name='module_content')
+@roles('organizer', 'instructor', 'admin', route_name='module_content')
 class ModuleContentViewSet(viewsets.ModelViewSet):
     """
     Module content management.
@@ -188,7 +188,7 @@ def _get_event_for_user(user, event_uuid):
     return get_object_or_404(Event, uuid=event_uuid, owner=user)
 
 
-@roles('educator', 'course_manager', 'admin', route_name='assignments')
+@roles('organizer', 'instructor', 'admin', route_name='assignments')
 class AssignmentViewSet(viewsets.ModelViewSet):
     """
     Assignment management.
@@ -218,7 +218,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         serializer.save(module=module)
 
 
-@roles('learner', 'educator', 'course_manager', 'admin', route_name='attendee_submissions')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='attendee_submissions')
 class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
     """
     Attendee's assignment submissions.
@@ -316,7 +316,7 @@ class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
         return Response(AssignmentSubmissionSerializer(submission).data)
 
 
-@roles('educator', 'course_manager', 'admin', route_name='organizer_submissions')
+@roles('organizer', 'instructor', 'admin', route_name='organizer_submissions')
 class OrganizerSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Organizer view of all submissions for their events.
@@ -375,7 +375,7 @@ class OrganizerSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(AssignmentSubmissionSerializer(submission).data)
 
 
-@roles('learner', 'educator', 'course_manager', 'admin', route_name='my_learning')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='my_learning')
 class MyLearningViewSet(viewsets.GenericViewSet):
     """
     Attendee's learning dashboard.
@@ -468,7 +468,7 @@ class MyLearningViewSet(viewsets.GenericViewSet):
         return Response({'event_uuid': event.uuid, 'event_title': event.title, 'modules': module_data})
 
 
-@roles('learner', 'educator', 'course_manager', 'admin', route_name='content_progress')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='content_progress')
 class ContentProgressView(views.APIView):
     """
     Update content progress.
@@ -531,7 +531,7 @@ class ContentProgressView(views.APIView):
         return Response(ContentProgressSerializer(progress).data)
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='courses')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='courses')
 class CourseViewSet(viewsets.ModelViewSet):
     """
     Course management.
@@ -633,6 +633,120 @@ class CourseViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You do not have permission to publish this course.")
         course.publish()
         return Response(CourseSerializer(course).data)
+
+    @action(detail=False, methods=['get'])
+    def reports(self, request):
+        """Summary, trends, and recent activity for the requester's courses."""
+        from datetime import datetime, timedelta
+
+        from django.db.models import Count
+        from django.db.models.functions import TruncDate
+        from django.utils import timezone
+        from rest_framework.exceptions import PermissionDenied
+
+        user = request.user
+        if not user.groups.filter(name__in=['instructor', 'admin']).exists():
+            raise PermissionDenied('Course reports are limited to instructors and admins.')
+
+        if user.groups.filter(name='admin').exists():
+            courses = Course.objects.all()
+        else:
+            courses = Course.objects.filter(
+                models.Q(created_by=user) | models.Q(staff_assignments__user=user)
+            ).distinct()
+
+        now = timezone.now()
+        period = request.query_params.get('period', 'last-30-days')
+        if period == 'last-7-days':
+            start = now - timedelta(days=7)
+        elif period == 'last-90-days':
+            start = now - timedelta(days=90)
+        elif period == 'this-year':
+            start = timezone.make_aware(datetime(now.year, 1, 1))
+        else:
+            start = now - timedelta(days=30)
+
+        enrollments = CourseEnrollment.objects.filter(
+            course__in=courses,
+            enrolled_at__gte=start,
+            enrolled_at__lte=now,
+        )
+
+        total_enrollments = enrollments.count()
+        completions_in_period = CourseEnrollment.objects.filter(
+            course__in=courses,
+            completed_at__gte=start,
+            completed_at__lte=now,
+        ).count()
+
+        completion_rate = None
+        if total_enrollments:
+            completion_rate = round((completions_in_period / total_enrollments) * 100, 1)
+
+        trends = []
+        for row in (
+            enrollments.annotate(day=TruncDate('enrolled_at'))
+            .values('day')
+            .annotate(count=Count('id'))
+            .order_by('day')
+        ):
+            trends.append(
+                {
+                    'date': row['day'].isoformat() if row['day'] else None,
+                    'count': row['count'],
+                }
+            )
+
+        status_breakdown = [
+            {'label': 'Active', 'count': enrollments.filter(status=CourseEnrollment.Status.ACTIVE).count()},
+            {'label': 'Completed', 'count': enrollments.filter(status=CourseEnrollment.Status.COMPLETED).count()},
+            {'label': 'Dropped', 'count': enrollments.filter(status=CourseEnrollment.Status.DROPPED).count()},
+        ]
+
+        recent_enrollments = [
+            {
+                'enrollment_uuid': str(e.uuid),
+                'course_title': e.course.title if e.course else '',
+                'user_name': getattr(e.user, 'full_name', None) or getattr(e.user, 'email', ''),
+                'progress_percent': e.progress_percent,
+                'status': e.status,
+                'enrolled_at': e.enrolled_at.isoformat(),
+            }
+            for e in enrollments.select_related('course', 'user').order_by('-enrolled_at')[:5]
+        ]
+
+        top_courses = [
+            {
+                'uuid': str(c.uuid),
+                'title': c.title,
+                'enrollments': c.period_enrollments,
+            }
+            for c in courses.annotate(
+                period_enrollments=Count(
+                    'enrollments',
+                    filter=models.Q(
+                        enrollments__enrolled_at__gte=start,
+                        enrollments__enrolled_at__lte=now,
+                    ),
+                )
+            ).order_by('-period_enrollments')[:5]
+            if c.period_enrollments
+        ]
+
+        return Response(
+            {
+                'summary': {
+                    'total_enrollments': total_enrollments,
+                    'completions': completions_in_period,
+                    'completion_rate': completion_rate,
+                    'courses_published': courses.filter(status=Course.Status.PUBLISHED).count(),
+                },
+                'trends': trends,
+                'status_breakdown': status_breakdown,
+                'recent_enrollments': recent_enrollments,
+                'top_courses': top_courses,
+            }
+        )
 
     @action(detail=True, methods=['get'], url_path='enrollments')
     def enrollments(self, request, uuid=None):
@@ -740,7 +854,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         })
 
 
-@roles('educator', 'course_manager', 'admin', route_name='course_staff')
+@roles('organizer', 'instructor', 'admin', route_name='course_staff')
 class CourseStaffViewSet(viewsets.ModelViewSet):
     """
     Manage course staff assignments.
@@ -777,7 +891,7 @@ class CourseStaffViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         user = get_object_or_404(User, uuid=serializer.validated_data['user_uuid'])
-        role = serializer.validated_data.get('role', 'course_manager')
+        role = serializer.validated_data.get('role', 'instructor')
 
         staff, created = CourseStaff.objects.get_or_create(
             course=course, user=user, defaults={'role': role}
@@ -795,7 +909,7 @@ class CourseStaffViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-@roles('learner', 'educator', 'course_manager', 'admin', route_name='course_enrollments')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_enrollments')
 class CourseEnrollmentViewSet(viewsets.ModelViewSet):
     """
     User enrollments in courses.
@@ -876,18 +990,10 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
         """
 
         course_uuid = request.data.get('course_uuid')
-        success_url = request.data.get('success_url')
-        cancel_url = request.data.get('cancel_url')
 
         if not course_uuid:
             return Response(
                 {'error': 'course_uuid is required'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not success_url or not cancel_url:
-            return Response(
-                {'error': 'success_url and cancel_url are required'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -934,150 +1040,20 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_201_CREATED,
             )
 
-        # Create Stripe checkout session for paid course
-        result = self._create_course_checkout_session(
-            user=request.user,
-            course=course,
-            success_url=success_url,
-            cancel_url=cancel_url,
-        )
-
-        if result.get('success'):
-            return Response(
-                {
-                    'session_id': result['session_id'],
-                    'url': result['url'],
-                }
-            )
-        else:
-            return Response(
-                {'error': result.get('error', 'Failed to create checkout session')},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    @swagger_auto_schema(
-        operation_summary="Confirm course enrollment",
-        operation_description="Confirm enrollment after Stripe Checkout. Synchrnously creates/activates enrollment.",
-        request_body=serializers.Serializer(),
-        responses={200: CourseEnrollmentSerializer, 400: '{"error": "..."}'},
-    )
-    @action(detail=False, methods=['post'], url_path='confirm-checkout')
-    def confirm_checkout(self, request):
-        """
-        Confirm course enrollment from Stripe Checkout.
-        Expects: {"session_id": "cs_test_..."}
-        """
-        session_id = request.data.get('session_id')
-        if not session_id:
-            return error_response('session_id is required', code='MISSING_SESSION_ID')
-
-        from .services import CourseService
-        service = CourseService()
-
-        result = service.confirm_enrollment(request.user, session_id)
-
-        if result['success']:
-            serializer = self.get_serializer(result['enrollment'])
-            return Response(serializer.data)
-        else:
-             return error_response(result.get('error', 'Enrollment confirmation failed'), code='ENROLLMENT_FAILED')
-
-    def _create_course_checkout_session(self, user, course, success_url: str, cancel_url: str) -> dict:
-        """
-        Create Stripe checkout session for course enrollment.
-
-        Uses Stripe Checkout with course-specific metadata for webhook handling.
-        """
-        import logging
-
-        from django.conf import settings
-
-        logger = logging.getLogger(__name__)
+        # Create Stripe Checkout Session for a paid course.
+        from billing.checkout import checkout_service
 
         try:
-            import stripe
-
-            stripe.api_key = settings.STRIPE_SECRET_KEY
-
-            # Create or get Stripe customer
-            from billing.services import stripe_service
-
-            customer_id = stripe_service.create_customer(user)
-
-            # Build line items
-            # Use course's stripe_price_id if configured, otherwise create ad-hoc price
-            if course.stripe_price_id:
-                line_items = [
-                    {
-                        'price': course.stripe_price_id,
-                        'quantity': 1,
-                    }
-                ]
-            else:
-                # Create ad-hoc price for one-time purchase
-                line_items = [
-                    {
-                        'price_data': {
-                            'currency': course.currency.lower(),
-                            'product_data': {
-                                'name': course.title,
-                                'description': (
-                                    course.short_description or course.description[:500] if course.description else None
-                                ),
-                            },
-                            'unit_amount': course.price_cents,
-                        },
-                        'quantity': 1,
-                    }
-                ]
-
-            # Create checkout session
-            session = stripe.checkout.Session.create(
-                customer=customer_id,
-                mode='payment',  # One-time payment for course
-                line_items=line_items,
-                success_url=f"{success_url}?session_id={{CHECKOUT_SESSION_ID}}",
-                cancel_url=cancel_url,
-                metadata={
-                    'type': 'course_enrollment',
-                    'course_uuid': str(course.uuid),
-                    'course_title': course.title,
-                    'user_id': str(user.id),
-                    'user_email': user.email,
-                },
-                payment_intent_data={
-                    'metadata': {
-                        'type': 'course_enrollment',
-                        'course_uuid': str(course.uuid),
-                        'user_id': str(user.id),
-                    },
-                },
-                # Transfer to course organization's connected account if applicable
-                **(self._get_transfer_data(course) or {}),
+            result = checkout_service.for_course_enrollment(request.user, course)
+        except Exception as exc:
+            return Response(
+                {'error': f'Failed to create checkout session: {exc}'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-
-            logger.info(f"Created course checkout session {session.id} for course {course.uuid}")
-
-            return {
-                'success': True,
-                'session_id': session.id,
-                'url': session.url,
-            }
-
-        except Exception as e:
-            logger.error(f"Course checkout session creation failed: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-            }
-
-    def _get_transfer_data(self, course) -> dict | None:
-        """Get Stripe Connect transfer data for course payment."""
-        # In single-tenant mode, transfer data is handled at the owner level if applicable
-        return None
+        return Response({'session_id': result.session_id, 'url': result.url})
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_modules')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_modules')
 class CourseModuleViewSet(viewsets.ModelViewSet):
     """
     Manage modules within a course.
@@ -1183,7 +1159,7 @@ class CourseModuleViewSet(viewsets.ModelViewSet):
         return Response(CourseModuleSerializer(course_link).data)
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_module_content')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_module_content')
 class CourseModuleContentViewSet(viewsets.ModelViewSet):
     """
     Content management for course modules.
@@ -1281,7 +1257,7 @@ class CourseModuleContentViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_assignments')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_assignments')
 class CourseAssignmentViewSet(viewsets.ModelViewSet):
     """
     Assignment management for course modules.
@@ -1354,7 +1330,7 @@ class CourseAssignmentViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-@roles('educator', 'course_manager', 'instructor', 'admin', route_name='course_submissions')
+@roles('organizer', 'instructor', 'admin', route_name='course_submissions')
 class CourseSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Course staff view of submissions for a course.
@@ -1419,7 +1395,7 @@ class CourseSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(AssignmentSubmissionStaffSerializer(submission).data)
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_announcements')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_announcements')
 class CourseAnnouncementViewSet(viewsets.ModelViewSet):
     """
     Announcements for a course.
@@ -1480,7 +1456,7 @@ class CourseAnnouncementViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-@roles('educator', 'course_manager', 'instructor', 'admin', route_name='course_sessions')
+@roles('organizer', 'instructor', 'admin', route_name='course_sessions')
 class CourseSessionViewSet(viewsets.ModelViewSet):
     """
     Live session management for hybrid courses.
@@ -1809,7 +1785,7 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='programs')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='programs')
 class ProgramViewSet(viewsets.ModelViewSet):
     """
     Program (course bundle) management.
@@ -1904,8 +1880,119 @@ class ProgramViewSet(viewsets.ModelViewSet):
             )
         return Response(ProgramSerializer(program).data)
 
+    @action(detail=False, methods=['get'])
+    def reports(self, request):
+        """Summary, trends, and recent activity for the requester's programs."""
+        from datetime import datetime, timedelta
 
-@roles('learner', 'educator', 'course_manager', 'admin', route_name='program_courses')
+        from django.db.models import Count
+        from django.db.models.functions import TruncDate
+        from django.utils import timezone
+        from rest_framework.exceptions import PermissionDenied
+
+        user = request.user
+        if not user.groups.filter(name__in=['instructor', 'admin']).exists():
+            raise PermissionDenied('Program reports are limited to instructors and admins.')
+
+        if user.groups.filter(name='admin').exists():
+            programs = Program.objects.all()
+        else:
+            programs = Program.objects.filter(created_by=user).distinct()
+
+        now = timezone.now()
+        period = request.query_params.get('period', 'last-30-days')
+        if period == 'last-7-days':
+            start = now - timedelta(days=7)
+        elif period == 'last-90-days':
+            start = now - timedelta(days=90)
+        elif period == 'this-year':
+            start = timezone.make_aware(datetime(now.year, 1, 1))
+        else:
+            start = now - timedelta(days=30)
+
+        enrollments = ProgramEnrollment.objects.filter(
+            program__in=programs,
+            enrolled_at__gte=start,
+            enrolled_at__lte=now,
+        )
+
+        total_enrollments = enrollments.count()
+        completions_in_period = ProgramEnrollment.objects.filter(
+            program__in=programs,
+            completed_at__gte=start,
+            completed_at__lte=now,
+        ).count()
+
+        completion_rate = None
+        if total_enrollments:
+            completion_rate = round((completions_in_period / total_enrollments) * 100, 1)
+
+        trends = []
+        for row in (
+            enrollments.annotate(day=TruncDate('enrolled_at'))
+            .values('day')
+            .annotate(count=Count('id'))
+            .order_by('day')
+        ):
+            trends.append(
+                {
+                    'date': row['day'].isoformat() if row['day'] else None,
+                    'count': row['count'],
+                }
+            )
+
+        status_breakdown = [
+            {'label': 'Active', 'count': enrollments.filter(status=ProgramEnrollment.Status.ACTIVE).count()},
+            {'label': 'Completed', 'count': enrollments.filter(status=ProgramEnrollment.Status.COMPLETED).count()},
+            {'label': 'Dropped', 'count': enrollments.filter(status=ProgramEnrollment.Status.DROPPED).count()},
+        ]
+
+        recent_enrollments = [
+            {
+                'enrollment_uuid': str(e.uuid),
+                'program_title': e.program.title if e.program else '',
+                'user_name': getattr(e.user, 'full_name', None) or getattr(e.user, 'email', ''),
+                'status': e.status,
+                'enrolled_at': e.enrolled_at.isoformat(),
+            }
+            for e in enrollments.select_related('program', 'user').order_by('-enrolled_at')[:5]
+        ]
+
+        top_programs = [
+            {
+                'uuid': str(p.uuid),
+                'title': p.title,
+                'enrollments': p.period_enrollments,
+            }
+            for p in programs.annotate(
+                period_enrollments=Count(
+                    'enrollments',
+                    filter=models.Q(
+                        enrollments__enrolled_at__gte=start,
+                        enrollments__enrolled_at__lte=now,
+                    ),
+                )
+            ).order_by('-period_enrollments')[:5]
+            if p.period_enrollments
+        ]
+
+        return Response(
+            {
+                'summary': {
+                    'total_enrollments': total_enrollments,
+                    'completions': completions_in_period,
+                    'completion_rate': completion_rate,
+                    'programs_published': programs.filter(status=Program.Status.PUBLISHED).count(),
+                },
+                'trends': trends,
+                'status_breakdown': status_breakdown,
+                'recent_enrollments': recent_enrollments,
+                'top_programs': top_programs,
+            }
+        )
+
+
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='program_courses')
 class ProgramCourseViewSet(viewsets.ModelViewSet):
     """
     Manage the courses in a program (add, remove, reorder).
@@ -1955,7 +2042,7 @@ class ProgramCourseViewSet(viewsets.ModelViewSet):
         program.update_counts()
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='program_enrollments')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='program_enrollments')
 class ProgramEnrollmentViewSet(viewsets.ReadOnlyModelViewSet):
     """A learner's own program enrollments."""
 
@@ -2035,7 +2122,7 @@ def _apply_mentions(post, cleaned_html):
     return users
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_discussions')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_discussions')
 class DiscussionThreadViewSet(viewsets.ModelViewSet):
     """Threads on a course discussion board."""
 
@@ -2137,7 +2224,7 @@ class DiscussionThreadViewSet(viewsets.ModelViewSet):
         return Response(DiscussionFlagSerializer(flag).data, status=status.HTTP_201_CREATED)
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_discussions')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_discussions')
 class DiscussionReplyViewSet(viewsets.ModelViewSet):
     """Replies under a discussion thread."""
 
@@ -2225,7 +2312,7 @@ class DiscussionReplyViewSet(viewsets.ModelViewSet):
         return Response(DiscussionFlagSerializer(flag).data, status=status.HTTP_201_CREATED)
 
 
-@roles('educator', 'course_manager', 'instructor', 'admin', route_name='course_discussion_flags')
+@roles('organizer', 'instructor', 'admin', route_name='course_discussion_flags')
 class DiscussionFlagViewSet(viewsets.GenericViewSet):
     """Staff-only flag queue + resolve actions."""
 
@@ -2277,7 +2364,7 @@ class DiscussionFlagViewSet(viewsets.GenericViewSet):
         return Response(DiscussionFlagSerializer(flag).data)
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_member_search')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_member_search')
 class CourseMemberSearchView(views.APIView):
     """Search enrolled members + staff for @mention autocomplete."""
 

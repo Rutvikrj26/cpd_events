@@ -3,7 +3,7 @@ export interface User {
     email: string;
     full_name: string;
     roles: string[];
-    primary_role: 'learner' | 'educator' | 'course_manager' | 'instructor' | 'admin';
+    primary_role: 'learner' | 'organizer' | 'instructor' | 'admin';
     email_verified?: boolean;
     onboarding_completed?: boolean;
     is_active: boolean;

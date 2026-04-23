@@ -5,13 +5,16 @@ Admin endpoints for configuring billing and managing plans.
 Learner endpoints for viewing plans and managing subscriptions.
 """
 
-from rest_framework import generics, status
+from django.shortcuts import get_object_or_404
+from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework import serializers as drf_serializers
 
 from common.rbac import roles
 
+from .checkout import checkout_service
 from .models import InstitutionBillingConfig, InstitutionPlan, Subscription
 
 
@@ -24,7 +27,7 @@ class BillingConfigSerializer(drf_serializers.ModelSerializer):
     class Meta:
         model = InstitutionBillingConfig
         fields = [
-            "uuid", "pricing_model", "stripe_publishable_key",
+            "uuid", "pricing_model",
             "default_currency", "tax_enabled", "tax_id",
             "is_stripe_configured", "created_at", "updated_at",
         ]
@@ -101,7 +104,7 @@ class InstitutionPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
 # =============================================================================
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="public_plans")
+@roles("learner", "organizer", "instructor", "admin", route_name="public_plans")
 class PublicPlanListView(generics.ListAPIView):
     """GET /api/v1/billing/plans/ — List available subscription plans."""
 
@@ -112,7 +115,17 @@ class PublicPlanListView(generics.ListAPIView):
         return InstitutionPlan.objects.filter(is_active=True)
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="my_subscription")
+class PublicPricingView(generics.ListAPIView):
+    """GET /api/v1/public/pricing/ — Unauthenticated list of active plans for the public pricing page."""
+
+    serializer_class = InstitutionPlanSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return InstitutionPlan.objects.filter(is_active=True)
+
+
+@roles("learner", "organizer", "instructor", "admin", route_name="my_subscription")
 class MySubscriptionView(generics.RetrieveAPIView):
     """GET /api/v1/billing/my-subscription/ — Current subscription status."""
 
@@ -135,3 +148,48 @@ class MySubscriptionView(generics.RetrieveAPIView):
             })
         serializer = self.get_serializer(obj)
         return Response(serializer.data)
+
+
+# =============================================================================
+# Checkout — subscription signup & Customer Portal
+# =============================================================================
+
+
+class SubscribeView(APIView):
+    """POST /api/v1/billing/subscribe/
+
+    Body: ``{"plan_uuid": "..."}``. Returns a Stripe Checkout Session URL
+    for subscription signup. Webhook ``customer.subscription.created``
+    creates the local ``Subscription`` row on success.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        plan_uuid = request.data.get("plan_uuid")
+        if not plan_uuid:
+            return Response({"error": "plan_uuid is required"}, status=400)
+        plan = get_object_or_404(InstitutionPlan, uuid=plan_uuid, is_active=True)
+        try:
+            result = checkout_service.for_subscription(request.user, plan)
+        except Exception as exc:
+            return Response({"error": str(exc)}, status=400)
+        return Response({"session_id": result.session_id, "url": result.url})
+
+
+class CustomerPortalView(APIView):
+    """POST /api/v1/billing/portal/
+
+    Returns a Stripe Customer Portal URL. Portal covers cancel/resume/plan
+    switch/card update/invoice history with no UI code on our side.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        return_url = request.data.get("return_url")
+        try:
+            result = checkout_service.for_customer_portal(request.user, return_url=return_url)
+        except Exception as exc:
+            return Response({"error": str(exc)}, status=400)
+        return Response({"url": result.url})

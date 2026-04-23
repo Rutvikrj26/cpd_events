@@ -18,7 +18,7 @@ Endpoints tested:
 """
 
 from decimal import Decimal
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import patch
 
 import pytest
 from rest_framework import status
@@ -144,7 +144,7 @@ class TestEventRegistrationViewSet:
         registration.payment_intent_id = 'pi_test_refund'
         registration.save(update_fields=['payment_intent_id'])
 
-        with patch('billing.services.stripe_payment_service.refund_payment_intent', return_value={'success': True}):
+        with patch('billing.services.refund_payment_intent', return_value={'refund_id': 're_test', 'status': 'succeeded', 'amount_cents': 5000}):
             response = organizer_client.post(
                 f'/api/v1/events/{published_event.uuid}/registrations/{registration.uuid}/refund/',
                 {'reason': 'Requested by attendee'},
@@ -393,216 +393,66 @@ class TestPublicRegistration:
 
 @pytest.mark.django_db
 class TestRegistrationPaymentFlow:
-    """Tests for paid registration workflows."""
+    """Tests for paid registration via Stripe Checkout Sessions."""
 
-    def test_paid_registration_requires_payment(self, api_client, organizer, db):
-        """Paid registration returns payment details and remains pending."""
+    def test_paid_registration_returns_checkout_url(self, api_client, organizer, db):
+        """Paid event registration creates a PENDING row and returns a checkout URL."""
         from factories import EventFactory
         from registrations.models import Registration
 
-        event = EventFactory(
-            owner=organizer,
-            status='published',
-            price=Decimal('100.00'),
-        )
+        event = EventFactory(owner=organizer, status='published', price=Decimal('100.00'))
 
-        with (
-            patch('billing.services.StripePaymentService.is_configured', new_callable=PropertyMock) as mock_config,
-            patch('registrations.services.stripe_payment_service.create_payment_intent') as mock_create,
-        ):
-            mock_config.return_value = True
-            mock_create.return_value = {
-                'success': True,
-                'client_secret': 'cs_test',
-                'payment_intent_id': 'pi_test',
-                'service_fee_cents': 200,
-                'processing_fee_cents': 300,
-                'tax_cents': 1300,
-                'total_amount_cents': 10600,
-            }
+        class _Session:
+            id = 'cs_test_123'
+            url = 'https://checkout.stripe.com/c/pay/cs_test_123'
+
+        with patch('billing.checkout.checkout_service.for_event_registration') as mock_checkout:
+            from billing.checkout import CheckoutResult
+
+            mock_checkout.return_value = CheckoutResult(url=_Session.url, session_id=_Session.id)
 
             response = api_client.post(
                 f'/api/v1/public/events/{event.uuid}/register/',
-                {
-                    'email': 'paid@example.com',
-                    'full_name': 'Paid User',
-                    'billing_country': 'CA',
-                    'billing_postal_code': 'M5V2T6',
-                },
+                {'email': 'paid@example.com', 'full_name': 'Paid User'},
             )
 
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['requires_payment'] is True
-        assert response.data['amount'] == 106.0
-        assert response.data['ticket_price'] == 100.0
-        assert response.data['platform_fee'] == 2.0
-        assert response.data['stripe_account_id'] is None
-
+        assert response.data['checkout_url'] == _Session.url
         registration = Registration.objects.get(email='paid@example.com', event=event)
         assert registration.status == Registration.Status.PENDING
         assert registration.payment_status == Registration.PaymentStatus.PENDING
-        assert registration.total_amount == Decimal('106.00')
-        assert registration.platform_fee_amount == Decimal('2.00')
 
-    def test_payment_intent_blocks_full_event(self, api_client, organizer, db):
-        """Payment intent endpoint blocks payment when event is full."""
+    def test_start_checkout_resume_endpoint(self, api_client, organizer, db):
+        """Pending registrations can resume via /start-checkout/."""
         from factories import EventFactory, RegistrationFactory
+        from billing.checkout import CheckoutResult
 
-        event = EventFactory(
-            owner=organizer,
-            status='published',
-            price=Decimal('50.00'),
-            max_attendees=1,
-        )
-        RegistrationFactory(event=event, status='confirmed')
-
+        event = EventFactory(owner=organizer, status='published', price=Decimal('80.00'), max_attendees=10)
         pending = RegistrationFactory(
-            event=event,
-            status='pending',
-            payment_status='pending',
-            amount_paid=Decimal('50.00'),
-            platform_fee_amount=Decimal('1.00'),
-            total_amount=Decimal('51.00'),
+            event=event, status='pending', payment_status='pending',
+            amount_paid=Decimal('80.00'), total_amount=Decimal('80.00'),
         )
 
-        response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/payment-intent/')
-        assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.data['error']['code'] == 'EVENT_FULL'
-
-    def test_payment_intent_reuses_existing_intent(self, api_client, organizer, db):
-        """Payment intent endpoint reuses existing intent if still payable."""
-        from factories import EventFactory, RegistrationFactory
-
-        event = EventFactory(
-            owner=organizer,
-            status='published',
-            price=Decimal('80.00'),
-            max_attendees=10,
-        )
-        pending = RegistrationFactory(
-            event=event,
-            status='pending',
-            payment_status='pending',
-            amount_paid=Decimal('80.00'),
-            platform_fee_amount=Decimal('1.60'),
-            total_amount=Decimal('81.60'),
-        )
-        pending.payment_intent_id = 'pi_existing'
-        pending.save(update_fields=['payment_intent_id'])
-
-        mock_intent = MagicMock()
-        mock_intent.status = 'requires_payment_method'
-        mock_intent.client_secret = 'cs_existing'
-
-        with (
-            patch('billing.services.StripePaymentService.is_configured', new_callable=PropertyMock) as mock_config,
-            patch('billing.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'),
-            patch('billing.services.stripe_payment_service.retrieve_payment_intent', return_value=mock_intent),
-        ):
-            mock_config.return_value = True
-            response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/payment-intent/')
+        with patch('billing.checkout.checkout_service.for_event_registration') as mock_checkout:
+            mock_checkout.return_value = CheckoutResult(url='https://cko/x', session_id='cs_x')
+            response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/start-checkout/')
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['client_secret'] == 'cs_existing'
-        assert response.data['amount'] == 81.6
-        assert response.data['stripe_account_id'] is None
+        assert response.data['url'] == 'https://cko/x'
 
-    def test_confirm_payment_refunds_when_full(self, api_client, organizer, db):
-        """Confirm payment refunds when capacity is already full."""
+    def test_start_checkout_rejects_when_paid(self, api_client, organizer, db):
+        """Already-paid registrations get a clean rejection."""
         from factories import EventFactory, RegistrationFactory
-        from registrations.models import Registration
-        from registrations.services import PaymentConfirmationService
 
-        organizer.stripe_connect_id = 'acct_test'
-        organizer.stripe_charges_enabled = True
-        organizer.save(update_fields=['stripe_connect_id', 'stripe_charges_enabled'])
-
-        event = EventFactory(
-            owner=organizer,
-            status='published',
-            price=Decimal('100.00'),
-            max_attendees=1,
+        event = EventFactory(owner=organizer, status='published', price=Decimal('50.00'), max_attendees=10)
+        paid = RegistrationFactory(
+            event=event, status='confirmed', payment_status='paid',
+            amount_paid=Decimal('50.00'), total_amount=Decimal('50.00'),
         )
-        RegistrationFactory(event=event, status='confirmed')
-
-        pending = RegistrationFactory(
-            event=event,
-            status='pending',
-            payment_status='pending',
-            amount_paid=Decimal('100.00'),
-            platform_fee_amount=Decimal('2.00'),
-            total_amount=Decimal('102.00'),
-        )
-        pending.payment_intent_id = 'pi_paid'
-        pending.save(update_fields=['payment_intent_id'])
-
-        intent = MagicMock()
-        intent.status = 'succeeded'
-        intent.amount_received = 10200
-
-        with (
-            patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config,
-            patch('registrations.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'),
-            patch('registrations.services.stripe_payment_service.retrieve_payment_intent', return_value=intent),
-            patch('registrations.services.stripe_payment_service.refund_payment_intent', return_value={'success': True}),
-        ):
-            mock_config.return_value = True
-            response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/confirm-payment/')
-
-        assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.data['error']['code'] == 'EVENT_FULL'
-
-        pending.refresh_from_db()
-        assert pending.payment_status == Registration.PaymentStatus.REFUNDED
-        assert pending.status == Registration.Status.PENDING
-
-    def test_confirm_payment_success(self, api_client, organizer, db):
-        """Confirm payment succeeds and confirms registration when capacity allows."""
-        from factories import EventFactory, RegistrationFactory
-        from registrations.models import Registration
-        from registrations.services import PaymentConfirmationService
-
-        organizer.stripe_connect_id = 'acct_test'
-        organizer.stripe_charges_enabled = True
-        organizer.save(update_fields=['stripe_connect_id', 'stripe_charges_enabled'])
-
-        event = EventFactory(
-            owner=organizer,
-            status='published',
-            price=Decimal('75.00'),
-            max_attendees=2,
-        )
-
-        pending = RegistrationFactory(
-            event=event,
-            status='pending',
-            payment_status='pending',
-            amount_paid=Decimal('75.00'),
-            platform_fee_amount=Decimal('1.50'),
-            total_amount=Decimal('76.50'),
-        )
-        pending.payment_intent_id = 'pi_success'
-        pending.save(update_fields=['payment_intent_id'])
-
-        intent = MagicMock()
-        intent.status = 'succeeded'
-        intent.amount_received = 7650
-
-        with (
-            patch.object(PaymentConfirmationService, 'is_configured', new_callable=PropertyMock) as mock_config,
-            patch('registrations.services.stripe_payment_service.get_payee_account_id', return_value='acct_test'),
-            patch('registrations.services.stripe_payment_service.retrieve_payment_intent', return_value=intent),
-            patch('registrations.tasks.send_registration_confirmation.delay'),
-        ):
-            mock_config.return_value = True
-            response = api_client.post(f'/api/v1/public/registrations/{pending.uuid}/confirm-payment/')
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data['status'] == 'paid'
-
-        pending.refresh_from_db()
-        assert pending.payment_status == Registration.PaymentStatus.PAID
-        assert pending.status == Registration.Status.CONFIRMED
+        response = api_client.post(f'/api/v1/public/registrations/{paid.uuid}/start-checkout/')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['error']['code'] == 'ALREADY_PAID'
 
 
 # =============================================================================

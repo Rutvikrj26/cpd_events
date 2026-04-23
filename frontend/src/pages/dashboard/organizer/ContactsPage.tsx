@@ -215,6 +215,7 @@ export function ContactsPage() {
                                         {/* TAGGING-DISABLED: <TableHead>Tags</TableHead> */}
                                         <TableHead>Status</TableHead>
                                         <TableHead className="text-right">Events</TableHead>
+                                        <TableHead className="text-right">Courses</TableHead>
                                         <TableHead className="w-[50px]"></TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -267,6 +268,12 @@ export function ContactsPage() {
                                                 <div className="flex flex-col text-sm">
                                                     <span className="font-medium">{contact.events_attended_count} attended</span>
                                                     <span className="text-xs text-muted-foreground">{contact.events_invited_count} invited</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex flex-col text-sm">
+                                                    <span className="font-medium">{contact.courses_enrolled_count ?? 0} enrolled</span>
+                                                    <span className="text-xs text-muted-foreground">{contact.courses_completed_count ?? 0} completed</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell>

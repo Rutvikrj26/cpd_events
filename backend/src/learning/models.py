@@ -855,13 +855,15 @@ class Course(BaseModel):
             return True
         if self.created_by_id == user.id:
             return True
-        return self.staff_assignments.filter(user=user, role="course_manager").exists()
+        return self.staff_assignments.filter(user=user).exists()
 
     def can_instruct(self, user) -> bool:
-        """Check if user has instructional access for this course."""
-        if self.can_manage(user):
-            return True
-        return self.staff_assignments.filter(user=user, role="instructor").exists()
+        """Check if user has instructional access for this course.
+
+        Course staff are all instructors under the unified role model;
+        the per-course role distinction was retired with `course_manager`.
+        """
+        return self.can_manage(user)
 
     def get_staff_role(self, user) -> str | None:
         """Return the effective course role for the given user."""
@@ -1049,16 +1051,16 @@ class CourseStaff(BaseModel):
     """
     Assigns users as staff on a course.
 
-    Course staff can be assigned as course_managers or instructors. Course
-    managers have full per-course management access, while instructors are
-    limited to instructional workflows for their assigned course.
+    All course staff are instructors under the unified role model; staff
+    assignment grants both management and instructional access for the
+    assigned course.
     """
 
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='staff_assignments')
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='course_staff_assignments'
     )
-    role = models.CharField(max_length=30, default='course_manager')
+    role = models.CharField(max_length=30, default='instructor')
 
     class Meta:
         db_table = 'course_staff'

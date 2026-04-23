@@ -5,17 +5,17 @@ from rest_framework.response import Response
 from badges.models import BadgeTemplate, IssuedBadge
 from badges.serializers import BadgeTemplateSerializer, IssuedBadgeSerializer
 from badges.services import badge_service
-from common.permissions import IsEducatorOrAdmin
+from common.permissions import IsOrganizerOrAdmin
 from common.rbac import roles
 
 
-@roles('educator', 'admin', route_name='badge_templates')
+@roles('organizer', 'admin', route_name='badge_templates')
 class BadgeTemplateViewSet(viewsets.ModelViewSet):
     """
     CRUD for Badge Templates.
     """
     serializer_class = BadgeTemplateSerializer
-    permission_classes = [permissions.IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsOrganizerOrAdmin]
     lookup_field = 'uuid'
 
     def get_queryset(self):
@@ -46,7 +46,7 @@ class BadgeTemplateViewSet(viewsets.ModelViewSet):
         return Response({'preview_base64': f"data:image/png;base64,{b64}"})
 
 
-@roles('learner', 'educator', 'admin', route_name='issued_badges')
+@roles('learner', 'organizer', 'admin', route_name='issued_badges')
 class IssuedBadgeViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ReadOnly view for issued badges (My Badges).

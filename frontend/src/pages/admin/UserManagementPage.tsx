@@ -160,8 +160,7 @@ export const UserManagementPage: React.FC = () => {
                             <SelectContent>
                                 <SelectItem value="all">All roles</SelectItem>
                                 <SelectItem value="learner">Learner</SelectItem>
-                                <SelectItem value="educator">Educator</SelectItem>
-                                <SelectItem value="course_manager">Course Manager</SelectItem>
+                                <SelectItem value="organizer">Organizer</SelectItem>
                                 <SelectItem value="instructor">Instructor</SelectItem>
                                 <SelectItem value="admin">Admin</SelectItem>
                             </SelectContent>
@@ -589,7 +588,7 @@ function ChangeRoleDialog({ open, onOpenChange, user, onSuccess }: { open: boole
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const allRoles = ['learner', 'educator', 'course_manager', 'instructor', 'admin'];
+    const allRoles = ['learner', 'organizer', 'instructor', 'admin'];
 
     const toggleRole = (role: string) => {
         setSelectedRoles(prev =>
@@ -754,8 +753,7 @@ function InviteDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpen
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="learner">Learner</SelectItem>
-                                <SelectItem value="educator">Educator</SelectItem>
-                                <SelectItem value="course_manager">Course Manager</SelectItem>
+                                <SelectItem value="organizer">Organizer</SelectItem>
                                 <SelectItem value="instructor">Instructor</SelectItem>
                                 <SelectItem value="admin">Admin</SelectItem>
                             </SelectContent>

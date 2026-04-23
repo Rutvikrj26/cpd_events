@@ -78,9 +78,9 @@ class TestDiscussionThreadPermissions:
 
 @pytest.mark.django_db
 class TestModerationActions:
-    def test_staff_can_pin(self, course_manager_client, course):
+    def test_staff_can_pin(self, instructor_client, course):
         thread = DiscussionThreadFactory(course=course)
-        response = course_manager_client.post(_url(course, f'{thread.uuid}/pin/'))
+        response = instructor_client.post(_url(course, f'{thread.uuid}/pin/'))
         assert response.status_code == status.HTTP_200_OK
         thread.refresh_from_db()
         assert thread.is_pinned is True
@@ -90,9 +90,9 @@ class TestModerationActions:
         response = enrolled_learner_client.post(_url(course, f'{thread.uuid}/pin/'))
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_staff_can_lock(self, course_manager_client, course):
+    def test_staff_can_lock(self, instructor_client, course):
         thread = DiscussionThreadFactory(course=course)
-        response = course_manager_client.post(_url(course, f'{thread.uuid}/lock/'))
+        response = instructor_client.post(_url(course, f'{thread.uuid}/lock/'))
         assert response.status_code == status.HTTP_200_OK
         thread.refresh_from_db()
         assert thread.is_locked is True
@@ -112,9 +112,9 @@ class TestModerationActions:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['count'] == 0
 
-    def test_hidden_thread_visible_to_staff(self, course_manager_client, course):
+    def test_hidden_thread_visible_to_staff(self, instructor_client, course):
         DiscussionThreadFactory(course=course, is_hidden=True)
-        response = course_manager_client.get(_url(course))
+        response = instructor_client.get(_url(course))
         assert response.status_code == status.HTTP_200_OK
         assert response.data['count'] == 1
 
@@ -170,17 +170,17 @@ class TestFlags:
         response = enrolled_learner_client.get(f'/api/v1/courses/{course.uuid}/discussions/flags/')
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_staff_can_see_flag_queue(self, course_manager_client, course):
+    def test_staff_can_see_flag_queue(self, instructor_client, course):
         thread = DiscussionThreadFactory(course=course)
         DiscussionFlagFactory(thread=thread, reporter=UserFactory())
-        response = course_manager_client.get(f'/api/v1/courses/{course.uuid}/discussions/flags/')
+        response = instructor_client.get(f'/api/v1/courses/{course.uuid}/discussions/flags/')
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
 
-    def test_resolve_hide_marks_content_hidden(self, course_manager_client, course):
+    def test_resolve_hide_marks_content_hidden(self, instructor_client, course):
         thread = DiscussionThreadFactory(course=course)
         flag = DiscussionFlagFactory(thread=thread, reporter=UserFactory())
-        response = course_manager_client.post(
+        response = instructor_client.post(
             f'/api/v1/courses/{course.uuid}/discussions/flags/{flag.uuid}/resolve/',
             {'action': 'hide'},
             format='json',
@@ -191,10 +191,10 @@ class TestFlags:
         flag.refresh_from_db()
         assert flag.status == 'resolved_hidden'
 
-    def test_resolve_keep_leaves_content(self, course_manager_client, course):
+    def test_resolve_keep_leaves_content(self, instructor_client, course):
         thread = DiscussionThreadFactory(course=course, is_hidden=False)
         flag = DiscussionFlagFactory(thread=thread, reporter=UserFactory())
-        response = course_manager_client.post(
+        response = instructor_client.post(
             f'/api/v1/courses/{course.uuid}/discussions/flags/{flag.uuid}/resolve/',
             {'action': 'keep'},
             format='json',

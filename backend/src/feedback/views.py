@@ -27,7 +27,7 @@ def _event_access_q(user, prefix: str = ''):
     return django_models.Q(**{owner_key: user})
 
 
-@roles('learner', 'educator', 'admin', route_name='event_feedback')
+@roles('learner', 'organizer', 'admin', route_name='event_feedback')
 class EventFeedbackViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing event feedback.
@@ -128,7 +128,7 @@ class EventFeedbackViewSet(viewsets.ModelViewSet):
             logger.error(f"Auto-certificate issuance failed: {e}")
 
 
-@roles('educator', 'admin', route_name='event_feedback_fields')
+@roles('organizer', 'admin', route_name='event_feedback_fields')
 class EventFeedbackFieldViewSet(viewsets.ModelViewSet):
     """
     CRUD for an event's feedback form schema.

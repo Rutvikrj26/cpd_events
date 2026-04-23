@@ -76,7 +76,8 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
             }
         } catch (err: any) {
             setError(
-                err?.response?.data?.error ??
+                err?.response?.data?.error?.message ??
+                    err?.response?.data?.detail ??
                     err?.message ??
                     'Failed to import. Check the file format against the template.',
             );

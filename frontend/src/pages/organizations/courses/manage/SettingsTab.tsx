@@ -560,7 +560,7 @@ function CourseStaffCard({ courseUuid }: { courseUuid: string }) {
         if (query.length < 2) { setSearchResults([]); return; }
         setSearching(true);
         try {
-            const response = await client.get('/admin/users/', { params: { search: query, role: 'course_manager' } });
+            const response = await client.get('/admin/users/', { params: { search: query, role: 'instructor' } });
             const users = Array.isArray(response.data) ? response.data : (response.data.results || []);
             // Filter out already-assigned users
             const assignedEmails = new Set(staff.map(s => s.user_email));

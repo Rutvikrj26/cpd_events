@@ -37,7 +37,7 @@ from conferencing.service import get_video_provider
 logger = logging.getLogger(__name__)
 
 
-@roles('learner', 'educator', 'course_manager', 'admin', route_name='video_status')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='video_status')
 class VideoStatusView(generics.GenericAPIView):
     """GET /api/v1/video/status/ — Check if video conferencing is configured."""
 
@@ -52,7 +52,7 @@ class VideoStatusView(generics.GenericAPIView):
         return Response(VideoStatusSerializer(data).data)
 
 
-@roles('learner', 'educator', 'admin', route_name='join_video')
+@roles('learner', 'organizer', 'admin', route_name='join_video')
 class JoinVideoView(generics.GenericAPIView):
     """
     POST /api/v1/events/{event_uuid}/join-video/
@@ -232,7 +232,7 @@ class JoinVideoGuestView(generics.GenericAPIView):
         return Response(JoinVideoResponseSerializer(data).data)
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='join_course_video')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='join_course_video')
 class JoinCourseSessionVideoView(generics.GenericAPIView):
     """
     POST /api/v1/courses/{course_uuid}/sessions/{session_uuid}/join-video/
@@ -312,7 +312,7 @@ class JoinCourseSessionVideoView(generics.GenericAPIView):
         return Response(JoinVideoResponseSerializer(data).data)
 
 
-@roles('educator', 'admin', route_name='video_rooms')
+@roles('organizer', 'admin', route_name='video_rooms')
 class VideoRoomViewSet(viewsets.ReadOnlyModelViewSet):
     """
     GET /api/v1/video/rooms/ — List video rooms for the authenticated user's
@@ -446,7 +446,7 @@ class VideoRoomViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
-@roles('educator', 'admin', route_name='video_recordings')
+@roles('organizer', 'admin', route_name='video_recordings')
 class VideoRecordingViewSet(viewsets.ReadOnlyModelViewSet):
     """
     GET /api/v1/video/recordings/ — List published recordings accessible to the user.

@@ -42,11 +42,11 @@ const OrgProgramsPage: React.FC = () => {
     return (
         <div className="container mx-auto py-8 px-4 max-w-6xl">
             <PageHeader
-                title="Programs"
+                title="Manage Programs"
                 description="Bundle courses and offer them at a discount."
                 actions={
                     <Button onClick={() => navigate('/programs/manage/new')}>
-                        <Plus className="mr-2 h-4 w-4" /> New program
+                        <Plus className="mr-2 h-4 w-4" /> Create Program
                     </Button>
                 }
             />

@@ -196,7 +196,7 @@ export interface AdminUserDetail {
         professional_title: string | null;
         organization_name: string | null;
         roles: string[];
-        primary_role: 'learner' | 'educator' | 'course_manager' | 'instructor' | 'admin';
+        primary_role: 'learner' | 'organizer' | 'instructor' | 'admin';
         is_active: boolean;
         email_verified: boolean;
         last_login_at: string | null;

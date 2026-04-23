@@ -1,95 +1,49 @@
+/**
+ * Types matching the trimmed single-tenant billing backend.
+ *
+ * The frontend used to model a full SaaS subscription (plan strings, trial,
+ * pending changes, per-period usage counters). That surface is gone — the
+ * backend now exposes a simple institutional plan + per-user subscription
+ * status. See ~/.claude/plans/lets-trace-through-the-calm-flute.md.
+ */
+
+export type SubscriptionStatus =
+    | 'active'
+    | 'canceled'
+    | 'past_due'
+    | 'unpaid'
+    | 'incomplete'
+    | 'paused';
+
 export interface Subscription {
     uuid: string;
-    plan: 'attendee' | 'organizer' | 'lms' | 'organization';
-    plan_display: string;
-    status: 'active' | 'trialing' | 'canceled' | 'past_due' | 'unpaid' | 'incomplete' | 'paused';
-    status_display: string;
-    is_active: boolean;
-    is_trialing: boolean;
-    is_trial_expired: boolean;
-    is_in_grace_period: boolean;
-    is_access_blocked: boolean;
-    can_create_events: boolean;
-    can_create_courses: boolean;
-    days_until_trial_ends: number | null;
-    subscription_status_display: string;
-    limits: {
-        events_per_month: number | null;
-        courses_per_month: number | null;
-        certificates_per_month: number | null;
-        max_attendees_per_event: number | null;
-    };
-    billing_interval: 'month' | 'year';
-    pending_plan?: 'attendee' | 'organizer' | 'lms' | 'organization' | null;
-    pending_billing_interval?: 'month' | 'year' | null;
-    pending_change_at?: string | null;
+    plan_name: string | null;
+    status: SubscriptionStatus;
     current_period_start: string | null;
     current_period_end: string | null;
-    trial_ends_at: string | null;
     cancel_at_period_end: boolean;
-    canceled_at: string | null;
-    events_created_this_period: number;
-    courses_created_this_period: number;
-    certificates_issued_this_period: number;
-    stripe_subscription_id?: string | null;
-    stripe_customer_id?: string | null;
-    has_payment_method?: boolean;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface Invoice {
-    uuid: string;
-    amount_due: number;
-    amount_display?: string;
-    status: 'paid' | 'open' | 'void' | 'draft' | 'uncollectible';
-    pdf_url?: string;
-    invoice_pdf_url?: string;
-    period_start?: string;
-    period_end?: string;
-    created_at?: string;
-}
-
-export interface PaymentMethod {
-    uuid: string;
-    card_brand: string;
-    card_last4: string;
-    card_exp_month: number;
-    card_exp_year: number;
-    is_default: boolean;
-    is_expired: boolean;
-    card_display: string;
-    billing_name: string;
-    billing_email: string;
     created_at: string;
 }
 
-// ============================================================================
-// Public Pricing API Types (from backend)
-// ============================================================================
-
-export interface PricingPrice {
-    uuid: string;
-    amount_cents: number;
-    amount_display: string;
-    currency: string;
-    billing_interval: 'month' | 'year';
+export interface SubscriptionEnvelope {
+    subscription: Subscription | null;
+    pricing_model?: 'free' | 'per_item' | 'subscription' | 'hybrid';
 }
 
-export interface PricingProduct {
+/** Shape returned by GET /api/v1/public/pricing/ — InstitutionPlan rows. */
+export interface InstitutionPlan {
     uuid: string;
     name: string;
     description: string;
-    plan: string;
-    plan_display: string;
-    trial_days: number;
-    show_contact_sales: boolean;
-    features: string[];
-    feature_limits: {
-        events_per_month: number | null;
-        courses_per_month: number | null;
-        certificates_per_month: number | null;
-        max_attendees_per_event: number | null;
-    };
-    prices: PricingPrice[];
+    price_cents: number;
+    price_display: string;
+    billing_interval: 'month' | 'year';
+    includes_all_courses: boolean;
+    max_enrollments: number | null;
+    is_active: boolean;
+    is_featured: boolean;
+    sort_order: number;
+    features_list: string[];
+    created_at: string;
+    updated_at: string;
 }

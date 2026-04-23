@@ -19,4 +19,9 @@ urlpatterns = [
     # Learner-facing
     path('billing/plans/', views.PublicPlanListView.as_view(), name='public-plans'),
     path('billing/my-subscription/', views.MySubscriptionView.as_view(), name='my-subscription'),
+    path('billing/subscribe/', views.SubscribeView.as_view(), name='billing-subscribe'),
+    path('billing/portal/', views.CustomerPortalView.as_view(), name='billing-portal'),
+
+    # Public (unauthenticated)
+    path('public/pricing/', views.PublicPricingView.as_view(), name='public-pricing'),
 ]

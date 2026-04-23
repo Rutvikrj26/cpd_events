@@ -178,7 +178,7 @@ class TestAdmitDenyParticipant:
         response = auth_client.post(
             self.admit_url(video_room), {'identity': 'attendee-1'}, format='json'
         )
-        # Role decorator (educator/admin) rejects learners.
+        # Role decorator (organizer/admin) rejects learners.
         assert response.status_code in (
             status.HTTP_403_FORBIDDEN,
             status.HTTP_404_NOT_FOUND,

@@ -47,6 +47,8 @@ export interface Contact {
     // Engagement
     events_invited_count: number;
     events_attended_count: number;
+    courses_enrolled_count?: number;
+    courses_completed_count?: number;
     last_invited_at: string | null;
     last_attended_at: string | null;
     // Status

@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 logger = logging.getLogger(__name__)
 
 from common.pagination import SmallPagination
-from common.permissions import IsContentCreator, IsEducatorOrAdmin
+from common.permissions import IsContentCreator, IsOrganizerOrAdmin
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import ReadOnlyModelViewSet, SoftDeleteModelViewSet
@@ -28,15 +28,15 @@ from common.viewsets import ReadOnlyModelViewSet, SoftDeleteModelViewSet
 from . import serializers
 from .models import Certificate, CertificateTemplate
 
-INSTITUTION_CONTENT_GROUPS = ('educator', 'course_manager', 'admin')
+INSTITUTION_CONTENT_GROUPS = ('organizer', 'instructor', 'admin')
 
 
 def _get_writable_event(event_uuid, user):
     """
     Fetch an active event that `user` is allowed to manage certificates for.
 
-    Institutional single-tenant model: staff, or any user in the educator /
-    course_manager / admin groups, can manage certificates for any active
+    Institutional single-tenant model: staff, or any user in the organizer /
+    instructor / admin groups, can manage certificates for any active
     event. Regular users may only manage events they own.
 
     Returns the Event or None.
@@ -64,7 +64,7 @@ def _get_writable_course(course_uuid, user):
 # =============================================================================
 
 
-@roles('educator', 'course_manager', 'admin', route_name='certificate_templates')
+@roles('organizer', 'instructor', 'admin', route_name='certificate_templates')
 class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     """
     Manage certificate templates.
@@ -144,7 +144,7 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
         Get every template the current user is allowed to pick from.
 
         In institutional single-tenant mode this matches the main list: all
-        active non-deleted templates for staff / educators / course_managers /
+        active non-deleted templates for staff / organizers / instructors /
         admins, and owned-only templates for anyone else.
         """
         templates = self.get_queryset()
@@ -283,7 +283,7 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
 # =============================================================================
 
 
-@roles('educator', 'course_manager', 'admin', route_name='organization_certificates')
+@roles('organizer', 'instructor', 'admin', route_name='organization_certificates')
 class OrganizationCertificateListView(generics.ListAPIView):
     """
     List every certificate that belongs to an event or course the current
@@ -333,7 +333,7 @@ class OrganizationCertificateListView(generics.ListAPIView):
 # =============================================================================
 
 
-@roles('educator', 'course_manager', 'admin', route_name='certificate_issue')
+@roles('organizer', 'instructor', 'admin', route_name='certificate_issue')
 class CertificateIssueView(generics.GenericAPIView):
     """
     POST /api/v1/certificates/issue/
@@ -343,7 +343,7 @@ class CertificateIssueView(generics.GenericAPIView):
     """
 
     serializer_class = serializers.CertificateIssueSerializer
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
 
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -428,7 +428,7 @@ class CertificateIssueView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles('educator', 'course_manager', 'admin', route_name='certificate_revoke')
+@roles('organizer', 'instructor', 'admin', route_name='certificate_revoke')
 class CertificateRevokeView(APIView):
     """
     POST /api/v1/certificates/<uuid>/revoke/
@@ -437,7 +437,7 @@ class CertificateRevokeView(APIView):
     Body: { "reason": "..." }
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
 
     def post(self, request, uuid):
         try:
@@ -490,7 +490,7 @@ class EventCertificateFilter(filters.FilterSet):
         fields = ['status']
 
 
-@roles('educator', 'admin', route_name='event_certificates')
+@roles('organizer', 'admin', route_name='event_certificates')
 class EventCertificateViewSet(viewsets.ModelViewSet):
     """
     Manage certificates for an event.
@@ -498,7 +498,7 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/certificates/
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
     pagination_class = SmallPagination  # M5: Nested resource pagination
     filterset_class = EventCertificateFilter
     ordering = ['-created_at']
@@ -759,7 +759,7 @@ class CertificateQrCodeView(APIView):
 # =============================================================================
 
 
-@roles('learner', 'educator', 'admin', route_name='my_certificates')
+@roles('learner', 'organizer', 'admin', route_name='my_certificates')
 class MyCertificateViewSet(ReadOnlyModelViewSet):
     """
     Current user's certificates.

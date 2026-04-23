@@ -76,10 +76,10 @@ export const StepSettings = () => {
     }, [formData.badges_enabled]);
 
     // Fetch individual user payouts status
-    const { isEducator } = getRoleFlags(user);
+    const { isOrganizer } = getRoleFlags(user);
     useEffect(() => {
         const fetchUserPayouts = async () => {
-            if (!isEducator) {
+            if (!isOrganizer) {
                 setLoadingUserPayouts(false);
                 return;
             }
@@ -99,7 +99,7 @@ export const StepSettings = () => {
             }
         };
         fetchUserPayouts();
-    }, [isEducator]);
+    }, [isOrganizer]);
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">

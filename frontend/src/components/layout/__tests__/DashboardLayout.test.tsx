@@ -65,7 +65,6 @@ describe("DashboardLayout", () => {
         await renderDashboardLayout();
 
         expect(screen.getByRole("link", { name: /certificates/i })).toBeInTheDocument();
-        expect(screen.getByRole("link", { name: /billing/i })).toBeInTheDocument();
     });
 
     it("shows theme toggle", async () => {

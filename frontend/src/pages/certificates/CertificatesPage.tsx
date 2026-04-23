@@ -21,8 +21,8 @@ import { Badge } from '@/components/ui/badge';
 export const CertificatesPage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { isCreator, isAdmin } = getRoleFlags(user);
-    const isStaffView = isCreator || isAdmin;
+    const { isOrganizer, isInstructor, isAdmin } = getRoleFlags(user);
+    const isStaffView = isOrganizer || isInstructor || isAdmin;
     const [certificates, setCertificates] = useState<Certificate[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(true);

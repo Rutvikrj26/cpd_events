@@ -238,7 +238,7 @@ class PasswordResetConfirmView(generics.GenericAPIView):
         return Response({"message": "Password reset successfully."})
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="password_change")
+@roles("learner", "organizer", "instructor", "admin", route_name="password_change")
 class PasswordChangeView(generics.GenericAPIView):
     """POST /api/v1/auth/password-change/ - Change password."""
 
@@ -264,7 +264,7 @@ class PasswordChangeView(generics.GenericAPIView):
 EMAIL_CHANGE_TOKEN_HOURS = 24
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="email_change_request")
+@roles("learner", "organizer", "instructor", "admin", route_name="email_change_request")
 class EmailChangeRequestView(generics.GenericAPIView):
     """POST /api/v1/users/me/email-change/request/
 
@@ -483,7 +483,7 @@ class EmailChangeConfirmView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="user_sessions")
+@roles("learner", "organizer", "instructor", "admin", route_name="user_sessions")
 class UserSessionListView(generics.ListAPIView):
     """GET /api/v1/users/me/sessions/ - List active sessions."""
 
@@ -494,7 +494,7 @@ class UserSessionListView(generics.ListAPIView):
         return UserSession.objects.filter(user=self.request.user, is_active=True).order_by("-last_activity_at")
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="user_session_revoke")
+@roles("learner", "organizer", "instructor", "admin", route_name="user_session_revoke")
 class UserSessionRevokeView(generics.DestroyAPIView):
     """DELETE /api/v1/users/me/sessions/{uuid}/ - Revoke a specific session."""
 
@@ -509,7 +509,7 @@ class UserSessionRevokeView(generics.DestroyAPIView):
         instance.deactivate()
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="user_sessions_logout_all")
+@roles("learner", "organizer", "instructor", "admin", route_name="user_sessions_logout_all")
 class UserSessionLogoutAllView(generics.GenericAPIView):
     """POST /api/v1/users/me/sessions/logout-all/ - Logout from all sessions."""
 
@@ -525,7 +525,7 @@ class UserSessionLogoutAllView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="current_user")
+@roles("learner", "organizer", "instructor", "admin", route_name="current_user")
 class CurrentUserView(generics.RetrieveUpdateAPIView):
     """GET/PATCH /api/v1/users/me/ - Current user profile."""
 
@@ -540,7 +540,7 @@ class CurrentUserView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="notification_preferences")
+@roles("learner", "organizer", "instructor", "admin", route_name="notification_preferences")
 class NotificationPreferencesView(generics.RetrieveUpdateAPIView):
     """GET/PATCH /api/v1/users/me/notifications/ - Notification preferences."""
 
@@ -551,7 +551,7 @@ class NotificationPreferencesView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="my_accreditations")
+@roles("learner", "organizer", "instructor", "admin", route_name="my_accreditations")
 class MyAccreditationsView(generics.GenericAPIView):
     """GET /api/v1/users/me/accreditations/
 
@@ -636,7 +636,7 @@ class MyAccreditationsView(generics.GenericAPIView):
         return self.request.user
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="user_notifications")
+@roles("learner", "organizer", "instructor", "admin", route_name="user_notifications")
 class UserNotificationViewSet(viewsets.ModelViewSet):
     """User notification inbox."""
 
@@ -675,7 +675,7 @@ class UserNotificationViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="delete_account")
+@roles("learner", "organizer", "instructor", "admin", route_name="delete_account")
 class DeleteAccountView(generics.GenericAPIView):
     """POST /api/v1/users/me/delete-account/ - Delete/anonymize account."""
 
@@ -699,7 +699,7 @@ class DeleteAccountView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="data_export")
+@roles("learner", "organizer", "instructor", "admin", route_name="data_export")
 class DataExportView(generics.GenericAPIView):
     """POST /api/v1/users/me/export-data/ - Request GDPR data export."""
 
@@ -795,7 +795,7 @@ class DataExportView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="complete_onboarding")
+@roles("learner", "organizer", "instructor", "admin", route_name="complete_onboarding")
 class CompleteOnboardingView(generics.GenericAPIView):
     """POST /api/v1/users/me/onboarding/complete/ - Mark onboarding as complete."""
 
@@ -820,7 +820,7 @@ class CompleteOnboardingView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="cpd_requirements")
+@roles("learner", "organizer", "instructor", "admin", route_name="cpd_requirements")
 class CPDRequirementViewSet(viewsets.ModelViewSet):
     """
     CRUD for user CPD requirements.
@@ -911,7 +911,7 @@ class CPDRequirementViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
-@roles("learner", "educator", "course_manager", "admin", route_name="manifest")
+@roles("learner", "organizer", "instructor", "admin", route_name="manifest")
 class ManifestView(generics.GenericAPIView):
     """
     GET /api/v1/auth/manifest/

@@ -15,7 +15,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from common.pagination import SmallPagination
-from common.permissions import IsContentCreator, IsEducatorOrAdmin
+from common.permissions import IsContentCreator, IsOrganizerOrAdmin
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import BaseModelViewSet, SoftDeleteModelViewSet
@@ -93,7 +93,7 @@ class PublicEventFilter(filters.FilterSet):
 # =============================================================================
 
 
-@roles('educator', 'course_manager', 'admin', route_name='events')
+@roles('organizer', 'admin', route_name='events')
 class EventViewSet(SoftDeleteModelViewSet):
     """
     Organizer-level CRUD for events.
@@ -103,10 +103,13 @@ class EventViewSet(SoftDeleteModelViewSet):
     GET /api/v1/events/{uuid}/
     PATCH /api/v1/events/{uuid}/
     DELETE /api/v1/events/{uuid}/
+
+    Instructors do NOT have access to top-level events. They schedule
+    live sessions inside their courses via the course_sessions endpoint.
     """
 
     parser_classes = (MultiPartParser, FormParser, JSONParser)
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin | IsContentCreator]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
     filterset_class = EventFilter
     search_fields = ['title', 'description']
     ordering_fields = ['starts_at', 'created_at', 'title', 'registration_count']
@@ -658,7 +661,7 @@ class PublicEventDetailView(generics.RetrieveAPIView):
 # =============================================================================
 
 
-@roles('educator', 'admin', route_name='event_custom_fields')
+@roles('organizer', 'admin', route_name='event_custom_fields')
 class EventCustomFieldViewSet(viewsets.ModelViewSet):
     """
     Manage custom fields for an event.
@@ -666,7 +669,7 @@ class EventCustomFieldViewSet(viewsets.ModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/custom-fields/
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
     lookup_field = 'uuid'
 
     def get_queryset(self):
@@ -710,7 +713,7 @@ class EventCustomFieldViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
-@roles('educator', 'admin', route_name='event_sessions')
+@roles('organizer', 'admin', route_name='event_sessions')
 class EventSessionViewSet(viewsets.ModelViewSet):
     """
     Manage sessions for a multi-session event.
@@ -718,7 +721,7 @@ class EventSessionViewSet(viewsets.ModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/sessions/
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
     pagination_class = SmallPagination  # M5: Nested resource pagination
     lookup_field = 'uuid'
 
@@ -785,7 +788,7 @@ class EventSessionViewSet(viewsets.ModelViewSet):
         return Response({'message': 'Sessions reordered.'})
 
 
-@roles('learner', 'educator', 'admin', route_name='session_attendance')
+@roles('learner', 'organizer', 'admin', route_name='session_attendance')
 class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
     """
     View session attendance for a registration.
@@ -851,13 +854,13 @@ class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializers.SessionAttendanceSerializer(session_attendance).data)
 
 
-@roles('educator', 'admin', route_name='speakers')
+@roles('organizer', 'admin', route_name='speakers')
 class SpeakerViewSet(BaseModelViewSet):
     """
     CRUD for speakers.
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
     queryset = Speaker.objects.all()
     serializer_class = serializers.SpeakerSerializer
     search_fields = ['name', 'bio']

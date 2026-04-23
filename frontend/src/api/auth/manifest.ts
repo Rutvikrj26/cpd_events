@@ -25,7 +25,7 @@ export interface DeploymentConfig {
 export interface Manifest {
     user: {
         roles: string[];
-        primary_role: 'learner' | 'educator' | 'course_manager' | 'instructor' | 'admin';
+        primary_role: 'learner' | 'organizer' | 'instructor' | 'admin';
     };
     routes: string[];
     features: {

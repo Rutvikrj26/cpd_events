@@ -6,13 +6,51 @@ from django.contrib import admin
 
 from .models import (
     CoursePurchase,
+    Dispute,
     InstitutionBillingConfig,
     InstitutionPlan,
     Invoice,
     PaymentMethod,
     RefundRecord,
+    StripeEvent,
     Subscription,
 )
+
+
+@admin.register(Dispute)
+class DisputeAdmin(admin.ModelAdmin):
+    list_display = [
+        "stripe_dispute_id", "status", "reason", "amount_cents",
+        "evidence_due_by", "registration", "created_at",
+    ]
+    list_filter = ["status", "reason"]
+    search_fields = [
+        "stripe_dispute_id", "stripe_charge_id", "stripe_payment_intent_id",
+    ]
+    readonly_fields = [
+        "stripe_dispute_id", "stripe_charge_id", "stripe_payment_intent_id",
+        "registration", "course_purchase", "raw_payload", "created_at", "updated_at",
+    ]
+    ordering = ["-created_at", "evidence_due_by"]
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(StripeEvent)
+class StripeEventAdmin(admin.ModelAdmin):
+    list_display = ["event_id", "event_type", "received_at", "processed_at", "error_short"]
+    list_filter = ["event_type", "processed_at"]
+    search_fields = ["event_id", "event_type"]
+    readonly_fields = ["event_id", "event_type", "payload", "received_at", "processed_at", "error"]
+    ordering = ["-received_at"]
+
+    def error_short(self, obj):
+        return (obj.error or "")[:60]
+    error_short.short_description = "Error"
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(InstitutionBillingConfig)

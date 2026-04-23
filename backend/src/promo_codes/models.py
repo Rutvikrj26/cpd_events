@@ -81,6 +81,18 @@ class PromoCode(BaseModel):
     current_uses = models.PositiveIntegerField(default=0, help_text="Current usage count (denormalized)")
 
     # =========================================
+    # Stripe sync
+    # =========================================
+    stripe_coupon_id = models.CharField(
+        max_length=64, blank=True, null=True, unique=True,
+        help_text="Stripe Coupon id created for this promo code",
+    )
+    stripe_promotion_code_id = models.CharField(
+        max_length=64, blank=True, null=True, unique=True, db_index=True,
+        help_text="Stripe Promotion Code id (promo_...); redeemed at checkout",
+    )
+
+    # =========================================
     # Applicability
     # =========================================
     # If events is empty, code applies to ALL events by this organizer

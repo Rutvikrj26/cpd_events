@@ -26,6 +26,46 @@ from common.models import BaseModel
 
 
 # =============================================================================
+# Stripe Event (idempotency + async dispatch record)
+# =============================================================================
+
+
+class StripeEvent(models.Model):
+    """One row per webhook delivery, keyed on the Stripe event id.
+
+    The webhook endpoint inserts on receipt (unique constraint dedupes
+    replays); a cloud task picks up unprocessed rows, re-fetches the canonical
+    event from Stripe, and runs the matching handler inside a transaction
+    that also flips ``processed_at``. ``error`` captures the last handler
+    failure so retries can be investigated in admin.
+    """
+
+    event_id = models.CharField(max_length=80, primary_key=True, help_text="Stripe event id (evt_...)")
+    event_type = models.CharField(max_length=120, db_index=True)
+    payload = models.JSONField(default=dict, help_text="Snapshot of event body as received from Stripe")
+    received_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    processed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "stripe_events"
+        ordering = ["-received_at"]
+        indexes = [
+            models.Index(fields=["event_type", "-received_at"]),
+            models.Index(fields=["processed_at"]),
+        ]
+        verbose_name = "Stripe Event"
+        verbose_name_plural = "Stripe Events"
+
+    def __str__(self):
+        return f"{self.event_type} ({self.event_id})"
+
+    @property
+    def is_processed(self):
+        return self.processed_at is not None
+
+
+# =============================================================================
 # Institution Billing Configuration
 # =============================================================================
 
@@ -50,12 +90,7 @@ class InstitutionBillingConfig(BaseModel):
         help_text="How learners pay for content",
     )
 
-    # Stripe configuration (institution's own Stripe account)
-    stripe_secret_key = EncryptedTextField(blank=True, help_text="Institution's Stripe secret key")
-    stripe_publishable_key = models.CharField(max_length=255, blank=True, help_text="Institution's Stripe publishable key")
-    stripe_webhook_secret = EncryptedTextField(blank=True, help_text="Stripe webhook signing secret")
-
-    # Defaults
+    # Defaults (Stripe credentials live in env: STRIPE_SECRET_KEY / _PUBLISHABLE_KEY / _WEBHOOK_SECRET)
     default_currency = models.CharField(max_length=3, default="CAD", help_text="Default currency for pricing")
     tax_enabled = models.BooleanField(default=False, help_text="Enable Stripe Tax")
     tax_id = models.CharField(max_length=50, blank=True, help_text="Institution's tax ID (GST/HST)")
@@ -73,7 +108,8 @@ class InstitutionBillingConfig(BaseModel):
 
     @property
     def is_stripe_configured(self):
-        return bool(self.stripe_secret_key and self.stripe_publishable_key)
+        from django.conf import settings
+        return bool(getattr(settings, "STRIPE_SECRET_KEY", None))
 
     @property
     def is_free(self):
@@ -411,3 +447,94 @@ class RefundRecord(BaseModel):
     @property
     def amount_display(self):
         return f"${self.amount_cents / 100:.2f} {self.currency.upper()}"
+
+
+# =============================================================================
+# Disputes (chargebacks)
+# =============================================================================
+
+
+class Dispute(BaseModel):
+    """Stripe dispute / chargeback record.
+
+    Written by ``charge.dispute.*`` webhook handlers. Kept as its own entity
+    (not fused with RefundRecord) because disputes have their own lifecycle —
+    evidence due dates, outcomes, and reason taxonomy distinct from refunds.
+    """
+
+    class Status(models.TextChoices):
+        WARNING_NEEDS_RESPONSE = "warning_needs_response", "Warning — Needs Response"
+        WARNING_UNDER_REVIEW = "warning_under_review", "Warning — Under Review"
+        WARNING_CLOSED = "warning_closed", "Warning — Closed"
+        NEEDS_RESPONSE = "needs_response", "Needs Response"
+        UNDER_REVIEW = "under_review", "Under Review"
+        WON = "won", "Won"
+        LOST = "lost", "Lost"
+
+    class Reason(models.TextChoices):
+        CREDIT_NOT_PROCESSED = "credit_not_processed", "Credit not processed"
+        DUPLICATE = "duplicate", "Duplicate"
+        FRAUDULENT = "fraudulent", "Fraudulent"
+        GENERAL = "general", "General"
+        INCORRECT_AMOUNT = "incorrect_account_details", "Incorrect account details"
+        INSUFFICIENT_FUNDS = "insufficient_funds", "Insufficient funds"
+        PRODUCT_NOT_RECEIVED = "product_not_received", "Product not received"
+        PRODUCT_UNACCEPTABLE = "product_unacceptable", "Product unacceptable"
+        SUBSCRIPTION_CANCELED = "subscription_canceled", "Subscription canceled"
+        UNRECOGNIZED = "unrecognized", "Unrecognized"
+        OTHER = "other", "Other"
+
+    stripe_dispute_id = models.CharField(max_length=255, unique=True, db_index=True)
+    stripe_charge_id = models.CharField(max_length=255, blank=True, db_index=True)
+    stripe_payment_intent_id = models.CharField(max_length=255, blank=True, db_index=True)
+
+    registration = models.ForeignKey(
+        "registrations.Registration",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="disputes",
+    )
+    course_purchase = models.ForeignKey(
+        CoursePurchase,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="disputes",
+    )
+
+    amount_cents = models.PositiveIntegerField()
+    currency = models.CharField(max_length=3, default="cad")
+    reason = models.CharField(max_length=64, choices=Reason.choices, default=Reason.GENERAL)
+    status = models.CharField(max_length=64, choices=Status.choices, default=Status.NEEDS_RESPONSE, db_index=True)
+
+    evidence_due_by = models.DateTimeField(null=True, blank=True, db_index=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    outcome = models.CharField(max_length=64, blank=True)
+
+    raw_payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = "disputes"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["evidence_due_by"]),
+        ]
+
+    def __str__(self):
+        return f"Dispute {self.stripe_dispute_id} ({self.status})"
+
+    @property
+    def is_open(self) -> bool:
+        return self.status in {
+            self.Status.NEEDS_RESPONSE,
+            self.Status.UNDER_REVIEW,
+            self.Status.WARNING_NEEDS_RESPONSE,
+            self.Status.WARNING_UNDER_REVIEW,
+        }
+
+    @property
+    def is_lost(self) -> bool:
+        return self.status == self.Status.LOST

@@ -705,7 +705,10 @@ class CourseStaffCreateSerializer(serializers.Serializer):
     """Create a course staff assignment."""
 
     user_uuid = serializers.UUIDField()
-    role = serializers.ChoiceField(choices=['course_manager', 'instructor'], default='course_manager')
+    # Only instructor is valid — the per-course course_manager distinction was
+    # retired with the Django group. `role` kept on the model for future
+    # extensibility but has a single accepted value today.
+    role = serializers.ChoiceField(choices=['instructor'], default='instructor')
 
 
 class CourseEnrollmentSerializer(serializers.ModelSerializer):
@@ -1202,7 +1205,7 @@ class _UserMiniSerializer(serializers.Serializer):
 
 
 class CourseMemberMiniSerializer(_UserMiniSerializer):
-    """User mini + their role in the course (learner / instructor / course_manager)."""
+    """User mini + their role in the course (learner / instructor / admin)."""
 
     role = serializers.CharField(read_only=True)
 

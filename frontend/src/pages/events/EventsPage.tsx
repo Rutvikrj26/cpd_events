@@ -37,7 +37,7 @@ export const EventsPage = () => {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
     const [deleting, setDeleting] = useState(false);
-    const { isEducator } = getRoleFlags(user);
+    const { isOrganizer } = getRoleFlags(user);
 
     const fetchEvents = async () => {
         try {
@@ -51,9 +51,9 @@ export const EventsPage = () => {
     };
 
     useEffect(() => {
-        if (!isEducator) return;
+        if (!isOrganizer) return;
         fetchEvents();
-    }, [isEducator]);
+    }, [isOrganizer]);
 
     const handleDuplicate = async (event: Event, e: React.MouseEvent) => {
         e.preventDefault();
@@ -94,7 +94,7 @@ export const EventsPage = () => {
         }
     };
 
-    if (!isEducator) {
+    if (!isOrganizer) {
         return <EventDiscovery />;
     }
 
@@ -105,13 +105,13 @@ export const EventsPage = () => {
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-3xl font-bold text-foreground">
-                        {isEducator ? 'My Events' : 'Browse Events'}
+                        {isOrganizer ? 'Manage Events' : 'Browse Events'}
                     </h1>
                     <p className="text-muted-foreground">
-                        {isEducator ? 'Manage your CPD events' : 'Discover upcoming CPD events'}
+                        {isOrganizer ? 'Create, edit, and run your CPD events' : 'Discover upcoming CPD events'}
                     </p>
                 </div>
-                {isEducator && (
+                {isOrganizer && (
                     <Link to="/events/create">
                         <Button className="flex items-center gap-2">
                             <Plus size={16} /> Create Event
@@ -231,7 +231,7 @@ export const EventsPage = () => {
                 ))}
                 {events.length === 0 && (
                     <div className="col-span-full py-12 text-center text-muted-foreground bg-card rounded-xl border border-dashed border-slate-300">
-                        {isEducator
+                        {isOrganizer
                             ? "No events found. Create your first one!"
                             : "No upcoming events available. Check back later!"
                         }

@@ -67,7 +67,7 @@ export interface Course {
     updated_at?: string;
 
     // Permission
-    user_role?: 'admin' | 'course_manager' | 'instructor' | null;
+    user_role?: 'admin' | 'instructor' | null;
 
     // Relations
     organization_slug?: string;

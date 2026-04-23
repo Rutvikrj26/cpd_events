@@ -17,11 +17,14 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { TermsPage } from './pages/public/TermsPage';
 import { PrivacyPage } from './pages/public/PrivacyPage';
 import { CookiePolicyPage } from './pages/public/CookiePolicyPage';
+import { PricingPage } from './pages/public/PricingPage';
+import { PublicLayout } from './components/layout/PublicLayout';
 
 // Learner browsing (reused from public pages, now behind auth)
 import { EventDetail } from './pages/public/EventDetail';
 import { EventDiscovery } from './pages/public/EventDiscovery';
 import { EventRegistration } from './pages/public/EventRegistration';
+import { CheckoutCancel, CheckoutSuccess } from './pages/public/CheckoutReturn';
 import { PublicCourseDetailPage } from './pages/courses/PublicCourseDetailPage';
 import { ProgramDiscoveryPage } from './pages/public/ProgramDiscoveryPage';
 import { PublicProgramDetailPage } from './pages/programs/PublicProgramDetailPage';
@@ -43,7 +46,6 @@ import { EventDetailPage } from './pages/events/EventDetailPage';
 import { MyLearningPage } from './pages/registrations/MyRegistrationsPage';
 import { CertificatesPage } from './pages/certificates/CertificatesPage';
 import { CertificateVerify } from './pages/certificates/CertificateVerify';
-import { CourseCertificatesPage } from './pages/certificates/CourseCertificatesPage';
 
 // Shared Dashboard Pages
 import { Notifications } from './pages/dashboard/Notifications';
@@ -54,14 +56,13 @@ import { MyEvents } from './pages/dashboard/attendee/MyEvents';
 import { CPDTracking } from './pages/dashboard/attendee/CPDTracking';
 import { CoursePlayerPage } from './pages/courses/CoursePlayerPage';
 
-// Educator Pages
+// Organizer Pages
 import { ContactsPage } from './pages/dashboard/organizer/ContactsPage';
 // TAGGING-DISABLED: restore TagLibraryPage import when re-enabling tag UI.
 // import { TagLibraryPage } from './pages/dashboard/organizer/TagLibraryPage';
 import { ReportsPage } from './pages/dashboard/organizer/ReportsPage';
 import { EventManagement } from './pages/dashboard/organizer/EventManagement';
-import { OrganizerCertificatesPage } from './pages/dashboard/organizer/OrganizerCertificatesPage';
-import { OrganizerBadgesPage } from './pages/dashboard/organizer/OrganizerBadgesPage';
+import { OrganizerAccreditationsPage } from './pages/dashboard/organizer/OrganizerAccreditationsPage';
 import VideoManagement from './pages/dashboard/organizer/VideoManagement';
 import PromoCodesPage from './pages/dashboard/organizer/PromoCodesPage';
 import SpeakersPage from './pages/dashboard/organizer/SpeakersPage';
@@ -125,6 +126,13 @@ export default function App() {
               <Route path="/verify/:code" element={<CertificateVerify />} />
               <Route path="/badges/verify/:code" element={<PublicBadgePage />} />
 
+              {/* Public pricing */}
+              <Route path="/pricing" element={
+                <PublicLayout>
+                  <PricingPage />
+                </PublicLayout>
+              } />
+
               {/* Public event, course & program pages */}
               <Route path="/discover/events" element={<EventDiscovery />} />
               <Route path="/discover/courses" element={<CourseCatalogPage />} />
@@ -133,6 +141,10 @@ export default function App() {
               <Route path="/courses/:slug" element={<PublicCourseDetailPage />} />
               <Route path="/programs" element={<ProgramDiscoveryPage />} />
               <Route path="/programs/:slug" element={<PublicProgramDetailPage />} />
+
+              {/* Stripe Checkout return */}
+              <Route path="/checkout/success" element={<CheckoutSuccess />} />
+              <Route path="/checkout/cancel" element={<CheckoutCancel />} />
 
               {/* Auth Routes */}
               <Route path="/login" element={
@@ -192,7 +204,6 @@ export default function App() {
                   <Route path="/certificates" element={<CertificatesPage />} />
                   <Route path="/my-events" element={<MyEvents />} />
                   <Route path="/courses" element={<CourseCatalogPage />} />
-                  <Route path="/courses/certificates" element={<CourseCertificatesPage />} />
                   <Route path="/learn/:courseUuid" element={<CoursePlayerPage />} />
                   <Route path="/badges" element={<MyBadgesPage />} />
                   <Route path="/cpd" element={<CPDTracking />} />
@@ -215,7 +226,7 @@ export default function App() {
                   } />
                   <Route path="/programs/manage/:programSlug" element={<ProgramManagementPage />} />
 
-                  {/* Educator pages */}
+                  {/* Organizer pages */}
                   <Route path="/organizer/contacts" element={
                     <ProtectedRoute requiredFeature="manage_contacts">
                       <ContactsPage />
@@ -228,24 +239,13 @@ export default function App() {
                     </ProtectedRoute>
                   } />
                   */}
-                  <Route path="/organizer/reports" element={
-                    <ProtectedRoute requiredFeature="create_events">
-                      <ReportsPage />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/organizer/certificates" element={
-                    <ProtectedRoute requiredFeature="manage_certificates">
-                      <OrganizerCertificatesPage />
-                    </ProtectedRoute>
-                  } />
+                  {/* Reports page gates its own Events/Courses/Programs tabs based on role;
+                      drop the requiredFeature so instructors without create_events can load it. */}
+                  <Route path="/organizer/reports" element={<ReportsPage />} />
+                  <Route path="/manage/accreditations" element={<OrganizerAccreditationsPage />} />
                   <Route path="/organizer/events/:uuid/manage" element={
                     <ProtectedRoute requiredFeature="create_events">
                       <EventManagement />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/organizer/badges" element={
-                    <ProtectedRoute requiredFeature="manage_badges">
-                      <OrganizerBadgesPage />
                     </ProtectedRoute>
                   } />
                   <Route path="/organizer/video" element={
@@ -288,7 +288,6 @@ export default function App() {
                 <Route path="/organizer/notifications" element={<Navigate to="/notifications" replace />} />
                 <Route path="/profile" element={<Navigate to="/settings" replace />} />
                 <Route path="/my-certificates" element={<Navigate to="/certificates" replace />} />
-                <Route path="/billing" element={<Navigate to="/dashboard" replace />} />
 
               </Route>
 

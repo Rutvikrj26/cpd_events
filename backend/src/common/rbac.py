@@ -6,10 +6,11 @@ This module provides a decorator-based system for declaring which groups
 1. Registers the view in ROUTE_REGISTRY for manifest generation
 2. Adds RoleBasedPermission to enforce the declared roles via Django Groups
 
-Groups (created via data migration):
+Groups (created via data migration / setup_groups):
 - learner: Can attend events, view courses, earn certificates
-- educator: Can create/manage events, issue certificates, manage contacts
-- course_manager: Can create/manage courses, manage LMS content
+- organizer: Can create/manage events, issue event certificates, manage contacts
+- instructor: Can create/manage courses + programs, issue course certificates,
+  schedule live sessions inside courses
 - admin: Full institution administrator access (admin group membership)
 
 Users can belong to multiple groups simultaneously.
@@ -17,7 +18,7 @@ Users can belong to multiple groups simultaneously.
 Usage:
     from common.rbac import roles
 
-    @roles('educator', 'admin', route_name='events')
+    @roles('organizer', 'admin', route_name='events')
     class EventViewSet(ModelViewSet):
         ...
 
@@ -31,10 +32,10 @@ from typing import Literal
 from rest_framework import permissions
 
 # Valid role types (map to Django Group names)
-Role = Literal["learner", "educator", "course_manager", "instructor", "admin", "public"]
+Role = Literal["learner", "organizer", "instructor", "admin", "public"]
 
 # Group names used by the system
-SYSTEM_GROUPS = {"learner", "educator", "course_manager", "instructor", "admin"}
+SYSTEM_GROUPS = {"learner", "organizer", "instructor", "admin"}
 
 # Global registry: route_name -> dict with roles
 # Used by the manifest endpoint to return allowed routes per user
@@ -46,11 +47,11 @@ def roles(*allowed_roles: Role, route_name: str | None = None):
     Decorator to declare which groups (roles) can access a view.
 
     Args:
-        *allowed_roles: Variable number of role strings ('learner', 'educator', 'admin', 'public')
+        *allowed_roles: Variable number of role strings ('learner', 'organizer', 'instructor', 'admin', 'public')
         route_name: Optional route identifier for frontend mapping. Defaults to class name.
 
     Example:
-        @roles('educator', 'admin', route_name='events')
+        @roles('organizer', 'admin', route_name='events')
         class EventViewSet(ModelViewSet):
             ...
     """
@@ -157,16 +158,17 @@ def get_features_for_user(user) -> dict[str, bool]:
             "view_own_certificates": True,
         }
 
-    is_educator = user.groups.filter(name__in=["educator", "admin"]).exists()
-    is_creator = user.groups.filter(name__in=["educator", "course_manager", "admin"]).exists()
+    is_organizer = user.groups.filter(name__in=["organizer", "admin"]).exists()
+    is_instructor = user.groups.filter(name__in=["instructor", "admin"]).exists()
+    is_creator = is_organizer or is_instructor
 
     return {
         "create_events": user.has_perm("events.can_create_event"),
         "create_courses": user.has_perm("learning.can_create_course"),
         "manage_certificates": user.has_perm("certificates.can_issue_certificate"),
-        "manage_contacts": is_educator,
-        "manage_badges": is_educator,
-        "manage_video": is_educator,
+        "manage_contacts": is_organizer,
+        "manage_badges": is_creator,
+        "manage_video": is_creator,
         "manage_users": user.has_perm("accounts.can_manage_users"),
         "configure_billing": user.has_perm("billing.can_configure_billing"),
         "browse_events": True,

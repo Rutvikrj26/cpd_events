@@ -6,15 +6,15 @@ from factories import UserFactory
 
 @pytest.mark.django_db
 class TestEventPermissions:
-    def test_course_manager_can_list_events(self, api_client):
-        """Course Manager should list events (empty or owned), not get 403."""
-        user = UserFactory(groups=['course_manager'])
+    def test_instructor_cannot_list_events(self, api_client):
+        """Instructors are course-only and must NOT see the top-level events list."""
+        user = UserFactory(groups=['instructor'])
         api_client.force_authenticate(user=user)
         response = api_client.get('/api/v1/events/')
-        assert response.status_code == status.HTTP_200_OK
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_organizer_can_list_events(self, api_client):
-        user = UserFactory(groups=['educator'])
+        user = UserFactory(groups=['organizer'])
         api_client.force_authenticate(user=user)
         response = api_client.get('/api/v1/events/')
         assert response.status_code == status.HTTP_200_OK

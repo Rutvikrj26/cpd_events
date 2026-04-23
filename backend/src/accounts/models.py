@@ -57,7 +57,7 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     """
     Custom user model for the CPD Events platform.
 
-    Roles are managed via Django Groups (learner, educator, course_manager, instructor, admin).
+    Roles are managed via Django Groups (learner, organizer, instructor, admin).
     Users can belong to multiple groups simultaneously.
 
     Key Features:
@@ -148,6 +148,14 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     # =========================================
     last_login_at = models.DateTimeField(null=True, blank=True, help_text="Last successful login")
 
+    # =========================================
+    # Stripe
+    # =========================================
+    stripe_customer_id = models.CharField(
+        max_length=64, blank=True, null=True, unique=True, db_index=True,
+        help_text="Stripe Customer id (cus_...); created on first checkout",
+    )
+
     objects = UserManager()
 
     USERNAME_FIELD = "email"
@@ -190,19 +198,19 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         return self.groups.filter(name="admin").exists()
 
     @property
-    def is_educator(self):
-        """Check if user is in the educator or admin group."""
-        return self.groups.filter(name__in=["educator", "admin"]).exists()
+    def is_organizer(self):
+        """Check if user is in the organizer or admin group."""
+        return self.groups.filter(name__in=["organizer", "admin"]).exists()
+
+    @property
+    def is_instructor(self):
+        """Check if user is in the instructor or admin group."""
+        return self.groups.filter(name__in=["instructor", "admin"]).exists()
 
     @property
     def is_learner(self):
         """Check if user is in the learner group."""
         return self.groups.filter(name="learner").exists()
-
-    @property
-    def is_course_manager(self):
-        """Check if user is in the course_manager or admin group."""
-        return self.groups.filter(name__in=["course_manager", "admin"]).exists()
 
     @property
     def is_admin(self):
@@ -220,10 +228,8 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
         roles = set(self.role_names)
         if "admin" in roles:
             return "admin"
-        if "educator" in roles:
-            return "educator"
-        if "course_manager" in roles:
-            return "course_manager"
+        if "organizer" in roles:
+            return "organizer"
         if "instructor" in roles:
             return "instructor"
         return "learner"
@@ -388,8 +394,7 @@ class UserInvitation(BaseModel):
 
     ROLE_CHOICES = [
         ("learner", "Learner"),
-        ("educator", "Educator"),
-        ("course_manager", "Course Manager"),
+        ("organizer", "Organizer"),
         ("instructor", "Instructor"),
         ("admin", "Admin"),
     ]

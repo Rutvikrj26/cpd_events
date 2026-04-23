@@ -21,7 +21,7 @@ export function CourseManagementPage() {
     const [course, setCourse] = useState<Course | null>(null);
     const [loading, setLoading] = useState(true);
     // Course staff see limited tabs (no overview/settings)
-    const isStaffOnly = course?.user_role === 'course_manager' || course?.user_role === 'instructor';
+    const isStaffOnly = course?.user_role === 'instructor';
 
     // Sessions tab shows for live and hybrid; curriculum is hidden for live (no modules)
     const showSessions = course?.format === 'hybrid' || course?.format === 'live';
@@ -77,7 +77,7 @@ export function CourseManagementPage() {
                 title={course.title}
                 description={`Manage course content and settings.`}
                 breadcrumbs={[
-                    { label: "My Courses", href: `/courses/manage` },
+                    { label: "Manage Courses", href: `/courses/manage` },
                     { label: course.title },
                 ]}
                 actions={

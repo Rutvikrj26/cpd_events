@@ -428,14 +428,14 @@ class TestRoleChangeAudit:
         target = UserFactory(email='target@example.com', groups=['learner'])
         url = f'{ADMIN_USERS_URL}{target.uuid}/'
 
-        response = admin_api_client.patch(url, {'roles': ['learner', 'educator']}, format='json')
+        response = admin_api_client.patch(url, {'roles': ['learner', 'organizer']}, format='json')
         assert response.status_code == status.HTTP_200_OK
 
         rows = UserRoleChange.objects.filter(user=target)
         assert rows.count() == 1
         row = rows.first()
         assert set(row.from_roles) == {'learner'}
-        assert set(row.to_roles) == {'learner', 'educator'}
+        assert set(row.to_roles) == {'learner', 'organizer'}
         assert row.changed_by == institution_admin
 
     def test_no_audit_row_when_roles_unchanged(self, admin_api_client):
@@ -470,10 +470,10 @@ class TestRoleValidation:
         target = UserFactory(email='dupe@example.com', groups=['learner'])
         url = f'{ADMIN_USERS_URL}{target.uuid}/'
 
-        response = admin_api_client.patch(url, {'roles': ['educator', 'educator', 'learner']}, format='json')
+        response = admin_api_client.patch(url, {'roles': ['organizer', 'organizer', 'learner']}, format='json')
         assert response.status_code == status.HTTP_200_OK
         target.refresh_from_db()
-        assert set(target.role_names) == {'educator', 'learner'}
+        assert set(target.role_names) == {'organizer', 'learner'}
 
 
 @pytest.mark.django_db
@@ -500,7 +500,7 @@ class TestInvitationAcceptWritesAudit:
         inv = UserInvitation.create_invitation(
             email='new@example.com',
             full_name='New Person',
-            role='educator',
+            role='organizer',
             invited_by=institution_admin,
         )
         response = api_client.post(
@@ -517,7 +517,7 @@ class TestInvitationAcceptWritesAudit:
         role_changes = UserRoleChange.objects.filter(user=user)
         assert role_changes.count() == 1
         row = role_changes.first()
-        assert set(row.to_roles) == {'educator'}
+        assert set(row.to_roles) == {'organizer'}
         assert row.changed_by == institution_admin
 
         assert AuditLog.objects.filter(
@@ -779,7 +779,7 @@ class TestAdminUserDetailView:
 
         patch = admin_api_client.patch(
             f'{ADMIN_USERS_URL}{target.uuid}/',
-            {'roles': ['learner', 'educator']},
+            {'roles': ['learner', 'organizer']},
             format='json',
         )
         assert patch.status_code == status.HTTP_200_OK
@@ -787,7 +787,7 @@ class TestAdminUserDetailView:
         detail = admin_api_client.get(f'{ADMIN_USERS_URL}{target.uuid}/detail/')
         activity_types = [row['type'] for row in detail.data['recent_activity']]
         assert 'role_change' in activity_types
-        assert 'educator' in detail.data['groups']
+        assert 'organizer' in detail.data['groups']
 
     def test_pending_invitation_surfaced(self, admin_api_client, institution_admin):
         # Issue an invitation for an email not yet claimed, then create the

@@ -11,7 +11,7 @@ import { Course } from '@/api/courses/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { getRoleFlags } from '@/lib/role-utils';
 
-export function CourseManagerDashboard() {
+export function InstructorDashboard() {
   const { user } = useAuth();
   const { isAdmin } = getRoleFlags(user);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -58,21 +58,19 @@ export function CourseManagerDashboard() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <PageHeader
-        title={isAdmin ? "Course Manager Dashboard" : "Course Staff Dashboard"}
-        description={isAdmin ? "Build courses, track enrollments, and measure learner completion." : "Manage your assigned courses, grade submissions, and track enrollments."}
+        title="Instructor Dashboard"
+        description="Manage your courses, grade submissions, and track enrollments."
         actions={(
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="outline" size="lg" className="shadow-sm">
               <Link to="/courses/manage">Manage Courses</Link>
             </Button>
-            {isAdmin && (
-              <Button asChild size="lg" className="shadow-sm">
-                <Link to="/courses/manage/new">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create New Course
-                </Link>
-              </Button>
-            )}
+            <Button asChild size="lg" className="shadow-sm">
+              <Link to="/courses/manage/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Course
+              </Link>
+            </Button>
           </div>
         )}
       />

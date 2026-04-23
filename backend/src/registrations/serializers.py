@@ -184,13 +184,9 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
             'status',
             'payment_status',
             'amount_paid',
-            'platform_fee_amount',
-            'service_fee_amount',
-            'processing_fee_amount',
             'tax_amount',
             'total_amount',
-            'stripe_transfer_id',
-            'stripe_tax_transaction_id',
+            'stripe_checkout_session_id',
             'attended',
             'check_in_time',
             'total_attendance_minutes',
@@ -247,20 +243,12 @@ class RegistrationDetailSerializer(SoftDeleteModelSerializer):
             'can_receive_certificate',
             # Payment
             'amount_paid',
-            'platform_fee_amount',
-            'service_fee_amount',
-            'processing_fee_amount',
             'tax_amount',
             'total_amount',
-            'stripe_transfer_id',
-            'stripe_tax_transaction_id',
+            'payment_intent_id',
+            'stripe_checkout_session_id',
             # Privacy
             'allow_public_verification',
-            # Billing
-            'billing_country',
-            'billing_state',
-            'billing_postal_code',
-            'billing_city',
             # Custom fields
             'custom_field_responses',
             # Waitlist
@@ -290,11 +278,8 @@ class RegistrationCreateSerializer(serializers.Serializer):
     organization_name = serializers.CharField(required=False, max_length=255, allow_blank=True)
     custom_field_responses = serializers.DictField(required=False)
     allow_public_verification = serializers.BooleanField(default=True)
-    promo_code = serializers.CharField(required=False, max_length=50, allow_blank=True)
-    billing_country = serializers.CharField(required=False, max_length=2, allow_blank=True)
-    billing_state = serializers.CharField(required=False, max_length=100, allow_blank=True)
-    billing_postal_code = serializers.CharField(required=False, max_length=20, allow_blank=True)
-    billing_city = serializers.CharField(required=False, max_length=100, allow_blank=True)
+    # Promo codes are entered at Stripe Checkout (allow_promotion_codes=True),
+    # so we no longer accept them in the registration payload.
 
     def validate(self, attrs):
         request = self.context.get('request')
@@ -351,8 +336,9 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
             'certificate_issued',
             'certificate_issued_at',
             'amount_paid',
-            'platform_fee_amount',
+            'tax_amount',
             'total_amount',
+            'stripe_checkout_session_id',
             'allow_public_verification',
             'waitlist_position',
             'promoted_from_waitlist_at',
@@ -360,14 +346,6 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
             'can_join',
             'certificate_url',
             'created_at',
-            'amount_paid',
-            'platform_fee_amount',
-            'service_fee_amount',
-            'processing_fee_amount',
-            'tax_amount',
-            'total_amount',
-            'stripe_transfer_id',
-            'stripe_tax_transaction_id',
         ]
         read_only_fields = fields
 
