@@ -246,6 +246,12 @@ class PromoCodeUsage(BaseModel):
             models.Index(fields=['promo_code', 'user_email']),
             models.Index(fields=['registration']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['registration', 'promo_code'],
+                name='uniq_promo_usage_per_registration_code',
+            ),
+        ]
         verbose_name = 'Promo Code Usage'
         verbose_name_plural = 'Promo Code Usages'
 

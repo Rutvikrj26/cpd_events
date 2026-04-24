@@ -1,10 +1,10 @@
 """Webhook event handlers, dispatched from the async worker.
 
 Every purchase goes through Stripe Checkout Sessions. Fulfilment flips the
-relevant local row (Registration / CourseEnrollment / ProgramEnrollment /
-Subscription) in response to ``checkout.session.completed``. The PaymentIntent
-path is gone — the only reason we keep ``payment_intent.payment_failed`` is to
-flag the odd Checkout Session that completes with a failed intent (rare, but
+relevant local row (Registration / CourseEnrollment / ProgramEnrollment) in
+response to ``checkout.session.completed``. The PaymentIntent path is gone —
+the only reason we keep ``payment_intent.payment_failed`` is to flag the
+odd Checkout Session that completes with a failed intent (rare, but
 surfaces in admin).
 """
 
@@ -60,200 +60,6 @@ def _cents_to_decimal(cents) -> Decimal:
 
 
 # ---------------------------------------------------------------------------
-# Subscription lifecycle
-# ---------------------------------------------------------------------------
-
-
-def _resolve_plan_from_subscription(data):
-    from billing.models import InstitutionPlan
-
-    items = (data.get("items") or {}).get("data") or []
-    if not items:
-        return None
-    price = items[0].get("price")
-    if not isinstance(price, dict):
-        return None
-    price_id = price.get("id")
-    if not price_id:
-        return None
-    return InstitutionPlan.objects.filter(stripe_price_id=price_id).first()
-
-
-def _apply_subscription_fields(subscription, data, *, plan):
-    subscription.status = data.get("status", subscription.status)
-    subscription.cancel_at_period_end = data.get("cancel_at_period_end", False)
-    subscription.current_period_start = _from_ts(data.get("current_period_start")) or subscription.current_period_start
-    subscription.current_period_end = _from_ts(data.get("current_period_end")) or subscription.current_period_end
-    if data.get("canceled_at"):
-        subscription.canceled_at = _from_ts(data["canceled_at"])
-    if plan is not None:
-        subscription.institution_plan = plan
-
-
-def handle_subscription_created(event):
-    """Create or update the local Subscription row on first Stripe write.
-
-    Subscription checkout (Phase 4) sets ``subscription_data.metadata.user_id``
-    so we can attach to the learner. Falls back to looking up by customer id.
-    """
-    from billing.models import Subscription
-
-    User = get_user_model()
-    data = _data(event)
-    customer_id = data.get("customer")
-    subscription_id = data.get("id")
-    if not customer_id or not subscription_id:
-        return
-
-    metadata = data.get("metadata") or {}
-    user_id = metadata.get("user_id")
-    user = None
-    if user_id:
-        user = User.objects.filter(pk=user_id).first()
-    if user is None:
-        user = User.objects.filter(stripe_customer_id=customer_id).first()
-    if user is None:
-        logger.warning(
-            "stripe.subscription.no_user",
-            extra={"customer_id": customer_id, "stripe_subscription_id": subscription_id},
-        )
-        return
-
-    plan = _resolve_plan_from_subscription(data)
-    sub, _ = Subscription.objects.update_or_create(
-        user=user,
-        defaults={
-            "stripe_customer_id": customer_id,
-            "stripe_subscription_id": subscription_id,
-            "institution_plan": plan,
-        },
-    )
-    _apply_subscription_fields(sub, data, plan=plan)
-    sub.save()
-
-
-def handle_subscription_updated(event):
-    from billing.models import Subscription
-
-    data = _data(event)
-    subscription_id = data.get("id")
-    if not subscription_id:
-        return
-    sub = Subscription.objects.filter(stripe_subscription_id=subscription_id).first()
-    if not sub:
-        logger.warning("stripe.subscription.missing", extra={"subscription_id": subscription_id})
-        return
-    _apply_subscription_fields(sub, data, plan=_resolve_plan_from_subscription(data))
-    sub.save()
-
-
-def handle_subscription_deleted(event):
-    from billing.models import Subscription
-
-    data = _data(event)
-    subscription_id = data.get("id")
-    if not subscription_id:
-        return
-    sub = Subscription.objects.filter(stripe_subscription_id=subscription_id).first()
-    if not sub:
-        return
-    sub.status = Subscription.Status.CANCELED
-    sub.canceled_at = timezone.now()
-    sub.save(update_fields=["status", "canceled_at", "updated_at"])
-
-
-# ---------------------------------------------------------------------------
-# Invoices
-# ---------------------------------------------------------------------------
-
-
-def handle_invoice_paid(event):
-    from billing.models import Invoice, Subscription
-
-    data = _data(event)
-    invoice_id = data.get("id")
-    customer_id = data.get("customer")
-    if not invoice_id or not customer_id:
-        return
-    sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
-    if not sub:
-        return
-    Invoice.objects.update_or_create(
-        stripe_invoice_id=invoice_id,
-        defaults={
-            "user": sub.user,
-            "subscription": sub,
-            "amount_cents": data.get("amount_paid", 0),
-            "currency": data.get("currency", "usd"),
-            "status": Invoice.Status.PAID,
-            "invoice_pdf_url": data.get("invoice_pdf", ""),
-            "hosted_invoice_url": data.get("hosted_invoice_url", ""),
-            "paid_at": timezone.now(),
-            "period_start": _from_ts(data.get("period_start")),
-            "period_end": _from_ts(data.get("period_end")),
-        },
-    )
-
-
-def handle_invoice_payment_failed(event):
-    from billing.models import Invoice, Subscription
-
-    data = _data(event)
-    invoice_id = data.get("id")
-    customer_id = data.get("customer")
-    if not invoice_id or not customer_id:
-        return
-    sub = Subscription.objects.filter(stripe_customer_id=customer_id).first()
-    if not sub:
-        return
-    sub.status = Subscription.Status.PAST_DUE
-    sub.save(update_fields=["status", "updated_at"])
-    Invoice.objects.update_or_create(
-        stripe_invoice_id=invoice_id,
-        defaults={
-            "user": sub.user,
-            "subscription": sub,
-            "amount_cents": data.get("amount_due", 0),
-            "currency": data.get("currency", "usd"),
-            "status": Invoice.Status.OPEN,
-        },
-    )
-    try:
-        from integrations.services import email_service
-
-        email_service.send_email(
-            template="payment_failed",
-            recipient=sub.user.email,
-            context={
-                "invoice_number": data.get("number", ""),
-                "amount_due": f"{data.get('amount_due', 0) / 100:.2f}",
-                "currency": data.get("currency", "usd").upper(),
-                "pay_url": data.get("hosted_invoice_url", ""),
-                "user_name": getattr(sub.user, "full_name", sub.user.email),
-            },
-        )
-    except Exception as exc:
-        logger.warning("stripe.invoice.email_failed", extra={"error": str(exc)})
-    try:
-        from accounts.notifications import create_notification
-
-        create_notification(
-            user=sub.user,
-            notification_type="payment_failed",
-            title="Payment failed",
-            message="We could not process your latest payment. Please update your billing details.",
-            action_url="/settings?tab=billing",
-            metadata={
-                "invoice_number": data.get("number", ""),
-                "amount_due_cents": data.get("amount_due", 0),
-                "currency": data.get("currency", "usd"),
-            },
-        )
-    except Exception as exc:
-        logger.warning("stripe.invoice.notif_failed", extra={"error": str(exc)})
-
-
-# ---------------------------------------------------------------------------
 # Checkout fulfilment — the primary path for every purchase kind
 # ---------------------------------------------------------------------------
 
@@ -278,9 +84,6 @@ def handle_checkout_session_completed(event):
         _fulfil_course_enrollment(data)
     elif kind == "program_enrollment":
         _fulfil_program_enrollment(data)
-    elif kind == "subscription_signup":
-        # customer.subscription.created does the work; this is a no-op log.
-        logger.info("stripe.checkout.subscription_signup_ack", extra=log_extra)
     else:
         logger.warning("stripe.checkout.unknown_kind", extra=log_extra)
 
@@ -352,6 +155,10 @@ def _fulfil_event_registration(session_data):
         )
         return
 
+    # The handler is idempotent: every step below is safe to re-run. No global
+    # short-circuit on ``payment_status == PAID`` — that would skip downstream
+    # side effects (promo recording, confirmation email) when reconciliation
+    # or a webhook retry arrives after a prior run already set the row to PAID.
     with transaction.atomic():
         reg = Registration.objects.select_for_update().filter(uuid=reg_uuid).first()
         if not reg:
@@ -360,37 +167,48 @@ def _fulfil_event_registration(session_data):
                 extra={"registration_uuid": reg_uuid},
             )
             return
-        if reg.payment_status == Registration.PaymentStatus.PAID:
-            return
 
         amount_total = session_data.get("amount_total", 0) or 0
         tax_amount = (session_data.get("total_details") or {}).get("amount_tax", 0) or 0
-        reg.total_amount = _cents_to_decimal(amount_total)
-        reg.amount_paid = _cents_to_decimal(amount_total)
-        reg.tax_amount = _cents_to_decimal(tax_amount)
-        reg.payment_status = Registration.PaymentStatus.PAID
-        reg.payment_intent_id = session_data.get("payment_intent") or ""
-        reg.stripe_checkout_session_id = session_data.get("id") or reg.stripe_checkout_session_id
-
-        status_changed = False
-        if reg.status == Registration.Status.PENDING:
-            reg.status = Registration.Status.CONFIRMED
-            status_changed = True
-
-        reg.save(
-            update_fields=[
-                "total_amount",
-                "amount_paid",
-                "tax_amount",
-                "payment_status",
-                "payment_intent_id",
-                "stripe_checkout_session_id",
-                "status",
-                "updated_at",
-            ]
+        new_total = _cents_to_decimal(amount_total)
+        new_tax = _cents_to_decimal(tax_amount)
+        new_pi = session_data.get("payment_intent") or reg.payment_intent_id or ""
+        new_session_id = session_data.get("id") or reg.stripe_checkout_session_id
+        new_status = (
+            Registration.Status.CONFIRMED
+            if reg.status == Registration.Status.PENDING
+            else reg.status
         )
 
-    # Record any applied promotion codes from the session payload.
+        dirty = []
+        if reg.total_amount != new_total:
+            reg.total_amount = new_total
+            dirty.append("total_amount")
+        if reg.amount_paid != new_total:
+            reg.amount_paid = new_total
+            dirty.append("amount_paid")
+        if reg.tax_amount != new_tax:
+            reg.tax_amount = new_tax
+            dirty.append("tax_amount")
+        if reg.payment_status != Registration.PaymentStatus.PAID:
+            reg.payment_status = Registration.PaymentStatus.PAID
+            dirty.append("payment_status")
+        if reg.payment_intent_id != new_pi:
+            reg.payment_intent_id = new_pi
+            dirty.append("payment_intent_id")
+        if reg.stripe_checkout_session_id != new_session_id:
+            reg.stripe_checkout_session_id = new_session_id
+            dirty.append("stripe_checkout_session_id")
+        if reg.status != new_status:
+            reg.status = new_status
+            dirty.append("status")
+
+        if dirty:
+            dirty.append("updated_at")
+            reg.save(update_fields=dirty)
+
+    # Record any applied promotion codes from the session payload. Idempotent
+    # via the (registration, promo_code) unique constraint on PromoCodeUsage.
     try:
         from promo_codes.services import record_usage_from_checkout_session
 
@@ -401,7 +219,10 @@ def _fulfil_event_registration(session_data):
             extra={"registration_uuid": reg_uuid, "error": str(exc)},
         )
 
-    if status_changed:
+    # Send the confirmation email. The task checks the EmailLog table for an
+    # existing REGISTRATION_CONFIRM row, so re-invocations from reconciliation
+    # or webhook retries are no-ops.
+    if reg.status == Registration.Status.CONFIRMED:
         try:
             from registrations.tasks import send_registration_confirmation
 
@@ -448,6 +269,7 @@ def _fulfil_course_enrollment(session_data):
 
 
 def _fulfil_program_enrollment(session_data):
+    from billing.models import CoursePurchase
     from learning.models import Program, ProgramEnrollment
 
     metadata = session_data.get("metadata") or {}
@@ -463,13 +285,28 @@ def _fulfil_program_enrollment(session_data):
     if not user or not program:
         return
 
+    # Receipt row first — idempotent by Stripe session id, matches the
+    # course + event purchase pattern so Reports/Refunds hit one surface.
+    session_id = session_data.get("id", "") or ""
+    CoursePurchase.objects.update_or_create(
+        stripe_checkout_session_id=session_id,
+        defaults={
+            "user": user,
+            "program": program,
+            "amount_cents": session_data.get("amount_total") or 0,
+            "currency": (session_data.get("currency") or "CAD").upper(),
+            "stripe_payment_intent_id": session_data.get("payment_intent") or "",
+            "status": CoursePurchase.Status.COMPLETED,
+        },
+    )
+
     enrollment, _ = ProgramEnrollment.objects.get_or_create(
         user=user,
         program=program,
-        defaults={"stripe_checkout_session_id": session_data.get("id", "")},
+        defaults={"stripe_checkout_session_id": session_id},
     )
     if not enrollment.stripe_checkout_session_id:
-        enrollment.stripe_checkout_session_id = session_data.get("id", "")
+        enrollment.stripe_checkout_session_id = session_id
     enrollment.activate()
     program.update_counts()
 
@@ -685,7 +522,7 @@ def _alert_dispute_lost(dispute):
 # ---------------------------------------------------------------------------
 
 _DISPATCH = {
-    # Checkout — primary fulfilment path
+    # Checkout — primary fulfilment path for course/event/program purchases
     "checkout.session.completed": handle_checkout_session_completed,
     "checkout.session.async_payment_succeeded": handle_checkout_session_async_payment_succeeded,
     "checkout.session.async_payment_failed": handle_checkout_session_async_payment_failed,
@@ -693,14 +530,6 @@ _DISPATCH = {
     # Refunds
     "charge.refunded": handle_charge_refunded,
     "refund.updated": handle_refund_updated,
-    # Subscription lifecycle
-    "customer.subscription.created": handle_subscription_created,
-    "customer.subscription.updated": handle_subscription_updated,
-    "customer.subscription.deleted": handle_subscription_deleted,
-    # Billing
-    "invoice.paid": handle_invoice_paid,
-    "invoice.payment_failed": handle_invoice_payment_failed,
-    "invoice.payment_action_required": handle_invoice_payment_failed,  # same action: set PAST_DUE, email
     # Disputes
     "charge.dispute.created": handle_charge_dispute_created,
     "charge.dispute.updated": handle_charge_dispute_updated,

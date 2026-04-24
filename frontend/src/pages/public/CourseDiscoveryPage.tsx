@@ -130,15 +130,15 @@ export function CourseDiscoveryPage() {
   const getEmptyStateCTA = () => {
     if (!isAuthenticated) {
       return {
-        text: "Contact Sales",
-        link: "/contact",
-        secondary: { text: "View Pricing", link: "/pricing" }
+        text: "Create Account",
+        link: "/signup",
+        secondary: { text: "Sign In", link: "/login" }
       };
     }
-    
+
     // Check if user can create courses (from roles)
     const canCreateCourses = user?.roles?.some(r => ['instructor', 'admin'].includes(r));
-    
+
     if (canCreateCourses) {
       return {
         text: "Create a Course",
@@ -146,11 +146,11 @@ export function CourseDiscoveryPage() {
         secondary: { text: "Go to Dashboard", link: "/dashboard" }
       };
     }
-    
+
     return {
-      text: "Upgrade to Create Courses",
-      link: "/billing",
-      secondary: { text: "View Plans", link: "/pricing" }
+      text: "Go to Dashboard",
+      link: "/dashboard",
+      secondary: { text: "Browse Events", link: "/discover/events" }
     };
   };
 

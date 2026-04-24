@@ -57,6 +57,9 @@ dependencies = [
 
     # Video Conferencing (LiveKit)
     "livekit-api>=0.7.0,<1.0.0",
+
+    # Firebase (used only for verifying Google ID tokens from social sign-in)
+    "firebase-admin>=6.5.0,<7.0.0",
 ]
 
 [project.optional-dependencies]

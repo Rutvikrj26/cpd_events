@@ -20,8 +20,14 @@ User = get_user_model()
 
 
 class SignupSerializer(serializers.ModelSerializer):
-    """User registration serializer."""
+    """User registration serializer.
 
+    Note: the email field intentionally opts out of DRF's auto-attached
+    ``UniqueValidator`` so ``SignupView`` can return a tailored 409
+    ``EMAIL_IN_USE`` response instead of a generic 400.
+    """
+
+    email = serializers.EmailField(required=True, validators=[])
     password = serializers.CharField(
         write_only=True, required=True, validators=[validate_password], style={'input_type': 'password'}
     )
@@ -38,7 +44,6 @@ class SignupSerializer(serializers.ModelSerializer):
             'organization_name',
         ]
         extra_kwargs = {
-            'email': {'required': True},
             'full_name': {'required': True},
         }
 
@@ -59,6 +64,12 @@ class SignupSerializer(serializers.ModelSerializer):
         user.assign_role("learner")
 
         return user
+
+
+class FirebaseAuthSerializer(serializers.Serializer):
+    """Validates the payload of ``POST /api/v1/auth/firebase/``."""
+
+    id_token = serializers.CharField(write_only=True, required=True, trim_whitespace=True)
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):

@@ -1,27 +1,20 @@
-"""
-Billing models for institutional deployment.
+"""Billing models for course-based institutional deployment.
 
-The institution configures how learners pay for content:
-- FREE: All content is free
-- PER_ITEM: Pay per course/event
-- SUBSCRIPTION: Monthly/annual plans for access
-- HYBRID: Some free, some paid
+Learners pay per course/event; there is no subscription tier. Stripe
+Checkout drives every purchase and its webhook writes the local rows.
 
 Models:
-- InstitutionBillingConfig: Single-row config for billing mode
-- InstitutionPlan: Subscription plans the institution offers learners
-- Subscription: Learner subscription to an InstitutionPlan
-- Invoice: Payment history
-- PaymentMethod: Stored payment methods
-- RefundRecord: Refund tracking
-- CoursePurchase: Individual course/event purchases (per-item mode)
+- StripeEvent: idempotency + async dispatch record for incoming webhooks
+- CoursePurchase: individual course/event purchase
+- PaymentMethod: stored payment methods (kept for future "use saved card")
+- RefundRecord: refund tracking
+- Dispute: Stripe chargeback/dispute record
 """
 
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from common.fields import EncryptedTextField
 from common.models import BaseModel
 
 
@@ -66,204 +59,16 @@ class StripeEvent(models.Model):
 
 
 # =============================================================================
-# Institution Billing Configuration
-# =============================================================================
-
-
-class InstitutionBillingConfig(BaseModel):
-    """
-    Single-row configuration for how this institution charges learners.
-
-    Only one row should exist. Use get_config() classmethod.
-    """
-
-    class PricingModel(models.TextChoices):
-        FREE = "free", "Free Access"
-        PER_ITEM = "per_item", "Per Course/Event"
-        SUBSCRIPTION = "subscription", "Subscription"
-        HYBRID = "hybrid", "Hybrid"
-
-    pricing_model = models.CharField(
-        max_length=20,
-        choices=PricingModel.choices,
-        default=PricingModel.FREE,
-        help_text="How learners pay for content",
-    )
-
-    # Defaults (Stripe credentials live in env: STRIPE_SECRET_KEY / _PUBLISHABLE_KEY / _WEBHOOK_SECRET)
-    default_currency = models.CharField(max_length=3, default="CAD", help_text="Default currency for pricing")
-    tax_enabled = models.BooleanField(default=False, help_text="Enable Stripe Tax")
-    tax_id = models.CharField(max_length=50, blank=True, help_text="Institution's tax ID (GST/HST)")
-
-    class Meta:
-        db_table = "institution_billing_config"
-        verbose_name = "Institution Billing Configuration"
-        verbose_name_plural = "Institution Billing Configuration"
-        permissions = [
-            ("can_configure_billing", "Can configure institutional billing"),
-        ]
-
-    def __str__(self):
-        return f"Billing Config: {self.get_pricing_model_display()}"
-
-    @property
-    def is_stripe_configured(self):
-        from django.conf import settings
-        return bool(getattr(settings, "STRIPE_SECRET_KEY", None))
-
-    @property
-    def is_free(self):
-        return self.pricing_model == self.PricingModel.FREE
-
-    @classmethod
-    def get_config(cls):
-        """Get or create the singleton billing config."""
-        config, _ = cls.objects.get_or_create(pk=1, defaults={"pricing_model": cls.PricingModel.FREE})
-        return config
-
-
-# =============================================================================
-# Institution Plans (for subscription pricing model)
-# =============================================================================
-
-
-class InstitutionPlan(BaseModel):
-    """
-    Subscription plans the institution offers to learners.
-
-    Examples: "Basic" ($29/mo, 5 courses), "Premium" ($99/mo, all courses), "All Access" ($199/yr)
-    """
-
-    class BillingInterval(models.TextChoices):
-        MONTH = "month", "Monthly"
-        YEAR = "year", "Annual"
-
-    name = models.CharField(max_length=100, help_text='Plan name (e.g., "Basic", "Premium")')
-    description = models.TextField(blank=True, help_text="Plan description shown to learners")
-    price_cents = models.PositiveIntegerField(default=0, help_text="Price in cents (e.g., 2900 = $29.00)")
-    billing_interval = models.CharField(
-        max_length=10,
-        choices=BillingInterval.choices,
-        default=BillingInterval.MONTH,
-    )
-
-    # Stripe
-    stripe_price_id = models.CharField(max_length=255, blank=True, help_text="Stripe Price ID")
-    stripe_product_id = models.CharField(max_length=255, blank=True, help_text="Stripe Product ID")
-
-    # Access control
-    includes_all_courses = models.BooleanField(default=False, help_text="Grants access to all courses")
-    included_courses = models.ManyToManyField("learning.Course", blank=True, help_text="Specific courses included in plan")
-    includes_all_events = models.BooleanField(default=False, help_text="Grants access to all paid events")
-    max_enrollments = models.PositiveIntegerField(null=True, blank=True, help_text="Max active enrollments (null = unlimited)")
-
-    # Display
-    is_active = models.BooleanField(default=True, help_text="Whether plan is available for purchase")
-    is_featured = models.BooleanField(default=False, help_text="Highlight this plan in the UI")
-    sort_order = models.IntegerField(default=0, help_text="Display order")
-    features_list = models.JSONField(default=list, blank=True, help_text='List of feature strings for display (e.g., ["5 courses", "Certificate included"])')
-
-    class Meta:
-        db_table = "institution_plans"
-        ordering = ["sort_order", "price_cents"]
-        verbose_name = "Institution Plan"
-        verbose_name_plural = "Institution Plans"
-
-    def __str__(self):
-        return f"{self.name} (${self.price_cents / 100:.2f}/{self.billing_interval})"
-
-    @property
-    def price_display(self):
-        return f"${self.price_cents / 100:.2f}"
-
-    def grants_access_to_course(self, course):
-        """Check if this plan grants access to a specific course."""
-        if self.includes_all_courses:
-            return True
-        return self.included_courses.filter(pk=course.pk).exists()
-
-
-# =============================================================================
-# Learner Subscription
-# =============================================================================
-
-
-class Subscription(BaseModel):
-    """
-    Learner's subscription to an InstitutionPlan.
-
-    Created when a learner subscribes to a plan via Stripe checkout.
-    """
-
-    class Status(models.TextChoices):
-        ACTIVE = "active", "Active"
-        PAST_DUE = "past_due", "Past Due"
-        CANCELED = "canceled", "Canceled"
-        UNPAID = "unpaid", "Unpaid"
-        INCOMPLETE = "incomplete", "Incomplete"
-        PAUSED = "paused", "Paused"
-
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="subscription")
-    institution_plan = models.ForeignKey(InstitutionPlan, on_delete=models.SET_NULL, null=True, blank=True, related_name="subscriptions")
-
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
-
-    # Stripe
-    stripe_subscription_id = models.CharField(max_length=255, blank=True, null=True, unique=True, db_index=True)
-    stripe_customer_id = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-
-    # Billing period
-    current_period_start = models.DateTimeField(null=True, blank=True)
-    current_period_end = models.DateTimeField(null=True, blank=True)
-
-    # Cancellation
-    cancel_at_period_end = models.BooleanField(default=False)
-    canceled_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = "subscriptions"
-        verbose_name = "Subscription"
-        verbose_name_plural = "Subscriptions"
-        indexes = [
-            models.Index(fields=["status"]),
-            models.Index(fields=["current_period_end"]),
-        ]
-
-    def __str__(self):
-        plan_name = self.institution_plan.name if self.institution_plan else "None"
-        return f"{self.user.email} - {plan_name} ({self.status})"
-
-    @property
-    def is_active(self):
-        return self.status in [self.Status.ACTIVE]
-
-    @property
-    def plan_name(self):
-        return self.institution_plan.name if self.institution_plan else None
-
-    def grants_access_to_course(self, course):
-        """Check if this subscription grants access to a course."""
-        if not self.is_active or not self.institution_plan:
-            return False
-        return self.institution_plan.grants_access_to_course(course)
-
-    def cancel(self, immediate=False):
-        if immediate:
-            self.status = self.Status.CANCELED
-        else:
-            self.cancel_at_period_end = True
-        self.canceled_at = timezone.now()
-        self.save()
-
-
-# =============================================================================
-# Course/Event Purchase (per-item mode)
+# Course/Event Purchase
 # =============================================================================
 
 
 class CoursePurchase(BaseModel):
-    """
-    Individual course or event purchase (for per-item pricing model).
+    """One row per Stripe-Checkout-backed purchase of a course, event, or program.
+
+    Exactly one of ``course``, ``event``, ``program`` is non-null per row.
+    The model name is a legacy holdover from the courses-only iteration; it
+    is now the shared receipt surface for every non-subscription purchase.
     """
 
     class Status(models.TextChoices):
@@ -275,6 +80,9 @@ class CoursePurchase(BaseModel):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="purchases")
     course = models.ForeignKey("learning.Course", on_delete=models.SET_NULL, null=True, blank=True, related_name="purchases")
     event = models.ForeignKey("events.Event", on_delete=models.SET_NULL, null=True, blank=True, related_name="purchases")
+    program = models.ForeignKey(
+        "learning.Program", on_delete=models.SET_NULL, null=True, blank=True, related_name="purchases"
+    )
 
     # Payment
     amount_cents = models.PositiveIntegerField(help_text="Amount paid in cents")
@@ -291,7 +99,7 @@ class CoursePurchase(BaseModel):
         verbose_name_plural = "Course Purchases"
 
     def __str__(self):
-        item = self.course or self.event
+        item = self.course or self.event or self.program
         return f"{self.user.email} purchased {item}"
 
     @property
@@ -301,55 +109,6 @@ class CoursePurchase(BaseModel):
     def has_access(self):
         """Check if this purchase grants access."""
         return self.status == self.Status.COMPLETED
-
-
-# =============================================================================
-# Invoice (payment history)
-# =============================================================================
-
-
-class Invoice(BaseModel):
-    """Invoice record from Stripe."""
-
-    class Status(models.TextChoices):
-        DRAFT = "draft", "Draft"
-        OPEN = "open", "Open"
-        PAID = "paid", "Paid"
-        VOID = "void", "Void"
-        UNCOLLECTIBLE = "uncollectible", "Uncollectible"
-
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="invoices")
-    subscription = models.ForeignKey(Subscription, on_delete=models.SET_NULL, null=True, blank=True, related_name="invoices")
-
-    stripe_invoice_id = models.CharField(max_length=255, unique=True, db_index=True)
-    amount_cents = models.PositiveIntegerField()
-    currency = models.CharField(max_length=3, default="cad")
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
-
-    invoice_pdf_url = models.URLField(max_length=500, blank=True)
-    hosted_invoice_url = models.URLField(max_length=500, blank=True)
-
-    period_start = models.DateTimeField(null=True, blank=True)
-    period_end = models.DateTimeField(null=True, blank=True)
-    paid_at = models.DateTimeField(null=True, blank=True)
-    due_date = models.DateField(null=True, blank=True)
-
-    class Meta:
-        db_table = "invoices"
-        verbose_name = "Invoice"
-        verbose_name_plural = "Invoices"
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"Invoice {self.stripe_invoice_id} - {self.amount_display}"
-
-    @property
-    def amount_display(self):
-        return f"${self.amount_cents / 100:.2f} {self.currency.upper()}"
-
-    @property
-    def is_paid(self):
-        return self.status == self.Status.PAID
 
 
 # =============================================================================

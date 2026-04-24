@@ -54,6 +54,12 @@ class ProgramCheckoutView(generics.GenericAPIView):
     def post(self, request, uuid=None):
         program = get_object_or_404(Program, uuid=uuid)
 
+        if program.status != Program.Status.PUBLISHED:
+            return error_response(
+                'This program is not open for new enrollments.',
+                code='NOT_PUBLISHED',
+            )
+
         if ProgramEnrollment.objects.filter(
             user=request.user,
             program=program,

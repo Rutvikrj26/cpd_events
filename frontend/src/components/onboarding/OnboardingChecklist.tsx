@@ -5,7 +5,6 @@ import {
     Circle,
     User,
     Calendar,
-    CreditCard,
     BookOpen,
     ChevronRight,
     X,
@@ -43,10 +42,7 @@ const getInitialDismissed = () => {
 };
 
 export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingChecklistProps) {
-    const { user, hasFeature, deployment } = useAuth();
-    // "Set up billing" is a SaaS-era trial prompt; on single-tenant deploys
-    // billing is pre-configured by the operator so the item is just noise.
-    const showBillingItem = deployment?.mode === 'saas' && hasFeature('configure_billing');
+    const { user, hasFeature } = useAuth();
     const [items, setItems] = useState<ChecklistItem[]>([]);
     const [loading, setLoading] = useState(() => !getInitialDismissed());
     const [dismissed, setDismissed] = useState(getInitialDismissed);
@@ -134,19 +130,6 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
                         action: 'Create Course'
                     });
                 }
-            }
-
-            // 5. Set up Billing — only on SaaS deploys where trials apply.
-            if (showBillingItem) {
-                checklistItems.push({
-                    id: 'billing',
-                    title: 'Set up billing',
-                    description: 'Add a payment method for when your trial ends',
-                    icon: CreditCard,
-                    completed: false,
-                    href: '/billing',
-                    action: 'Set Up Billing'
-                });
             }
 
             setItems(checklistItems);

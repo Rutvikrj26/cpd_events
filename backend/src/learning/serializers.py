@@ -735,11 +735,18 @@ class CourseEnrollmentSerializer(serializers.ModelSerializer):
 
 
 class CourseEnrollmentRosterSerializer(serializers.ModelSerializer):
-    """Enrollment details for course staff roster views."""
+    """Enrollment details for course staff roster views.
+
+    Includes payment info derived from the most-recent ``CoursePurchase``
+    for the same (user, course) pair so the roster UI can show Paid /
+    Refunded / Comp next to each learner.
+    """
 
     user_email = serializers.EmailField(source='user.email', read_only=True)
     user_name = serializers.CharField(source='user.full_name', read_only=True)
     user_uuid = serializers.UUIDField(source='user.uuid', read_only=True)
+    payment = serializers.SerializerMethodField()
+    via_program = serializers.SerializerMethodField()
 
     class Meta:
         model = CourseEnrollment
@@ -756,8 +763,62 @@ class CourseEnrollmentRosterSerializer(serializers.ModelSerializer):
             'modules_completed',
             'certificate_issued',
             'certificate_issued_at',
+            'payment',
+            'via_program',
         ]
         read_only_fields = fields
+
+    def get_via_program(self, obj):
+        """Expose program provenance so the UI can replace Refund with a
+        'Refund on program' link for seeded enrollments."""
+        if not obj.from_program_enrollment_id:
+            return None
+        pe = obj.from_program_enrollment
+        return {
+            'program_uuid': str(pe.program.uuid),
+            'program_title': pe.program.title,
+            'program_slug': pe.program.slug,
+            'program_enrollment_uuid': str(pe.uuid),
+        }
+
+    def get_payment(self, obj):
+        """Resolve the payment row for this enrollment.
+
+        ``comp`` is inferred — a course with a non-zero price where the
+        learner has no matching CoursePurchase row and no program
+        provenance was enrolled by a staff member without payment. Free
+        courses always report ``free``. Program-seeded rows report
+        ``via_program`` so the roster shows a 'Refund on program' affordance
+        instead of a broken course-level button.
+        """
+        course = obj.course
+
+        # A program-seeded enrollment routes its money through the program
+        # purchase, not the course. Surface that explicitly.
+        if obj.from_program_enrollment_id:
+            return {'status': 'via_program'}
+
+        if course.price_cents == 0:
+            return {'status': 'free'}
+
+        from billing.models import CoursePurchase
+
+        purchase = (
+            CoursePurchase.objects
+            .filter(user=obj.user, course=course)
+            .order_by('-created_at')
+            .first()
+        )
+        if purchase is None:
+            return {'status': 'comp'}
+        return {
+            'status': purchase.status,
+            'amount_cents': purchase.amount_cents,
+            'currency': purchase.currency,
+            'purchase_uuid': str(purchase.uuid),
+            'stripe_payment_intent_id': purchase.stripe_payment_intent_id,
+            'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
+        }
 
 
 class CourseAnnouncementSerializer(serializers.ModelSerializer):
@@ -1066,6 +1127,7 @@ class ProgramSerializer(serializers.ModelSerializer):
     program_courses = ProgramCourseEntrySerializer(many=True, read_only=True)
     sum_individual_price_cents = serializers.SerializerMethodField()
     bundle_savings_cents = serializers.SerializerMethodField()
+    already_paid_for_courses = serializers.SerializerMethodField()
 
     class Meta:
         model = Program
@@ -1084,6 +1146,7 @@ class ProgramSerializer(serializers.ModelSerializer):
             'is_free',
             'sum_individual_price_cents',
             'bundle_savings_cents',
+            'already_paid_for_courses',
             'stripe_price_id',
             'course_count',
             'enrollment_count',
@@ -1097,6 +1160,7 @@ class ProgramSerializer(serializers.ModelSerializer):
             'is_free',
             'sum_individual_price_cents',
             'bundle_savings_cents',
+            'already_paid_for_courses',
             'course_count',
             'enrollment_count',
             'program_courses',
@@ -1110,6 +1174,40 @@ class ProgramSerializer(serializers.ModelSerializer):
     def get_bundle_savings_cents(self, obj):
         sum_individual = obj.sum_individual_price_cents()
         return max(0, sum_individual - (obj.price_cents or 0))
+
+    def get_already_paid_for_courses(self, obj):
+        """Warn the signed-in learner if they've already paid for one or more
+        member courses individually. Powers the double-charge warning on the
+        public program detail page. Anonymous users get an empty list.
+        """
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if not user or not getattr(user, 'is_authenticated', False):
+            return []
+
+        from billing.models import CoursePurchase
+
+        member_course_ids = list(
+            obj.program_courses.values_list('course_id', flat=True),
+        )
+        if not member_course_ids:
+            return []
+
+        paid = (
+            CoursePurchase.objects
+            .filter(user=user, course_id__in=member_course_ids, status=CoursePurchase.Status.COMPLETED)
+            .select_related('course')
+        )
+        return [
+            {
+                'course_uuid': str(p.course.uuid),
+                'course_title': p.course.title,
+                'amount_cents': p.amount_cents,
+                'currency': p.currency,
+                'purchased_at': p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in paid
+        ]
 
 
 class ProgramCreateSerializer(serializers.ModelSerializer):
@@ -1189,6 +1287,60 @@ class ProgramEnrollmentSerializer(serializers.ModelSerializer):
                 'completed_at': ce.completed_at.isoformat() if ce and ce.completed_at else None,
             })
         return out
+
+
+class ProgramEnrollmentRosterSerializer(serializers.ModelSerializer):
+    """Staff-facing roster row for a program's enrollments.
+
+    Mirrors ``CourseEnrollmentRosterSerializer`` — surfaces the matching
+    ``CoursePurchase`` (by ``user × program``) as a ``payment`` object so
+    the UI can badge rows Paid / Refunded / Comp / Free without a second
+    round-trip.
+    """
+
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+    user_uuid = serializers.UUIDField(source='user.uuid', read_only=True)
+    payment = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProgramEnrollment
+        fields = [
+            'uuid',
+            'user_uuid',
+            'user_email',
+            'user_name',
+            'status',
+            'enrolled_at',
+            'started_at',
+            'completed_at',
+            'payment',
+        ]
+        read_only_fields = fields
+
+    def get_payment(self, obj):
+        program = obj.program
+        if program.price_cents == 0:
+            return {'status': 'free'}
+
+        from billing.models import CoursePurchase
+
+        purchase = (
+            CoursePurchase.objects
+            .filter(user=obj.user, program=program)
+            .order_by('-created_at')
+            .first()
+        )
+        if purchase is None:
+            return {'status': 'comp'}
+        return {
+            'status': purchase.status,
+            'amount_cents': purchase.amount_cents,
+            'currency': purchase.currency,
+            'purchase_uuid': str(purchase.uuid),
+            'stripe_payment_intent_id': purchase.stripe_payment_intent_id,
+            'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
+        }
 
 
 # =============================================================================

@@ -19,6 +19,7 @@ import {
     Tag,
     Mic,
     BarChart3,
+    CreditCard,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -78,6 +79,7 @@ export const Sidebar = () => {
 
         // Admin items
         { routeKey: 'admin_users', to: '/admin/users', icon: Shield, label: 'User Management', adminOnly: true },
+        { routeKey: 'admin_billing', to: '/admin/billing', icon: CreditCard, label: 'Billing & Stripe', adminOnly: true },
 
         // Shared
         { routeKey: 'profile', to: '/settings', icon: UserCircle, label: 'Profile' },
@@ -109,6 +111,8 @@ export const Sidebar = () => {
             // can see at least one of them.
             if (item.routeKey === 'reports') return hasFeature('create_events') || hasFeature('create_courses');
             if (item.routeKey === 'admin_users') return hasFeature('manage_users');
+            // Admin-only billing observability page; gated purely on admin role.
+            if (item.routeKey === 'admin_billing') return isAdmin;
 
             return hasRoute(item.routeKey);
         }

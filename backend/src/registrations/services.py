@@ -20,7 +20,7 @@ import logging
 from decimal import Decimal
 from typing import Any
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Max
 from rest_framework.exceptions import ValidationError
 
@@ -70,23 +70,35 @@ class RegistrationService:
             Registration.PaymentStatus.NA if is_free else Registration.PaymentStatus.PENDING
         )
 
-        with transaction.atomic():
-            registration = Registration.objects.create(
-                event=event,
-                user=user,
-                email=email,
-                full_name=full_name,
-                professional_title=data.get("professional_title", ""),
-                organization_name=data.get("organization_name", ""),
-                status=status_to_set,
-                payment_status=payment_status,
-                allow_public_verification=data.get("allow_public_verification", True),
-                source=Registration.Source.SELF,
-                amount_paid=Decimal("0.00") if is_free else Decimal(str(event.price)),
-                tax_amount=Decimal("0.00"),
-                total_amount=Decimal("0.00") if is_free else Decimal(str(event.price)),
+        # The pre-check above ("already") isn't race-safe. The DB-level
+        # ``unique_together = [['event', 'email']]`` constraint is the backstop;
+        # we translate the IntegrityError into the same ValidationError so the
+        # view's ``ALREADY_REGISTERED`` mapping is hit and callers get a 409-
+        # shaped response instead of a 500.
+        try:
+            with transaction.atomic():
+                registration = Registration.objects.create(
+                    event=event,
+                    user=user,
+                    email=email,
+                    full_name=full_name,
+                    professional_title=data.get("professional_title", ""),
+                    organization_name=data.get("organization_name", ""),
+                    status=status_to_set,
+                    payment_status=payment_status,
+                    allow_public_verification=data.get("allow_public_verification", True),
+                    source=Registration.Source.SELF,
+                    amount_paid=Decimal("0.00") if is_free else Decimal(str(event.price)),
+                    tax_amount=Decimal("0.00"),
+                    total_amount=Decimal("0.00") if is_free else Decimal(str(event.price)),
+                )
+                self._save_custom_fields(event, registration, data.get("custom_field_responses", {}))
+        except IntegrityError as exc:
+            logger.info(
+                "registration.race_lost",
+                extra={"event_id": event.pk, "email": email, "error": str(exc)},
             )
-            self._save_custom_fields(event, registration, data.get("custom_field_responses", {}))
+            raise ValidationError("Already registered for this event.") from exc
 
         result = {
             "registration": registration,

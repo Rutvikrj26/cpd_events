@@ -107,15 +107,12 @@ export function LandingPage() {
                   <span className="text-sm text-foreground">Issue automated CPD certificates</span>
                 </li>
               </ul>
-              <Link to="/pricing">
+              <Link to="/signup">
                 <Button size="lg" className="w-full h-12 text-base shadow-xl shadow-primary/20 glow-primary">
-                  Start Creating
+                  Get Started
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <div className="mt-4 text-center">
-                <Badge variant="secondary" className="text-xs font-normal">Free trial included</Badge>
-              </div>
             </div>
           </div>
         </div>
@@ -234,9 +231,9 @@ export function LandingPage() {
               </p>
 
               <div className="pt-4">
-                <Link to="/pricing">
+                <Link to="/signup">
                   <Button size="lg" className="h-12 px-8 shadow-xl shadow-primary/20 glow-primary">
-                    View Pricing
+                    Get Started
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </Link>
@@ -262,22 +259,12 @@ export function LandingPage() {
                 <Search className="ml-2 h-5 w-5" />
               </Button>
             </Link>
-            <Link to="/pricing">
+            <Link to="/signup">
               <Button size="lg" className="h-14 px-10 text-lg shadow-xl shadow-primary/20 glow-primary w-full sm:w-auto">
-                Start Creating
+                Create Account
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
-          </div>
-          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span>Free for learners</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span>Free trial for providers</span>
-            </div>
           </div>
         </div>
       </section>

@@ -1,13 +1,9 @@
-"""
-Cloud tasks for billing.
+"""Cloud tasks for billing.
 
-Trimmed from the SaaS shape. Removed tasks that referenced Subscription
-fields no longer on the model (plan string, billing_interval, trial_ends_at,
-reset_usage, last_usage_reset_at, cancellation_reason, get_plan_display,
-Subscription.Plan/BillingInterval enums, Subscription.Status.TRIALING) and a
-non-existent stripe_service.get_subscription method.
-
-Remaining tasks only touch fields that actually exist.
+Course-based deployment. The SaaS-era subscription tasks were removed when
+the Subscription/Invoice/InstitutionPlan models were dropped. What remains:
+the Stripe-event worker, an expired-payment-method sweeper, and refund
+notifications.
 """
 
 import logging
@@ -82,28 +78,6 @@ def process_stripe_event(event_id: str):
         # Re-raise so the task runtime can retry. Row state above already
         # captured the error for investigation.
         raise
-
-
-@task()
-def send_payment_failed_email(subscription_id: int):
-    """Notify a subscriber that their latest payment failed."""
-    from billing.models import Subscription
-    from integrations.services import email_service
-
-    try:
-        sub = Subscription.objects.select_related("user", "institution_plan").get(id=subscription_id)
-    except Subscription.DoesNotExist:
-        return False
-
-    plan_name = sub.institution_plan.name if sub.institution_plan else ""
-    return email_service.send_email(
-        template="payment_failed",
-        recipient=sub.user.email,
-        context={
-            "user_name": getattr(sub.user, "full_name", sub.user.email),
-            "plan": plan_name,
-        },
-    )
 
 
 @task()

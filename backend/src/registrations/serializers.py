@@ -384,6 +384,12 @@ class RegistrationCancelSerializer(serializers.Serializer):
 
 
 class RegistrationRefundSerializer(serializers.Serializer):
-    """Refund registration request."""
+    """Refund registration request.
 
-    reason = serializers.CharField(required=False, max_length=500, allow_blank=True)
+    ``amount_cents`` is optional; if omitted, issues a full refund. ``reason``
+    is required because refunds are audit-logged and a blank reason makes the
+    audit entry useless during later review.
+    """
+
+    reason = serializers.CharField(required=True, max_length=500, allow_blank=False)
+    amount_cents = serializers.IntegerField(required=False, min_value=1)

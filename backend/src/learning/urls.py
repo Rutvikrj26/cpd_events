@@ -11,6 +11,8 @@ from .views import (
     AttendeeSubmissionViewSet,
     ContentProgressView,
     CourseAnnouncementViewSet,
+    ProgramAnnouncementViewSet,
+    ProgramDiscussionView,
     CourseAssignmentViewSet,
     CourseEnrollmentViewSet,
     CourseMemberSearchView,
@@ -105,6 +107,23 @@ urlpatterns = [
         'courses/<uuid:course_uuid>/announcements/<uuid:uuid>/',
         CourseAnnouncementViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update', 'delete': 'destroy'}),
         name='course-announcement-detail',
+    ),
+    # Program announcements — share the CourseAnnouncement table via the program FK.
+    path(
+        'programs/<uuid:program_uuid>/announcements/',
+        ProgramAnnouncementViewSet.as_view({'get': 'list', 'post': 'create'}),
+        name='program-announcement-list',
+    ),
+    path(
+        'programs/<uuid:program_uuid>/announcements/<uuid:uuid>/',
+        ProgramAnnouncementViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update', 'delete': 'destroy'}),
+        name='program-announcement-detail',
+    ),
+    # Aggregated discussion view across a program's member courses.
+    path(
+        'programs/<uuid:program_uuid>/discussion/',
+        ProgramDiscussionView.as_view(),
+        name='program-discussion',
     ),
     # Course Staff
     path(

@@ -42,6 +42,7 @@ interface AuthContextType {
     manifest: Manifest | null;
     deployment: DeploymentConfig | null;
     login: (data: LoginRequest) => Promise<void>;
+    completeLogin: (access: string, refresh: string) => Promise<void>;
     logout: () => void;
     hasRoute: (routeKey: string) => boolean;
     hasFeature: (feature: keyof Manifest['features']) => boolean;
@@ -180,20 +181,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const login = async (data: LoginRequest) => {
         try {
             const { access, refresh } = await apiLogin(data);
-            setToken(access, refresh);
-            setIsAuthenticated(true);
-
-            // Fetch profile and manifest after login
-            const [userProfile] = await Promise.all([
-                getCurrentUser(),
-                fetchManifest(),
-            ]);
-            setUser(userProfile);
-
+            await completeLogin(access, refresh);
         } catch (error) {
             console.error("Login failed", error);
             throw error;
         }
+    };
+
+    /**
+     * Finish a login when tokens were obtained out-of-band (e.g. Firebase
+     * sign-in, invitation acceptance, email verification auto-login).
+     * Persists tokens, hydrates the profile + manifest, and flips auth on.
+     */
+    const completeLogin = async (access: string, refresh: string) => {
+        setToken(access, refresh);
+        setIsAuthenticated(true);
+        const [userProfile] = await Promise.all([
+            getCurrentUser(),
+            fetchManifest(),
+        ]);
+        setUser(userProfile);
     };
 
     const logout = () => {
@@ -212,6 +219,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             manifest,
             deployment,
             login,
+            completeLogin,
             logout,
             hasRoute,
             hasFeature,

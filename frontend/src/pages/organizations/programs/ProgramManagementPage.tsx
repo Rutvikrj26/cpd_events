@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Layers, Loader2, Plus, Trash2, Users, Eye, ArrowUpDown } from 'lucide-react';
+import { ArrowLeft, BookOpen, Layers, Loader2, Plus, Trash2, Users, Eye, ChevronUp, ChevronDown } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,10 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { EnrollmentsTab } from './manage/EnrollmentsTab';
+import { AnalyticsTab } from './manage/AnalyticsTab';
+import { AnnouncementsTab } from './manage/AnnouncementsTab';
+import { DiscussionTab } from './manage/DiscussionTab';
 import { useToast } from '@/components/ui/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -21,11 +25,14 @@ import {
 
 import {
     addProgramCourse,
+    archiveProgram,
     deleteProgram,
     getProgramBySlug,
     publishProgram,
     removeProgramCourse,
+    syncProgramToStripe,
     updateProgram,
+    updateProgramCourse,
     type Program,
 } from '@/api/programs';
 import { getOwnedCourses, type Course } from '@/api/courses';
@@ -102,6 +109,27 @@ const ProgramManagementPage: React.FC = () => {
         }
     };
 
+    const handleArchive = async () => {
+        if (!program) return;
+        if (!confirm(
+            'Archive this program? It will be hidden from discovery and no new enrollments can be created. Existing learners keep access.',
+        )) return;
+        setIsMutating(true);
+        try {
+            await archiveProgram(program.uuid);
+            toast({ title: 'Program archived' });
+            await reload();
+        } catch (err: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Could not archive',
+                description: err?.response?.data?.detail || err?.message,
+            });
+        } finally {
+            setIsMutating(false);
+        }
+    };
+
     const handleDelete = async () => {
         if (!program) return;
         if (!confirm('Delete this program? Courses inside will not be deleted.')) return;
@@ -146,6 +174,38 @@ const ProgramManagementPage: React.FC = () => {
         }
     };
 
+    const handleMove = async (entryUuid: string, direction: 'up' | 'down') => {
+        if (!program) return;
+        const sorted = [...program.program_courses].sort((a, b) => a.order - b.order);
+        const idx = sorted.findIndex((e) => e.uuid === entryUuid);
+        if (idx < 0) return;
+        const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+        if (targetIdx < 0 || targetIdx >= sorted.length) return;
+
+        const current = sorted[idx];
+        const other = sorted[targetIdx];
+        try {
+            // Swap their order values via two PATCHes. Server stores canonical order.
+            await Promise.all([
+                updateProgramCourse(program.uuid, current.uuid, { order: other.order }),
+                updateProgramCourse(program.uuid, other.uuid, { order: current.order }),
+            ]);
+            await reload();
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Reorder failed', description: err?.message });
+        }
+    };
+
+    const handleToggleRequired = async (entryUuid: string, next: boolean) => {
+        if (!program) return;
+        try {
+            await updateProgramCourse(program.uuid, entryUuid, { is_required: next });
+            await reload();
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Update failed', description: err?.message });
+        }
+    };
+
     if (loading || !program) {
         return (
             <div className="flex items-center justify-center py-12">
@@ -183,7 +243,16 @@ const ProgramManagementPage: React.FC = () => {
                     </Button>
                     {program.status !== 'published' && (
                         <Button onClick={handlePublish} disabled={isMutating || program.course_count === 0}>
-                            Publish
+                            {program.status === 'archived' ? 'Unarchive & publish' : 'Publish'}
+                        </Button>
+                    )}
+                    {program.status === 'published' && (
+                        <Button
+                            variant="outline"
+                            onClick={handleArchive}
+                            disabled={isMutating}
+                        >
+                            Archive
                         </Button>
                     )}
                 </div>
@@ -193,6 +262,10 @@ const ProgramManagementPage: React.FC = () => {
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="courses">Courses ({program.course_count})</TabsTrigger>
+                    <TabsTrigger value="enrollments">Enrollments ({program.enrollment_count})</TabsTrigger>
+                    <TabsTrigger value="announcements">Announcements</TabsTrigger>
+                    <TabsTrigger value="discussion">Discussion</TabsTrigger>
+                    <TabsTrigger value="analytics">Analytics</TabsTrigger>
                     <TabsTrigger value="settings">Settings</TabsTrigger>
                 </TabsList>
 
@@ -269,13 +342,34 @@ const ProgramManagementPage: React.FC = () => {
                                 <div className="divide-y">
                                     {[...program.program_courses]
                                         .sort((a, b) => a.order - b.order)
-                                        .map(entry => (
+                                        .map((entry, idx, arr) => (
                                             <div
                                                 key={entry.uuid}
                                                 className="py-3 flex items-center justify-between gap-4"
                                             >
                                                 <div className="flex items-center gap-3 min-w-0">
-                                                    <ArrowUpDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                    <div className="flex flex-col">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-5 w-5 p-0"
+                                                            disabled={idx === 0}
+                                                            onClick={() => handleMove(entry.uuid, 'up')}
+                                                            aria-label="Move up"
+                                                        >
+                                                            <ChevronUp className="h-3 w-3" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-5 w-5 p-0"
+                                                            disabled={idx === arr.length - 1}
+                                                            onClick={() => handleMove(entry.uuid, 'down')}
+                                                            aria-label="Move down"
+                                                        >
+                                                            <ChevronDown className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
                                                     <span className="font-mono text-xs text-muted-foreground w-6">
                                                         {entry.order}
                                                     </span>
@@ -288,23 +382,53 @@ const ProgramManagementPage: React.FC = () => {
                                                         </Link>
                                                         <div className="text-xs text-muted-foreground">
                                                             {formatPrice(entry.course.price_cents, entry.course.currency)}
-                                                            {entry.is_required && ' · Required'}
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleRemoveCourse(entry.uuid)}
-                                                >
-                                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                                </Button>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <Switch
+                                                            id={`required-${entry.uuid}`}
+                                                            checked={entry.is_required}
+                                                            onCheckedChange={(v) => handleToggleRequired(entry.uuid, v)}
+                                                        />
+                                                        <Label
+                                                            htmlFor={`required-${entry.uuid}`}
+                                                            className="text-xs text-muted-foreground cursor-pointer"
+                                                        >
+                                                            Required
+                                                        </Label>
+                                                    </div>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleRemoveCourse(entry.uuid)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                         ))}
                                 </div>
                             )}
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                <TabsContent value="enrollments" className="mt-6">
+                    <EnrollmentsTab programUuid={program.uuid} />
+                </TabsContent>
+
+                <TabsContent value="announcements" className="mt-6">
+                    <AnnouncementsTab programUuid={program.uuid} />
+                </TabsContent>
+
+                <TabsContent value="discussion" className="mt-6">
+                    <DiscussionTab programUuid={program.uuid} />
+                </TabsContent>
+
+                <TabsContent value="analytics" className="mt-6">
+                    <AnalyticsTab programUuid={program.uuid} />
                 </TabsContent>
 
                 <TabsContent value="settings" className="mt-6">
@@ -351,6 +475,7 @@ const SettingsTab: React.FC<{ program: Program; onSaved: () => void; onDelete: (
     const [currency, setCurrency] = useState(program.currency);
     const [isPublic, setIsPublic] = useState(program.is_public);
     const [saving, setSaving] = useState(false);
+    const [syncing, setSyncing] = useState(false);
 
     const handleSave = async () => {
         setSaving(true);
@@ -373,6 +498,26 @@ const SettingsTab: React.FC<{ program: Program; onSaved: () => void; onDelete: (
             });
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleSyncStripe = async () => {
+        setSyncing(true);
+        try {
+            await syncProgramToStripe(program.uuid);
+            toast({ title: 'Synced with Stripe' });
+            await onSaved();
+        } catch (err: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Sync failed',
+                description:
+                    err?.response?.data?.error?.message ||
+                    err?.response?.data?.detail ||
+                    err?.message,
+            });
+        } finally {
+            setSyncing(false);
         }
     };
 
@@ -426,6 +571,30 @@ const SettingsTab: React.FC<{ program: Program; onSaved: () => void; onDelete: (
                     </div>
                     <Switch checked={isPublic} onCheckedChange={setIsPublic} />
                 </div>
+
+                {program.price_cents > 0 && (
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                        <div>
+                            <Label className="text-base flex items-center gap-2">
+                                Stripe sync
+                                {program.stripe_price_id ? (
+                                    <Badge className="bg-emerald-600">Synced</Badge>
+                                ) : (
+                                    <Badge variant="secondary">Not synced</Badge>
+                                )}
+                            </Label>
+                            <p className="text-sm text-muted-foreground">
+                                {program.stripe_price_id
+                                    ? `Price ID: ${program.stripe_price_id}`
+                                    : 'Create a Stripe Product + Price so checkout uses a canonical price record.'}
+                            </p>
+                        </div>
+                        <Button variant="outline" onClick={handleSyncStripe} disabled={syncing}>
+                            {syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {program.stripe_price_id ? 'Re-sync' : 'Sync now'}
+                        </Button>
+                    </div>
+                )}
 
                 <div className="flex justify-between pt-4">
                     <Button variant="destructive" onClick={onDelete}>

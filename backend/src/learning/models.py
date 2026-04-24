@@ -999,10 +999,23 @@ class Course(BaseModel):
 
 class CourseAnnouncement(BaseModel):
     """
-    Announcements for a course.
+    Announcements for a course OR a program.
+
+    Exactly one of ``course`` / ``program`` is set. Named CourseAnnouncement
+    for historical reasons — the program case was added later and re-uses
+    the same table rather than creating a parallel model.
     """
 
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="announcements")
+    course = models.ForeignKey(
+        Course, on_delete=models.CASCADE, null=True, blank=True, related_name="announcements"
+    )
+    program = models.ForeignKey(
+        "learning.Program",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="announcements",
+    )
     title = models.CharField(max_length=255)
     body = models.TextField()
     is_published = models.BooleanField(default=True)
@@ -1017,11 +1030,12 @@ class CourseAnnouncement(BaseModel):
     class Meta:
         db_table = "course_announcements"
         ordering = ["-created_at"]
-        verbose_name = "Course Announcement"
-        verbose_name_plural = "Course Announcements"
+        verbose_name = "Course/Program Announcement"
+        verbose_name_plural = "Course/Program Announcements"
 
     def __str__(self):
-        return f"{self.course.title} - {self.title}"
+        parent = self.course or self.program
+        return f"{parent} - {self.title}"
 
 
 class CourseModule(BaseModel):
@@ -1101,6 +1115,19 @@ class CourseEnrollment(BaseModel):
 
     # Billing
     stripe_checkout_session_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe Checkout Session ID")
+
+    # Provenance — set when this row was auto-seeded by a ProgramEnrollment.
+    # NULL means the learner enrolled in the course directly. Used by the
+    # program-refund cascade to revoke access only on program-seeded rows.
+    from_program_enrollment = models.ForeignKey(
+        "learning.ProgramEnrollment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="seeded_course_enrollments",
+        db_index=True,
+        help_text="The ProgramEnrollment that seeded this row, if any.",
+    )
 
     # Timestamps
     enrolled_at = models.DateTimeField(auto_now_add=True, help_text="When user enrolled")
@@ -1829,7 +1856,14 @@ class ProgramEnrollment(BaseModel):
             self._seed_course_enrollments()
 
     def _seed_course_enrollments(self):
-        """Create or activate CourseEnrollments for each member course (idempotent)."""
+        """Create or activate CourseEnrollments for each member course (idempotent).
+
+        New rows are stamped with ``from_program_enrollment=self`` so the
+        refund-cascade can identify them. Pre-existing direct enrollments
+        are left alone — we never overwrite their provenance (NULL stays
+        NULL) so a direct self-enrollment is not cascade-dropped if the
+        learner later refunds a program containing that course.
+        """
         for member in self.program.program_courses.select_related("course"):
             course = member.course
             existing = CourseEnrollment.objects.filter(course=course, user=self.user).first()
@@ -1840,6 +1874,7 @@ class ProgramEnrollment(BaseModel):
                     status=CourseEnrollment.Status.ACTIVE,
                     enrolled_at=timezone.now(),
                     access_type=CourseEnrollment.AccessType.LIFETIME,
+                    from_program_enrollment=self,
                 )
             elif existing.status not in (
                 CourseEnrollment.Status.ACTIVE,

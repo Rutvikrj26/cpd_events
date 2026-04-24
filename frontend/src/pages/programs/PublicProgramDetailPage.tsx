@@ -8,7 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { getProgramBySlug, programCheckout, type Program } from '@/api/programs';
+import {
+    getProgramBySlug,
+    programCheckout,
+    programEnrollFree,
+    type Program,
+} from '@/api/programs';
 
 const formatPrice = (cents: number, currency: string): string => {
     if (cents === 0) return 'Free';
@@ -64,6 +69,34 @@ export const PublicProgramDetailPage: React.FC = () => {
         () => [...(program?.program_courses ?? [])].sort((a, b) => a.order - b.order),
         [program],
     );
+
+    const handleFreeEnroll = async () => {
+        if (!program) return;
+        if (!isAuthenticated) {
+            navigate(`/login?next=/programs/${program.slug}`);
+            return;
+        }
+        setCheckoutLoading(true);
+        try {
+            await programEnrollFree(program.uuid);
+            toast({
+                title: 'Enrolled',
+                description: 'You are enrolled in every course in this program.',
+            });
+            navigate('/my-programs');
+        } catch (err: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Enrollment failed',
+                description:
+                    err?.response?.data?.error?.message ||
+                    err?.message ||
+                    'Could not enroll.',
+            });
+        } finally {
+            setCheckoutLoading(false);
+        }
+    };
 
     const handleBundlePurchase = async () => {
         if (!program) return;
@@ -150,10 +183,33 @@ export const PublicProgramDetailPage: React.FC = () => {
                         )}
                     </CardHeader>
                     <CardContent className="space-y-3">
+                        {(program.already_paid_for_courses?.length ?? 0) > 0 && !program.is_free && (
+                            <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+                                <p className="font-medium text-amber-700 dark:text-amber-400 mb-1">
+                                    You already paid for{' '}
+                                    {program.already_paid_for_courses!.length} course
+                                    {program.already_paid_for_courses!.length === 1 ? '' : 's'} in this bundle
+                                </p>
+                                <ul className="list-disc list-inside text-xs text-muted-foreground space-y-0.5">
+                                    {program.already_paid_for_courses!.map((c) => (
+                                        <li key={c.course_uuid}>{c.course_title}</li>
+                                    ))}
+                                </ul>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                    Purchasing the program won't refund those earlier purchases.
+                                </p>
+                            </div>
+                        )}
                         {program.is_free ? (
-                            <p className="text-sm text-muted-foreground">
-                                This program is free — enroll in the courses individually.
-                            </p>
+                            <Button
+                                className="w-full"
+                                size="lg"
+                                onClick={handleFreeEnroll}
+                                disabled={checkoutLoading}
+                            >
+                                {checkoutLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Enroll for free
+                            </Button>
                         ) : (
                             <Button
                                 className="w-full"
@@ -166,7 +222,7 @@ export const PublicProgramDetailPage: React.FC = () => {
                             </Button>
                         )}
                         <p className="text-xs text-muted-foreground text-center">
-                            Or enroll in any course individually below.
+                            Enrolling gives you access to every course in this program.
                         </p>
                     </CardContent>
                 </Card>

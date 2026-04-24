@@ -146,6 +146,34 @@ class EventViewSet(SoftDeleteModelViewSet):
         except Exception as e:
             raise e
 
+    def perform_update(self, serializer):
+        # Capture price/currency before save so we can audit any change.
+        old = serializer.instance
+        old_price = old.price
+        old_currency = old.currency
+
+        instance = serializer.save()
+
+        if instance.price != old_price or instance.currency != old_currency:
+            try:
+                from accounts.audit import log_audit_event
+
+                log_audit_event(
+                    actor=self.request.user,
+                    action='event.price_changed',
+                    object_type='Event',
+                    object_uuid=str(instance.uuid),
+                    metadata={
+                        'from_price': str(old_price),
+                        'to_price': str(instance.price),
+                        'from_currency': old_currency,
+                        'to_currency': instance.currency,
+                    },
+                    request=self.request,
+                )
+            except Exception:
+                logger.warning('audit log failed for event price change %s', instance.uuid, exc_info=True)
+
     @swagger_auto_schema(
         operation_summary="Publish event",
         operation_description="Publish a draft event to make it visible and open for registration.",

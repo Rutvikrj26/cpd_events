@@ -254,6 +254,11 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
 
+# Firebase (used only for verifying Google ID tokens on social sign-in)
+FIREBASE_PROJECT_ID = os.environ.get('FIREBASE_PROJECT_ID', '')
+FIREBASE_CREDENTIALS_JSON = os.environ.get('FIREBASE_CREDENTIALS_JSON', '')
+FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH', '')
+
 # Deployment configuration
 from common.config.deployment import (
     DEPLOYMENT_MODE,

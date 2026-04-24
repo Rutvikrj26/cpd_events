@@ -250,30 +250,6 @@ class TagFactory(DjangoModelFactory):
 # =============================================================================
 
 
-class SubscriptionFactory(DjangoModelFactory):
-    """Factory for creating Subscription instances."""
-
-    class Meta:
-        model = 'billing.Subscription'
-
-    user = factory.SubFactory(OrganizerFactory)
-    plan = 'free'
-    status = 'active'
-
-
-class InvoiceFactory(DjangoModelFactory):
-    """Factory for creating Invoice instances."""
-
-    class Meta:
-        model = 'billing.Invoice'
-
-    user = factory.SubFactory(OrganizerFactory)
-    stripe_invoice_id = factory.Sequence(lambda n: f'in_{n:024d}')
-    amount_cents = 0
-    currency = 'usd'
-    status = 'paid'
-
-
 class PaymentMethodFactory(DjangoModelFactory):
     """Factory for creating PaymentMethod instances."""
 

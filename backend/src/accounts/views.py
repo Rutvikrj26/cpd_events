@@ -49,21 +49,76 @@ class AuthThrottle(AnonRateThrottle):
 
 @roles("public", route_name="signup")
 class SignupView(generics.CreateAPIView):
-    """POST /api/v1/auth/signup/ - Disabled self-service signup endpoint."""
+    """POST /api/v1/auth/signup/ — self-service account creation.
+
+    Behavior is gated by ``REGISTRATION_MODE``:
+      * ``open``            — creates the user, sends a verification email, returns 201.
+      * ``admin_approval``  — creates the user with ``is_active=False``; admin approval
+                              is a later iteration, so for now we simply return 202.
+      * ``invite_only``     — returns 403 REGISTRATION_DISABLED.
+    """
 
     serializer_class = serializers.SignupSerializer
     permission_classes = [AllowAny]
     throttle_classes = [AuthThrottle]
 
     def create(self, request, *args, **kwargs):
+        if REGISTRATION_MODE == "invite_only":
+            return Response(
+                {
+                    "error": {
+                        "code": "REGISTRATION_DISABLED",
+                        "message": "Registration is by invitation only. Contact your administrator.",
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        existing = User.objects.filter(email__iexact=serializer.validated_data["email"]).first()
+        if existing is not None:
+            # Don't leak whether the email exists; ask them to log in or verify.
+            return Response(
+                {
+                    "error": {
+                        "code": "EMAIL_IN_USE",
+                        "message": "An account with this email already exists. Please log in or reset your password.",
+                    }
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        user = serializer.save()
+
+        if REGISTRATION_MODE == "admin_approval":
+            user.is_active = False
+            user.save(update_fields=["is_active", "updated_at"])
+            return Response(
+                {
+                    "message": "Account created and is pending admin approval.",
+                    "status": "pending_approval",
+                    "user": {"uuid": str(user.uuid), "email": user.email},
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+
+        # REGISTRATION_MODE == "open" — issue verification email.
+        token = user.generate_email_verification_token()
+        verification_url = f"{settings.FRONTEND_URL}/auth/verify-email?token={token}"
+        try:
+            send_email_verification(user.uuid, verification_url)
+        except Exception:
+            # Email delivery is best-effort; the user can request a resend.
+            pass
+
         return Response(
             {
-                "error": {
-                    "code": "REGISTRATION_DISABLED",
-                    "message": "Registration is by invitation only. Contact your administrator.",
-                }
+                "message": "Account created. Please check your email to verify your address before logging in.",
+                "user": {"uuid": str(user.uuid), "email": user.email, "full_name": user.full_name},
             },
-            status=status.HTTP_403_FORBIDDEN,
+            status=status.HTTP_201_CREATED,
         )
 
 
@@ -1526,4 +1581,155 @@ class AcceptInvitationView(generics.GenericAPIView):
                 },
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+# =============================================================================
+# Firebase Sign-In (Public)
+# =============================================================================
+
+
+@roles("public", route_name="firebase_auth")
+class FirebaseAuthView(generics.GenericAPIView):
+    """POST /api/v1/auth/firebase/ — sign in / sign up with a Firebase ID token.
+
+    The frontend uses the Firebase Web SDK to produce an ID token (e.g. from
+    ``signInWithPopup(GoogleAuthProvider)``) and POSTs it here. We verify the
+    token server-side with ``firebase-admin``, then either:
+
+      * **Link**: the email matches an existing user → populate ``firebase_uid``
+        (Google has proven email ownership, so we also mark the account
+        ``email_verified=True`` if it wasn't already).
+      * **Create**: no existing user → create a new account with
+        ``auth_provider='google'``, ``email_verified=True``, default learner role.
+
+    Gated by ``REGISTRATION_MODE`` the same way ``/auth/signup/`` is — if the
+    deployment is invite-only, unknown emails are rejected with
+    ``REGISTRATION_DISABLED``. Existing users can still link/sign in.
+    """
+
+    serializer_class = serializers.FirebaseAuthSerializer
+    permission_classes = [AllowAny]
+    throttle_classes = [AuthThrottle]
+
+    def post(self, request):
+        from accounts.firebase import FirebaseNotConfigured, verify_id_token
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        id_token = serializer.validated_data["id_token"]
+
+        try:
+            claims = verify_id_token(id_token)
+        except FirebaseNotConfigured as exc:
+            return Response(
+                {"error": {"code": "FIREBASE_NOT_CONFIGURED", "message": str(exc)}},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except ValueError as exc:
+            return Response(
+                {"error": {"code": "INVALID_TOKEN", "message": str(exc)}},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        firebase_uid = claims.get("uid") or claims.get("user_id")
+        email = (claims.get("email") or "").lower()
+        email_verified = bool(claims.get("email_verified", False))
+        full_name = claims.get("name") or claims.get("display_name") or ""
+
+        if not firebase_uid or not email:
+            return error_response(
+                "Firebase token is missing required claims.", code="INVALID_TOKEN", status_code=status.HTTP_401_UNAUTHORIZED
+            )
+
+        # For Google sign-in, Firebase always reports email_verified=True. Guard
+        # against providers that don't.
+        if not email_verified:
+            return error_response(
+                "The Firebase provider did not verify this email.",
+                code="EMAIL_NOT_VERIFIED",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        existing_by_uid = User.objects.filter(firebase_uid=firebase_uid).first()
+        existing_by_email = User.objects.filter(email__iexact=email).first()
+
+        if existing_by_uid and existing_by_email and existing_by_uid.pk != existing_by_email.pk:
+            # Two different local rows claim the same Firebase identity. Refuse.
+            return error_response(
+                "Account conflict — please contact support.",
+                code="ACCOUNT_CONFLICT",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+
+        user = existing_by_uid or existing_by_email
+
+        if user is None:
+            if REGISTRATION_MODE == "invite_only":
+                return Response(
+                    {
+                        "error": {
+                            "code": "REGISTRATION_DISABLED",
+                            "message": "Registration is by invitation only. Contact your administrator.",
+                        }
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            user = User.objects.create(
+                email=email,
+                full_name=full_name or email.split("@")[0],
+                firebase_uid=firebase_uid,
+                auth_provider="google",
+                email_verified=True,
+                email_verified_at=timezone.now(),
+                is_active=(REGISTRATION_MODE != "admin_approval"),
+            )
+            user.set_unusable_password()
+            user.save(update_fields=["password"])
+            user.assign_role("learner")
+        else:
+            dirty: list[str] = []
+            if not user.firebase_uid:
+                user.firebase_uid = firebase_uid
+                dirty.append("firebase_uid")
+            if not user.email_verified:
+                user.email_verified = True
+                user.email_verified_at = timezone.now()
+                dirty.extend(["email_verified", "email_verified_at"])
+            if dirty:
+                dirty.append("updated_at")
+                user.save(update_fields=dirty)
+
+        if not user.is_active:
+            return error_response(
+                "Account is not active. Contact your administrator.",
+                code="ACCOUNT_INACTIVE",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Claim any guest registrations keyed on this email.
+        from registrations.models import Registration
+
+        Registration.link_registrations_for_user(user)
+
+        user.record_login()
+
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        refresh = RefreshToken.for_user(user)
+
+        return Response(
+            {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": {
+                    "uuid": str(user.uuid),
+                    "email": user.email,
+                    "full_name": user.full_name,
+                    "roles": user.role_names,
+                    "primary_role": user.primary_role,
+                    "email_verified": user.email_verified,
+                },
+            },
+            status=status.HTTP_200_OK,
         )

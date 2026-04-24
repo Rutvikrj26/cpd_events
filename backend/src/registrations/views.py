@@ -301,27 +301,60 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
         if not registration.payment_intent_id:
             return error_response('No payment intent found for this registration.', code='NO_PAYMENT_INTENT')
 
+        amount_cents = serializer.validated_data.get('amount_cents')
+        if amount_cents is not None and amount_cents > int(registration.amount_paid * 100):
+            return error_response(
+                'Refund amount exceeds amount paid.',
+                code='REFUND_EXCEEDS_AMOUNT',
+            )
+
+        reason = serializer.validated_data['reason']
         try:
-            refund_payment_intent(registration.payment_intent_id, reason=serializer.validated_data.get('reason'))
+            stripe_result = refund_payment_intent(
+                registration.payment_intent_id,
+                amount_cents=amount_cents,
+                reason='requested_by_customer',
+            )
         except Exception as exc:
             return error_response(str(exc), code='REFUND_FAILED')
 
-        reason = serializer.validated_data.get('reason', 'Organizer refunded registration')
+        is_partial = amount_cents is not None and amount_cents < int(registration.amount_paid * 100)
 
-        if registration.status != Registration.Status.CANCELLED:
-            registration.cancel(reason=reason, cancelled_by=request.user)
-        elif reason and not registration.cancellation_reason:
-            registration.cancellation_reason = reason
-            registration.save(update_fields=['cancellation_reason', 'updated_at'])
+        if not is_partial:
+            if registration.status != Registration.Status.CANCELLED:
+                registration.cancel(reason=reason, cancelled_by=request.user)
+            elif reason and not registration.cancellation_reason:
+                registration.cancellation_reason = reason
+                registration.save(update_fields=['cancellation_reason', 'updated_at'])
 
-        registration.payment_status = Registration.PaymentStatus.REFUNDED
-        registration.save(update_fields=['payment_status', 'updated_at'])
+            registration.payment_status = Registration.PaymentStatus.REFUNDED
+            registration.save(update_fields=['payment_status', 'updated_at'])
+            try:
+                from promo_codes.models import PromoCodeUsage
+
+                PromoCodeUsage.release_for_registration(registration)
+            except Exception as e:
+                logger.warning("Failed to release promo code usage for %s: %s", registration.uuid, e)
+
         try:
-            from promo_codes.models import PromoCodeUsage
+            from accounts.audit import log_audit_event
 
-            PromoCodeUsage.release_for_registration(registration)
+            log_audit_event(
+                actor=request.user,
+                action='registration.refunded',
+                object_type='Registration',
+                object_uuid=str(registration.uuid),
+                metadata={
+                    'event_uuid': str(registration.event.uuid),
+                    'amount_cents': stripe_result.get('amount_cents'),
+                    'partial': is_partial,
+                    'reason': reason,
+                    'stripe_refund_id': stripe_result.get('refund_id'),
+                },
+                request=request,
+            )
         except Exception as e:
-            logger.warning("Failed to release promo code usage for %s: %s", registration.uuid, e)
+            logger.warning("Failed to audit registration refund for %s: %s", registration.uuid, e)
 
         return Response(serializers.RegistrationDetailSerializer(registration).data)
 

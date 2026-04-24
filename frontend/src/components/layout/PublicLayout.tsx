@@ -33,7 +33,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const location = useLocation();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, deployment } = useAuth();
+  const signupAllowed = (deployment?.registration_mode ?? 'open') !== 'invite_only';
 
   const isActive = (path: string) => location.pathname === path;
   const isActivePrefix = (prefix: string) => location.pathname.startsWith(prefix);
@@ -108,17 +109,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     </NavigationMenuContent>
                   </NavigationMenuItem>
 
-                  <NavigationMenuItem>
-                    <Link
-                      to="/pricing"
-                      className={cn(
-                        "group inline-flex h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground focus:outline-none",
-                        isActive('/pricing') ? 'text-foreground bg-muted' : 'text-muted-foreground'
-                      )}
-                    >
-                      Pricing
-                    </Link>
-                  </NavigationMenuItem>
 
                   <NavigationMenuItem>
                     <NavigationMenuTrigger>Resources</NavigationMenuTrigger>
@@ -202,12 +192,14 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                         Log in
                       </Button>
                     </Link>
-                    <Link to="/pricing">
-                      <Button size="sm" className="font-medium shadow-sm hover:shadow-md transition-all duration-200 glow-primary">
-                        Get Started
-                        <ArrowRight className="ml-1 h-4 w-4" />
-                      </Button>
-                    </Link>
+                    {signupAllowed && (
+                      <Link to="/signup">
+                        <Button size="sm" className="font-medium shadow-sm hover:shadow-md transition-all duration-200 glow-primary">
+                          Sign up
+                          <ArrowRight className="ml-1 h-4 w-4" />
+                        </Button>
+                      </Link>
+                    )}
                   </>
                 )}
               </div>
@@ -291,13 +283,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   Resources
                 </div>
                 <Link
-                  to="/pricing"
-                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Pricing
-                </Link>
-                <Link
                   to="/faq"
                   className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -338,9 +323,11 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     <Link to="/login" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
                       <Button variant="outline" className="w-full justify-center h-11">Log in</Button>
                     </Link>
-                    <Link to="/pricing" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
-                      <Button className="w-full justify-center h-11">Get Started</Button>
-                    </Link>
+                    {signupAllowed && (
+                      <Link to="/signup" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
+                        <Button className="w-full justify-center h-11">Sign up</Button>
+                      </Link>
+                    )}
                   </>
                 )}
               </div>
@@ -389,7 +376,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 <li><Link to="/features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</Link></li>
                 <li><Link to="/features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Video Conferencing</Link></li>
                 <li><Link to="/features/certificates" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Certificates</Link></li>
-                <li><Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</Link></li>
               </ul>
             </div>
 

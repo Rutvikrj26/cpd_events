@@ -23,6 +23,15 @@ export interface LoginRequest {
     password: string;
 }
 
+export interface SignupRequest {
+    email: string;
+    password: string;
+    password_confirm: string;
+    full_name: string;
+    professional_title?: string;
+    organization_name?: string;
+}
+
 export interface RefreshTokenRequest {
     refresh: string;
 }

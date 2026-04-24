@@ -75,7 +75,10 @@ def _frontend_url(path: str) -> str:
 
 
 def _success_and_cancel(kind: str) -> tuple[str, str]:
-    success = _frontend_url("/checkout/success?session_id={CHECKOUT_SESSION_ID}")
+    # Include ``kind`` in success too so /checkout/success can route the
+    # learner to the right dashboard (events → /registrations, courses →
+    # /dashboard, programs → /my-programs) without a second API round-trip.
+    success = _frontend_url(f"/checkout/success?session_id={{CHECKOUT_SESSION_ID}}&kind={kind}")
     cancel = _frontend_url(f"/checkout/cancel?kind={kind}")
     return success, cancel
 
@@ -247,70 +250,6 @@ class CheckoutService:
         logger.info(
             "stripe.checkout.program_enrollment",
             extra={"session_id": session.id, "program_uuid": str(program.uuid), "user_id": user.pk},
-        )
-        return CheckoutResult(url=session.url, session_id=session.id)
-
-    # ------------------------------------------------------------------
-    # Subscription signup
-    # ------------------------------------------------------------------
-    def for_subscription(self, user, plan) -> CheckoutResult:
-        if not plan.stripe_price_id:
-            raise ValueError(
-                f"InstitutionPlan '{plan.name}' has no stripe_price_id — "
-                "run `python manage.py sync_institution_plans` first."
-            )
-
-        stripe = get_stripe()
-        customer_id = get_or_create_stripe_customer(user)
-        success_url, cancel_url = _success_and_cancel("subscription")
-
-        session = stripe.checkout.Session.create(
-            mode="subscription",
-            line_items=[{"price": plan.stripe_price_id, "quantity": 1}],
-            customer=customer_id,
-            client_reference_id=str(plan.uuid),
-            metadata={
-                "kind": "subscription_signup",
-                "plan_uuid": str(plan.uuid),
-                "user_id": str(user.pk),
-                "env": _env_tag(),
-            },
-            subscription_data={
-                "metadata": {
-                    "user_id": str(user.pk),
-                    "user_uuid": str(user.uuid),
-                    "plan_uuid": str(plan.uuid),
-                    "env": _env_tag(),
-                },
-            },
-            automatic_tax={"enabled": True},
-            allow_promotion_codes=True,
-            customer_update={"address": "auto", "name": "auto"},
-            billing_address_collection="required",
-            success_url=success_url,
-            cancel_url=cancel_url,
-            idempotency_key=f"checkout:subscribe:{plan.uuid}:user:{user.uuid}:v1",
-        )
-        logger.info(
-            "stripe.checkout.subscription_signup",
-            extra={"session_id": session.id, "plan_uuid": str(plan.uuid), "user_id": user.pk},
-        )
-        return CheckoutResult(url=session.url, session_id=session.id)
-
-    # ------------------------------------------------------------------
-    # Customer Portal (self-serve billing)
-    # ------------------------------------------------------------------
-    def for_customer_portal(self, user, return_url: str | None = None) -> CheckoutResult:
-        stripe = get_stripe()
-        customer_id = get_or_create_stripe_customer(user)
-        return_url = return_url or _frontend_url("/settings?tab=billing")
-        session = stripe.billing_portal.Session.create(
-            customer=customer_id,
-            return_url=return_url,
-        )
-        logger.info(
-            "stripe.portal.session",
-            extra={"session_id": session.id, "user_id": user.pk},
         )
         return CheckoutResult(url=session.url, session_id=session.id)
 

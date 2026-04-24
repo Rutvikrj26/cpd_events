@@ -25,6 +25,17 @@ export interface Program {
     is_free: boolean;
     sum_individual_price_cents: number;
     bundle_savings_cents: number;
+    /** Populated for the authenticated viewer: courses in this program that
+     *  the viewer has already paid for individually. Used to warn against
+     *  double-charging when purchasing the bundle. Empty list for anonymous
+     *  or unauthenticated viewers. */
+    already_paid_for_courses?: Array<{
+        course_uuid: string;
+        course_title: string;
+        amount_cents: number;
+        currency: string;
+        purchased_at: string | null;
+    }>;
     stripe_price_id?: string;
     course_count: number;
     enrollment_count: number;

@@ -124,6 +124,11 @@ def sync_to_stripe(promo_code: PromoCode) -> PromoCode:
 def record_usage_from_checkout_session(session_data: dict, registration=None, user=None):
     """Write ``PromoCodeUsage`` rows for a completed Checkout Session.
 
+    Idempotent: safe to invoke multiple times for the same session. Uniqueness
+    comes from the ``(registration, promo_code)`` unique constraint on
+    ``PromoCodeUsage`` — repeated calls become no-ops instead of duplicating
+    rows or double-incrementing ``current_uses``.
+
     Called by the fulfilment handler. ``session_data`` is the raw dict of a
     ``stripe.checkout.Session``; we inspect ``total_details.breakdown.discounts``
     for every applied promotion code and resolve it to a local ``PromoCode``
@@ -135,7 +140,7 @@ def record_usage_from_checkout_session(session_data: dict, registration=None, us
     breakdown = total_details.get("breakdown") or {}
     discounts = breakdown.get("discounts") or []
 
-    if not discounts:
+    if not discounts or registration is None:
         return []
 
     amount_subtotal = session_data.get("amount_subtotal") or 0
@@ -161,25 +166,28 @@ def record_usage_from_checkout_session(session_data: dict, registration=None, us
         discount_amount = Decimal(discount_cents) / Decimal("100")
         final_price = max(Decimal("0.00"), original_price - discount_amount)
 
-        usage = PromoCodeUsage.objects.create(
-            promo_code=local,
+        usage, created = PromoCodeUsage.objects.get_or_create(
             registration=registration,
-            user_email=(registration.email if registration else (user.email if user else "")),
-            user=user or (registration.user if registration else None),
-            original_price=original_price,
-            discount_amount=discount_amount,
-            final_price=final_price,
+            promo_code=local,
+            defaults=dict(
+                user_email=(registration.email or (user.email if user else "")),
+                user=user or registration.user,
+                original_price=original_price,
+                discount_amount=discount_amount,
+                final_price=final_price,
+            ),
         )
-        local.increment_usage()
+        if created:
+            local.increment_usage()
+            logger.info(
+                "stripe.promo.usage_recorded",
+                extra={
+                    "promo_uuid": str(local.uuid),
+                    "registration_uuid": str(registration.uuid),
+                    "discount_amount": str(discount_amount),
+                    "currency": currency,
+                },
+            )
         usages.append(usage)
-        logger.info(
-            "stripe.promo.usage_recorded",
-            extra={
-                "promo_uuid": str(local.uuid),
-                "registration_uuid": str(registration.uuid) if registration else None,
-                "discount_amount": str(discount_amount),
-                "currency": currency,
-            },
-        )
 
     return usages

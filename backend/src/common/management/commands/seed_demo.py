@@ -49,7 +49,6 @@ class Command(BaseCommand):
         with transaction.atomic():
             users = self._build_users(now)
             templates = self._build_templates(now, users)
-            plans = self._build_billing_plans()
             speakers = self._build_speakers(users)
             events = self._build_events(now, users, templates, speakers)
             sessions = self._build_event_sessions(now, events)
@@ -62,7 +61,7 @@ class Command(BaseCommand):
             self._build_badges(now, users, registrations, enrollments, templates)
             self._build_feedback(now, events, registrations)
             self._build_discussions(now, users, courses)
-            self._build_billing(now, users, plans, events, courses)
+            self._build_billing(now, users, events, courses)
             self._build_promo_codes(now, users, events, registrations)
             self._build_notifications(now, users, events, courses)
             self._build_audit_log(now, users)
@@ -251,62 +250,6 @@ class Command(BaseCommand):
             "badge_ethics": badge_template,
             "badge_cpd": badge_template_cpd,
         }
-
-    # ------------------------------------------------------------------
-    # Billing plans (institution plans)
-    # ------------------------------------------------------------------
-    def _build_billing_plans(self):
-        from billing.models import InstitutionBillingConfig, InstitutionPlan
-
-        config, _ = InstitutionBillingConfig.objects.get_or_create(
-            pk=1,
-            defaults=dict(
-                pricing_model=InstitutionBillingConfig.PricingModel.HYBRID,
-                default_currency="CAD",
-            ),
-        )
-
-        basic, _ = InstitutionPlan.objects.update_or_create(
-            name="Basic",
-            defaults=dict(
-                description="Up to 5 courses per month, with certificate support.",
-                price_cents=2900,
-                billing_interval=InstitutionPlan.BillingInterval.MONTH,
-                includes_all_courses=False,
-                is_active=True,
-                sort_order=1,
-                features_list=["5 courses / month", "Certificate downloads", "Email support"],
-            ),
-        )
-        premium, _ = InstitutionPlan.objects.update_or_create(
-            name="Premium",
-            defaults=dict(
-                description="Access to every course and event, CPD tracking included.",
-                price_cents=9900,
-                billing_interval=InstitutionPlan.BillingInterval.MONTH,
-                includes_all_courses=True,
-                includes_all_events=True,
-                is_active=True,
-                is_featured=True,
-                sort_order=2,
-                features_list=["All courses", "All events", "CPD tracking", "Priority support"],
-            ),
-        )
-        annual, _ = InstitutionPlan.objects.update_or_create(
-            name="All Access Annual",
-            defaults=dict(
-                description="Everything in Premium, billed yearly at a discount.",
-                price_cents=99000,
-                billing_interval=InstitutionPlan.BillingInterval.YEAR,
-                includes_all_courses=True,
-                includes_all_events=True,
-                is_active=True,
-                sort_order=3,
-                features_list=["All courses", "All events", "Annual CPD report", "Dedicated contact"],
-            ),
-        )
-
-        return {"config": config, "basic": basic, "premium": premium, "annual": annual}
 
     # ------------------------------------------------------------------
     # Speakers
@@ -1331,60 +1274,8 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
     # Billing
     # ------------------------------------------------------------------
-    def _build_billing(self, now, users, plans, events, courses):
-        from billing.models import CoursePurchase, Invoice, PaymentMethod, RefundRecord, Subscription
-
-        # Emily: active premium subscription
-        Subscription.objects.update_or_create(
-            user=users["emily"],
-            defaults=dict(
-                institution_plan=plans["premium"],
-                status=Subscription.Status.ACTIVE,
-                stripe_subscription_id="sub_demo_emily",
-                stripe_customer_id="cus_demo_emily",
-                current_period_start=now - timedelta(days=15),
-                current_period_end=now + timedelta(days=15),
-            ),
-        )
-        # Michael: cancelled subscription (shows reactivate)
-        Subscription.objects.update_or_create(
-            user=users["michael"],
-            defaults=dict(
-                institution_plan=plans["basic"],
-                status=Subscription.Status.CANCELED,
-                stripe_subscription_id="sub_demo_michael",
-                stripe_customer_id="cus_demo_michael",
-                current_period_start=now - timedelta(days=60),
-                current_period_end=now - timedelta(days=30),
-                canceled_at=now - timedelta(days=30),
-            ),
-        )
-
-        # Invoices
-        Invoice.objects.update_or_create(
-            stripe_invoice_id="in_demo_emily_1",
-            defaults=dict(
-                user=users["emily"], amount_cents=9900, currency="cad",
-                status=Invoice.Status.PAID, paid_at=now - timedelta(days=15),
-                period_start=now - timedelta(days=45), period_end=now - timedelta(days=15),
-            ),
-        )
-        Invoice.objects.update_or_create(
-            stripe_invoice_id="in_demo_emily_2",
-            defaults=dict(
-                user=users["emily"], amount_cents=9900, currency="cad",
-                status=Invoice.Status.PAID, paid_at=now - timedelta(days=45),
-                period_start=now - timedelta(days=75), period_end=now - timedelta(days=45),
-            ),
-        )
-        Invoice.objects.update_or_create(
-            stripe_invoice_id="in_demo_michael_1",
-            defaults=dict(
-                user=users["michael"], amount_cents=2900, currency="cad",
-                status=Invoice.Status.VOID,
-                period_start=now - timedelta(days=60), period_end=now - timedelta(days=30),
-            ),
-        )
+    def _build_billing(self, now, users, events, courses):
+        from billing.models import CoursePurchase, PaymentMethod, RefundRecord
 
         # Payment methods
         PaymentMethod.objects.update_or_create(

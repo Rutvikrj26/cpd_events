@@ -60,6 +60,7 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
             ? parseFloat(course.estimated_hours) || 0
             : (course.estimated_hours ?? 0),
         price_cents: course.price_cents ?? 0,
+        currency: course.currency ?? 'USD',
         is_public: course.is_public ?? true,
         enrollment_open: course.enrollment_open ?? true,
         max_enrollments: course.max_enrollments ?? 0,
@@ -272,29 +273,46 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
                     <Card>
                         <CardHeader>
                             <CardTitle>Pricing</CardTitle>
-                            <CardDescription>Set your course price</CardDescription>
+                            <CardDescription>Set your course price. Enter the amount in cents (e.g. 4900 = $49.00).</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="price">Price (in pence/cents)</Label>
-                                <div className="flex items-center gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="price">Price (cents)</Label>
                                     <Input
                                         id="price"
                                         type="number"
                                         min="0"
-                                        className="max-w-[200px]"
                                         value={formData.price_cents}
                                         onChange={(e) => setFormData({ ...formData, price_cents: parseInt(e.target.value) || 0 })}
                                     />
-                                    <p className="text-sm font-medium">
-                                        {formData.price_cents === 0 ? (
-                                            <Badge variant="secondary">Free Course</Badge>
-                                        ) : (
-                                            `£${(formData.price_cents / 100).toFixed(2)}`
-                                        )}
-                                    </p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="currency">Currency</Label>
+                                    <select
+                                        id="currency"
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                        value={formData.currency}
+                                        onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                                    >
+                                        <option value="USD">USD</option>
+                                        <option value="CAD">CAD</option>
+                                        <option value="GBP">GBP</option>
+                                        <option value="EUR">EUR</option>
+                                        <option value="AUD">AUD</option>
+                                    </select>
                                 </div>
                             </div>
+                            <p className="text-sm font-medium">
+                                {formData.price_cents === 0 ? (
+                                    <Badge variant="secondary">Free Course</Badge>
+                                ) : (
+                                    new Intl.NumberFormat('en-US', {
+                                        style: 'currency',
+                                        currency: formData.currency || 'USD',
+                                    }).format(formData.price_cents / 100)
+                                )}
+                            </p>
                         </CardContent>
                     </Card>
 

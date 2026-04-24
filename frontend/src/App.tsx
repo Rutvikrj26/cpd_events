@@ -17,7 +17,6 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { TermsPage } from './pages/public/TermsPage';
 import { PrivacyPage } from './pages/public/PrivacyPage';
 import { CookiePolicyPage } from './pages/public/CookiePolicyPage';
-import { PricingPage } from './pages/public/PricingPage';
 import { PublicLayout } from './components/layout/PublicLayout';
 
 // Learner browsing (reused from public pages, now behind auth)
@@ -31,6 +30,7 @@ import { PublicProgramDetailPage } from './pages/programs/PublicProgramDetailPag
 
 // Auth Pages
 import { LoginPage } from "@/pages/auth/LoginPage";
+import { SignupPage } from "@/pages/auth/SignupPage";
 import { VerifyEmailPage } from "@/pages/auth/VerifyEmailPage";
 import { CheckEmailPage } from "@/pages/auth/CheckEmailPage";
 import { ForgotPasswordPage } from "@/pages/auth/ForgotPasswordPage";
@@ -83,6 +83,7 @@ import ProgramManagementPage from './pages/organizations/programs/ProgramManagem
 // Admin Pages
 import { UserManagementPage } from './pages/admin/UserManagementPage';
 import { AdminUserDetailPage } from './pages/admin/AdminUserDetailPage';
+import { BillingAdminPage } from './pages/admin/BillingAdminPage';
 
 // Onboarding
 import { OnboardingWizard } from './pages/onboarding';
@@ -126,13 +127,6 @@ export default function App() {
               <Route path="/verify/:code" element={<CertificateVerify />} />
               <Route path="/badges/verify/:code" element={<PublicBadgePage />} />
 
-              {/* Public pricing */}
-              <Route path="/pricing" element={
-                <PublicLayout>
-                  <PricingPage />
-                </PublicLayout>
-              } />
-
               {/* Public event, course & program pages */}
               <Route path="/discover/events" element={<EventDiscovery />} />
               <Route path="/discover/courses" element={<CourseCatalogPage />} />
@@ -152,7 +146,11 @@ export default function App() {
                   <LoginPage />
                 </AuthLayout>
               } />
-              <Route path="/signup" element={<Navigate to="/login" replace />} />
+              <Route path="/signup" element={
+                <AuthLayout>
+                  <SignupPage />
+                </AuthLayout>
+              } />
 
               <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
               <Route path="/auth/check-email" element={<CheckEmailPage />} />
@@ -273,6 +271,11 @@ export default function App() {
                   <Route path="/admin/users/:uuid" element={
                     <ProtectedRoute requiredFeature="manage_users">
                       <AdminUserDetailPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/admin/billing" element={
+                    <ProtectedRoute>
+                      <BillingAdminPage />
                     </ProtectedRoute>
                   } />
 

@@ -28,12 +28,12 @@ describe("LandingPage", () => {
         expect(browseLinks[0]).toHaveAttribute("href", "/events/browse");
     });
 
-    it("has Start Creating CTA button for providers", () => {
+    it("has Get Started CTA button routed to signup", () => {
         renderLandingPage();
 
-        const startLinks = screen.getAllByRole("link", { name: /start creating/i });
+        const startLinks = screen.getAllByRole("link", { name: /get started/i });
         expect(startLinks.length).toBeGreaterThan(0);
-        expect(startLinks[0]).toHaveAttribute("href", "/pricing");
+        expect(startLinks[0]).toHaveAttribute("href", "/signup");
     });
 
     it("renders Why Learners Choose Accredit section", () => {

@@ -40,7 +40,6 @@ def reconcile(hours: int = OVERLAP_HOURS) -> dict[str, Any]:
     findings: list[DriftFinding] = []
     findings.extend(_reconcile_checkout_sessions(since_ts))
     findings.extend(_reconcile_payment_intents(since_ts))
-    findings.extend(_reconcile_subscriptions(since_ts))
     findings.extend(_reconcile_refunds(since_ts))
     findings.extend(_reconcile_disputes(since_ts))
 
@@ -168,35 +167,6 @@ def _reconcile_payment_intents(since_ts: int) -> Iterable[DriftFinding]:
                     "stripe_status": intent.status,
                     "local_payment_status": reg.payment_status,
                 },
-            )
-
-
-# ---------------------------------------------------------------------------
-# Subscriptions
-# ---------------------------------------------------------------------------
-
-
-def _reconcile_subscriptions(since_ts: int) -> Iterable[DriftFinding]:
-    from billing.models import Subscription
-
-    stripe = get_stripe()
-    remote = stripe.Subscription.list(created={"gte": since_ts}, limit=100)
-    for sub in remote.auto_paging_iter():
-        local = Subscription.objects.filter(stripe_subscription_id=sub.id).first()
-        if not local:
-            yield DriftFinding(
-                kind="missing_local",
-                entity="Subscription",
-                stripe_id=sub.id,
-                detail={"customer": sub.customer, "status": sub.status},
-            )
-            continue
-        if local.status != sub.status:
-            yield DriftFinding(
-                kind="state_mismatch",
-                entity="Subscription",
-                stripe_id=sub.id,
-                detail={"local_status": local.status, "stripe_status": sub.status},
             )
 
 

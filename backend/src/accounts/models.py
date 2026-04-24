@@ -82,6 +82,14 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     google_user_id = models.CharField(
         max_length=255, blank=True, null=True, unique=True, db_index=True, help_text="Google user ID for OAuth"
     )
+    firebase_uid = models.CharField(
+        max_length=128,
+        blank=True,
+        null=True,
+        unique=True,
+        db_index=True,
+        help_text="Firebase UID; set on first successful Firebase-backed sign-in (e.g., Google).",
+    )
     auth_provider = models.CharField(
         max_length=20,
         choices=[("local", "Local"), ("google", "Google")],

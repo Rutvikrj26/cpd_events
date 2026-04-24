@@ -2,13 +2,17 @@
 Learning API views.
 """
 
+import logging
+
 from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import parsers, permissions, serializers, status, views, viewsets
+from rest_framework import generics, parsers, permissions, serializers, status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+
+logger = logging.getLogger(__name__)
 
 from common.permissions import IsContentCreator
 from common.rbac import roles
@@ -68,6 +72,7 @@ from .serializers import (
     ModuleProgressSerializer,
     ProgramCourseEntrySerializer,
     ProgramCreateSerializer,
+    ProgramEnrollmentRosterSerializer,
     ProgramEnrollmentSerializer,
     ProgramListSerializer,
     ProgramSerializer,
@@ -617,7 +622,33 @@ class CourseViewSet(viewsets.ModelViewSet):
         from rest_framework.exceptions import PermissionDenied
         if not serializer.instance.can_manage(self.request.user):
             raise PermissionDenied("You do not have permission to update this course.")
-        serializer.save()
+
+        # Capture price/currency before save so we can audit any change.
+        old = serializer.instance
+        old_price_cents = old.price_cents
+        old_currency = old.currency
+
+        instance = serializer.save()
+
+        if instance.price_cents != old_price_cents or instance.currency != old_currency:
+            try:
+                from accounts.audit import log_audit_event
+
+                log_audit_event(
+                    actor=self.request.user,
+                    action='course.price_changed',
+                    object_type='Course',
+                    object_uuid=str(instance.uuid),
+                    metadata={
+                        'from_price_cents': old_price_cents,
+                        'to_price_cents': instance.price_cents,
+                        'from_currency': old_currency,
+                        'to_currency': instance.currency,
+                    },
+                    request=self.request,
+                )
+            except Exception:
+                logger.warning('audit log failed for course price change %s', instance.uuid, exc_info=True)
 
     def perform_destroy(self, instance):
         from rest_framework.exceptions import PermissionDenied
@@ -733,6 +764,36 @@ class CourseViewSet(viewsets.ModelViewSet):
             if c.period_enrollments
         ]
 
+        # --- Revenue (CoursePurchase, course-scoped) ---------------------
+        from django.db.models import Sum
+
+        from billing.models import CoursePurchase
+
+        purchases_in_period = CoursePurchase.objects.filter(
+            course__in=courses,
+            created_at__gte=start,
+            created_at__lte=now,
+        )
+        completed = purchases_in_period.filter(status=CoursePurchase.Status.COMPLETED)
+        refunded = purchases_in_period.filter(status=CoursePurchase.Status.REFUNDED)
+
+        gross_cents = completed.aggregate(total=Sum('amount_cents'))['total'] or 0
+        refund_cents = refunded.aggregate(total=Sum('amount_cents'))['total'] or 0
+        net_cents = gross_cents - refund_cents
+
+        recent_transactions = [
+            {
+                'purchase_uuid': str(p.uuid),
+                'course_title': p.course.title if p.course else '',
+                'user_name': getattr(p.user, 'full_name', None) or getattr(p.user, 'email', ''),
+                'amount_cents': p.amount_cents,
+                'currency': p.currency,
+                'status': p.status,
+                'created_at': p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in purchases_in_period.select_related('course', 'user').order_by('-created_at')[:10]
+        ]
+
         return Response(
             {
                 'summary': {
@@ -740,11 +801,17 @@ class CourseViewSet(viewsets.ModelViewSet):
                     'completions': completions_in_period,
                     'completion_rate': completion_rate,
                     'courses_published': courses.filter(status=Course.Status.PUBLISHED).count(),
+                    'gross_revenue_cents': gross_cents,
+                    'refunds_cents': refund_cents,
+                    'net_revenue_cents': net_cents,
+                    'purchase_count': completed.count(),
+                    'refund_count': refunded.count(),
                 },
                 'trends': trends,
                 'status_breakdown': status_breakdown,
                 'recent_enrollments': recent_enrollments,
                 'top_courses': top_courses,
+                'recent_transactions': recent_transactions,
             }
         )
 
@@ -759,6 +826,130 @@ class CourseViewSet(viewsets.ModelViewSet):
 
         enrollments = CourseEnrollment.objects.filter(course=course).select_related('user').order_by('-enrolled_at')
         return Response(CourseEnrollmentRosterSerializer(enrollments, many=True).data)
+
+    @action(detail=True, methods=['post'], url_path='refund-enrollment')
+    def refund_enrollment(self, request, uuid=None):
+        """Refund a learner's course purchase and revoke their enrollment.
+
+        Body: ``{enrollment_uuid: UUID, reason: str, amount_cents?: int}``.
+
+        Matches the CoursePurchase for the same (user, course) pair, calls
+        Stripe with an optional partial amount, marks the purchase REFUNDED
+        (full only), drops the enrollment, and writes an audit entry.
+        """
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+
+        from billing.models import CoursePurchase
+        from billing.services import refund_payment_intent
+
+        course = self.get_object()
+        if not (course.can_manage(request.user) or course.can_instruct(request.user)):
+            raise PermissionDenied("You do not have permission to refund enrollments for this course.")
+
+        enrollment_uuid = request.data.get('enrollment_uuid')
+        reason = (request.data.get('reason') or '').strip()
+        amount_cents = request.data.get('amount_cents')
+
+        if not enrollment_uuid:
+            raise ValidationError({'enrollment_uuid': 'required'})
+        if not reason:
+            raise ValidationError({'reason': 'required'})
+        if amount_cents is not None:
+            try:
+                amount_cents = int(amount_cents)
+            except (TypeError, ValueError):
+                raise ValidationError({'amount_cents': 'must be an integer'}) from None
+            if amount_cents <= 0:
+                raise ValidationError({'amount_cents': 'must be positive'})
+
+        enrollment = (
+            CourseEnrollment.objects
+            .filter(course=course, uuid=enrollment_uuid)
+            .select_related('user', 'from_program_enrollment__program')
+            .first()
+        )
+        if enrollment is None:
+            return Response({'error': {'code': 'ENROLLMENT_NOT_FOUND'}}, status=status.HTTP_404_NOT_FOUND)
+
+        # Refunds for program-seeded enrollments must be issued at the program
+        # level so the cascade revokes access to every member course. Surfacing
+        # that here keeps the data invariant explicit.
+        if enrollment.from_program_enrollment_id:
+            parent = enrollment.from_program_enrollment
+            return Response(
+                {
+                    'error': {
+                        'code': 'PROGRAM_SEEDED',
+                        'message': 'This enrollment was created by a program purchase. Refund the program instead.',
+                        'program_uuid': str(parent.program.uuid),
+                        'program_enrollment_uuid': str(parent.uuid),
+                        'program_title': parent.program.title,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        purchase = (
+            CoursePurchase.objects
+            .filter(user=enrollment.user, course=course)
+            .exclude(status=CoursePurchase.Status.REFUNDED)
+            .order_by('-created_at')
+            .first()
+        )
+        if purchase is None:
+            return Response(
+                {'error': {'code': 'NO_PURCHASE', 'message': 'No refundable purchase found for this enrollment.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not purchase.stripe_payment_intent_id:
+            return Response(
+                {'error': {'code': 'NO_PAYMENT_INTENT'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if amount_cents is not None and amount_cents > purchase.amount_cents:
+            return Response(
+                {'error': {'code': 'REFUND_EXCEEDS_AMOUNT'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            stripe_result = refund_payment_intent(
+                purchase.stripe_payment_intent_id,
+                amount_cents=amount_cents,
+                reason='requested_by_customer',
+            )
+        except Exception as exc:
+            return Response({'error': {'code': 'REFUND_FAILED', 'message': str(exc)}}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_partial = amount_cents is not None and amount_cents < purchase.amount_cents
+        if not is_partial:
+            purchase.status = CoursePurchase.Status.REFUNDED
+            purchase.save(update_fields=['status', 'updated_at'])
+            enrollment.status = CourseEnrollment.Status.DROPPED
+            enrollment.save(update_fields=['status', 'updated_at'])
+
+        try:
+            from accounts.audit import log_audit_event
+
+            log_audit_event(
+                actor=request.user,
+                action='course_purchase.refunded',
+                object_type='CoursePurchase',
+                object_uuid=str(purchase.uuid),
+                metadata={
+                    'course_uuid': str(course.uuid),
+                    'enrollment_uuid': str(enrollment.uuid),
+                    'amount_cents': stripe_result.get('amount_cents'),
+                    'partial': is_partial,
+                    'reason': reason,
+                    'stripe_refund_id': stripe_result.get('refund_id'),
+                },
+                request=request,
+            )
+        except Exception:
+            logger.warning('audit log failed for course refund %s', purchase.uuid, exc_info=True)
+
+        return Response(CourseEnrollmentRosterSerializer(enrollment).data)
 
     @action(detail=True, methods=['get'], url_path='progress')
     def progress(self, request, uuid=None):
@@ -1456,6 +1647,105 @@ class CourseAnnouncementViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='program_announcements')
+class ProgramAnnouncementViewSet(viewsets.ModelViewSet):
+    """Announcements for a program. Re-uses the ``CourseAnnouncement`` table
+    with the ``program`` FK populated (``course`` is NULL)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = CourseAnnouncementSerializer
+    lookup_field = 'uuid'
+
+    def get_program(self):
+        program_uuid = self.kwargs.get('program_uuid')
+        return get_object_or_404(Program, uuid=program_uuid)
+
+    def _is_program_staff(self, program):
+        return program.can_manage(self.request.user)
+
+    def get_queryset(self):
+        program = self.get_program()
+        queryset = CourseAnnouncement.objects.filter(program=program)
+
+        if self._is_program_staff(program):
+            return queryset
+
+        enrolled = ProgramEnrollment.objects.filter(
+            user=self.request.user,
+            program=program,
+            status__in=[ProgramEnrollment.Status.ACTIVE, ProgramEnrollment.Status.COMPLETED],
+        ).exists()
+        if not enrolled:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("You do not have access to this program.")
+
+        return queryset.filter(is_published=True)
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self.get_program()
+        if not self._is_program_staff(program):
+            raise PermissionDenied("You do not have access to this program.")
+        serializer.save(program=program, created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self.get_program()
+        if not self._is_program_staff(program):
+            raise PermissionDenied("You do not have access to this program.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self.get_program()
+        if not self._is_program_staff(program):
+            raise PermissionDenied("You do not have access to this program.")
+        instance.delete()
+
+
+@roles('organizer', 'instructor', 'admin', route_name='program_discussion')
+class ProgramDiscussionView(generics.GenericAPIView):
+    """Aggregated discussion view across a program's member courses.
+
+    We intentionally don't fork the Discussion model for programs —
+    learners discuss inside individual courses. This endpoint surfaces
+    recent threads across every member course so an admin has one place
+    to see what's active at the program level.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, program_uuid=None):
+        from rest_framework.exceptions import PermissionDenied
+
+        from learning.models import DiscussionThread
+        from learning.serializers import DiscussionThreadListSerializer
+
+        program = get_object_or_404(Program, uuid=program_uuid)
+        if not program.can_manage(request.user):
+            raise PermissionDenied("You do not have access to this program.")
+
+        course_ids = list(
+            program.program_courses.values_list('course_id', flat=True)
+        )
+        threads = (
+            DiscussionThread.objects
+            .filter(course_id__in=course_ids, deleted_at__isnull=True)
+            .select_related('course', 'author')
+            .order_by('-last_activity_at')[:50]
+        )
+        return Response(
+            {
+                'threads': DiscussionThreadListSerializer(threads, many=True).data,
+                'member_course_count': len(course_ids),
+            }
+        )
+
+
 @roles('organizer', 'instructor', 'admin', route_name='course_sessions')
 class CourseSessionViewSet(viewsets.ModelViewSet):
     """
@@ -1822,7 +2112,9 @@ class ProgramViewSet(viewsets.ModelViewSet):
         if owned:
             return queryset.filter(created_by=user).distinct()
 
-        if self.action in ['list', 'retrieve']:
+        # ``enroll_free`` is a learner-facing action on any published public
+        # program — not just programs the learner owns. Treat it like retrieve.
+        if self.action in ['list', 'retrieve', 'enroll_free']:
             return queryset.filter(
                 models.Q(is_public=True, status=Program.Status.PUBLISHED)
                 | models.Q(created_by=user)
@@ -1879,6 +2171,347 @@ class ProgramViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(ProgramSerializer(program).data)
+
+    @action(detail=True, methods=['get'], url_path='analytics')
+    def analytics(self, request, uuid=None):
+        """Per-program analytics: enrollments, completions, revenue.
+
+        Uses the same ``period`` shape as the cohort ``reports`` action but
+        scoped to a single program. Revenue is drawn from
+        ``CoursePurchase.program`` so it only exists once the program has
+        been purchased since the schema landed; legacy Stripe Sessions are
+        surfaced via /admin/billing/reconcile if missing.
+        """
+        from datetime import datetime, timedelta
+
+        from django.db.models import Count, Sum
+        from django.db.models.functions import TruncDate
+        from django.utils import timezone
+        from rest_framework.exceptions import PermissionDenied
+
+        from billing.models import CoursePurchase
+
+        program = self.get_object()
+        if not program.can_manage(request.user):
+            raise PermissionDenied("You do not have access to this program's analytics.")
+
+        now = timezone.now()
+        period = request.query_params.get('period', 'last-30-days')
+        if period == 'last-7-days':
+            start = now - timedelta(days=7)
+        elif period == 'last-90-days':
+            start = now - timedelta(days=90)
+        elif period == 'this-year':
+            start = timezone.make_aware(datetime(now.year, 1, 1))
+        else:
+            start = now - timedelta(days=30)
+
+        enrollments = ProgramEnrollment.objects.filter(
+            program=program, enrolled_at__gte=start, enrolled_at__lte=now,
+        )
+        total_enrollments = enrollments.count()
+        completions = ProgramEnrollment.objects.filter(
+            program=program, completed_at__gte=start, completed_at__lte=now,
+        ).count()
+        completion_rate = round((completions / total_enrollments) * 100, 1) if total_enrollments else None
+
+        trends = [
+            {'date': row['day'].isoformat() if row['day'] else None, 'count': row['count']}
+            for row in (
+                enrollments.annotate(day=TruncDate('enrolled_at'))
+                .values('day').annotate(count=Count('id')).order_by('day')
+            )
+        ]
+
+        status_breakdown = [
+            {'label': 'Active', 'count': enrollments.filter(status=ProgramEnrollment.Status.ACTIVE).count()},
+            {'label': 'Completed', 'count': enrollments.filter(status=ProgramEnrollment.Status.COMPLETED).count()},
+            {'label': 'Dropped', 'count': enrollments.filter(status=ProgramEnrollment.Status.DROPPED).count()},
+        ]
+
+        purchases_in_period = CoursePurchase.objects.filter(
+            program=program, created_at__gte=start, created_at__lte=now,
+        )
+        completed = purchases_in_period.filter(status=CoursePurchase.Status.COMPLETED)
+        refunded = purchases_in_period.filter(status=CoursePurchase.Status.REFUNDED)
+        gross_cents = completed.aggregate(total=Sum('amount_cents'))['total'] or 0
+        refund_cents = refunded.aggregate(total=Sum('amount_cents'))['total'] or 0
+
+        recent_transactions = [
+            {
+                'purchase_uuid': str(p.uuid),
+                'user_name': getattr(p.user, 'full_name', None) or getattr(p.user, 'email', ''),
+                'amount_cents': p.amount_cents,
+                'currency': p.currency,
+                'status': p.status,
+                'created_at': p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in purchases_in_period.select_related('user').order_by('-created_at')[:10]
+        ]
+
+        return Response(
+            {
+                'summary': {
+                    'total_enrollments': total_enrollments,
+                    'completions': completions,
+                    'completion_rate': completion_rate,
+                    'gross_revenue_cents': gross_cents,
+                    'refunds_cents': refund_cents,
+                    'net_revenue_cents': gross_cents - refund_cents,
+                    'purchase_count': completed.count(),
+                    'refund_count': refunded.count(),
+                },
+                'trends': trends,
+                'status_breakdown': status_breakdown,
+                'recent_transactions': recent_transactions,
+            }
+        )
+
+    @action(detail=True, methods=['post'], url_path='sync-stripe')
+    def sync_stripe(self, request, uuid=None):
+        """Create or refresh the Stripe Product + Price for this program.
+
+        Without this, checkout falls back to inline ``price_data`` every
+        time — which works, but the price isn't reusable for promo codes
+        or Stripe Dashboard reporting. Writing stripe_product_id /
+        stripe_price_id lets Stripe reconcile purchases to a canonical
+        product record.
+        """
+        from rest_framework.exceptions import PermissionDenied
+
+        from billing.client import get_stripe
+
+        program = self.get_object()
+        if not program.can_manage(request.user):
+            raise PermissionDenied('You do not have permission to sync this program.')
+
+        if program.price_cents <= 0:
+            return Response(
+                {'error': {'code': 'NOT_PAID', 'message': 'Free programs do not need a Stripe product.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        stripe = get_stripe()
+        try:
+            if not program.stripe_product_id:
+                product = stripe.Product.create(
+                    name=program.title,
+                    description=(program.short_description or program.title)[:500],
+                    metadata={'program_uuid': str(program.uuid)},
+                    idempotency_key=f'program_product:{program.uuid}:v1',
+                )
+                program.stripe_product_id = product.id
+
+            # Always create a new Price row if the price or currency shifts
+            # (Stripe Prices are immutable — new values require a new Price).
+            price = stripe.Price.create(
+                currency=(program.currency or 'USD').lower(),
+                unit_amount=program.price_cents,
+                product=program.stripe_product_id,
+                metadata={'program_uuid': str(program.uuid)},
+            )
+            program.stripe_price_id = price.id
+            program.save(update_fields=['stripe_product_id', 'stripe_price_id', 'updated_at'])
+        except Exception as exc:
+            return Response(
+                {'error': {'code': 'STRIPE_ERROR', 'message': str(exc)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(ProgramSerializer(program).data)
+
+    @action(detail=True, methods=['post'])
+    def archive(self, request, uuid=None):
+        """Archive a program: hidden from discovery, blocks new enrollments.
+
+        Existing ProgramEnrollments keep access. Admin can un-archive by
+        calling ``publish`` again, which validates + flips the status back
+        to PUBLISHED.
+        """
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self.get_object()
+        if not program.can_manage(request.user):
+            raise PermissionDenied('You do not have permission to archive this program.')
+        program.archive()
+        return Response(ProgramSerializer(program).data)
+
+    @action(detail=True, methods=['post'], url_path='enroll')
+    def enroll_free(self, request, uuid=None):
+        """One-click enrollment for price-zero programs.
+
+        Paid programs must go through Stripe Checkout. This is the single
+        direct path for free bundles — creates the ProgramEnrollment,
+        activates it (seeding member-course enrollments with provenance),
+        and writes an audit entry.
+        """
+        program = self.get_object()
+        if program.price_cents > 0:
+            return Response(
+                {'error': {'code': 'NOT_FREE', 'message': 'Paid programs require checkout.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if program.status != Program.Status.PUBLISHED:
+            return Response(
+                {'error': {'code': 'NOT_PUBLISHED', 'message': 'Program is not open for enrollment.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        enrollment, created = ProgramEnrollment.objects.get_or_create(
+            user=request.user, program=program
+        )
+        enrollment.activate()
+        program.update_counts()
+
+        if created:
+            try:
+                from accounts.audit import log_audit_event
+
+                log_audit_event(
+                    actor=request.user,
+                    action='program_enrollment.created',
+                    object_type='ProgramEnrollment',
+                    object_uuid=str(enrollment.uuid),
+                    metadata={'program_uuid': str(program.uuid), 'price_cents': 0},
+                    request=request,
+                )
+            except Exception:
+                logger.warning('audit log failed for free program enroll %s', enrollment.uuid, exc_info=True)
+
+        return Response(ProgramEnrollmentSerializer(enrollment).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='enrollments')
+    def enrollments(self, request, uuid=None):
+        """Staff roster: every learner enrolled in this program with payment status."""
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self.get_object()
+        if not program.can_manage(request.user):
+            raise PermissionDenied("You do not have access to this program's enrollments.")
+
+        qs = (
+            ProgramEnrollment.objects
+            .filter(program=program)
+            .select_related('user')
+            .order_by('-enrolled_at')
+        )
+        return Response(ProgramEnrollmentRosterSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['post'], url_path='refund-enrollment')
+    def refund_enrollment(self, request, uuid=None):
+        """Refund a learner's program purchase and cascade-drop seeded enrollments.
+
+        Body: ``{enrollment_uuid, reason, amount_cents?}``.
+
+        Resolves the CoursePurchase for (user, program), calls Stripe with
+        an optional partial amount, marks the purchase REFUNDED (full only),
+        drops the ProgramEnrollment, and cascade-drops every CourseEnrollment
+        whose ``from_program_enrollment`` points at this one. Direct
+        enrollments the learner made outside the program are not touched.
+        """
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+
+        from billing.models import CoursePurchase
+        from billing.services import refund_payment_intent
+
+        program = self.get_object()
+        if not program.can_manage(request.user):
+            raise PermissionDenied("You do not have permission to refund enrollments for this program.")
+
+        enrollment_uuid = request.data.get('enrollment_uuid')
+        reason = (request.data.get('reason') or '').strip()
+        amount_cents = request.data.get('amount_cents')
+
+        if not enrollment_uuid:
+            raise ValidationError({'enrollment_uuid': 'required'})
+        if not reason:
+            raise ValidationError({'reason': 'required'})
+        if amount_cents is not None:
+            try:
+                amount_cents = int(amount_cents)
+            except (TypeError, ValueError):
+                raise ValidationError({'amount_cents': 'must be an integer'}) from None
+            if amount_cents <= 0:
+                raise ValidationError({'amount_cents': 'must be positive'})
+
+        enrollment = (
+            ProgramEnrollment.objects
+            .filter(program=program, uuid=enrollment_uuid)
+            .select_related('user')
+            .first()
+        )
+        if enrollment is None:
+            return Response({'error': {'code': 'ENROLLMENT_NOT_FOUND'}}, status=status.HTTP_404_NOT_FOUND)
+
+        purchase = (
+            CoursePurchase.objects
+            .filter(user=enrollment.user, program=program)
+            .exclude(status=CoursePurchase.Status.REFUNDED)
+            .order_by('-created_at')
+            .first()
+        )
+        if purchase is None:
+            return Response(
+                {'error': {'code': 'NO_PURCHASE', 'message': 'No refundable purchase found for this enrollment.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not purchase.stripe_payment_intent_id:
+            return Response(
+                {'error': {'code': 'NO_PAYMENT_INTENT'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if amount_cents is not None and amount_cents > purchase.amount_cents:
+            return Response(
+                {'error': {'code': 'REFUND_EXCEEDS_AMOUNT'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            stripe_result = refund_payment_intent(
+                purchase.stripe_payment_intent_id,
+                amount_cents=amount_cents,
+                reason='requested_by_customer',
+            )
+        except Exception as exc:
+            return Response({'error': {'code': 'REFUND_FAILED', 'message': str(exc)}}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_partial = amount_cents is not None and amount_cents < purchase.amount_cents
+        cascade_count = 0
+        if not is_partial:
+            purchase.status = CoursePurchase.Status.REFUNDED
+            purchase.save(update_fields=['status', 'updated_at'])
+            enrollment.status = ProgramEnrollment.Status.DROPPED
+            enrollment.save(update_fields=['status', 'updated_at'])
+            cascade_count = CourseEnrollment.objects.filter(
+                from_program_enrollment=enrollment,
+            ).exclude(status=CourseEnrollment.Status.DROPPED).update(
+                status=CourseEnrollment.Status.DROPPED,
+                updated_at=timezone.now(),
+            )
+
+        try:
+            from accounts.audit import log_audit_event
+
+            log_audit_event(
+                actor=request.user,
+                action='program_purchase.refunded',
+                object_type='CoursePurchase',
+                object_uuid=str(purchase.uuid),
+                metadata={
+                    'program_uuid': str(program.uuid),
+                    'enrollment_uuid': str(enrollment.uuid),
+                    'amount_cents': stripe_result.get('amount_cents'),
+                    'partial': is_partial,
+                    'reason': reason,
+                    'stripe_refund_id': stripe_result.get('refund_id'),
+                    'cascade_drop_count': cascade_count,
+                },
+                request=request,
+            )
+        except Exception:
+            logger.warning('audit log failed for program refund %s', purchase.uuid, exc_info=True)
+
+        return Response(ProgramEnrollmentRosterSerializer(enrollment).data)
 
     @action(detail=False, methods=['get'])
     def reports(self, request):

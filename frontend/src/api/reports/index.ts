@@ -51,6 +51,22 @@ export interface LearningSummary {
     completion_rate: number | null;
     courses_published?: number;
     programs_published?: number;
+    gross_revenue_cents?: number;
+    refunds_cents?: number;
+    net_revenue_cents?: number;
+    purchase_count?: number;
+    refund_count?: number;
+}
+
+export interface RecentTransaction {
+    purchase_uuid: string;
+    course_title?: string;
+    program_title?: string;
+    user_name: string;
+    amount_cents: number;
+    currency: string;
+    status: string;
+    created_at: string | null;
 }
 
 export interface LearningTrendPoint {
@@ -92,6 +108,7 @@ export interface CourseReportsResponse {
     status_breakdown: LearningStatusBreakdown[];
     recent_enrollments: RecentCourseEnrollment[];
     top_courses: LearningTopItem[];
+    recent_transactions?: RecentTransaction[];
 }
 
 export interface ProgramReportsResponse {

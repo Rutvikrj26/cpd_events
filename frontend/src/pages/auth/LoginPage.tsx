@@ -17,6 +17,8 @@ import {
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { signInWithFirebase } from "@/api/accounts";
+import { getGoogleIdToken, isFirebaseConfigured } from "@/lib/firebase";
 
 const formSchema = z.object({
   email: z.string().email({
@@ -31,11 +33,15 @@ const formSchema = z.object({
 export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login } = useAuth();
+  const { login, completeLogin, deployment } = useAuth();
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const returnUrl = searchParams.get('returnUrl');
   const oauthError = searchParams.get('error');
+  const firebaseReady = isFirebaseConfigured();
+  const registrationMode = deployment?.registration_mode ?? 'open';
+  const signupAllowed = registrationMode !== 'invite_only';
 
   React.useEffect(() => {
     if (oauthError === 'invite_only') {
@@ -76,6 +82,29 @@ export function LoginPage() {
     }
   }
 
+  async function onGoogle() {
+    if (!firebaseReady) {
+      toast.error("Google sign-in isn't configured for this environment.");
+      return;
+    }
+    setIsGoogleLoading(true);
+    try {
+      const idToken = await getGoogleIdToken();
+      const { access, refresh } = await signInWithFirebase(idToken);
+      await completeLogin(access, refresh);
+      toast.success("Signed in with Google");
+      navigate(returnUrl ?? "/dashboard");
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.error?.message ||
+        err?.message ||
+        "Google sign-in failed.";
+      toast.error(msg);
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="space-y-2 text-center">
@@ -83,9 +112,42 @@ export function LoginPage() {
           Sign in to your account
         </h1>
         <p className="text-sm text-muted-foreground">
-          Accounts on this platform are created by invitation only. Contact your administrator for access.
+          {signupAllowed ? (
+            <>
+              New here?{" "}
+              <Link to="/signup" className="font-medium text-primary hover:text-primary/80">
+                Create an account
+              </Link>
+              .
+            </>
+          ) : (
+            "Accounts on this platform are created by invitation only. Contact your administrator for access."
+          )}
         </p>
       </div>
+
+      {firebaseReady && (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={onGoogle}
+            disabled={isGoogleLoading || isLoading}
+          >
+            {isGoogleLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Continue with Google
+          </Button>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">or</span>
+            </div>
+          </div>
+        </>
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-6">

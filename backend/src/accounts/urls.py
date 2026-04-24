@@ -28,6 +28,7 @@ urlpatterns = [
     path('auth/manifest/', views.ManifestView.as_view(), name='manifest'),
     path('auth/deployment/', views.DeploymentConfigView.as_view(), name='deployment_config'),
     path('auth/accept-invitation/', views.AcceptInvitationView.as_view(), name='accept_invitation'),
+    path('auth/firebase/', views.FirebaseAuthView.as_view(), name='firebase_auth'),
     # Current user
     path('users/me/', views.CurrentUserView.as_view(), name='current_user'),
     path('users/me/notifications/', views.NotificationPreferencesView.as_view(), name='notifications'),

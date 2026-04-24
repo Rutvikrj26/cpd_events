@@ -264,9 +264,9 @@ export function FeaturesPage() {
                                     <ArrowRight className="ml-2 h-5 w-5" />
                                 </Button>
                             </Link>
-                            <Link to="/pricing">
+                            <Link to="/discover/courses">
                                 <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 min-w-[180px] h-14 text-lg bg-transparent">
-                                    View Pricing
+                                    Browse Courses
                                 </Button>
                             </Link>
                         </div>

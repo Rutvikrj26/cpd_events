@@ -11,7 +11,15 @@ import {
     Award,
     CheckCircle2,
     Percent,
+    RotateCcw,
 } from "lucide-react";
+
+function formatCurrency(cents: number, currency: string = "USD"): string {
+    return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency,
+    }).format((cents ?? 0) / 100);
+}
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -249,14 +257,37 @@ function CoursesTab({ period }: { period: string }) {
         return Math.max(...reports.trends.map((t) => t.count), 1);
     }, [reports?.trends]);
 
+    const grossCents = reports?.summary.gross_revenue_cents ?? 0;
+    const refundCents = reports?.summary.refunds_cents ?? 0;
+    const netCents = reports?.summary.net_revenue_cents ?? 0;
+
     return (
         <>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <DashboardStat
+                    title="Gross Revenue"
+                    value={loading ? "--" : formatCurrency(grossCents)}
+                    icon={DollarSign}
+                    description={`${reports?.summary.purchase_count ?? 0} purchases`}
+                />
+                <DashboardStat
+                    title="Refunds"
+                    value={loading ? "--" : formatCurrency(refundCents)}
+                    icon={RotateCcw}
+                    description={`${reports?.summary.refund_count ?? 0} refunds`}
+                />
+                <DashboardStat
+                    title="Net Revenue"
+                    value={loading ? "--" : formatCurrency(netCents)}
+                    icon={TrendingUp}
+                />
                 <DashboardStat
                     title="Total Enrollments"
                     value={loading ? "--" : String(reports?.summary.total_enrollments ?? 0)}
                     icon={GraduationCap}
                 />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <DashboardStat
                     title="Completions"
                     value={loading ? "--" : String(reports?.summary.completions ?? 0)}

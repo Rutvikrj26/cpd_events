@@ -422,24 +422,6 @@ class CertificateService:
                         course_enrollment
                     )
 
-                # Subscription limit check (best-effort — skipped if the subscription
-                # model doesn't expose certificate limits in this deployment).
-                subscription = getattr(owner, 'subscription', None) if owner else None
-                if subscription and hasattr(subscription, 'check_certificate_limit'):
-                    if not subscription.check_certificate_limit():
-                        limit = getattr(subscription, 'limits', {}).get(
-                            'certificates_per_month'
-                        )
-                        return {
-                            'success': False,
-                            'code': 'LIMIT_EXCEEDED',
-                            'error': (
-                                f"Certificate limit reached ({limit} per month). "
-                                "Please upgrade your plan to issue more certificates."
-                            ),
-                            'limit_exceeded': True,
-                        }
-
                 template = template or default_template
                 if not template:
                     return {

@@ -2,6 +2,7 @@ import client from '../client';
 import {
     LoginRequest,
     AuthResponse,
+    SignupRequest,
     SignupResponse,
     User,
     UserSession,
@@ -14,6 +15,16 @@ import {
 
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     const response = await client.post<AuthResponse>('/auth/token/', data);
+    return response.data;
+};
+
+export const signup = async (data: SignupRequest): Promise<SignupResponse> => {
+    const response = await client.post<SignupResponse>('/auth/signup/', data);
+    return response.data;
+};
+
+export const signInWithFirebase = async (idToken: string): Promise<AuthResponse> => {
+    const response = await client.post<AuthResponse>('/auth/firebase/', { id_token: idToken });
     return response.data;
 };
 
