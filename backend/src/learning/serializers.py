@@ -420,7 +420,13 @@ class CourseSerializer(serializers.ModelSerializer):
 
     modules = CourseModuleSerializer(many=True, read_only=True)
     user_role = serializers.SerializerMethodField()
+    is_current_user_host = serializers.SerializerMethodField()
     programs = serializers.SerializerMethodField()
+
+    def get_is_current_user_host(self, obj):
+        from conferencing.views import is_course_session_host
+        request = self.context.get('request')
+        return is_course_session_host(request.user, obj) if request else False
 
     def get_programs(self, obj):
         """Public-visible programs that include this course."""
@@ -507,6 +513,7 @@ class CourseSerializer(serializers.ModelSerializer):
             'module_count',
             'modules',
             'user_role',
+            'is_current_user_host',
             'programs',
             'created_at',
             'updated_at',

@@ -10,6 +10,11 @@ export interface EventListParams extends PaginationParams {
     search?: string;
 }
 
+export const getMySpeakingEvents = async (): Promise<Event[]> => {
+    const response = await client.get<PaginatedResponse<Event> | Event[]>('/events/my-speaking/');
+    return unwrapList(response.data);
+};
+
 export const getEvents = async (params?: EventListParams): Promise<PaginatedResponse<Event>> => {
     const response = await client.get<PaginatedResponse<Event>>('/events/', { params });
     // Handle both paginated and non-paginated responses for backwards compatibility

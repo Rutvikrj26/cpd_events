@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Calendar, Award, Clock, Video, GraduationCap, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { JoinButton } from "@/components/video/JoinButton";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DashboardStat } from "@/components/dashboard/DashboardStats";
@@ -196,12 +195,11 @@ export function AttendeeDashboard() {
 
                       {/* Action Area */}
                       <div className="mt-4 flex items-center gap-3 relative z-10">
-                        <JoinButton
-                          eventUuid={reg.event.uuid}
-                          size="sm"
-                          label="Join Session"
-                          className="h-8 shadow-sm"
-                        />
+                        <Button size="sm" className="h-8 shadow-sm" asChild>
+                          <Link to={`/events/${reg.event.uuid}/lobby`}>
+                            <Video className="h-3 w-3 mr-1" /> Go to lobby
+                          </Link>
+                        </Button>
                         <Button variant="outline" size="sm" className="h-8" asChild>
                           <Link to={`/events/${reg.event.slug || reg.event.uuid}/details`}>View Details</Link>
                         </Button>

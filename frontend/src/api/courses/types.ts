@@ -68,6 +68,7 @@ export interface Course {
 
     // Permission
     user_role?: 'admin' | 'instructor' | null;
+    is_current_user_host?: boolean; // Server-computed: creator | course staff | platform admin
 
     // Relations
     organization_slug?: string;

@@ -67,7 +67,6 @@ import { ContactsPage } from './pages/dashboard/organizer/ContactsPage';
 import { ReportsPage } from './pages/dashboard/organizer/ReportsPage';
 import { EventManagement } from './pages/dashboard/organizer/EventManagement';
 import { OrganizerAccreditationsPage } from './pages/dashboard/organizer/OrganizerAccreditationsPage';
-import VideoManagement from './pages/dashboard/organizer/VideoManagement';
 import PromoCodesPage from './pages/dashboard/organizer/PromoCodesPage';
 import SpeakersPage from './pages/dashboard/organizer/SpeakersPage';
 import { PublicBadgePage } from './pages/badges/PublicBadgePage';
@@ -259,11 +258,7 @@ export default function App() {
                       <EventManagement />
                     </ProtectedRoute>
                   } />
-                  <Route path="/organizer/video" element={
-                    <ProtectedRoute requiredFeature="manage_video">
-                      <VideoManagement />
-                    </ProtectedRoute>
-                  } />
+                  <Route path="/organizer/video" element={<Navigate to="/settings" replace />} />
                   <Route path="/organizer/promo-codes" element={
                     <ProtectedRoute requiredFeature="create_events">
                       <PromoCodesPage />

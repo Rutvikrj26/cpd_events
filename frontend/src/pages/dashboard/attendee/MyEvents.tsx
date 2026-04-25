@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Calendar, Search, Loader2, Award, Link2, RefreshCw } from "lucide-react";
+import { Calendar, Search, Loader2, Award, Link2, RefreshCw, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { JoinButton } from "@/components/video/JoinButton";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -11,10 +10,14 @@ import { PageHeader } from "@/components/custom/PageHeader";
 import { Separator } from "@/components/ui/separator";
 import { getMyRegistrations, linkRegistrations } from "@/api/registrations";
 import { Registration } from "@/api/registrations/types";
+import { getMySpeakingEvents } from "@/api/events";
+import { Event } from "@/api/events/types";
+import { JoinButton } from "@/components/video/JoinButton";
 import { toast } from "sonner";
 
 export function MyEvents() {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [speakingEvents, setSpeakingEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -32,6 +35,12 @@ export function MyEvents() {
 
   useEffect(() => {
     fetchRegistrations();
+    getMySpeakingEvents()
+      .then(setSpeakingEvents)
+      .catch((error) => {
+        // Non-blocking: a 403 here just means the user has no speaker profiles.
+        if (error?.response?.status !== 403) console.error("Failed to load speaking events", error);
+      });
   }, []);
 
   const handleLinkRegistrations = async () => {
@@ -87,6 +96,40 @@ export function MyEvents() {
           </Link>
         }
       />
+
+      {speakingEvents.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Video className="h-4 w-4" /> Speaking at
+            </CardTitle>
+            <CardDescription>Upcoming events where you're listed as a speaker.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {speakingEvents.map((ev) => {
+              const eventStarted = new Date(ev.starts_at) <= new Date();
+              return (
+                <div key={ev.uuid} className="flex items-center justify-between gap-3 rounded-md border p-3">
+                  <div className="min-w-0">
+                    <Link to={`/events/${ev.slug || ev.uuid}/details`} className="font-medium truncate block hover:underline">
+                      {ev.title}
+                    </Link>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(ev.starts_at).toLocaleString()}
+                    </div>
+                  </div>
+                  <JoinButton
+                    eventUuid={ev.uuid}
+                    role="host"
+                    state={eventStarted ? "live" : "pre_event"}
+                    size="sm"
+                  />
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="upcoming" className="w-full">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
@@ -217,7 +260,11 @@ function RegistrationCard({ registration, isPast = false }: { registration: Regi
             </Link>
           )}
           {!isPast && (
-            <JoinButton eventUuid={event.uuid} size="sm" label="Join" />
+            <Link to={`/events/${event.uuid}/lobby`}>
+              <Button size="sm">
+                <Video className="h-3 w-3 mr-1" /> Go to lobby
+              </Button>
+            </Link>
           )}
           {isPast && (
             <Link to={`/events/${event.uuid}/recording`}>

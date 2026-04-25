@@ -1,6 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-    BarChart3,
     TrendingUp,
     Users,
     DollarSign,
@@ -13,6 +12,8 @@ import {
     Percent,
     RotateCcw,
 } from "lucide-react";
+import { TrendChart } from "@/components/charts/TrendChart";
+import { bucketForPeriod, bucketTrend } from "@/components/charts/bucketTrend";
 
 function formatCurrency(cents: number, currency: string = "USD"): string {
     return new Intl.NumberFormat("en-US", {
@@ -130,11 +131,29 @@ function EventsTab({ period }: { period: string }) {
         () => new Intl.NumberFormat("en-US", { style: "currency", currency }),
         [currency],
     );
+    const compactCurrencyFormatter = useMemo(
+        () => new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency,
+            notation: "compact",
+            maximumFractionDigits: 1,
+        }),
+        [currency],
+    );
 
-    const trendMax = useMemo(() => {
-        if (!reports?.trends.length) return 1;
-        return Math.max(...reports.trends.map((t) => t.registrations), 1);
-    }, [reports?.trends]);
+    const bucket = bucketForPeriod(period);
+    const trendData = useMemo(
+        () =>
+            bucketTrend(
+                (reports?.trends ?? []).map((t) => ({
+                    date: t.date,
+                    primary: t.registrations,
+                    secondary: (t.revenue_cents ?? 0) / 100,
+                })),
+                bucket,
+            ),
+        [reports?.trends, bucket],
+    );
 
     return (
         <>
@@ -164,17 +183,19 @@ function EventsTab({ period }: { period: string }) {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                 <Card className="col-span-4">
                     <CardHeader>
-                        <CardTitle>Registration Trends</CardTitle>
-                        <CardDescription>Number of registrations over time.</CardDescription>
+                        <CardTitle>Registrations & Revenue</CardTitle>
+                        <CardDescription>
+                            {bucketDescription(bucket, "Registration count and gross revenue")}
+                        </CardDescription>
                     </CardHeader>
                     <CardContent className="pl-2">
-                        <BarList
+                        <TrendChart
+                            data={trendData}
                             loading={loading}
-                            rows={(reports?.trends ?? []).map((t) => ({
-                                label: t.date ? new Date(t.date).toLocaleDateString() : "Unknown",
-                                count: t.registrations,
-                                max: trendMax,
-                            }))}
+                            bucket={bucket}
+                            primaryLabel="Registrations"
+                            secondaryLabel="Revenue"
+                            formatSecondary={(v) => compactCurrencyFormatter.format(v)}
                             emptyMessage="No registrations yet"
                         />
                     </CardContent>
@@ -252,10 +273,15 @@ function CoursesTab({ period }: { period: string }) {
             .finally(() => setLoading(false));
     }, [period]);
 
-    const trendMax = useMemo(() => {
-        if (!reports?.trends.length) return 1;
-        return Math.max(...reports.trends.map((t) => t.count), 1);
-    }, [reports?.trends]);
+    const bucket = bucketForPeriod(period);
+    const trendData = useMemo(
+        () =>
+            bucketTrend(
+                (reports?.trends ?? []).map((t) => ({ date: t.date, primary: t.count })),
+                bucket,
+            ),
+        [reports?.trends, bucket],
+    );
 
     const grossCents = reports?.summary.gross_revenue_cents ?? 0;
     const refundCents = reports?.summary.refunds_cents ?? 0;
@@ -309,16 +335,14 @@ function CoursesTab({ period }: { period: string }) {
                 <Card className="col-span-4">
                     <CardHeader>
                         <CardTitle>Enrollment Trends</CardTitle>
-                        <CardDescription>New course enrollments over time.</CardDescription>
+                        <CardDescription>{bucketDescription(bucket, "New course enrollments")}</CardDescription>
                     </CardHeader>
                     <CardContent className="pl-2">
-                        <BarList
+                        <TrendChart
+                            data={trendData}
                             loading={loading}
-                            rows={(reports?.trends ?? []).map((t) => ({
-                                label: t.date ? new Date(t.date).toLocaleDateString() : "Unknown",
-                                count: t.count,
-                                max: trendMax,
-                            }))}
+                            bucket={bucket}
+                            primaryLabel="Enrollments"
                             emptyMessage="No enrollments yet"
                         />
                     </CardContent>
@@ -404,10 +428,15 @@ function ProgramsTab({ period }: { period: string }) {
             .finally(() => setLoading(false));
     }, [period]);
 
-    const trendMax = useMemo(() => {
-        if (!reports?.trends.length) return 1;
-        return Math.max(...reports.trends.map((t) => t.count), 1);
-    }, [reports?.trends]);
+    const bucket = bucketForPeriod(period);
+    const trendData = useMemo(
+        () =>
+            bucketTrend(
+                (reports?.trends ?? []).map((t) => ({ date: t.date, primary: t.count })),
+                bucket,
+            ),
+        [reports?.trends, bucket],
+    );
 
     return (
         <>
@@ -438,16 +467,14 @@ function ProgramsTab({ period }: { period: string }) {
                 <Card className="col-span-4">
                     <CardHeader>
                         <CardTitle>Enrollment Trends</CardTitle>
-                        <CardDescription>New program enrollments over time.</CardDescription>
+                        <CardDescription>{bucketDescription(bucket, "New program enrollments")}</CardDescription>
                     </CardHeader>
                     <CardContent className="pl-2">
-                        <BarList
+                        <TrendChart
+                            data={trendData}
                             loading={loading}
-                            rows={(reports?.trends ?? []).map((t) => ({
-                                label: t.date ? new Date(t.date).toLocaleDateString() : "Unknown",
-                                count: t.count,
-                                max: trendMax,
-                            }))}
+                            bucket={bucket}
+                            primaryLabel="Enrollments"
                             emptyMessage="No enrollments yet"
                         />
                     </CardContent>
@@ -518,51 +545,10 @@ function ProgramsTab({ period }: { period: string }) {
 // Shared presentational helpers
 // ============================================================
 
-function BarList({
-    loading,
-    rows,
-    emptyMessage,
-}: {
-    loading: boolean;
-    rows: { label: string; count: number; max: number }[];
-    emptyMessage: string;
-}) {
-    if (loading) {
-        return (
-            <div className="h-[300px] flex items-center justify-center bg-muted/50 rounded-lg border border-dashed text-muted-foreground">
-                <div className="text-center">
-                    <BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                    <p>Loading trends...</p>
-                </div>
-            </div>
-        );
-    }
-    if (!rows.length) {
-        return (
-            <div className="h-[300px] flex items-center justify-center bg-muted/50 rounded-lg border border-dashed text-muted-foreground">
-                <div className="text-center">
-                    <BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                    <p>{emptyMessage}</p>
-                </div>
-            </div>
-        );
-    }
-    return (
-        <div className="space-y-3">
-            {rows.map((r, i) => (
-                <div key={`${r.label}-${i}`} className="flex items-center gap-3">
-                    <div className="w-20 text-xs text-muted-foreground">{r.label}</div>
-                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-primary"
-                            style={{ width: `${(r.count / Math.max(r.max, 1)) * 100}%` }}
-                        />
-                    </div>
-                    <div className="w-16 text-xs text-muted-foreground text-right">{r.count}</div>
-                </div>
-            ))}
-        </div>
-    );
+function bucketDescription(bucket: "day" | "week" | "month", base: string): string {
+    if (bucket === "month") return `${base} (monthly).`;
+    if (bucket === "week") return `${base} (weekly).`;
+    return `${base} (daily).`;
 }
 
 function KeyValueList({

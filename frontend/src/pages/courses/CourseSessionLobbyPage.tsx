@@ -83,14 +83,15 @@ export function CourseSessionLobbyPage() {
 
     // In-person sessions skip the JoinButton entirely (no video stream).
     // Hybrid sessions still get the button — remote attendees join via video.
+    // Hosts (course creator, staff, platform admin) can start any time, regardless of join window.
+    const isHost = !!course.is_current_user_host;
     const joinSlot = !isInPerson ? (
         <JoinButton
             courseUuid={course.uuid}
             sessionUuid={session.uuid}
-            label={canJoinNow ? 'Join now' : 'Join when live'}
+            role={isHost ? 'host' : 'attendee'}
+            state={isHost ? (canJoinNow ? 'live' : 'pre_event') : (canJoinNow ? 'in_window' : 'pre_event')}
             size="lg"
-            className={!canJoinNow ? 'opacity-60 pointer-events-none' : ''}
-            disabledReason={canJoinNow ? null : 'not_yet'}
         />
     ) : null;
 

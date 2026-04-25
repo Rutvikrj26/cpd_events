@@ -6,14 +6,45 @@ from conferencing.models import VideoRecording, VideoRecordingFile, VideoRoom
 
 
 class VideoRoomSerializer(serializers.ModelSerializer):
+    target = serializers.SerializerMethodField()
+
     class Meta:
         model = VideoRoom
         fields = [
             'uuid', 'room_name', 'status', 'provider',
             'started_at', 'ended_at', 'max_participants',
             'settings', 'created_at',
+            'target',
         ]
         read_only_fields = fields
+
+    def get_target(self, obj):
+        """
+        Resolve the join-target for this room (event vs course session).
+        Used by admin live-rooms widget to build a one-click host-join button.
+        """
+        from events.models import Event
+        from learning.models import CourseSession
+
+        ct = obj.content_type
+        if ct.model_class() is Event:
+            try:
+                event = Event.objects.get(id=obj.object_id)
+            except Event.DoesNotExist:
+                return None
+            return {'kind': 'event', 'event_uuid': str(event.uuid), 'title': event.title}
+        if ct.model_class() is CourseSession:
+            try:
+                session = CourseSession.objects.select_related('course').get(id=obj.object_id)
+            except CourseSession.DoesNotExist:
+                return None
+            return {
+                'kind': 'course_session',
+                'course_uuid': str(session.course.uuid),
+                'session_uuid': str(session.uuid),
+                'title': f'{session.course.title} — {session.title}',
+            }
+        return None
 
 
 class VideoRecordingSerializer(serializers.ModelSerializer):

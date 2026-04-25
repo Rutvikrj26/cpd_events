@@ -17,6 +17,7 @@ import { getCourseModules, getModuleContents } from '@/api/courses/modules';
 import { updateContentProgress } from '@/api/learning';
 import { Course, CourseModule, Assignment, AssignmentSubmission, CourseAnnouncement, CourseSession } from '@/api/courses/types';
 import { LiveSessionRow } from '@/components/live/LiveSessionRow';
+import { JoinButton } from '@/components/video/JoinButton';
 import { DiscussionPanel } from '@/components/courses/discussion/DiscussionPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { deriveProgressDisplay } from '@/lib/progress';
@@ -649,25 +650,42 @@ export function CoursePlayerPage() {
                             <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                 Live Sessions
                             </div>
-                            {sessions.map((s) => (
-                                <LiveSessionRow
-                                    key={s.uuid}
-                                    session={s as any}
-                                    onClick={() => {
-                                        // Past + has recording → recording page.
-                                        // Otherwise (upcoming, live, or past-no-recording) → lobby.
-                                        const rec = (s as any).recording;
-                                        const ends = (s as any).ends_at
-                                            ? new Date((s as any).ends_at)
-                                            : new Date(new Date(s.starts_at).getTime() + (s.duration_minutes ?? 0) * 60_000);
-                                        const isPast = new Date() >= ends || s.status === 'completed';
-                                        const target = isPast && rec
-                                            ? `/courses/${course.slug}/sessions/${s.uuid}/recording`
-                                            : `/courses/${course.slug}/sessions/${s.uuid}/lobby`;
-                                        navigate(target);
-                                    }}
-                                />
-                            ))}
+                            {sessions.map((s) => {
+                                const rec = (s as any).recording;
+                                const ends = (s as any).ends_at
+                                    ? new Date((s as any).ends_at)
+                                    : new Date(new Date(s.starts_at).getTime() + (s.duration_minutes ?? 0) * 60_000);
+                                const isPast = new Date() >= ends || s.status === 'completed';
+                                const isInPerson = s.delivery_mode === 'in_person';
+                                const showHostPill =
+                                    !!course.is_current_user_host && !isPast && !isInPerson;
+                                return (
+                                    <div key={s.uuid} className="flex items-center gap-1 px-1">
+                                        <div className="flex-1 min-w-0">
+                                            <LiveSessionRow
+                                                session={s as any}
+                                                onClick={() => {
+                                                    const target = isPast && rec
+                                                        ? `/courses/${course.slug}/sessions/${s.uuid}/recording`
+                                                        : `/courses/${course.slug}/sessions/${s.uuid}/lobby`;
+                                                    navigate(target);
+                                                }}
+                                            />
+                                        </div>
+                                        {showHostPill && (
+                                            <JoinButton
+                                                courseUuid={course.uuid}
+                                                sessionUuid={s.uuid}
+                                                role="host"
+                                                state={s.status === 'live' ? 'live' : 'pre_event'}
+                                                size="sm"
+                                                variant="outline"
+                                                className="shrink-0 h-7 px-2 text-xs"
+                                            />
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                     {course.format !== 'live' && (

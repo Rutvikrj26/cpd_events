@@ -14,6 +14,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { OnboardingChecklist } from "@/components/onboarding";
+import { AdminLiveRoomsWidget } from "@/components/dashboard/AdminLiveRoomsWidget";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -112,6 +113,8 @@ export function OrganizerDashboard() {
           </Button>
         }
       />
+
+      {isAdmin && <AdminLiveRoomsWidget />}
 
       {/* Onboarding Checklist */}
       <OnboardingChecklist />

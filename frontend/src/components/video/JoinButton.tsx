@@ -9,38 +9,59 @@ import {
 import { joinEventVideo, joinCourseSessionVideo } from '@/api/video';
 import { VideoRoom } from './VideoRoom';
 
+export type JoinRole = 'host' | 'attendee';
+export type JoinState =
+  | 'pre_event'
+  | 'in_window'
+  | 'live'
+  | 'past_recording'
+  | 'past_no_recording'
+  | 'provisioning'
+  | 'cancelled';
+
 interface JoinButtonProps {
   eventUuid?: string;
   courseUuid?: string;
   sessionUuid?: string;
-  label?: string;
+  role: JoinRole;
+  state: JoinState;
   variant?: 'default' | 'outline' | 'secondary';
   size?: 'default' | 'sm' | 'lg';
   className?: string;
-  /**
-   * Disable the button with a contextual reason. Common values:
-   *   "not_provisioned" — VideoRoom is still being set up
-   *   "ended"           — event has finished, no joining
-   *   "not_yet"         — too early to join (lobby decides this)
-   */
-  disabledReason?: 'not_provisioned' | 'ended' | 'not_yet' | null;
 }
 
-const DISABLED_LABELS: Record<NonNullable<JoinButtonProps['disabledReason']>, string> = {
-  not_provisioned: 'Setting up room…',
-  ended: 'Event ended',
-  not_yet: 'Join when live',
-};
+interface Resolved {
+  label: string;
+  enabled: boolean;
+  /** Surface a tooltip when disabled so users understand why. */
+  disabledReason?: string;
+}
+
+function resolve(role: JoinRole, state: JoinState): Resolved {
+  if (state === 'provisioning') return { label: 'Setting up room…', enabled: false, disabledReason: 'Refresh in a moment.' };
+  if (state === 'cancelled') return { label: 'Cancelled', enabled: false };
+  if (state === 'past_no_recording') return { label: 'Recording unavailable', enabled: false };
+  if (state === 'past_recording') return { label: 'Watch recording', enabled: true };
+
+  if (role === 'host') {
+    if (state === 'live') return { label: 'Join as host', enabled: true };
+    return { label: 'Start meeting', enabled: true };
+  }
+
+  // attendee
+  if (state === 'pre_event') return { label: 'Join when live', enabled: false, disabledReason: 'Opens 15 minutes before start.' };
+  return { label: 'Join now', enabled: true };
+}
 
 export function JoinButton({
   eventUuid,
   courseUuid,
   sessionUuid,
-  label = 'Join Video',
+  role,
+  state,
   variant = 'default',
   size = 'default',
   className,
-  disabledReason = null,
 }: JoinButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,10 +76,11 @@ export function JoinButton({
     recording_active?: boolean;
   } | null>(null);
 
+  const { label, enabled, disabledReason } = resolve(role, state);
+
   const handleJoin = async () => {
     setLoading(true);
     setError(null);
-
     try {
       let response;
       if (eventUuid) {
@@ -70,10 +92,9 @@ export function JoinButton({
       }
       setVideoSession(response);
     } catch (err: unknown) {
-      // Surface room-not-ready messages from the backend.
       const message = err instanceof Error ? err.message : 'Failed to join video room';
       const friendly = /not configured|not ready|provision/i.test(message)
-        ? 'The video room isn\'t ready yet — please try again in a moment.'
+        ? "The video room isn't ready yet — please try again in a moment."
         : message;
       setError(friendly);
     } finally {
@@ -81,8 +102,7 @@ export function JoinButton({
     }
   };
 
-  const effectiveLabel = disabledReason ? DISABLED_LABELS[disabledReason] : label;
-  const isDisabled = loading || disabledReason !== null;
+  const isDisabled = loading || !enabled;
 
   return (
     <>
@@ -92,21 +112,19 @@ export function JoinButton({
         className={className}
         onClick={handleJoin}
         disabled={isDisabled}
-        title={disabledReason === 'not_provisioned' ? 'Refresh in a moment.' : undefined}
+        title={disabledReason}
       >
         {loading ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : disabledReason ? (
+        ) : !enabled ? (
           <AlertCircle className="mr-2 h-4 w-4" />
         ) : (
           <Video className="mr-2 h-4 w-4" />
         )}
-        {effectiveLabel}
+        {label}
       </Button>
 
-      {error && (
-        <p className="text-sm text-destructive mt-1">{error}</p>
-      )}
+      {error && <p className="text-sm text-destructive mt-1">{error}</p>}
 
       <Dialog
         open={!!videoSession}

@@ -116,9 +116,9 @@ export function EventLobbyPage() {
         !isCancelled && !isPast ? (
           <JoinButton
             eventUuid={event.uuid}
-            label={isLive ? 'Join now' : canJoinNow ? 'Join now' : 'Join when live'}
+            role="attendee"
+            state={canJoinNow ? 'in_window' : 'pre_event'}
             size="lg"
-            className={!canJoinNow ? 'opacity-60 pointer-events-none' : ''}
           />
         ) : null
       }

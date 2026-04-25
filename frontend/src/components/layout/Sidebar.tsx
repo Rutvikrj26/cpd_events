@@ -14,7 +14,6 @@ import {
     GraduationCap,
     Users,
     TrendingUp,
-    Video,
     Shield,
     Tag,
     Mic,
@@ -64,7 +63,6 @@ export const Sidebar = () => {
 
         // Organizer items (event management)
         { routeKey: 'manage_events', to: '/events', icon: Calendar, label: 'Manage Events', organizerOnly: true },
-        { routeKey: 'video_rooms', to: '/organizer/video', icon: Video, label: 'Video Rooms', organizerOrInstructor: true },
         { routeKey: 'contacts', to: '/organizer/contacts', icon: Users, label: 'Contacts', organizerOnly: true },
         { routeKey: 'speakers', to: '/organizer/speakers', icon: Mic, label: 'Speakers', organizerOnly: true },
         { routeKey: 'promo_codes', to: '/organizer/promo-codes', icon: Tag, label: 'Promo Codes', organizerOnly: true },
@@ -104,7 +102,6 @@ export const Sidebar = () => {
             if (item.routeKey === 'registrations') return hasFeature('view_own_registrations');
             if (item.routeKey === 'manage_events') return hasFeature('create_events');
             if (item.routeKey === 'contacts') return hasFeature('manage_contacts');
-            if (item.routeKey === 'video_rooms') return hasFeature('manage_video');
             if (item.routeKey === 'speakers') return hasFeature('create_events');
             if (item.routeKey === 'promo_codes') return hasFeature('create_events');
             // Reports page has Events/Courses/Programs tabs — show if the user

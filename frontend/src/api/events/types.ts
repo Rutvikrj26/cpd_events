@@ -65,6 +65,7 @@ export interface Event {
 
     // Misc
     is_public: boolean;
+    is_current_user_host?: boolean; // Server-computed: owner | listed speaker | platform admin
     owner_name?: string; // List view
     organizer_name?: string; // Public list view
     owner?: { uuid: string; display_name: string }; // Detail view

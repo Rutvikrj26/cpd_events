@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { getEvent, updateEvent, publishEvent, unpublishEvent, getEventRegistrations, checkInAttendee, deleteEvent, cancelEventRegistration, refundEventRegistration } from "@/api/events";
 import { issueCertificates, revokeCertificate, reissueCertificate, CertificateIssueResult } from "@/api/certificates";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { JoinButton } from "@/components/video/JoinButton";
 import {
    AlertDialog,
    AlertDialogAction,
@@ -139,6 +140,9 @@ export function EventManagement() {
    }, [fetchFeedback]);
 
    const hasStarted = event ? new Date(event.starts_at) < new Date() : false;
+   const hasEnded = event ? (event.ends_at ? new Date(event.ends_at) < new Date() : false) : false;
+   const isLive = hasStarted && !hasEnded && event?.format !== 'in_person';
+   const isEventHost = !!event?.is_current_user_host;
 
    const getRegistrationBadge = (attendee: any) => {
       const paymentStatus = (attendee.payment_status || '').toLowerCase();
@@ -437,6 +441,23 @@ export function EventManagement() {
 
    return (
       <div className="space-y-8">
+         {isLive && isEventHost && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
+               <span className="flex items-center gap-2 text-sm font-medium text-destructive">
+                  <span className="relative flex h-2 w-2">
+                     <span className="absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75 animate-ping" />
+                     <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
+                  </span>
+                  Event is live now
+               </span>
+               <JoinButton
+                  eventUuid={event.uuid}
+                  role="host"
+                  state="live"
+                  size="sm"
+               />
+            </div>
+         )}
          <PageHeader
             title={event.title}
             description={`Manage registrations and attendance for your ${event.format ? `${event.format} event` : 'event'}.`}

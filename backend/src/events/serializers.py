@@ -380,6 +380,12 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
     sessions = EventSessionListSerializer(many=True, read_only=True)
     video_settings = VideoSettingsSerializer(read_only=True)
     latest_recording = serializers.SerializerMethodField()
+    is_current_user_host = serializers.SerializerMethodField()
+
+    def get_is_current_user_host(self, obj):
+        from conferencing.views import is_event_host
+        request = self.context.get('request')
+        return is_event_host(request.user, obj) if request else False
 
     def get_latest_recording(self, obj):
         from conferencing.models import VideoRecording
@@ -422,6 +428,7 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             # Video conferencing
             'video_settings',
             'latest_recording',
+            'is_current_user_host',
             # Multi-session fields (H2)
             'is_multi_session',
             'minimum_attendance_percent',

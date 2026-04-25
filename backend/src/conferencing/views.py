@@ -37,6 +37,40 @@ from conferencing.service import get_video_provider
 logger = logging.getLogger(__name__)
 
 
+def is_platform_admin(user) -> bool:
+    """True if the user belongs to the platform-wide 'admin' group."""
+    return bool(user and user.is_authenticated and user.groups.filter(name='admin').exists())
+
+
+def is_event_host(user, event) -> bool:
+    """
+    Host of an event = the owner, a User linked to any Speaker on the event,
+    or a platform admin (support override).
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if event.owner_id == user.id:
+        return True
+    if is_platform_admin(user):
+        return True
+    # Speaker.owner is a User FK; Event.speakers is M2M to Speaker.
+    return event.speakers.filter(owner_id=user.id).exists()
+
+
+def is_course_session_host(user, course) -> bool:
+    """
+    Host of a course session = the course creator, an active CourseStaff
+    member of the course, or a platform admin.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if course.created_by_id == user.id:
+        return True
+    if is_platform_admin(user):
+        return True
+    return course.staff_assignments.filter(user_id=user.id).exists()
+
+
 @roles('learner', 'organizer', 'instructor', 'admin', route_name='video_status')
 class VideoStatusView(generics.GenericAPIView):
     """GET /api/v1/video/status/ — Check if video conferencing is configured."""
@@ -80,15 +114,15 @@ class JoinVideoView(generics.GenericAPIView):
         except VideoRoom.DoesNotExist:
             return Response({'error': 'No video room for this event'}, status=status.HTTP_404_NOT_FOUND)
 
-        is_owner = event.owner_id == request.user.id
+        is_host = is_event_host(request.user, event)
 
         if video_room.status == VideoRoom.Status.ENDED:
-            if is_owner:
+            if is_host:
                 video_room.reopen()
             else:
                 return Response({'error': 'Video room has ended'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not is_owner:
+        if not is_host:
             from registrations.models import Registration
 
             has_registration = Registration.objects.filter(
@@ -103,17 +137,23 @@ class JoinVideoView(generics.GenericAPIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
+        if is_platform_admin(request.user) and event.owner_id != request.user.id:
+            logger.info(
+                "admin_host_override event_uuid=%s admin_user_id=%s",
+                event.uuid, request.user.id,
+            )
+
         video_settings = event.video_settings or {}
         waiting_room_enabled = bool(video_settings.get('waiting_room_enabled', False))
         recording_default = bool(video_settings.get('recording_enabled', False))
-        waiting = waiting_room_enabled and not is_owner
+        waiting = waiting_room_enabled and not is_host
 
         provider = get_video_provider()
         token = provider.generate_join_token(
             room_name=video_room.room_name,
             participant_identity=str(request.user.uuid),
             participant_name=request.user.full_name or request.user.email,
-            is_host=is_owner,
+            is_host=is_host,
             waiting=waiting,
         )
 
@@ -127,7 +167,7 @@ class JoinVideoView(generics.GenericAPIView):
             'ws_url': ws_url,
             'room_name': video_room.room_name,
             'room_uuid': str(video_room.uuid),
-            'is_host': is_owner,
+            'is_host': is_host,
             'waiting': waiting,
             'waiting_room_enabled': waiting_room_enabled,
             'recording_enabled_default': recording_default,
@@ -246,7 +286,7 @@ class JoinCourseSessionVideoView(generics.GenericAPIView):
         from learning.models import Course, CourseSession
 
         try:
-            course = Course.objects.get(uuid=course_uuid, deleted_at__isnull=True)
+            course = Course.objects.get(uuid=course_uuid)
         except Course.DoesNotExist:
             return Response({'error': 'Course not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -263,15 +303,15 @@ class JoinCourseSessionVideoView(generics.GenericAPIView):
         except VideoRoom.DoesNotExist:
             return Response({'error': 'No video room for this session'}, status=status.HTTP_404_NOT_FOUND)
 
-        is_instructor = course.created_by_id == request.user.id
+        is_host = is_course_session_host(request.user, course)
 
         if video_room.status == VideoRoom.Status.ENDED:
-            if is_instructor:
+            if is_host:
                 video_room.reopen()
             else:
                 return Response({'error': 'Video room has ended'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not is_instructor:
+        if not is_host:
             from learning.models import CourseEnrollment
 
             has_enrollment = CourseEnrollment.objects.filter(
@@ -285,12 +325,18 @@ class JoinCourseSessionVideoView(generics.GenericAPIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
+        if is_platform_admin(request.user) and course.created_by_id != request.user.id:
+            logger.info(
+                "admin_host_override course_uuid=%s session_uuid=%s admin_user_id=%s",
+                course.uuid, session.uuid, request.user.id,
+            )
+
         provider = get_video_provider()
         token = provider.generate_join_token(
             room_name=video_room.room_name,
             participant_identity=str(request.user.uuid),
             participant_name=request.user.full_name or request.user.email,
-            is_host=is_instructor,
+            is_host=is_host,
         )
 
         recording_active = VideoRecording.objects.filter(
@@ -303,7 +349,7 @@ class JoinCourseSessionVideoView(generics.GenericAPIView):
             'ws_url': ws_url,
             'room_name': video_room.room_name,
             'room_uuid': str(video_room.uuid),
-            'is_host': is_instructor,
+            'is_host': is_host,
             'waiting': False,
             'waiting_room_enabled': False,
             'recording_enabled_default': False,
@@ -333,24 +379,29 @@ class VideoRoomViewSet(viewsets.ReadOnlyModelViewSet):
         session_ct = ContentType.objects.get_for_model(CourseSession)
 
         if self.request.user.groups.filter(name="admin").exists():
-            return VideoRoom.objects.filter(content_type__in=[event_ct, session_ct])
+            qs = VideoRoom.objects.filter(content_type__in=[event_ct, session_ct])
+        else:
+            user_event_ids = Event.objects.filter(
+                owner=self.request.user, deleted_at__isnull=True
+            ).values_list('id', flat=True)
 
-        user_event_ids = Event.objects.filter(
-            owner=self.request.user, deleted_at__isnull=True
-        ).values_list('id', flat=True)
+            staff_course_ids = Course.objects.filter(
+                Q(created_by=self.request.user)
+                | Q(staff_assignments__user=self.request.user)
+            ).values_list('id', flat=True).distinct()
+            user_session_ids = CourseSession.objects.filter(
+                course_id__in=staff_course_ids,
+            ).values_list('id', flat=True)
 
-        staff_course_ids = Course.objects.filter(
-            Q(created_by=self.request.user)
-            | Q(staff_assignments__user=self.request.user)
-        ).values_list('id', flat=True).distinct()
-        user_session_ids = CourseSession.objects.filter(
-            course_id__in=staff_course_ids,
-        ).values_list('id', flat=True)
+            qs = VideoRoom.objects.filter(
+                Q(content_type=event_ct, object_id__in=user_event_ids)
+                | Q(content_type=session_ct, object_id__in=user_session_ids)
+            )
 
-        return VideoRoom.objects.filter(
-            Q(content_type=event_ct, object_id__in=user_event_ids)
-            | Q(content_type=session_ct, object_id__in=user_session_ids)
-        )
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param)
+        return qs.order_by('-started_at', '-created_at')
 
     @action(detail=True, methods=['post'])
     def start_recording(self, request, pk=None, uuid=None):

@@ -141,11 +141,15 @@ export function EventDetail() {
   const isPast = event.ends_at
     ? new Date(event.ends_at) < new Date()
     : new Date(event.starts_at) < new Date();
+  const eventStarted = new Date(event.starts_at) <= new Date();
   const isRegistrationOpen = event.is_registration_open ?? event.registration_enabled;
   const organizerName = event.organizer?.display_name || event.organizer_name || event.owner?.display_name || "Unknown Organizer";
 
   // Check if current user is the organizer (check both nested objects as per API variant)
   const isEventOwner = isAuthenticated && (user?.uuid === event.owner?.uuid || user?.uuid === event.organizer?.uuid);
+  // Host = owner + listed speaker + platform admin; computed on the server.
+  // Falls back to ownership for legacy responses missing the flag.
+  const isEventHost = isAuthenticated && (event.is_current_user_host ?? isEventOwner);
 
   // Calculate duration display
   const getDurationDisplay = () => {
@@ -325,6 +329,24 @@ export function EventDetail() {
               <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
                 {event.title}
               </h1>
+
+              {isEventHost && eventStarted && !isPast && (event.format === 'online' || event.format === 'hybrid') && (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
+                  <span className="flex items-center gap-2 text-sm font-medium text-destructive">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75 animate-ping" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
+                    </span>
+                    Event is live now
+                  </span>
+                  <JoinButton
+                    eventUuid={event.uuid}
+                    role="host"
+                    state="live"
+                    size="sm"
+                  />
+                </div>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 text-muted-foreground pt-2">
                 <div className="flex items-center gap-2">
@@ -733,11 +755,24 @@ export function EventDetail() {
                               </p>
                             )}
                           </div>
-                        ) : (isConfirmedRegistration || isEventOwner) ? (
+                        ) : (isConfirmedRegistration || isEventHost) ? (
                           <div className="mt-2 space-y-2">
-                            <JoinButton eventUuid={event.uuid} size="sm" label={isEventOwner ? "Start Meeting" : "Join Video"} />
+                            {isEventHost ? (
+                              <JoinButton
+                                eventUuid={event.uuid}
+                                size="sm"
+                                role="host"
+                                state={eventStarted ? "live" : "pre_event"}
+                              />
+                            ) : (
+                              <Button size="sm" asChild>
+                                <Link to={`/events/${event.uuid}/lobby`}>
+                                  <Video className="h-3 w-3 mr-1" /> Go to lobby
+                                </Link>
+                              </Button>
+                            )}
                             <p className="text-xs text-muted-foreground">
-                              {isEventOwner ? "You'll join as host" : "Check your email for meeting details"}
+                              {isEventHost ? "You'll join as host" : "Check your email for meeting details"}
                             </p>
                           </div>
                         ) : isPendingPayment ? (
@@ -759,11 +794,24 @@ export function EventDetail() {
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="font-medium text-foreground">Hybrid Event</p>
-                        {(isConfirmedRegistration || isEventOwner) ? (
+                        {(isConfirmedRegistration || isEventHost) ? (
                           <div className="mt-2 space-y-2">
-                            <JoinButton eventUuid={event.uuid} size="sm" label={isEventOwner ? "Start Meeting" : "Join Online"} />
+                            {isEventHost ? (
+                              <JoinButton
+                                eventUuid={event.uuid}
+                                size="sm"
+                                role="host"
+                                state={eventStarted ? "live" : "pre_event"}
+                              />
+                            ) : (
+                              <Button size="sm" asChild>
+                                <Link to={`/events/${event.uuid}/lobby`}>
+                                  <Video className="h-3 w-3 mr-1" /> Go to lobby
+                                </Link>
+                              </Button>
+                            )}
                             <p className="text-xs text-muted-foreground">
-                              {isEventOwner ? "You'll join as host" : "Check your email for meeting details"}
+                              {isEventHost ? "You'll join as host" : "Check your email for meeting details"}
                             </p>
                           </div>
                         ) : isPendingPayment ? (

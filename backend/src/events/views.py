@@ -908,3 +908,31 @@ class SpeakerViewSet(BaseModelViewSet):
     def perform_destroy(self, instance):
         instance.is_active = False
         instance.save(update_fields=['is_active', 'updated_at'])
+
+
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='my_speaking_events')
+class MySpeakingEventsView(generics.ListAPIView):
+    """
+    GET /api/v1/events/my-speaking/
+
+    Events where the authenticated user is listed as a speaker
+    (via Speaker.owner -> Event.speakers M2M). Returns upcoming and currently
+    live events; past events are excluded.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = serializers.EventListSerializer
+
+    def get_queryset(self):
+        from django.utils import timezone as _tz
+
+        now = _tz.now()
+        return (
+            Event.objects.filter(
+                speakers__owner=self.request.user,
+                deleted_at__isnull=True,
+            )
+            .filter(Q(ends_at__gte=now) | Q(ends_at__isnull=True, starts_at__gte=now))
+            .distinct()
+            .order_by('starts_at')
+        )

@@ -18,6 +18,8 @@ import {
    Shield,
    Download,
    AlertTriangle,
+   Plug,
+   Video as VideoIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -152,7 +154,23 @@ export function ProfileSettings() {
    };
 
    // Payouts state
-   const { user: authUser, logout, manifest } = useAuth();
+   const { user: authUser, logout, manifest, hasFeature } = useAuth();
+
+   const [videoStatus, setVideoStatus] = useState<{ configured: boolean; provider: string } | null>(null);
+   const [loadingVideoStatus, setLoadingVideoStatus] = useState(false);
+
+   useEffect(() => {
+      if (!hasFeature('manage_video')) return;
+      let cancelled = false;
+      setLoadingVideoStatus(true);
+      import('@/api/video').then(({ getVideoStatus }) =>
+         getVideoStatus()
+            .then((s) => { if (!cancelled) setVideoStatus(s); })
+            .catch(() => { if (!cancelled) setVideoStatus({ configured: false, provider: '' }); })
+            .finally(() => { if (!cancelled) setLoadingVideoStatus(false); })
+      );
+      return () => { cancelled = true; };
+   }, [hasFeature]);
    const isSingleTenant = manifest?.deployment?.mode === 'single_tenant';
    const { isOrganizer, isInstructor } = getRoleFlags(authUser);
    // Whether the current user can create content (either event or course side).
@@ -412,6 +430,14 @@ export function ProfileSettings() {
                            className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
                         >
                            <Banknote className="mr-2 h-4 w-4" /> Payouts
+                        </TabsTrigger>
+                     )}
+                     {hasFeature('manage_video') && (
+                        <TabsTrigger
+                           value="integrations"
+                           className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
+                        >
+                           <Plug className="mr-2 h-4 w-4" /> Integrations
                         </TabsTrigger>
                      )}
                   </TabsList>
@@ -748,6 +774,53 @@ export function ProfileSettings() {
                         onConfirm={handleDeleteAccount}
                      />
                   </TabsContent>
+
+                  {/* INTEGRATIONS TAB */}
+                  {hasFeature('manage_video') && (
+                     <TabsContent value="integrations" className="mt-0 space-y-6">
+                        <Card>
+                           <CardHeader>
+                              <CardTitle>Video conferencing</CardTitle>
+                              <CardDescription>
+                                 Provider used to host live event and course-session video rooms.
+                              </CardDescription>
+                           </CardHeader>
+                           <CardContent>
+                              {loadingVideoStatus ? (
+                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Checking…
+                                 </div>
+                              ) : (
+                                 <div className="flex items-center justify-between gap-4 p-4 border rounded-lg bg-muted/30">
+                                    <div className="flex items-center gap-3">
+                                       <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                          <VideoIcon className="h-4 w-4" />
+                                       </div>
+                                       <div>
+                                          <p className="font-medium capitalize">{videoStatus?.provider || 'LiveKit'}</p>
+                                          <p className="text-xs text-muted-foreground">
+                                             {videoStatus?.configured
+                                                ? 'Rooms are provisioned automatically when you enable video on an event or live course session.'
+                                                : 'Not configured yet — contact your admin to connect a provider.'}
+                                          </p>
+                                       </div>
+                                    </div>
+                                    {videoStatus?.configured ? (
+                                       <Badge variant="default" className="bg-success/15 text-success border-success/30">
+                                          <CheckCircle className="h-3 w-3 mr-1" /> Connected
+                                       </Badge>
+                                    ) : (
+                                       <Badge variant="outline" className="text-muted-foreground">
+                                          Not connected
+                                       </Badge>
+                                    )}
+                                 </div>
+                              )}
+                           </CardContent>
+                        </Card>
+                     </TabsContent>
+                  )}
 
                   {/* PAYOUTS TAB */}
                   {isContentCreator && !isSingleTenant && (
