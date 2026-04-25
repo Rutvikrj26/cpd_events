@@ -38,7 +38,8 @@ import { FeedbackModal } from '@/components/feedback';
 import { getRegistrationFeedback } from '@/api/feedback';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDate } from '@/lib/datetime';
-import { deriveProgressDisplay } from '@/lib/progress';
+import { deriveProgressDisplay, formatProgressSubtitle } from '@/lib/progress';
+import { FormatBadge } from '@/components/courses/FormatBadge';
 import { EventFeedback } from '@/api/feedback/types';
 import { format } from 'date-fns';
 
@@ -347,10 +348,16 @@ export const MyLearningPage = () => {
                                 return (
                                     <Card key={enrollment.uuid} className="flex flex-col h-full hover:shadow-md transition-shadow">
                                         <CardHeader className="pb-4">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <Badge variant={display.isCompleted ? 'default' : display.statusLabel === 'Awaiting Review' ? 'outline' : 'secondary'}>
-                                                    {display.statusLabel}
-                                                </Badge>
+                                            <div className="flex justify-between items-start mb-2 gap-2">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <Badge variant={display.isCompleted ? 'default' : display.statusLabel === 'Awaiting Review' ? 'outline' : 'secondary'}>
+                                                        {display.statusLabel}
+                                                    </Badge>
+                                                    <FormatBadge
+                                                        course={enrollment.course}
+                                                        nextSessionAt={(enrollment as any).next_session_at}
+                                                    />
+                                                </div>
                                                 {enrollment.certificate_issued && (
                                                     <div title="Certificate Earned">
                                                         <Award className="h-5 w-5 text-amber-500" />
@@ -372,13 +379,9 @@ export const MyLearningPage = () => {
                                                         <span className="font-medium">{display.percent}%</span>
                                                     </div>
                                                     <Progress value={display.percent} className="h-2" />
-                                                    {(enrollment.course?.module_count ?? 0) > 0 && (
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {display.isCompleted
-                                                                ? `${enrollment.course?.module_count} of ${enrollment.course?.module_count} modules complete`
-                                                                : `${enrollment.modules_completed ?? 0} of ${enrollment.course?.module_count} modules complete`}
-                                                        </p>
-                                                    )}
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {formatProgressSubtitle(enrollment as any, enrollment.course as any)}
+                                                    </p>
                                                 </div>
                                                 <div className="text-xs text-muted-foreground flex justify-between">
                                                     <span>

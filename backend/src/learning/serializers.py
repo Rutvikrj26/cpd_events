@@ -723,6 +723,8 @@ class CourseEnrollmentSerializer(serializers.ModelSerializer):
     """Enrollment details."""
 
     course = CourseListSerializer(read_only=True)
+    next_session_at = serializers.SerializerMethodField()
+    session_progress = serializers.SerializerMethodField()
 
     class Meta:
         model = CourseEnrollment
@@ -738,8 +740,68 @@ class CourseEnrollmentSerializer(serializers.ModelSerializer):
             'current_score',
             'certificate_issued',
             'certificate_issued_at',
+            'next_session_at',
+            'session_progress',
         ]
         read_only_fields = fields
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Omit session_progress entirely (not null) for online courses so the
+        # client can branch by key presence rather than by format.
+        if data.get('session_progress') is None:
+            data.pop('session_progress', None)
+        return data
+
+    def get_session_progress(self, obj):
+        """Compact session breakdown so My Learning cards can render
+        "2 of 3 modules · 1 of 2 sessions" subtitles without a second fetch.
+        Only populated for live + hybrid courses; absent for online.
+        """
+        from learning.models import CourseSession
+        if obj.course.format not in ('live', 'hybrid'):
+            return None
+        sessions_total = (
+            CourseSession.objects
+            .filter(course=obj.course, is_published=True, is_mandatory=True)
+            .exclude(status=CourseSession.Status.CANCELLED)
+            .count()
+        )
+        sessions_attended = (
+            obj.session_attendance
+            .filter(is_eligible=True, session__is_mandatory=True, session__is_published=True)
+            .exclude(session__status=CourseSession.Status.CANCELLED)
+            .count()
+        )
+        return {
+            'sessions_attended': sessions_attended,
+            'sessions_total': sessions_total,
+            'criteria': obj.course.hybrid_completion_criteria,
+        }
+
+    def get_next_session_at(self, obj):
+        """Earliest upcoming CourseSession the learner hasn't yet attended-
+        eligibly. Drives the "Hybrid · Next session in 7d" badge with a
+        single field, no per-card N+1.
+        """
+        from django.utils import timezone as _tz
+        from learning.models import CourseSession
+        if obj.course.format not in ('live', 'hybrid'):
+            return None
+        attended_session_ids = obj.session_attendance.filter(
+            is_eligible=True,
+        ).values_list('session_id', flat=True)
+        nxt = (
+            CourseSession.objects.filter(
+                course=obj.course, is_published=True,
+                starts_at__gt=_tz.now(),
+            )
+            .exclude(status=CourseSession.Status.CANCELLED)
+            .exclude(id__in=list(attended_session_ids))
+            .order_by('starts_at')
+            .first()
+        )
+        return nxt.starts_at.isoformat() if nxt else None
 
 
 class CourseEnrollmentRosterSerializer(serializers.ModelSerializer):
@@ -854,6 +916,130 @@ class CourseAnnouncementSerializer(serializers.ModelSerializer):
 # =============================================================================
 # Course Session Serializers
 # =============================================================================
+
+
+class LiveSessionSerializer(serializers.ModelSerializer):
+    """Learner-context view of a CourseSession.
+
+    Collapses CourseSession + the caller's CourseSessionAttendance + the
+    polymorphic VideoRoom lookup into one shape (per
+    docs/design/hybrid-course-experience.md §A). The same shape will host
+    EventSession in a future iteration; treat it as the canonical
+    "live-session UI primitive" for the frontend.
+
+    All learner-context fields (`attendance`, `recording`, `join_url`,
+    `is_within_join_window`) require `context['request']`. Without it the
+    serializer falls back to the un-hydrated shape (still valid).
+    """
+
+    ends_at = serializers.DateTimeField(read_only=True)
+    attendance = serializers.SerializerMethodField()
+    recording = serializers.SerializerMethodField()
+    join_url = serializers.SerializerMethodField()
+    is_within_join_window = serializers.SerializerMethodField()
+    next_action = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CourseSession
+        fields = [
+            'uuid', 'title', 'description', 'order',
+            'session_type', 'delivery_mode',
+            'starts_at', 'ends_at', 'duration_minutes', 'timezone',
+            'actual_start_at', 'actual_end_at',
+            'is_mandatory', 'minimum_attendance_percent',
+            'status', 'is_published',
+            'cpd_credits',
+            # Learner-context fields
+            'attendance', 'recording', 'join_url', 'is_within_join_window',
+            'next_action',
+        ]
+
+    def _enrollment(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        if not hasattr(self, '_enrollment_cache'):
+            self._enrollment_cache = {}
+        course_id = obj.course_id
+        if course_id not in self._enrollment_cache:
+            from learning.models import CourseEnrollment
+            self._enrollment_cache[course_id] = CourseEnrollment.objects.filter(
+                user=request.user, course_id=course_id,
+            ).first()
+        return self._enrollment_cache[course_id]
+
+    def get_attendance(self, obj):
+        from learning.models import CourseSessionAttendance
+        enr = self._enrollment(obj)
+        if enr is None:
+            return None
+        rec = CourseSessionAttendance.objects.filter(session=obj, enrollment=enr).first()
+        if rec is None:
+            return None
+        return {
+            'is_eligible': rec.is_eligible,
+            'attendance_minutes': rec.attendance_minutes,
+            'is_manual_override': rec.is_manual_override,
+        }
+
+    def get_recording(self, obj):
+        from conferencing.models import VideoRecording
+        rec = (
+            VideoRecording.objects.filter(
+                course_session=obj,
+                is_published=True,
+                status=VideoRecording.Status.AVAILABLE,
+            )
+            .order_by('-recording_start')
+            .first()
+        )
+        if rec is None:
+            return None
+        return {
+            'uuid': str(rec.uuid),
+            'storage_path': rec.storage_path,
+            'duration_seconds': rec.duration_seconds,
+        }
+
+    def get_join_url(self, obj):
+        if obj.delivery_mode == obj.DeliveryMode.IN_PERSON:
+            return None
+        if not self.get_is_within_join_window(obj):
+            return None
+        from conferencing.models import VideoRoom
+        from django.contrib.contenttypes.models import ContentType
+        ct = ContentType.objects.get_for_model(obj)
+        room = VideoRoom.objects.filter(
+            content_type=ct, object_id=obj.id,
+        ).exclude(status=VideoRoom.Status.ERROR).first()
+        if room is None:
+            return None
+        # Frontend resolves the actual signed join URL via /api/conferencing
+        # /rooms/.../join/. Surfacing the room UUID is enough for routing.
+        return f'/courses/{obj.course.slug}/sessions/{obj.uuid}/lobby'
+
+    def get_is_within_join_window(self, obj):
+        from django.utils import timezone as _tz
+        if obj.status == obj.Status.CANCELLED:
+            return False
+        now = _tz.now()
+        # 15-min lead time before scheduled start.
+        window_open = obj.starts_at - _tz.timedelta(minutes=15)
+        # Window closes at actual_end_at if set, else scheduled end.
+        window_close = obj.actual_end_at or obj.ends_at
+        return window_open <= now <= window_close
+
+    def get_next_action(self, obj):
+        attendance = self.get_attendance(obj)
+        if obj.status == obj.Status.CANCELLED:
+            return None
+        if self.get_is_within_join_window(obj):
+            return 'join_now'
+        if attendance and attendance['is_eligible']:
+            return 'view_recording' if self.get_recording(obj) else None
+        if obj.is_past:
+            return 'view_recording' if self.get_recording(obj) else 'mark_attended_manually'
+        return 'add_to_calendar'
 
 
 class CourseSessionSerializer(serializers.ModelSerializer):

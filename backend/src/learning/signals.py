@@ -98,6 +98,40 @@ def _recompute_enrollees_for_course(course_id):
             logger.exception("Failed to recompute progress for enrollment=%s", enrollment.id)
 
 
+@receiver(pre_save, sender='learning.CourseSessionAttendance')
+def _capture_attendance_eligibility(sender, instance, **kwargs):
+    """Stash old is_eligible so post_save can detect a flip."""
+    if instance.pk is None:
+        instance._old_is_eligible = None
+        return
+    try:
+        prev = sender.objects.only('is_eligible').get(pk=instance.pk)
+        instance._old_is_eligible = prev.is_eligible
+    except sender.DoesNotExist:
+        instance._old_is_eligible = None
+
+
+@receiver(post_save, sender='learning.CourseSessionAttendance')
+def _attendance_eligibility_cascade(sender, instance, created, **kwargs):
+    """When session attendance becomes eligible (or stops being eligible),
+    recompute the enrollee's progress. Today only the LiveKit "leave room"
+    task does this; manual instructor overrides + seed-time inserts skip it.
+    Mirrors the ContentProgress→ModuleProgress cascade pattern.
+    """
+    old = getattr(instance, '_old_is_eligible', None)
+    if not created and instance.is_eligible == old:
+        return
+    if instance.enrollment_id is None:
+        return
+    try:
+        instance.enrollment.update_progress()
+    except Exception:
+        logger.exception(
+            "Attendance-eligibility cascade failed for enrollment=%s session=%s",
+            instance.enrollment_id, instance.session_id,
+        )
+
+
 @receiver(pre_save, sender='learning.CourseSession')
 def _capture_session_state(sender, instance, **kwargs):
     """Stash the prior status so post_save can detect the CANCELLED transition."""

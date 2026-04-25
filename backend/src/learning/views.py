@@ -996,14 +996,56 @@ class CourseViewSet(viewsets.ModelViewSet):
                 }
             )
 
-        return Response(
-            {
-                'course_uuid': course.uuid,
-                'course_title': course.title,
-                'enrollment': CourseEnrollmentSerializer(enrollment).data,
-                'modules': module_data,
+        # Hydrate module/session breakdown from the snapshot the learner-side
+        # progress was just computed from. Pure-online courses get no
+        # session_progress key (absent, not zero) so the client can branch
+        # without re-checking course.format. See
+        # docs/design/hybrid-course-experience.md §B.
+        snapshot = enrollment._progress_snapshot()
+        enrollment_data = CourseEnrollmentSerializer(enrollment).data
+        from learning.models import CourseSession
+        modules_total = CourseModule.objects.filter(course=course).count()
+        enrollment_data['module_progress'] = {
+            'units_completed': snapshot['module_units_completed'],
+            'units_total': snapshot['module_units_total'],
+            'modules_completed': snapshot['modules_completed'],
+            'modules_total': modules_total,
+        }
+
+        sessions_payload = None
+        if course.format in (Course.CourseFormat.LIVE, Course.CourseFormat.HYBRID):
+            from .serializers import LiveSessionSerializer
+            sessions_qs = (
+                CourseSession.objects.filter(course=course, is_published=True)
+                .exclude(status=CourseSession.Status.CANCELLED)
+                .order_by('order', 'starts_at')
+            )
+            sessions_payload = LiveSessionSerializer(
+                sessions_qs, many=True, context={'request': request},
+            ).data
+            mandatory_sessions = sessions_qs.filter(is_mandatory=True).count()
+            attended_sessions = sessions_qs.filter(
+                attendance_records__enrollment=enrollment,
+                attendance_records__is_eligible=True,
+                is_mandatory=True,
+            ).count()
+            enrollment_data['session_progress'] = {
+                'units_completed': snapshot['session_units_completed'],
+                'units_total': snapshot['session_units_total'],
+                'sessions_attended': attended_sessions,
+                'sessions_total': mandatory_sessions,
+                'criteria': course.hybrid_completion_criteria,
             }
-        )
+
+        response_data = {
+            'course_uuid': course.uuid,
+            'course_title': course.title,
+            'enrollment': enrollment_data,
+            'modules': module_data,
+        }
+        if sessions_payload is not None:
+            response_data['sessions'] = sessions_payload
+        return Response(response_data)
 
 
     @action(detail=True, methods=['get'])

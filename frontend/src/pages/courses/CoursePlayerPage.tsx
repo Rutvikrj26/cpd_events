@@ -17,6 +17,7 @@ import { getCourseModules, getModuleContents } from '@/api/courses/modules';
 import { updateContentProgress } from '@/api/learning';
 import { Course, CourseModule, Assignment, AssignmentSubmission, CourseAnnouncement, CourseSession } from '@/api/courses/types';
 import { SessionsPanel } from '@/components/courses/SessionsPanel';
+import { LiveSessionRow } from '@/components/live/LiveSessionRow';
 import { DiscussionPanel } from '@/components/courses/discussion/DiscussionPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { deriveProgressDisplay } from '@/lib/progress';
@@ -145,8 +146,18 @@ export function CoursePlayerPage() {
                 let progressMap: Record<string, any> = {};
                 let savedEnrollmentProgress = 0;
 
+                let sessionsFromProgress = false;
                 try {
                     const progress = await getCourseProgress(courseUuid);
+                    // The progress endpoint returns sessions with attendance,
+                    // recording, and join-window already resolved against the
+                    // current user (via LiveSessionSerializer). Prefer it over
+                    // the separate getCourseSessions call which uses the
+                    // anonymous list serializer.
+                    if (Array.isArray((progress as any).sessions)) {
+                        setSessions((progress as any).sessions);
+                        sessionsFromProgress = true;
+                    }
                     progress.modules.forEach((module: any) => {
                         const mUuid = module.module?.uuid || module.module?.id;
                         availability[mUuid] = module.is_available;
@@ -204,9 +215,11 @@ export function CoursePlayerPage() {
                     console.error('Failed to load announcements:', error);
                 }
 
-                // Load sessions for live + hybrid courses (LIVE has no
-                // self-paced modules, so sessions are the only learner surface).
-                if (courseData.format === 'hybrid' || courseData.format === 'live') {
+                // Sessions are now sourced from the progress endpoint above
+                // (hydrated with attendance + recording per request user). The
+                // anonymous list endpoint is kept as a fallback only when the
+                // progress fetch failed (staff preview, unenrolled).
+                if (!sessionsFromProgress && (courseData.format === 'hybrid' || courseData.format === 'live')) {
                     try {
                         const courseSessions = await getCourseSessions(courseUuid);
                         setSessions(courseSessions.filter((s: CourseSession) => s.is_published));
@@ -311,6 +324,9 @@ export function CoursePlayerPage() {
         if (!courseUuid) return;
         try {
             const progress = await getCourseProgress(courseUuid);
+            if (Array.isArray((progress as any).sessions)) {
+                setSessions((progress as any).sessions);
+            }
             const completed = new Set<string>();
             const availability: Record<string, boolean> = {};
             const progressMap: Record<string, any> = {};
@@ -625,8 +641,38 @@ export function CoursePlayerPage() {
                     </div>
                 </div>
 
-                {/* Module List */}
+                {/* Sidebar — two-track for live/hybrid: sessions above modules.
+                    Pure-online courses skip the sessions group; pure-live skip
+                    modules. See docs/design/hybrid-course-experience.md §B. */}
                 <div className="flex-1 overflow-y-auto">
+                    {(course.format === 'live' || course.format === 'hybrid') && sessions.length > 0 && (
+                        <div className="p-2 border-b">
+                            <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Live Sessions
+                            </div>
+                            {sessions.map((s) => (
+                                <LiveSessionRow
+                                    key={s.uuid}
+                                    session={s as any}
+                                    onClick={() => {
+                                        // Lobby + recording pages are Phase 2. Until they ship,
+                                        // open published recording in a new tab if available;
+                                        // otherwise show a "coming soon" toast.
+                                        const rec = (s as any).recording;
+                                        if (rec?.storage_path) {
+                                            window.open(rec.storage_path, '_blank');
+                                        } else {
+                                            toast({
+                                                title: 'Lobby coming soon',
+                                                description: 'Live attendance is captured automatically during the session.',
+                                            });
+                                        }
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    )}
+                    {course.format !== 'live' && (
                     <div className="p-2">
                         {modules.map((mod, modIdx) => {
                             const moduleUuid = mod.module?.uuid || mod.uuid;
@@ -712,6 +758,7 @@ export function CoursePlayerPage() {
                             );
                         })}
                     </div>
+                    )}
                 </div>
             </div>
 
@@ -922,11 +969,10 @@ export function CoursePlayerPage() {
                 ) : (
                     <div className="flex-1 overflow-y-auto p-6">
                         <div className="max-w-4xl mx-auto">
-                            {/* Show sessions for live and hybrid courses */}
-                            {(course.format === 'live' || course.format === 'hybrid') && sessions.length > 0 && (
-                                <SessionsPanel sessions={sessions} courseTitle={course.title} courseUuid={course.uuid} />
-                            )}
-
+                            {/* Sessions are rendered in the sidebar (two-track layout).
+                                The empty-state branch only fires for pure-live courses
+                                with no sessions yet — keep that, drop the duplicate
+                                SessionsPanel render that pre-dated the sidebar. */}
                             {course.format === 'live' && sessions.length === 0 ? (
                                 <div className="text-center py-12">
                                     <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
