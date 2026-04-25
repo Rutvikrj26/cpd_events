@@ -3,6 +3,13 @@ from rest_framework import status
 
 from learning.models import Course
 
+pytest.skip(
+    "Subscription / per-seat plan model was removed in the single-tenant "
+    "transition. Course-creation gating is now role-based (see "
+    "@roles decorators) — no per-instructor monthly limits.",
+    allow_module_level=True,
+)
+
 
 @pytest.mark.django_db
 class TestLmsPlanAccess:
