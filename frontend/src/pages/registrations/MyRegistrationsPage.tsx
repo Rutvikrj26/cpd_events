@@ -19,7 +19,7 @@ import {
     Award,
     ArrowRight,
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -38,6 +38,7 @@ import { FeedbackModal } from '@/components/feedback';
 import { getRegistrationFeedback } from '@/api/feedback';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDate } from '@/lib/datetime';
+import { deriveProgressDisplay } from '@/lib/progress';
 import { EventFeedback } from '@/api/feedback/types';
 import { format } from 'date-fns';
 
@@ -48,6 +49,8 @@ export const MyLearningPage = () => {
     const [loading, setLoading] = useState(true);
     const [linking, setLinking] = useState(false);
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const initialTab = searchParams.get('tab') === 'courses' ? 'courses' : 'events';
 
     // Feedback state
     const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
@@ -190,7 +193,15 @@ export const MyLearningPage = () => {
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-foreground">My Learning</h1>
 
-            <Tabs defaultValue="events" className="w-full">
+            <Tabs
+                value={initialTab}
+                onValueChange={(v) => {
+                    const next = new URLSearchParams(searchParams);
+                    if (v === 'events') next.delete('tab'); else next.set('tab', v);
+                    setSearchParams(next, { replace: true });
+                }}
+                className="w-full"
+            >
                 <TabsList>
                     <TabsTrigger value="events">Events ({registrations.length})</TabsTrigger>
                     <TabsTrigger value="courses">Courses ({enrollments.length})</TabsTrigger>
@@ -332,13 +343,13 @@ export const MyLearningPage = () => {
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {enrollments.map((enrollment) => {
-                                const isComplete = enrollment.status === 'completed' || enrollment.progress_percent >= 100;
+                                const display = deriveProgressDisplay(enrollment);
                                 return (
                                     <Card key={enrollment.uuid} className="flex flex-col h-full hover:shadow-md transition-shadow">
                                         <CardHeader className="pb-4">
                                             <div className="flex justify-between items-start mb-2">
-                                                <Badge variant={enrollment.status === 'completed' ? 'default' : enrollment.progress_percent >= 100 ? 'outline' : 'secondary'}>
-                                                    {enrollment.status === 'completed' ? 'Completed' : enrollment.progress_percent >= 100 ? 'Awaiting Review' : 'In Progress'}
+                                                <Badge variant={display.isCompleted ? 'default' : display.statusLabel === 'Awaiting Review' ? 'outline' : 'secondary'}>
+                                                    {display.statusLabel}
                                                 </Badge>
                                                 {enrollment.certificate_issued && (
                                                     <div title="Certificate Earned">
@@ -358,9 +369,16 @@ export const MyLearningPage = () => {
                                                 <div className="space-y-2">
                                                     <div className="flex justify-between text-sm">
                                                         <span className="text-muted-foreground">Progress</span>
-                                                        <span className="font-medium">{enrollment.progress_percent}%</span>
+                                                        <span className="font-medium">{display.percent}%</span>
                                                     </div>
-                                                    <Progress value={enrollment.progress_percent} className="h-2" />
+                                                    <Progress value={display.percent} className="h-2" />
+                                                    {(enrollment.course?.module_count ?? 0) > 0 && (
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {display.isCompleted
+                                                                ? `${enrollment.course?.module_count} of ${enrollment.course?.module_count} modules complete`
+                                                                : `${enrollment.modules_completed ?? 0} of ${enrollment.course?.module_count} modules complete`}
+                                                        </p>
+                                                    )}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground flex justify-between">
                                                     <span>
@@ -375,7 +393,7 @@ export const MyLearningPage = () => {
                                         <CardFooter className="pt-0 flex gap-2">
                                             <Button className="flex-1" asChild>
                                                 <Link to={`/learn/${enrollment.course?.uuid}`}>
-                                                    {isComplete ? 'Review' : 'Continue'}
+                                                    {display.isCompleted ? 'Review' : 'Continue'}
                                                     <ArrowRight className="ml-2 h-4 w-4" />
                                                 </Link>
                                             </Button>

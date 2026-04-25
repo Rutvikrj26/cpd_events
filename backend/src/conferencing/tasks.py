@@ -411,6 +411,7 @@ def _update_session_attendance(video_room, participant_identity):
             'attendance_minutes', 'leave_time',
             'is_eligible', 'updated_at',
         ])
+        attendance.enrollment.update_progress()
 
 
 def _handle_recording_ended(video_room, payload):

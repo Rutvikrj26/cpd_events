@@ -31,8 +31,16 @@ export const getOwnedCourses = async (): Promise<Course[]> => {
     return Array.isArray(response.data) ? response.data : response.data.results || [];
 };
 
-export const getCourse = async (uuid: string): Promise<Course> => {
-    const response = await client.get<Course>(`/courses/${uuid}/`);
+export const getCourse = async (
+    uuid: string,
+    options: { silent?: boolean } = {},
+): Promise<Course> => {
+    const response = await client.get<Course>(`/courses/${uuid}/`, {
+        // Forwarded to the axios interceptor — when set, the global toast
+        // for non-401 errors is suppressed so callers can render an inline
+        // empty/404 state without a duplicate red toast.
+        ...(options.silent ? { silent: true } : {}),
+    } as any);
     return response.data;
 };
 

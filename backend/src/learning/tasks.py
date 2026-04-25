@@ -273,6 +273,77 @@ def send_course_completed(enrollment_id: int):
 
 
 @task()
+def send_session_cancelled(enrollment_id: int, session_id: int):
+    """Notify a learner that a course session was cancelled and that their
+    completion requirements were recomputed (D2 in
+    docs/design/hybrid-course-experience.md).
+
+    Idempotent: skips if a session_cancelled EmailLog already exists for this
+    (user, session) pair.
+    """
+    from accounts.models import Notification
+    from integrations.models import EmailLog
+    from integrations.services import email_service
+
+    from .models import CourseEnrollment, CourseSession
+
+    try:
+        enrollment = CourseEnrollment.objects.select_related('course', 'user').get(id=enrollment_id)
+        session = CourseSession.objects.get(id=session_id)
+    except (CourseEnrollment.DoesNotExist, CourseSession.DoesNotExist):
+        logger.warning(
+            "send_session_cancelled: enrollment %s or session %s missing",
+            enrollment_id, session_id,
+        )
+        return False
+
+    if not enrollment.user or not enrollment.user.email:
+        return False
+
+    already_sent = EmailLog.objects.filter(
+        recipient_user=enrollment.user,
+        email_type='session_cancelled',
+        subject__icontains=session.title,
+    ).exists()
+    if already_sent:
+        return True
+
+    log = EmailLog.objects.create(
+        recipient_email=enrollment.user.email,
+        recipient_name=enrollment.user.full_name,
+        recipient_user=enrollment.user,
+        email_type='session_cancelled',
+        subject=f"Session cancelled: {session.title}",
+    )
+
+    email_service.send_log(log, context={
+        'user_name': enrollment.user.full_name,
+        'course_title': enrollment.course.title,
+        'session_title': session.title,
+        'cancellation_reason': session.cancelled_reason or '',
+        'course_url': _course_url(enrollment.course),
+    })
+
+    Notification.objects.create(
+        user=enrollment.user,
+        notification_type='session_cancelled',
+        title=f"Session cancelled: {session.title}",
+        message=(
+            f"{session.title} in {enrollment.course.title} was cancelled. "
+            "Your completion requirements have been updated."
+        ),
+        action_url=_course_url(enrollment.course),
+        metadata={
+            'course_uuid': str(enrollment.course.uuid),
+            'session_uuid': str(session.uuid),
+            'enrollment_id': enrollment.id,
+            'email_log_id': log.id,
+        },
+    )
+    return True
+
+
+@task()
 def send_course_session_reminders(hours_before: int = 24):
     """Send reminders for upcoming course sessions in a window."""
     from integrations.services import email_service

@@ -39,8 +39,9 @@ class TestCourseProgressArchitecture:
         assert progress.registration is None
         assert progress.pk is not None
 
-        # Verify Module Progress creation
-        mod_progress = ModuleProgress.objects.create(course_enrollment=enrollment, module=event_module)
+        # ModuleProgress is auto-created by the ContentProgress post_save
+        # cascade signal (learning/signals.py); fetch the existing row.
+        mod_progress = ModuleProgress.objects.get(course_enrollment=enrollment, module=event_module)
         assert mod_progress.course_enrollment == enrollment
 
     def test_event_registration_progress(self):

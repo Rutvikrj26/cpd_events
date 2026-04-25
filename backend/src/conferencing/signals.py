@@ -55,7 +55,14 @@ def handle_event_video(sender, instance, created, **kwargs):
 
 @receiver(post_save, sender='learning.CourseSession')
 def handle_course_session_video(sender, instance, created, **kwargs):
-    """Create a video room when a course session has video enabled."""
+    """Create a video room when a course session has video enabled.
+
+    Skipped for in-person sessions: there's no remote stream to host. Hybrid
+    sessions still provision a room because remote attendees join via video.
+    """
+    if instance.delivery_mode == instance.DeliveryMode.IN_PERSON:
+        return
+
     video_settings = getattr(instance, 'video_settings', None)
     if not video_settings:
         return

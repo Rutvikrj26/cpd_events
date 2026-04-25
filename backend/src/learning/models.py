@@ -541,6 +541,17 @@ class ContentProgress(BaseModel):
         user = self.registration.user if self.registration else self.course_enrollment.user
         return f"{user.email} - {self.content.title}"
 
+    def save(self, *args, **kwargs):
+        # Mirror CourseEnrollment.save() invariant: status=COMPLETED ⟺
+        # progress_percent=100 + completed_at set. Lets the player drop the
+        # defensive "status===completed || progress===100" dual check.
+        if self.status == self.Status.COMPLETED:
+            if self.progress_percent != 100:
+                self.progress_percent = 100
+            if self.completed_at is None:
+                self.completed_at = timezone.now()
+        super().save(*args, **kwargs)
+
     def start(self):
         """Mark content as started."""
         if self.status == self.Status.NOT_STARTED:
@@ -548,23 +559,32 @@ class ContentProgress(BaseModel):
             self.started_at = timezone.now()
             self.save()
 
-    def complete(self):
+    def complete(self, time_spent=0, position=None):
         """Mark content as completed."""
         self.status = self.Status.COMPLETED
         self.progress_percent = 100
-        self.completed_at = timezone.now()
+        if not self.completed_at:
+            self.completed_at = timezone.now()
+        if time_spent:
+            self.time_spent_seconds += time_spent
+        if position is not None:
+            self.last_position = position
         self.save()
 
     def update_progress(self, percent, time_spent=0, position=None):
         """Update progress."""
         self.progress_percent = min(percent, 100)
         self.time_spent_seconds += time_spent
-        if position:
+        if position is not None:
             self.last_position = position
 
         if percent >= 100:
-            self.complete()
+            self.complete(position=position)
         else:
+            if self.status == self.Status.NOT_STARTED and percent > 0:
+                self.status = self.Status.IN_PROGRESS
+                if not self.started_at:
+                    self.started_at = timezone.now()
             self.save()
 
 
@@ -638,7 +658,7 @@ class ModuleProgress(BaseModel):
 
     def update_from_content(self):
         """Update progress based on content progress."""
-        required_contents = self.module.contents.filter(is_required=True)
+        required_contents = self.module.contents.filter(is_required=True, is_published=True)
         self.contents_total = required_contents.count()
 
         # Context-aware lookup
@@ -653,11 +673,16 @@ class ModuleProgress(BaseModel):
 
         if self.contents_completed >= self.contents_total and self.contents_total > 0:
             self.status = self.Status.COMPLETED
-            self.completed_at = timezone.now()
+            if not self.completed_at:
+                self.completed_at = timezone.now()
         elif self.contents_completed > 0:
             self.status = self.Status.IN_PROGRESS
             if not self.started_at:
                 self.started_at = timezone.now()
+            self.completed_at = None
+        else:
+            self.status = self.Status.NOT_STARTED
+            self.completed_at = None
 
         self.save()
 
@@ -1175,6 +1200,18 @@ class CourseEnrollment(BaseModel):
     def __str__(self):
         return f"{self.user.email} - {self.course.title}"
 
+    def save(self, *args, **kwargs):
+        # Invariant: status=COMPLETED ⟺ progress_percent=100 + completed_at set.
+        # Catches every code path that flips status without normalising the
+        # accompanying fields (seed updates, admin actions, future bugs).
+        if self.status == self.Status.COMPLETED:
+            if self.progress_percent != 100:
+                self.progress_percent = 100
+            if self.completed_at is None:
+                from django.utils import timezone as _tz
+                self.completed_at = _tz.now()
+        super().save(*args, **kwargs)
+
     @property
     def is_active(self):
         """Check if enrollment is active."""
@@ -1262,27 +1299,215 @@ class CourseEnrollment(BaseModel):
         self.save(update_fields=["status", "updated_at"])
         self.course.update_counts()
 
+    def _required_course_modules(self):
+        """Published required modules are the learner-visible module requirements."""
+        return (
+            self.course.modules.filter(is_required=True, module__is_published=True)
+            .select_related("module")
+            .order_by("order")
+        )
+
+    def _has_passing_submission(self, assignment) -> bool:
+        return (
+            AssignmentSubmission.objects.filter(
+                assignment=assignment,
+                course_enrollment=self,
+                status__in=[
+                    AssignmentSubmission.Status.GRADED,
+                    AssignmentSubmission.Status.APPROVED,
+                ],
+            )
+            .filter(score__gte=assignment.passing_score)
+            .exists()
+        )
+
+    def _module_requirement_progress(self) -> dict:
+        """
+        Requirement-weighted progress for self-paced coursework.
+
+        Required, published content counts as one unit each. Assignments in
+        required modules count as one unit each because the Assignment model
+        has no separate required/optional flag.
+        """
+        completed_units = 0
+        total_units = 0
+        modules_completed = 0
+        total_modules = 0
+
+        for course_module in self._required_course_modules():
+            module = course_module.module
+            total_modules += 1
+            module_completed_units = 0
+            module_total_units = 0
+
+            required_contents = module.contents.filter(is_required=True, is_published=True)
+            completed_content_ids = set(
+                ContentProgress.objects.filter(
+                    course_enrollment=self,
+                    content__in=required_contents,
+                    status=ContentProgress.Status.COMPLETED,
+                ).values_list("content_id", flat=True)
+            )
+
+            for content in required_contents:
+                module_total_units += 1
+                if content.id in completed_content_ids:
+                    module_completed_units += 1
+
+            for assignment in module.assignments.all():
+                module_total_units += 1
+                if self._has_passing_submission(assignment):
+                    module_completed_units += 1
+
+            total_units += module_total_units
+            completed_units += module_completed_units
+            if module_total_units > 0 and module_completed_units == module_total_units:
+                modules_completed += 1
+
+        return {
+            "completed_units": completed_units,
+            "total_units": total_units,
+            "modules_completed": modules_completed,
+            "total_modules": total_modules,
+        }
+
+    def _session_requirement_progress(self) -> dict:
+        """Requirement-weighted progress for live-session attendance.
+
+        CANCELLED sessions are excluded from both numerator and denominator
+        (per D2 in docs/design/hybrid-course-experience.md). Attendance rows
+        for cancelled sessions survive in the audit log but stop counting.
+        """
+        course = self.course
+        criteria = course.hybrid_completion_criteria
+
+        if criteria == Course.HybridCompletionCriteria.MIN_SESSIONS:
+            total_units = course.min_sessions_required
+            completed_units = CourseSessionAttendance.objects.filter(
+                enrollment=self,
+                is_eligible=True,
+                session__course=course,
+                session__is_published=True,
+            ).exclude(session__status=CourseSession.Status.CANCELLED).count()
+            return {
+                "completed_units": min(completed_units, total_units),
+                "total_units": total_units,
+            }
+
+        mandatory_sessions = course.sessions.filter(
+            is_mandatory=True, is_published=True
+        ).exclude(status=CourseSession.Status.CANCELLED)
+        total_units = mandatory_sessions.count()
+        completed_units = CourseSessionAttendance.objects.filter(
+            enrollment=self,
+            is_eligible=True,
+            session__in=mandatory_sessions,
+        ).count()
+        return {
+            "completed_units": min(completed_units, total_units),
+            "total_units": total_units,
+        }
+
+    @staticmethod
+    def _percent(completed: int, total: int) -> int:
+        if total <= 0:
+            return 0
+        return int((completed / total) * 100)
+
+    def _progress_snapshot(self) -> dict:
+        """Calculate the learner-facing progress counter from required work."""
+        module_progress = self._module_requirement_progress()
+        session_progress = self._session_requirement_progress()
+        course = self.course
+
+        if course.format == Course.CourseFormat.ONLINE:
+            progress_percent = self._percent(
+                module_progress["completed_units"],
+                module_progress["total_units"],
+            )
+        elif course.format == Course.CourseFormat.LIVE:
+            progress_percent = self._percent(
+                session_progress["completed_units"],
+                session_progress["total_units"],
+            )
+        else:
+            criteria = course.hybrid_completion_criteria
+            module_percent = self._percent(
+                module_progress["completed_units"],
+                module_progress["total_units"],
+            )
+            session_percent = self._percent(
+                session_progress["completed_units"],
+                session_progress["total_units"],
+            )
+            if criteria == Course.HybridCompletionCriteria.MODULES_ONLY:
+                progress_percent = module_percent
+            elif criteria == Course.HybridCompletionCriteria.SESSIONS_ONLY:
+                progress_percent = session_percent
+            elif criteria == Course.HybridCompletionCriteria.EITHER:
+                progress_percent = max(module_percent, session_percent)
+            else:
+                completed = module_progress["completed_units"] + session_progress["completed_units"]
+                total = module_progress["total_units"] + session_progress["total_units"]
+                progress_percent = self._percent(completed, total)
+
+        return {
+            "progress_percent": min(progress_percent, 100),
+            "modules_completed": module_progress["modules_completed"],
+            "module_units_completed": module_progress["completed_units"],
+            "module_units_total": module_progress["total_units"],
+            "session_units_completed": session_progress["completed_units"],
+            "session_units_total": session_progress["total_units"],
+        }
+
+    def _apply_progress_snapshot(self):
+        snapshot = self._progress_snapshot()
+        self.modules_completed = snapshot["modules_completed"]
+        self.progress_percent = snapshot["progress_percent"]
+        # Refresh current_score from graded passing submissions. Used by
+        # is_passing and by the cert-issuance path (final_score on the
+        # certificate). Without this update the field stays at its initial
+        # value forever — the bug that made cert final_score always null
+        # for every learner whose enrollment wasn't manually patched.
+        self._refresh_current_score()
+        return snapshot
+
+    def _refresh_current_score(self):
+        """Average score across the learner's passing graded submissions.
+
+        Returns None if no graded submissions exist (preserves null instead
+        of writing 0, which would make is_passing return False spuriously).
+        """
+        submissions = self.assignment_submissions.filter(
+            status__in=[
+                AssignmentSubmission.Status.GRADED,
+                AssignmentSubmission.Status.APPROVED,
+            ],
+            score__isnull=False,
+        ).values_list("score", flat=True)
+        scores = list(submissions)
+        if scores:
+            self.current_score = round(sum(scores) / len(scores))
+        else:
+            self.current_score = None
+
     def update_progress(self):
-        """Update progress from module progress."""
-        total_modules = self.course.modules.filter(is_required=True).count()
-        if total_modules == 0:
+        """Update stored progress from all learner requirements.
+
+        Once the enrollment is marked COMPLETED it represents an immutable
+        historical fact (the learner finished, the certificate has been
+        issued). Recomputing from leaf data after that point would erase
+        progress for archived courses with no surviving ContentProgress
+        rows, and would also undo manual instructor completion overrides.
+        """
+        if self.status == self.Status.COMPLETED:
             return
 
-        # Count completed modules
-        completed = 0
-        for course_module in self.course.modules.filter(is_required=True):
-            try:
-                progress = ModuleProgress.objects.get(
-                    course_enrollment=self,
-                    module=course_module.module,
-                )
-                if progress.status == ModuleProgress.Status.COMPLETED:
-                    completed += 1
-            except ModuleProgress.DoesNotExist:
-                pass
+        self._apply_progress_snapshot()
 
-        self.modules_completed = completed
-        self.progress_percent = int((completed / total_modules) * 100)
+        if self.status != self.Status.ACTIVE:
+            self.save(update_fields=["modules_completed", "progress_percent", "updated_at"])
+            return
 
         # Check completion after updating progress
         self.check_completion()
@@ -1299,6 +1524,8 @@ class CourseEnrollment(BaseModel):
         """
         if self.status != self.Status.ACTIVE:
             return False
+
+        self._apply_progress_snapshot()
 
         # Check for manual completion override
         if getattr(self, "manually_completed", False):
@@ -1356,57 +1583,59 @@ class CourseEnrollment(BaseModel):
 
     def _check_module_requirements(self) -> bool:
         """Check if module/assignment requirements are passed."""
-        # Get all required modules for this course
-        required_modules = self.course.modules.filter(is_required=True).values_list("module_id", flat=True)
+        required_modules = list(self._required_course_modules())
 
         if not required_modules:
             # No required modules, check if 100% progress
             return self.progress_percent >= 100
 
-        # Get all assignments from required modules
-        required_assignments = Assignment.objects.filter(module_id__in=required_modules)
+        module_ids = [course_module.module_id for course_module in required_modules]
 
-        if not required_assignments.exists():
-            # No assignments, just check module progress
-            return self.progress_percent >= 100
+        required_contents = ModuleContent.objects.filter(
+            module_id__in=module_ids,
+            is_required=True,
+            is_published=True,
+        )
+        for content in required_contents:
+            if not ContentProgress.objects.filter(
+                course_enrollment=self,
+                content=content,
+                status=ContentProgress.Status.COMPLETED,
+            ).exists():
+                return False
+
+        # Get all assignments from required modules. All assignments are
+        # required because Assignment currently has no optional flag.
+        required_assignments = Assignment.objects.filter(module_id__in=module_ids)
 
         # Check each required assignment has a passing submission
         for assignment in required_assignments:
-            has_passing = (
-                AssignmentSubmission.objects.filter(
-                    assignment=assignment,
-                    course_enrollment=self,
-                    status__in=[
-                        AssignmentSubmission.Status.GRADED,
-                        AssignmentSubmission.Status.APPROVED,
-                    ],
-                )
-                .filter(score__gte=assignment.passing_score)
-                .exists()
-            )
-
-            if not has_passing:
+            if not self._has_passing_submission(assignment):
                 return False
 
-        return True
+        return required_contents.exists() or required_assignments.exists() or self.progress_percent >= 100
 
     def _check_session_requirements(self) -> bool:
         """Check if session attendance requirements are met."""
         course = self.course
         criteria = course.hybrid_completion_criteria
 
+        # CANCELLED sessions are excluded from both denominator and numerator
+        # — see D2 (docs/design/hybrid-course-experience.md).
+        active_sessions = course.sessions.exclude(status=CourseSession.Status.CANCELLED)
+
         # If strict session count is required, use that logic regardless of "mandatory" flags
         if criteria == Course.HybridCompletionCriteria.MIN_SESSIONS:
-            published_count = course.sessions.filter(is_published=True).count()
+            published_count = active_sessions.filter(is_published=True).count()
             if published_count < course.min_sessions_required:
                 return False
             eligible_count = CourseSessionAttendance.objects.filter(
                 enrollment=self, is_eligible=True, session__course=course
-            ).count()
+            ).exclude(session__status=CourseSession.Status.CANCELLED).count()
             return eligible_count >= course.min_sessions_required
 
         # Otherwise (SESSIONS_ONLY, BOTH, EITHER): use mandatory-session attendance.
-        mandatory_sessions = course.sessions.filter(is_mandatory=True, is_published=True)
+        mandatory_sessions = active_sessions.filter(is_mandatory=True, is_published=True)
 
         if not mandatory_sessions.exists():
             # For session-driven courses (live, or hybrid with SESSIONS_ONLY/BOTH/EITHER)
@@ -1462,6 +1691,11 @@ class CourseSession(BaseModel):
         COMPLETED = "completed", "Completed"
         CANCELLED = "cancelled", "Cancelled"
 
+    class DeliveryMode(models.TextChoices):
+        ONLINE = "online", "Online"
+        IN_PERSON = "in_person", "In Person"
+        HYBRID = "hybrid", "Hybrid (in-person + remote)"
+
     # Relationships
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="sessions")
 
@@ -1470,6 +1704,15 @@ class CourseSession(BaseModel):
     description = models.TextField(blank=True, help_text="Session description")
     order = models.PositiveIntegerField(default=0, help_text="Display order")
     session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.LIVE)
+
+    # Delivery mode — drives whether a VideoRoom is provisioned (in_person → no
+    # room). Sessions are by definition live; an "asynchronous" choice here
+    # would be a contradiction (recordings are tracked separately via
+    # CourseSessionRecordingView).
+    delivery_mode = models.CharField(
+        max_length=20, choices=DeliveryMode.choices, default=DeliveryMode.ONLINE,
+        help_text="How attendees join: online, in person, or both.",
+    )
 
     # Schedule
     starts_at = models.DateTimeField(help_text="Session start time")
@@ -1536,6 +1779,8 @@ class CourseSession(BaseModel):
     def _recording_enabled(self) -> bool:
         if not self.recording_enabled:
             return False
+        if self.delivery_mode == self.DeliveryMode.IN_PERSON:
+            return False  # No video stream → nothing to record.
         settings = self.video_settings if isinstance(self.video_settings, dict) else {}
         return bool(settings.get('enabled'))
 
@@ -1650,6 +1895,41 @@ class CourseSessionAttendance(BaseModel):
         self.override_by = user
         self.override_reason = reason
         self.save()
+
+
+class CourseSessionRecordingView(BaseModel):
+    """Tracks recording-playback events for a learner.
+
+    Per D3 in docs/design/hybrid-course-experience.md, this is observability
+    + product signal — it never feeds CourseSessionAttendance.is_eligible.
+    Manual instructor override remains the only way to credit a missed-live
+    attendee based on a recording.
+    """
+
+    course_enrollment = models.ForeignKey(
+        CourseEnrollment, on_delete=models.CASCADE, related_name="recording_views"
+    )
+    session = models.ForeignKey(
+        CourseSession, on_delete=models.CASCADE, related_name="recording_views"
+    )
+
+    watch_seconds = models.PositiveIntegerField(default=0, help_text="Cumulative seconds watched")
+    last_position_seconds = models.PositiveIntegerField(default=0, help_text="Resume point")
+    completed_at = models.DateTimeField(null=True, blank=True, help_text="When the learner watched to the end")
+
+    class Meta:
+        db_table = "course_session_recording_views"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["course_enrollment", "session"],
+                name="unique_enrollment_session_recording",
+            ),
+        ]
+        verbose_name = "Course Session Recording View"
+        verbose_name_plural = "Course Session Recording Views"
+
+    def __str__(self):
+        return f"{self.course_enrollment.user.email} - {self.session.title} ({self.watch_seconds}s)"
 
 
 # =============================================================================

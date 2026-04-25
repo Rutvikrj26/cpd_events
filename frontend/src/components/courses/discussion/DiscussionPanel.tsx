@@ -143,28 +143,67 @@ export function DiscussionPanel({ courseUuid, currentUserUuid, isStaff }: Discus
         );
     }
 
+    // Dialogs (FlagDialog, ThreadComposerDialog) must mount regardless of
+    // which sub-view is active — otherwise opening a flag from inside the
+    // thread detail view sets state that no rendered dialog reads.
+    const dialogs = (
+        <>
+            <ThreadComposerDialog
+                open={composerOpen}
+                onOpenChange={setComposerOpen}
+                courseUuid={courseUuid}
+                onCreated={async (thread) => {
+                    setComposerOpen(false);
+                    await loadThreads();
+                    await openThread(thread.uuid);
+                }}
+            />
+            <FlagDialog
+                open={!!flagTarget}
+                onOpenChange={(open) => !open && setFlagTarget(null)}
+                targetLabel={flagTarget?.label ?? 'this post'}
+                onSubmit={async (data) => {
+                    if (!flagTarget) return;
+                    if (flagTarget.type === 'thread') {
+                        await flagThread(courseUuid, flagTarget.threadUuid, data);
+                    } else {
+                        await flagReply(
+                            courseUuid,
+                            flagTarget.threadUuid,
+                            flagTarget.replyUuid,
+                            data
+                        );
+                    }
+                }}
+            />
+        </>
+    );
+
     if (activeThread) {
         return (
-            <ThreadView
-                courseUuid={courseUuid}
-                thread={activeThread}
-                currentUserUuid={currentUserUuid}
-                isStaff={isStaff}
-                onBack={() => {
-                    setActiveThread(null);
-                    loadThreads();
-                }}
-                onReplySent={handleReplySent}
-                onModerate={(verb) => handleModerate(verb, activeThread.uuid)}
-                onDelete={() => handleDeleteThread(activeThread.uuid)}
-                onFlagReply={(replyUuid, label) =>
-                    setFlagTarget({ type: 'reply', threadUuid: activeThread.uuid, replyUuid, label })
-                }
-                onFlagThread={(label) =>
-                    setFlagTarget({ type: 'thread', threadUuid: activeThread.uuid, label })
-                }
-                onReload={() => openThread(activeThread.uuid)}
-            />
+            <>
+                <ThreadView
+                    courseUuid={courseUuid}
+                    thread={activeThread}
+                    currentUserUuid={currentUserUuid}
+                    isStaff={isStaff}
+                    onBack={() => {
+                        setActiveThread(null);
+                        loadThreads();
+                    }}
+                    onReplySent={handleReplySent}
+                    onModerate={(verb) => handleModerate(verb, activeThread.uuid)}
+                    onDelete={() => handleDeleteThread(activeThread.uuid)}
+                    onFlagReply={(replyUuid, label) =>
+                        setFlagTarget({ type: 'reply', threadUuid: activeThread.uuid, replyUuid, label })
+                    }
+                    onFlagThread={(label) =>
+                        setFlagTarget({ type: 'thread', threadUuid: activeThread.uuid, label })
+                    }
+                    onReload={() => openThread(activeThread.uuid)}
+                />
+                {dialogs}
+            </>
         );
     }
 
@@ -252,35 +291,7 @@ export function DiscussionPanel({ courseUuid, currentUserUuid, isStaff }: Discus
                 </div>
             )}
 
-            <ThreadComposerDialog
-                open={composerOpen}
-                onOpenChange={setComposerOpen}
-                courseUuid={courseUuid}
-                onCreated={async (thread) => {
-                    setComposerOpen(false);
-                    await loadThreads();
-                    await openThread(thread.uuid);
-                }}
-            />
-
-            <FlagDialog
-                open={!!flagTarget}
-                onOpenChange={(open) => !open && setFlagTarget(null)}
-                targetLabel={flagTarget?.label ?? 'this post'}
-                onSubmit={async (data) => {
-                    if (!flagTarget) return;
-                    if (flagTarget.type === 'thread') {
-                        await flagThread(courseUuid, flagTarget.threadUuid, data);
-                    } else {
-                        await flagReply(
-                            courseUuid,
-                            flagTarget.threadUuid,
-                            flagTarget.replyUuid,
-                            data
-                        );
-                    }
-                }}
-            />
+            {dialogs}
         </>
     );
 }

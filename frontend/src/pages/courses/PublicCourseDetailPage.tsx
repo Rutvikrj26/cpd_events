@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
 import { getCourseBySlug, enrollInCourse, getPublicCourses, courseCheckout, getEnrollments } from '@/api/courses';
 import { Course } from '@/api/courses/types';
+import { formatCpdLabel } from '@/lib/completion-criteria';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -186,7 +187,12 @@ export const PublicCourseDetailPage = () => {
                             <div className="flex flex-wrap gap-4 mt-6">
                                 <Badge variant={Number(course.cpd_credits) > 0 ? "default" : "secondary"} className="text-sm py-1 px-3">
                                     <Award className="mr-1 h-4 w-4" />
-                                    {course.cpd_credits} CPD Credits
+                                    {formatCpdLabel({
+                                        credits: course.cpd_credits,
+                                        criteria: course.hybrid_completion_criteria,
+                                        // Public page — viewer is unenrolled, so always pre-completion.
+                                        isCompleted: false,
+                                    })}{(course.hybrid_completion_criteria === 'either' || course.hybrid_completion_criteria === 'min_sessions') ? '' : ' Credits'}
                                 </Badge>
                                 <Badge variant="outline" className="text-sm py-1 px-3">
                                     <Clock className="mr-1 h-4 w-4" />

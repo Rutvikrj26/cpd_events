@@ -777,7 +777,8 @@ class Command(BaseCommand):
                       fmt="online", max_enrollments=None, short_description="", description="",
                       cpd_credits="1.00", cpd_type="general", is_public=True,
                       enrollment_open=True, enrollment_opens_at=None, enrollment_closes_at=None,
-                      enrollment_count=0):
+                      enrollment_count=0, hybrid_completion_criteria=None,
+                      min_sessions_required=1):
             defaults = dict(
                 created_by=users["organizer"],
                 title=title,
@@ -801,6 +802,9 @@ class Command(BaseCommand):
                 auto_issue_certificates=True,
                 enrollment_count=enrollment_count,
             )
+            if hybrid_completion_criteria is not None:
+                defaults["hybrid_completion_criteria"] = hybrid_completion_criteria
+                defaults["min_sessions_required"] = min_sessions_required
             obj, _ = Course.objects.update_or_create(
                 created_by=users["organizer"], slug=slug,
                 defaults=defaults,
@@ -864,6 +868,44 @@ class Command(BaseCommand):
                 "A free, self-paced intro to QI in healthcare. Reserved as a sandbox so "
                 "demo users can walk through the enrollment confirmation, notification, "
                 "and progress flows without affecting other learners' state."
+            ),
+        )
+        # Hybrid course — pre-work modules plus two scheduled live sessions.
+        # Exercises hybrid_completion_criteria=BOTH (modules AND sessions),
+        # CourseSession rendering, attendance tracking, and the live/replay
+        # surfaces inside the course player.
+        courses["bootcamp"] = mk_course(
+            "procedural-skills-bootcamp",
+            "Procedural Skills Bootcamp",
+            status="published",
+            fmt=Course.CourseFormat.HYBRID,
+            price_cents=12900, currency="CAD",
+            cpd_credits="6.00", cpd_type="clinical",
+            hybrid_completion_criteria=Course.HybridCompletionCriteria.BOTH,
+            short_description="Self-paced anatomy + equipment pre-work, then two live skills sessions.",
+            description=(
+                "Mastery-track hybrid course. Complete the three pre-work modules at "
+                "your own pace, then attend two live sessions: a didactic Q&A and a "
+                "hands-on lab. Both modules and live attendance are required to "
+                "earn the certificate."
+            ),
+        )
+
+        # Pure-live cohort course — no self-paced modules, completion is
+        # driven entirely by session attendance. Exercises the LIVE branch of
+        # _progress_snapshot() that the bootcamp's HYBRID flow doesn't.
+        courses["cohort"] = mk_course(
+            "cohort-workshop-difficult-conversations",
+            "Cohort Workshop: Difficult Conversations",
+            status="published",
+            fmt=Course.CourseFormat.LIVE,
+            price_cents=4900, currency="CAD",
+            cpd_credits="2.50", cpd_type="general",
+            short_description="Two-session live cohort on having difficult patient conversations.",
+            description=(
+                "A live, instructor-led cohort. Two 60-minute sessions over two "
+                "weeks. No self-paced material — completion is earned by "
+                "attending both sessions."
             ),
         )
 
@@ -931,6 +973,15 @@ class Command(BaseCommand):
             progress=60, modules_completed=3, current_score=88,
             enrolled_days_ago=14,
         )
+        # Pure-live cohort: Emily attends both sessions → COMPLETED via
+        # session attendance only (LIVE format, no modules to complete).
+        # Final progress + completed_at are set by _refresh_denormalized_counts
+        # once the attendance rows exist.
+        enrollments["emily_cohort"] = mk_enroll(
+            courses["cohort"], users["emily"],
+            progress=0, modules_completed=0,
+            enrolled_days_ago=21,
+        )
         # Michael: active on ethics (low progress), active on comms (prereq-locked area)
         enrollments["michael_ethics"] = mk_enroll(
             courses["ethics"], users["michael"],
@@ -969,6 +1020,34 @@ class Command(BaseCommand):
             status=CourseEnrollment.Status.PENDING,
             progress=0, modules_completed=0,
             enrolled_days_ago=2,
+        )
+        # Dropped — Michael started Patient Communication Essentials and
+        # decided it wasn't for him. Surfaces the "Dropped" status badge.
+        enrollments["michael_qi_dropped"] = mk_enroll(
+            courses["qi"], users["michael"],
+            status=CourseEnrollment.Status.DROPPED,
+            progress=22, modules_completed=0,
+            enrolled_days_ago=40,
+        )
+        # Manually completed — Aisha was marked complete by an instructor
+        # despite low underlying activity (e.g., transfer credit, equivalency).
+        # Tests that mark_complete_manually + the COMPLETED-lock invariant
+        # cooperate: status COMPLETED + progress 100 is preserved even
+        # though leaf progress would say otherwise.
+        enrollments["aisha_qi_manual"] = mk_enroll(
+            courses["qi"], users["aisha"],
+            status=CourseEnrollment.Status.COMPLETED,
+            progress=100, modules_completed=0,
+            completed_at=now - timedelta(days=12),
+            certificate_issued=False,
+            enrolled_days_ago=30,
+        )
+        # Hybrid bootcamp — Emily enrolled mid-journey: pre-work modules done,
+        # attended session 1 (past), session 2 still upcoming.
+        enrollments["emily_bootcamp"] = mk_enroll(
+            courses["bootcamp"], users["emily"],
+            progress=0, modules_completed=0,  # recomputed by the snapshot path
+            enrolled_days_ago=14,
         )
         return enrollments
 
@@ -1034,12 +1113,12 @@ class Command(BaseCommand):
         m_eth_2 = mk_module(ethics, "Case Analysis Workshop", order=1, cpd="2.00")
         m_eth_3 = mk_module(ethics, "Advanced Ethics Applications", order=2, prereq=m_eth_2, release_type="prerequisite", cpd="2.00")
 
-        mk_content(m_eth_1, "Welcome & Orientation", "text", 0, duration=5, content_data={"body": "<p>Welcome to clinical ethics.</p>"})
-        mk_content(m_eth_1, "Intro Video", "video", 1, duration=15, content_data={"url": "https://demo.example/intro-ethics.mp4", "provider": "demo"})
+        c_eth_1_welcome = mk_content(m_eth_1, "Welcome & Orientation", "text", 0, duration=5, content_data={"body": "<p>Welcome to clinical ethics.</p>"})
+        c_eth_1_video = mk_content(m_eth_1, "Intro Video", "video", 1, duration=15, content_data={"url": "https://demo.example/intro-ethics.mp4", "provider": "demo"})
         c_eth_2_text = mk_content(m_eth_2, "Case Study Guide", "text", 0, duration=20, content_data={"body": "<p>Read the scenario carefully.</p>"})
         c_eth_2_quiz = mk_content(m_eth_2, "Module 2 Quiz", "quiz", 1, duration=20, content_data={"questions": [{"q": "Beneficence means?", "choices": ["a", "b"], "answer": 0}], "passing_score": 70})
         c_eth_3_video = mk_content(m_eth_3, "Advanced Case Video", "video", 0, duration=30, content_data={"url": "https://demo.example/adv-ethics.mp4"})
-        mk_content(m_eth_3, "Telemedicine Ethics Primer", "text", 1, duration=15, content_data={"body": "<p>Emerging considerations.</p>"})
+        c_eth_3_primer = mk_content(m_eth_3, "Telemedicine Ethics Primer", "text", 1, duration=15, content_data={"body": "<p>Emerging considerations.</p>"})
 
         # ---- Comms course modules (5 modules covering all content types) ----
         comms = courses["comms"]
@@ -1049,10 +1128,10 @@ class Command(BaseCommand):
         m_c_4 = mk_module(comms, "Cultural Competence", 3, cpd="0.75", prereq=m_c_3, release_type="prerequisite")
         m_c_5 = mk_module(comms, "Capstone Assignment", 4, cpd="0.50")
 
-        mk_content(m_c_1, "Welcome Text", "text", 0, duration=5, content_data={"body": "<p>Welcome.</p>"})
-        mk_content(m_c_2, "Listening Video", "video", 0, duration=15, content_data={"url": "https://demo.example/listening.mp4"})
-        mk_content(m_c_3, "Reading PDF", "document", 0, duration=20, content_data={})
-        mk_content(m_c_3, "Demo Reflection", "text", 1, duration=10, content_data={"body": "<p>Reflect.</p>"})
+        c_c_1_welcome = mk_content(m_c_1, "Welcome Text", "text", 0, duration=5, content_data={"body": "<p>Welcome.</p>"})
+        c_c_2_video = mk_content(m_c_2, "Listening Video", "video", 0, duration=15, content_data={"url": "https://demo.example/listening.mp4"})
+        c_c_3_pdf = mk_content(m_c_3, "Reading PDF", "document", 0, duration=20, content_data={})
+        c_c_3_reflection = mk_content(m_c_3, "Demo Reflection", "text", 1, duration=10, content_data={"body": "<p>Reflect.</p>"})
         mk_content(m_c_4, "External Reference", "external", 0, duration=15, content_data={"url": "https://example.com/cultural-competence", "open_in_new_tab": True})
         mk_content(m_c_4, "Lesson Bundle", "lesson", 1, duration=20, content_data={"video": {"url": "https://demo.example/cc.mp4"}, "text": {"body": "<p>Context.</p>"}})
         mk_content(m_c_5, "Capstone Brief", "text", 0, duration=5, content_data={"body": "<p>Submit the capstone.</p>"})
@@ -1065,13 +1144,13 @@ class Command(BaseCommand):
         m_dhr_4 = mk_module(records, "Optimising Day-to-Day EHR Use", 3, prereq=m_dhr_3,
                              release_type="prerequisite", cpd="1.00")
 
-        mk_content(m_dhr_1, "Module Overview", "text", 0, duration=8,
+        c_dhr_1_text = mk_content(m_dhr_1, "Module Overview", "text", 0, duration=8,
                    content_data={"body": "<p>How modern EHRs reshape clinical workflows.</p>"})
-        mk_content(m_dhr_1, "EHR Tour Video", "video", 1, duration=18,
+        c_dhr_1_video = mk_content(m_dhr_1, "EHR Tour Video", "video", 1, duration=18,
                    content_data={"url": "https://demo.example/ehr-tour.mp4", "provider": "demo"})
-        mk_content(m_dhr_2, "Coding Reference Guide", "document", 0, duration=25,
+        c_dhr_2_doc = mk_content(m_dhr_2, "Coding Reference Guide", "document", 0, duration=25,
                    content_data={})
-        mk_content(m_dhr_2, "Documentation Quiz", "quiz", 1, duration=15,
+        c_dhr_2_quiz = mk_content(m_dhr_2, "Documentation Quiz", "quiz", 1, duration=15,
                    content_data={"questions": [
                        {"q": "Which note type best supports billing review?",
                         "choices": ["SOAP", "Free text", "Telephone encounter"], "answer": 0},
@@ -1093,6 +1172,33 @@ class Command(BaseCommand):
                    content_data={"body": "<p>Archived course retained for alumni access.</p>"})
         mk_content(m_ph_2, "Interaction Tables", "document", 0, duration=20,
                    content_data={})
+
+        # ---- Procedural Skills Bootcamp (HYBRID) ----
+        bootcamp = courses["bootcamp"]
+        m_bc_1 = mk_module(bootcamp, "Pre-work: Anatomy Review", 0, cpd="1.00")
+        m_bc_2 = mk_module(bootcamp, "Equipment & Sterile Setup", 1, cpd="1.00")
+        m_bc_3 = mk_module(bootcamp, "Post-procedure Care", 2, cpd="1.00")
+
+        c_bc_1_text = mk_content(m_bc_1, "Anatomy Reading", "text", 0, duration=15,
+                                  content_data={"body": "<p>Review the regional anatomy notes before Session 1.</p>"})
+        c_bc_1_video = mk_content(m_bc_1, "Anatomy Walkthrough Video", "video", 1, duration=20,
+                                   content_data={"url": "https://demo.example/anatomy.mp4"})
+        c_bc_2_doc = mk_content(m_bc_2, "Equipment Checklist (PDF)", "document", 0, duration=10,
+                                 content_data={})
+        c_bc_2_quiz = mk_content(m_bc_2, "Sterile Setup Quiz", "quiz", 1, duration=10,
+                                  content_data={
+                                      "questions": [
+                                          {"q": "Which step comes first?",
+                                           "choices": ["Hand hygiene", "Glove on", "Drape patient"],
+                                           "answer": 0},
+                                      ],
+                                      "passing_score": 70,
+                                  })
+        c_bc_3_text = mk_content(m_bc_3, "Post-procedure Care Notes", "text", 0, duration=12,
+                                  content_data={"body": "<p>Discharge instructions and red-flag follow-up triggers.</p>"})
+        c_bc_3_external = mk_content(m_bc_3, "Reference: National Practice Guidelines", "external", 1, duration=8,
+                                      content_data={"url": "https://example.com/national-guidelines",
+                                                    "open_in_new_tab": True})
 
         # ---- Assignments ----
         a_eth = Assignment.objects.update_or_create(
@@ -1187,10 +1293,174 @@ class Command(BaseCommand):
                 course_enrollment=enroll, content=content, defaults=defaults,
             )
 
+        progress(enrollments["emily_ethics"], c_eth_1_welcome, status=ContentProgress.Status.COMPLETED)
+        progress(enrollments["emily_ethics"], c_eth_1_video, status=ContentProgress.Status.COMPLETED)
         progress(enrollments["emily_ethics"], c_eth_2_text, status=ContentProgress.Status.COMPLETED)
         progress(enrollments["emily_ethics"], c_eth_2_quiz, status=ContentProgress.Status.COMPLETED)
         progress(enrollments["emily_ethics"], c_eth_3_video, status=ContentProgress.Status.COMPLETED)
+        progress(enrollments["emily_ethics"], c_eth_3_primer, status=ContentProgress.Status.COMPLETED)
         progress(enrollments["michael_ethics"], c_eth_2_text, status=ContentProgress.Status.IN_PROGRESS, percent=60, completed_days_ago=None)
+
+        # Hybrid bootcamp leaf data for Emily — pre-work modules 1+2 done,
+        # m3 untouched, session 1 attended, session 2 upcoming.
+        from learning.models import CourseSession, CourseSessionAttendance
+        bc = courses["bootcamp"]
+
+        bc_session_1, _ = CourseSession.objects.update_or_create(
+            course=bc, title="Session 1: Live Q&A on Anatomy",
+            defaults=dict(
+                description="Didactic Q&A — review the anatomy walkthrough before joining.",
+                order=0,
+                session_type=CourseSession.SessionType.LIVE,
+                starts_at=now - timedelta(days=4, hours=2),
+                duration_minutes=90,
+                timezone="America/Toronto",
+                actual_start_at=now - timedelta(days=4, hours=2),
+                actual_end_at=now - timedelta(days=4, hours=2) + timedelta(minutes=92),
+                cpd_credits=Decimal("1.50"),
+                is_mandatory=True,
+                minimum_attendance_percent=80,
+                status=CourseSession.Status.COMPLETED,
+                is_published=True,
+                recording_enabled=True,
+                recording_auto_publish=True,
+            ),
+        )
+        bc_session_2, _ = CourseSession.objects.update_or_create(
+            course=bc, title="Session 2: Hands-on Skills Lab",
+            defaults=dict(
+                description="In-person lab — bring your scrubs and printed checklist.",
+                order=1,
+                session_type=CourseSession.SessionType.LIVE,
+                # In-person — exercises D4 (no VideoRoom provisioned for this
+                # session; learner-facing UI shows venue rather than Join button).
+                delivery_mode=CourseSession.DeliveryMode.IN_PERSON,
+                starts_at=now + timedelta(days=7, hours=2),
+                duration_minutes=180,
+                timezone="America/Toronto",
+                cpd_credits=Decimal("3.00"),
+                is_mandatory=True,
+                minimum_attendance_percent=80,
+                status=CourseSession.Status.SCHEDULED,
+                is_published=True,
+                recording_enabled=False,
+            ),
+        )
+        # Cancelled supplementary session — exercises D2 (cancellation auto-
+        # recompute path). The session pre-existed before being scrubbed; its
+        # CANCELLED status removes it from the completion denominator. The
+        # cancellation email task fires for every active enrollee on save.
+        CourseSession.objects.update_or_create(
+            course=bc, title="Optional: Pre-Lab Equipment Walk-through",
+            defaults=dict(
+                description="Cancelled — equipment walk-through merged into Session 2.",
+                order=2,
+                session_type=CourseSession.SessionType.LIVE,
+                delivery_mode=CourseSession.DeliveryMode.ONLINE,
+                starts_at=now - timedelta(days=1, hours=3),
+                duration_minutes=45,
+                timezone="America/Toronto",
+                cpd_credits=Decimal("0.50"),
+                is_mandatory=False,
+                minimum_attendance_percent=80,
+                status=CourseSession.Status.CANCELLED,
+                cancelled_reason="Folded into Session 2 to keep the cohort focused.",
+                cancelled_at=now - timedelta(days=2),
+                is_published=True,
+                recording_enabled=False,
+            ),
+        )
+        # Emily attended Session 1 fully → eligible.
+        CourseSessionAttendance.objects.update_or_create(
+            session=bc_session_1, enrollment=enrollments["emily_bootcamp"],
+            defaults=dict(
+                attendance_minutes=88,
+                is_eligible=True,
+                participant_email=users["emily"].email,
+                join_time=bc_session_1.starts_at,
+                leave_time=bc_session_1.starts_at + timedelta(minutes=88),
+            ),
+        )
+        # Pre-work content progress: m1 + m2 fully done, m3 not started.
+        progress(enrollments["emily_bootcamp"], c_bc_1_text, status=ContentProgress.Status.COMPLETED)
+        progress(enrollments["emily_bootcamp"], c_bc_1_video, status=ContentProgress.Status.COMPLETED)
+        progress(enrollments["emily_bootcamp"], c_bc_2_doc, status=ContentProgress.Status.COMPLETED)
+        progress(enrollments["emily_bootcamp"], c_bc_2_quiz, status=ContentProgress.Status.COMPLETED)
+
+        # Pure-live cohort sessions — Emily attended both, so the LIVE branch
+        # of _progress_snapshot() will land at 100% during the refresh pass.
+        cohort = courses["cohort"]
+        cohort_session_1, _ = CourseSession.objects.update_or_create(
+            course=cohort, title="Session 1: Framing Difficult Conversations",
+            defaults=dict(
+                description="Introducing the SPIKES protocol with role-play.",
+                order=0,
+                session_type=CourseSession.SessionType.LIVE,
+                starts_at=now - timedelta(days=14, hours=3),
+                duration_minutes=60,
+                timezone="America/Toronto",
+                actual_start_at=now - timedelta(days=14, hours=3),
+                actual_end_at=now - timedelta(days=14, hours=3) + timedelta(minutes=62),
+                cpd_credits=Decimal("1.25"),
+                is_mandatory=True,
+                minimum_attendance_percent=80,
+                status=CourseSession.Status.COMPLETED,
+                is_published=True,
+                recording_enabled=True,
+                recording_auto_publish=True,
+            ),
+        )
+        cohort_session_2, _ = CourseSession.objects.update_or_create(
+            course=cohort, title="Session 2: De-escalation & Family Meetings",
+            defaults=dict(
+                description="Applying the framework to family-meeting scenarios.",
+                order=1,
+                session_type=CourseSession.SessionType.LIVE,
+                starts_at=now - timedelta(days=7, hours=3),
+                duration_minutes=60,
+                timezone="America/Toronto",
+                actual_start_at=now - timedelta(days=7, hours=3),
+                actual_end_at=now - timedelta(days=7, hours=3) + timedelta(minutes=58),
+                cpd_credits=Decimal("1.25"),
+                is_mandatory=True,
+                minimum_attendance_percent=80,
+                status=CourseSession.Status.COMPLETED,
+                is_published=True,
+                recording_enabled=True,
+                recording_auto_publish=True,
+            ),
+        )
+        for s in (cohort_session_1, cohort_session_2):
+            CourseSessionAttendance.objects.update_or_create(
+                session=s, enrollment=enrollments["emily_cohort"],
+                defaults=dict(
+                    attendance_minutes=int(s.duration_minutes * 0.95),
+                    is_eligible=True,
+                    participant_email=users["emily"].email,
+                    join_time=s.starts_at,
+                    leave_time=s.starts_at + timedelta(minutes=int(s.duration_minutes * 0.95)),
+                ),
+            )
+
+        # Comms course leaf-level progress for Emily — backs the 60% display.
+        # Without ContentProgress rows the recompute path inside
+        # _progress_snapshot() would land at ~12% even though three modules
+        # are flagged COMPLETED, because the snapshot reads ContentProgress
+        # directly (single source of truth).
+        progress(enrollments["emily_comms"], c_c_1_welcome, status=ContentProgress.Status.COMPLETED)
+        progress(enrollments["emily_comms"], c_c_2_video, status=ContentProgress.Status.COMPLETED)
+        progress(enrollments["emily_comms"], c_c_3_pdf, status=ContentProgress.Status.COMPLETED)
+        progress(enrollments["emily_comms"], c_c_3_reflection, status=ContentProgress.Status.COMPLETED)
+        # Michael barely started Comms — m1 done, mid-watch on the m2 video.
+        progress(enrollments["michael_comms"], c_c_1_welcome, status=ContentProgress.Status.COMPLETED)
+        progress(enrollments["michael_comms"], c_c_2_video, status=ContentProgress.Status.IN_PROGRESS, percent=40, completed_days_ago=None)
+
+        # DHR leaf data — Emily 35% (m1 fully done = 2/8 ≈ 25% + 1 of m2 = 37.5%),
+        # Michael 12% (just one content of m1 watched).
+        progress(enrollments["emily_records"], c_dhr_1_text, status=ContentProgress.Status.COMPLETED)
+        progress(enrollments["emily_records"], c_dhr_1_video, status=ContentProgress.Status.COMPLETED)
+        progress(enrollments["emily_records"], c_dhr_2_doc, status=ContentProgress.Status.COMPLETED)
+        progress(enrollments["michael_records"], c_dhr_1_text, status=ContentProgress.Status.COMPLETED)
 
         # Module progress to make the UI happy
         def mp(enroll, module, status, completed_contents, total_contents, *, score=None):
@@ -2160,12 +2430,32 @@ class Command(BaseCommand):
     # Denormalized counts
     # ------------------------------------------------------------------
     def _refresh_denormalized_counts(self, events, courses, programs):
+        from learning.models import CourseEnrollment
+
         for event in events.values():
             event.update_counts()
         for course in courses.values():
             course.update_counts()
         for program in programs.values():
             program.update_counts()
+        # Recompute progress_percent for every ACTIVE enrollment from its
+        # leaf data (ContentProgress / submissions / session attendance).
+        # The seed inserts those leaves directly via update_or_create, which
+        # bypasses the signal cascade — without this pass, dashboards and
+        # the My Learning Courses tab would show the seed's literal `progress`
+        # arg even when the leaves disagree. COMPLETED enrollments are
+        # short-circuited by update_progress() and stay at 100.
+        for enrollment in CourseEnrollment.objects.filter(
+            status=CourseEnrollment.Status.ACTIVE
+        ):
+            try:
+                enrollment.update_progress()
+            except Exception:
+                # Don't fail the whole seed if a single enrollment trips on
+                # missing related rows — log and move on.
+                self.stdout.write(self.style.WARNING(
+                    f"  warn: update_progress failed for enrollment {enrollment.id}"
+                ))
 
     # ------------------------------------------------------------------
     # Re-assert event statuses after LiveKit / signal side-effects

@@ -7,6 +7,8 @@ import { ArrowLeft, Loader2, Save, Video } from 'lucide-react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 
+import { formatCompletionCriteria } from '@/lib/completion-criteria';
+
 import { Button } from '@/components/ui/button';
 import {
     Form,
@@ -543,16 +545,16 @@ const CreateCoursePage = () => {
                                                         <SelectContent>
                                                             {courseFormat === 'live' ? (
                                                                 <>
-                                                                    <SelectItem value="sessions_only">Attend All Required Sessions</SelectItem>
-                                                                    <SelectItem value="min_sessions">Attend Minimum Sessions</SelectItem>
+                                                                    <SelectItem value="sessions_only">{formatCompletionCriteria('sessions_only')}</SelectItem>
+                                                                    <SelectItem value="min_sessions">{formatCompletionCriteria('min_sessions', form.watch('min_sessions_required') as number)}</SelectItem>
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    <SelectItem value="both">Complete Modules AND Attend Sessions</SelectItem>
-                                                                    <SelectItem value="modules_only">Complete Modules Only</SelectItem>
-                                                                    <SelectItem value="sessions_only">Attend Sessions Only</SelectItem>
-                                                                    <SelectItem value="either">Complete Modules OR Attend Sessions</SelectItem>
-                                                                    <SelectItem value="min_sessions">Complete Modules + Min Sessions</SelectItem>
+                                                                    <SelectItem value="both">{formatCompletionCriteria('both')}</SelectItem>
+                                                                    <SelectItem value="modules_only">{formatCompletionCriteria('modules_only')}</SelectItem>
+                                                                    <SelectItem value="sessions_only">{formatCompletionCriteria('sessions_only')}</SelectItem>
+                                                                    <SelectItem value="either">{formatCompletionCriteria('either')}</SelectItem>
+                                                                    <SelectItem value="min_sessions">{formatCompletionCriteria('min_sessions', form.watch('min_sessions_required') as number)}</SelectItem>
                                                                 </>
                                                             )}
                                                         </SelectContent>

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { deriveProgressDisplay } from '@/lib/progress';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import {
@@ -275,7 +276,7 @@ export function EnrollmentsTab({ courseUuid }: EnrollmentsTabProps) {
                                                 )}
                                             </div>
                                             <div className="text-right">
-                                                <p className="text-sm font-medium">{enrollment.progress_percent}%</p>
+                                                <p className="text-sm font-medium">{deriveProgressDisplay(enrollment).percent}%</p>
                                                 <p className="text-xs text-muted-foreground">Progress</p>
                                             </div>
                                             <div className="text-right">

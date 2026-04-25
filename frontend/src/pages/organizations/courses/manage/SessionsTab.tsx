@@ -68,6 +68,7 @@ interface SessionFormData {
     starts_at: string;
     duration_minutes: number;
     session_type: 'live' | 'recorded' | 'hybrid';
+    delivery_mode: 'online' | 'in_person' | 'hybrid';
     is_mandatory: boolean;
     minimum_attendance_percent: number;
 }
@@ -87,6 +88,7 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
         starts_at: '',
         duration_minutes: 60,
         session_type: 'live',
+        delivery_mode: 'online',
         is_mandatory: false,
         minimum_attendance_percent: 80,
     });
@@ -118,6 +120,7 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
             starts_at: '',
             duration_minutes: 60,
             session_type: 'live',
+            delivery_mode: 'online',
             is_mandatory: false,
             minimum_attendance_percent: 80,
         });
@@ -132,6 +135,7 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
             starts_at: session.starts_at,
             duration_minutes: session.duration_minutes,
             session_type: session.session_type,
+            delivery_mode: session.delivery_mode || 'online',
             is_mandatory: session.is_mandatory,
             minimum_attendance_percent: session.minimum_attendance_percent,
         });
@@ -150,6 +154,7 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
             starts_at: formData.starts_at,
             duration_minutes: formData.duration_minutes,
             session_type: formData.session_type,
+            delivery_mode: formData.delivery_mode,
             is_mandatory: formData.is_mandatory,
             minimum_attendance_percent: formData.minimum_attendance_percent,
         };
@@ -374,6 +379,26 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
                                     <SelectItem value="recorded">Recorded / Webinar</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Delivery Mode</Label>
+                            <Select
+                                value={formData.delivery_mode}
+                                onValueChange={(val: any) => setFormData({ ...formData, delivery_mode: val })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="online">Online</SelectItem>
+                                    <SelectItem value="in_person">In Person</SelectItem>
+                                    <SelectItem value="hybrid">Hybrid (in-person + remote)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                In-person sessions skip video room provisioning.
+                            </p>
                         </div>
 
                         <div className="flex items-center justify-between pt-2">

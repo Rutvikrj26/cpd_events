@@ -509,6 +509,7 @@ class ContentProgressView(views.APIView):
             if not enrollments.exists():
                 return error_response('Not enrolled in course', code='NOT_ENROLLED')
             course_enrollment = enrollments.first()
+            course_enrollment.start()
             progress, created = ContentProgress.objects.get_or_create(course_enrollment=course_enrollment, content=content)
             module_prog, _ = ModuleProgress.objects.get_or_create(course_enrollment=course_enrollment, module=content.module)
 
@@ -520,7 +521,7 @@ class ContentProgressView(views.APIView):
             progress.start()
 
         if data.get('completed'):
-            progress.complete()
+            progress.complete(time_spent=data.get('time_spent', 0), position=data.get('position'))
         else:
             progress.update_progress(
                 percent=data['progress_percent'], time_spent=data.get('time_spent', 0), position=data.get('position')
@@ -577,10 +578,15 @@ class CourseViewSet(viewsets.ModelViewSet):
             ).distinct()
 
         if self.action in ['list', 'retrieve', 'progress']:
+            # Learners must keep access to courses they have an enrollment
+            # in, even after the course is archived — otherwise the Review
+            # button on completed cards 404s, and the cert/badge they earned
+            # has no backing artifact to review.
             return queryset.filter(
                 models.Q(is_public=True, status=Course.Status.PUBLISHED)
                 | models.Q(created_by=user)
                 | models.Q(staff_assignments__user=user)
+                | models.Q(enrollments__user=user)
             ).distinct()
 
         return queryset.filter(
@@ -965,6 +971,9 @@ class CourseViewSet(viewsets.ModelViewSet):
 
         if not enrollment:
             raise PermissionDenied("You are not enrolled in this course.")
+
+        enrollment.update_progress()
+        enrollment.refresh_from_db()
 
         modules = CourseModule.objects.filter(course=course).select_related('module').prefetch_related('module__contents')
 
@@ -1579,9 +1588,15 @@ class CourseSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
         review.to_status = submission.status
         review.save()
 
-        # Check if course should be completed after grading
+        # Check if course should be completed after grading. Even when
+        # completion criteria aren't met, refresh progress_percent so the
+        # learner's bar reflects the new submission state. update_progress()
+        # is a no-op once status=COMPLETED, so this is safe to call.
         if submission.course_enrollment:
             submission.course_enrollment.check_completion()
+            submission.course_enrollment.refresh_from_db()
+            if submission.course_enrollment.status == CourseEnrollment.Status.ACTIVE:
+                submission.course_enrollment.update_progress()
 
         return Response(AssignmentSubmissionStaffSerializer(submission).data)
 
@@ -1746,7 +1761,7 @@ class ProgramDiscussionView(generics.GenericAPIView):
         )
 
 
-@roles('organizer', 'instructor', 'admin', route_name='course_sessions')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_sessions')
 class CourseSessionViewSet(viewsets.ModelViewSet):
     """
     Live session management for hybrid courses.
@@ -1802,6 +1817,64 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'update', 'partial_update']:
             return CourseSessionCreateSerializer
         return CourseSessionSerializer
+
+    @action(detail=True, methods=['post', 'get'], url_path='recording-view')
+    def recording_view(self, request, course_uuid=None, uuid=None):
+        """Track recording playback. POST upserts the (enrollment, session)
+        row; GET returns the caller's current row (or 204 if none yet).
+
+        Body (POST): { watch_seconds: int, last_position_seconds?: int, completed?: bool }
+
+        Watch_seconds is monotone — never decreases. Caller (frontend player)
+        is expected to throttle to ~one POST per 15s of playback.
+
+        Per D3 (docs/design/hybrid-course-experience.md): this endpoint NEVER
+        flips CourseSessionAttendance.is_eligible — it's tracking only.
+        """
+        from .models import CourseEnrollment, CourseSessionRecordingView
+
+        session = self.get_object()
+        enrollment = CourseEnrollment.objects.filter(
+            user=request.user, course=session.course,
+        ).first()
+        if not enrollment:
+            return error_response(
+                'You must be enrolled to track recording playback.',
+                code='NOT_ENROLLED', status_code=403,
+            )
+
+        if request.method == 'GET':
+            view = CourseSessionRecordingView.objects.filter(
+                course_enrollment=enrollment, session=session,
+            ).first()
+            if not view:
+                return Response(status=204)
+            return Response({
+                'watch_seconds': view.watch_seconds,
+                'last_position_seconds': view.last_position_seconds,
+                'completed_at': view.completed_at.isoformat() if view.completed_at else None,
+            })
+
+        watch_seconds = int(request.data.get('watch_seconds') or 0)
+        last_position = int(request.data.get('last_position_seconds') or 0)
+        mark_completed = bool(request.data.get('completed'))
+
+        view, _ = CourseSessionRecordingView.objects.get_or_create(
+            course_enrollment=enrollment, session=session,
+        )
+        # Monotone: never lower stored watch_seconds.
+        if watch_seconds > view.watch_seconds:
+            view.watch_seconds = watch_seconds
+        view.last_position_seconds = last_position
+        if mark_completed and not view.completed_at:
+            view.completed_at = timezone.now()
+        view.save()
+
+        return Response({
+            'watch_seconds': view.watch_seconds,
+            'last_position_seconds': view.last_position_seconds,
+            'completed_at': view.completed_at.isoformat() if view.completed_at else None,
+        })
 
     @action(detail=True, methods=['post'])
     def sync_attendance(self, request, course_uuid=None, uuid=None):
@@ -1908,6 +1981,7 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
         )
         record.calculate_eligibility()
         record.save(update_fields=['is_eligible', 'updated_at'])
+        enrollment.update_progress()
 
         return Response({'status': 'matched'})
 
@@ -3033,4 +3107,3 @@ class CourseMemberSearchView(views.APIView):
                 'role': 'staff' if u.id in staff_ids else 'learner',
             })
         return Response(CourseMemberMiniSerializer(data, many=True).data)
-

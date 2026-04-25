@@ -271,12 +271,14 @@ export interface CourseModule {
 export interface CourseEnrollment {
     uuid: string;
     course: Course;
-    status: 'active' | 'completed' | 'dropped';
+    status: 'pending' | 'active' | 'completed' | 'dropped' | 'expired';
     enrolled_at: string;
     started_at?: string;
     completed_at?: string;
     progress_percent: number;
     modules_completed: number;
+    /** Average score across the learner's graded passing submissions; null until first graded submission. */
+    current_score?: number | null;
     certificate_issued: boolean;
     certificate_issued_at?: string;
 }
@@ -292,6 +294,8 @@ export interface PublishedSessionRecording {
     recording_end?: string | null;
 }
 
+export type SessionDeliveryMode = 'online' | 'in_person' | 'hybrid';
+
 export interface CourseSession {
     uuid: string;
     title: string;
@@ -299,6 +303,7 @@ export interface CourseSession {
     order: number;
     session_type: SessionType;
     session_type_display?: string;
+    delivery_mode?: SessionDeliveryMode;
     starts_at: string;
     ends_at?: string;
     duration_minutes: number;
@@ -328,6 +333,7 @@ export interface CourseSessionCreateRequest {
     description?: string;
     order?: number;
     session_type?: SessionType;
+    delivery_mode?: SessionDeliveryMode;
     starts_at: string;
     duration_minutes?: number;
     timezone?: string;

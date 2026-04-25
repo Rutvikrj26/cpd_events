@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.5; color: #1a1a1a; margin: 0; background-color: #f4f5f7;">
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f5f7;">
+        <tr>
+            <td align="center" style="padding: 32px 16px;">
+                <table cellpadding="0" cellspacing="0" border="0"
+                    style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 10px; padding: 32px;">
+                    <tr>
+                        <td>
+                            <h2 style="margin: 0 0 12px; font-size: 22px; font-weight: 600; color: #b32d2d;">
+                                Session Cancelled: {{ session_title }}
+                            </h2>
+                            <p style="margin: 0 0 16px; font-size: 15px;">
+                                Hi {{ user_name|default:"there" }}, we're writing to let you know that
+                                <strong>{{ session_title }}</strong> in
+                                <strong>{{ course_title }}</strong> has been cancelled.
+                            </p>
+                            {% if cancellation_reason %}
+                            <div style="background-color: #fff5f5; border-left: 4px solid #b32d2d; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">
+                                <strong>Reason:</strong> {{ cancellation_reason }}
+                            </div>
+                            {% endif %}
+                            <p style="margin: 16px 0; font-size: 14px;">
+                                Your course completion requirements have been updated automatically — the cancelled
+                                session no longer counts toward what you need to attend. If a replacement session is
+                                scheduled, you'll receive a separate notification.
+                            </p>
+                            <p style="margin: 24px 0;">
+                                <a href="{{ course_url }}"
+                                    style="background-color: #1a1a1a; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-size: 14px; display: inline-block;">
+                                    View course
+                                </a>
+                            </p>
+                            <p style="margin: 24px 0 0; font-size: 13px; color: #9a9a9a;">
+                                — The Accredit Team
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>

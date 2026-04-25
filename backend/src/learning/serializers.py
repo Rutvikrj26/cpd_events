@@ -353,10 +353,17 @@ class ContentProgressSerializer(serializers.ModelSerializer):
 class ContentProgressUpdateSerializer(serializers.Serializer):
     """Update content progress."""
 
-    progress_percent = serializers.IntegerField(min_value=0, max_value=100)
+    progress_percent = serializers.IntegerField(min_value=0, max_value=100, required=False)
     time_spent = serializers.IntegerField(min_value=0, required=False, default=0)
     position = serializers.DictField(required=False)
     completed = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs):
+        if attrs.get('completed'):
+            attrs.setdefault('progress_percent', 100)
+        elif 'progress_percent' not in attrs:
+            raise serializers.ValidationError({'progress_percent': 'This field is required unless completed is true.'})
+        return attrs
 
 
 class ModuleProgressSerializer(serializers.ModelSerializer):
@@ -889,6 +896,7 @@ class CourseSessionSerializer(serializers.ModelSerializer):
             'order',
             'session_type',
             'session_type_display',
+            'delivery_mode',
             'starts_at',
             'ends_at',
             'duration_minutes',
@@ -942,6 +950,7 @@ class CourseSessionListSerializer(serializers.ModelSerializer):
             'order',
             'session_type',
             'session_type_display',
+            'delivery_mode',
             'starts_at',
             'ends_at',
             'duration_minutes',
@@ -994,6 +1003,7 @@ class CourseSessionCreateSerializer(serializers.ModelSerializer):
             'description',
             'order',
             'session_type',
+            'delivery_mode',
             'starts_at',
             'duration_minutes',
             'timezone',

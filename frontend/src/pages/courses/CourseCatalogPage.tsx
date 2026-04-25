@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getPublicCourses, Course, PublicCourseListParams } from '@/api/courses';
+import { formatCpdLabel } from '@/lib/completion-criteria';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -209,7 +210,7 @@ export const CourseCatalogPage: React.FC = () => {
                                             {course.cpd_credits && (
                                                 <div className="flex items-center gap-1">
                                                     <Award className="h-4 w-4" />
-                                                    <span>{course.cpd_credits} CPD</span>
+                                                    <span>{formatCpdLabel({ credits: course.cpd_credits, criteria: course.hybrid_completion_criteria, isCompleted: false })}</span>
                                                 </div>
                                             )}
                                             {course.enrollment_count > 0 && (

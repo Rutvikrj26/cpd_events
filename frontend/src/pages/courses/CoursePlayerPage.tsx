@@ -19,6 +19,7 @@ import { Course, CourseModule, Assignment, AssignmentSubmission, CourseAnnouncem
 import { SessionsPanel } from '@/components/courses/SessionsPanel';
 import { DiscussionPanel } from '@/components/courses/discussion/DiscussionPanel';
 import { useAuth } from '@/contexts/AuthContext';
+import { deriveProgressDisplay } from '@/lib/progress';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -91,6 +92,7 @@ export function CoursePlayerPage() {
     const [moduleAvailability, setModuleAvailability] = useState<Record<string, boolean>>({});
     const [contentProgressMap, setContentProgressMap] = useState<Record<string, any>>({});
     const [enrollmentProgress, setEnrollmentProgress] = useState<number>(0);
+    const [enrollmentStatus, setEnrollmentStatus] = useState<string>('');
     const [submissions, setSubmissions] = useState<AssignmentSubmission[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [assignmentDraft, setAssignmentDraft] = useState({
@@ -114,8 +116,10 @@ export function CoursePlayerPage() {
             setSubmissions([]);
             setAnnouncements([]);
             try {
-                // Fetch course details
-                const courseData = await getCourse(courseUuid);
+                // Fetch course details. Pass silent=true so a 404 doesn't
+                // fire a red toast on top of the inline "Course not found"
+                // empty state we already render below.
+                const courseData = await getCourse(courseUuid, { silent: true });
                 setCourse(courseData);
 
                 // Check enrollment — redirect to detail page if not enrolled
@@ -148,12 +152,13 @@ export function CoursePlayerPage() {
                         availability[mUuid] = module.is_available;
                         module.content_progress.forEach((progressItem: any) => {
                             progressMap[progressItem.content] = progressItem;
-                            if (progressItem.status === 'completed' || progressItem.progress_percent === 100) {
+                            if (progressItem.status === 'completed') {
                                 completed.add(progressItem.content);
                             }
                         });
                     });
                     savedEnrollmentProgress = progress.enrollment?.progress_percent ?? 0;
+                    setEnrollmentStatus(progress.enrollment?.status ?? '');
                 } catch {
                     // Progress unavailable (staff preview) — default all available
                     modulesData.forEach((mod: any) => {
@@ -199,8 +204,9 @@ export function CoursePlayerPage() {
                     console.error('Failed to load announcements:', error);
                 }
 
-                // Load sessions for hybrid courses
-                if (courseData.format === 'hybrid') {
+                // Load sessions for live + hybrid courses (LIVE has no
+                // self-paced modules, so sessions are the only learner surface).
+                if (courseData.format === 'hybrid' || courseData.format === 'live') {
                     try {
                         const courseSessions = await getCourseSessions(courseUuid);
                         setSessions(courseSessions.filter((s: CourseSession) => s.is_published));
@@ -255,6 +261,9 @@ export function CoursePlayerPage() {
                 const status = (error as any)?.response?.status;
                 if (status === 403) {
                     setIsEnrollmentBlocked(true);
+                } else if (status === 404) {
+                    // Inline "Course not found" empty state below covers this;
+                    // no need for a red toast on top of it.
                 } else {
                     toast({
                         variant: 'destructive',
@@ -311,7 +320,7 @@ export function CoursePlayerPage() {
                 availability[mUuid] = module.is_available;
                 module.content_progress.forEach((progressItem: any) => {
                     progressMap[progressItem.content] = progressItem;
-                    if (progressItem.status === 'completed' || progressItem.progress_percent === 100) {
+                    if (progressItem.status === 'completed') {
                         completed.add(progressItem.content);
                     }
                 });
@@ -433,8 +442,14 @@ export function CoursePlayerPage() {
         }
     };
 
-    // Progress from backend (source of truth)
-    const progressPercent = enrollmentProgress;
+    // Progress from backend (source of truth). Locked at 100% when status is
+    // 'completed' so archived/historically-completed enrollments without
+    // surviving leaf data still render correctly.
+    const progressDisplay = deriveProgressDisplay({
+        status: enrollmentStatus,
+        progress_percent: enrollmentProgress,
+    });
+    const progressPercent = progressDisplay.percent;
 
     const getLatestSubmission = (assignmentUuid: string) => {
         return submissions
@@ -569,7 +584,7 @@ export function CoursePlayerPage() {
         return (
             <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
                 <p className="text-muted-foreground">Course not found</p>
-                <Button onClick={() => navigate('/my-courses')}>Back to My Courses</Button>
+                <Button onClick={() => navigate('/registrations?tab=courses')}>Back to My Courses</Button>
             </div>
         );
     }
@@ -579,7 +594,7 @@ export function CoursePlayerPage() {
             <div className="flex h-[80vh] flex-col items-center justify-center gap-4 text-center">
                 <p className="text-muted-foreground">You are not enrolled in this course yet.</p>
                 <div className="flex gap-2">
-                    <Button onClick={() => navigate('/my-courses')}>Back to My Courses</Button>
+                    <Button onClick={() => navigate('/registrations?tab=courses')}>Back to My Courses</Button>
                     {course.slug && (
                         <Button variant="outline" onClick={() => navigate(`/courses/${course.slug}`)}>
                             View Course Page
@@ -596,7 +611,7 @@ export function CoursePlayerPage() {
             <div className="w-80 border-r bg-muted/30 flex flex-col">
                 {/* Course Header */}
                 <div className="p-4 border-b bg-background">
-                    <Button variant="ghost" size="sm" className="mb-2 -ml-2" onClick={() => navigate('/my-courses')}>
+                    <Button variant="ghost" size="sm" className="mb-2 -ml-2" onClick={() => navigate('/registrations?tab=courses')}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
                         Back to Courses
                     </Button>

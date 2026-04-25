@@ -166,6 +166,7 @@ class EmailService:
         "enrollment_confirmation": "emails/enrollment_confirmation.html",
         "module_released": "emails/module_released.html",
         "course_completed": "emails/course_completed.html",
+        "session_cancelled": "emails/session_cancelled.html",
     }
 
     # Subject lines

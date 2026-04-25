@@ -123,7 +123,11 @@ export function CertificatesTab({ courseUuid }: CertificatesTabProps) {
         }
     };
 
-    const completed = enrollments.filter(e => e.status === 'completed' || e.progress_percent >= 100);
+    // Status is the only authoritative completion signal (see
+    // frontend/src/lib/progress.ts). progress_percent>=100 alone means
+    // "awaiting review", not completed — those enrollments don't yet have
+    // a certificate to issue/revoke.
+    const completed = enrollments.filter(e => e.status === 'completed');
 
     if (loading) {
         return (
