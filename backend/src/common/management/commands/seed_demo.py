@@ -944,7 +944,14 @@ class Command(BaseCommand):
         def mk_enroll(course, user, *, status=CourseEnrollment.Status.ACTIVE, progress=0,
                       modules_completed=0, current_score=None, completed_at=None,
                       certificate_issued=False, certificate_issued_at=None,
-                      enrolled_days_ago=10):
+                      enrolled_days_ago=10, started_days_ago=None):
+            # Default started_at for any non-PENDING enrollment; cards otherwise
+            # show "Started: Not started" alongside completion timestamps even
+            # when progress is recomputed > 0 by _refresh_denormalized_counts.
+            # PENDING (e.g., awaiting payment / instructor approval) is the one
+            # status where "not started yet" is correct.
+            if started_days_ago is None and status != CourseEnrollment.Status.PENDING:
+                started_days_ago = max(0, enrolled_days_ago - 1)
             defaults = dict(
                 status=status,
                 progress_percent=progress,
@@ -953,6 +960,7 @@ class Command(BaseCommand):
                 completed_at=completed_at,
                 certificate_issued=certificate_issued,
                 certificate_issued_at=certificate_issued_at,
+                started_at=(now - timedelta(days=started_days_ago)) if started_days_ago is not None else None,
             )
             obj, _ = CourseEnrollment.objects.update_or_create(course=course, user=user, defaults=defaults)
             CourseEnrollment.objects.filter(pk=obj.pk).update(enrolled_at=now - timedelta(days=enrolled_days_ago))

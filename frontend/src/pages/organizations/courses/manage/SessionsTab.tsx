@@ -257,15 +257,28 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
                                     </TableCell>
                                     <TableCell>{session.duration_minutes} min</TableCell>
                                     <TableCell className="capitalize">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
                                             {session.session_type === 'live' && <Video className="h-3 w-3" />}
-                                            {session.session_type}
+                                            <span>{session.session_type}</span>
+                                            {session.delivery_mode && session.delivery_mode !== 'online' && (
+                                                <Badge variant="outline" className="text-[10px] h-4 capitalize">
+                                                    {session.delivery_mode === 'in_person' ? 'In person' : session.delivery_mode}
+                                                </Badge>
+                                            )}
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant={session.is_published ? 'default' : 'outline'}>
-                                            {session.is_published ? 'Published' : 'Draft'}
-                                        </Badge>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <Badge variant={session.is_published ? 'default' : 'outline'}>
+                                                {session.is_published ? 'Published' : 'Draft'}
+                                            </Badge>
+                                            {session.status === 'cancelled' && (
+                                                <Badge variant="destructive" className="text-[10px] h-4">Cancelled</Badge>
+                                            )}
+                                            {session.status === 'completed' && (
+                                                <Badge variant="secondary" className="text-[10px] h-4">Past</Badge>
+                                            )}
+                                        </div>
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-2">

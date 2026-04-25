@@ -1102,6 +1102,67 @@
 
 ---
 
+### Page: `/courses/:slug/sessions/:sessionUuid/lobby` — CourseSessionLobbyPage (file: frontend/src/pages/courses/CourseSessionLobbyPage.tsx)
+
+**Purpose:** Pre/during-session lobby for live sessions inside hybrid or live-format courses. Mirrors the event lobby pattern but for `CourseSession` instead of `Event`. Uses the shared `LiveSessionLobby` presentational component.
+
+**Preconditions:**
+- Authenticated, must be enrolled in the course (queryset enforces).
+- `:slug` resolves to course; `:sessionUuid` resolves to a CourseSession.
+
+**Visible elements / regions:**
+- Back link (to course player)
+- Title, description
+- Countdown card (EventCountdown — same as events)
+- Cancellation banner (if status=cancelled)
+- When/Where card (date, duration, in-person venue if applicable)
+- **Join button** (only when not cancelled, not past, not in-person):
+  - Disabled outside 15-min window
+  - Active during the join window — wired to `joinCourseSessionVideo`
+  - Hidden entirely for `delivery_mode === 'in_person'` (no video stream)
+- Add-to-Calendar button
+- About-this-session description card
+- "After the session — View recording" card (only when `isPast && hasRecording`)
+
+**Interactions to test:**
+1. Page load (enrolled) → session detail fetch via `getCourseSession` (LiveSessionSerializer; includes attendance + recording + join_url)
+2. Page load (not enrolled) → 404 / friendly error card
+3. Outside join window → countdown shown, Join button disabled
+4. Within 15 min of start → Join button activates
+5. Click Add to Calendar → ICS download
+6. In-person session → "In-person venue" card, no Join button (D4)
+7. Cancelled session → red cancellation banner, no Join button (D2)
+8. Past + published recording → "View recording" link routes to recording page
+
+---
+
+### Page: `/courses/:slug/sessions/:sessionUuid/recording` — CourseSessionRecordingPage (file: frontend/src/pages/courses/CourseSessionRecordingPage.tsx)
+
+**Purpose:** Recording playback for past course sessions, mirrors EventRecordingPage. Includes D3 throttled playback tracking.
+
+**Preconditions:**
+- Authenticated, enrolled in the course (VideoRecording queryset filter at `backend/src/conferencing/views.py:482-509`).
+- `getVideoRecordings({ course_session_uuid })` returns matching published recordings.
+
+**Visible elements / regions:**
+- Back link (to course player)
+- Title, recorded-at metadata
+- HTML5 video player (controls, scrubbing, fullscreen)
+- Download link
+- Footer note: "Recording playback is tracked for instructor analytics. Live attendance is the only path to credit."
+- Empty state: "No recording available yet" if no published recording
+
+**Interactions to test:**
+1. Page load → fetches session, recordings, and the user's existing `recording-view` row in parallel
+2. Video plays → resumes from `last_position_seconds` if a previous view exists
+3. Throttled `recording-view` POST every ~15s during playback — `watch_seconds` increases monotonically
+4. Reach the end → POST with `completed: true` flag (one-shot)
+5. Refresh page mid-playback → video resumes from saved position
+6. **Per D3, this never flips `CourseSessionAttendance.is_eligible`** — verify in shell that attendance row is unchanged after playback
+7. Recording not yet published → empty state with descriptive copy
+
+---
+
 ### Page: `/registrations` — MyLearningPage (file: frontend/src/pages/registrations/MyRegistrationsPage.tsx)
 
 **Purpose:** Unified view of event registrations and course enrollments.
@@ -1121,8 +1182,18 @@
     - Download Certificate (if issued)
     - Join/Lobby button (if upcoming and can join)
 - Course enrollments:
-  - Course title, progress bar, status
-  - Resume button
+  - Course title, progress bar, status badge (In Progress / Completed / Awaiting Review)
+  - **FormatBadge** (next to status) — renders for live/hybrid courses only:
+    - Live → "Live" (with `Radio` icon) or "Live · N sessions" if `session_count` exposed
+    - Hybrid → "Hybrid · Next session in Nd" (calendar icon) or "Hybrid · Sessions complete" once attendance is full
+    - Online → no badge (default state)
+  - **Subtitle** — driven by `formatProgressSubtitle` (lib/progress.ts):
+    - Online: "X of Y modules complete"
+    - Hybrid + BOTH criteria: "X of Y modules · A of B sessions"
+    - Hybrid + EITHER: "X of Y modules or A of B sessions"
+    - Hybrid + MIN_SESSIONS: "X of Y modules · A of B sessions required"
+    - Live: "A of B sessions attended"
+  - Resume button (continues to course player two-track sidebar)
 - Search by event/course title
 - Filters: Status (Confirmed, Attended, etc.), time (Upcoming, Past)
 - Empty state (no registrations/enrollments)
@@ -1346,16 +1417,27 @@
 - `:courseUuid` param: course UUID
 
 **Visible elements / regions:**
-- **Left sidebar (module navigation):**
-  - Collapsible list of modules
-  - Module headers (expandable):
-    - Module title, progress (X / Y items completed), lock icon if not available
-    - Content items nested under module:
-      - Icon (text, video, quiz, document, external, lesson, assignment)
-      - Item title
-      - Checkmark if completed
-      - Lock icon if locked (sequential unlock)
-      - Click to navigate/load content
+- **Left sidebar — two-track for hybrid/live courses, modules-only for online:**
+  - **Live Sessions group** (only renders for `course.format ∈ {live, hybrid}` when sessions exist):
+    - Header: "LIVE SESSIONS"
+    - Each row (LiveSessionRow component) shows:
+      - Status icon: ✓ Attended (green) / 📅 Upcoming / ⏺ Live now (red, pulse) / ❌ Missed / 🎬 Recording / X Cancelled (strikethrough)
+      - Session title
+      - Status label + countdown ("In 7d", "Live now", "Attended", etc.)
+      - "📍 In person" tag if `delivery_mode === 'in_person'`
+      - "Required" amber tag if `is_mandatory`
+    - Click → navigates to `/courses/:slug/sessions/:uuid/lobby` (upcoming) or `/recording` (past + recording_published)
+    - Cancelled sessions render with strikethrough + reduced opacity
+  - **Modules group** (omitted for `course.format === 'live'`):
+    - Collapsible list of modules
+    - Module headers (expandable):
+      - Module title, progress (X / Y items completed), lock icon if not available
+      - Content items nested under module:
+        - Icon (text, video, quiz, document, external, lesson, assignment)
+        - Item title
+        - Checkmark if completed
+        - Lock icon if locked (sequential unlock)
+        - Click to navigate/load content
 - **Main content area:**
   - Breadcrumb: Course > Module > Content Item
   - Back button
@@ -1384,7 +1466,7 @@
     - Current discussions for this content item
     - New post form
     - Thread replies
-  - Sessions panel (if hybrid course, shows live session schedule)
+  - (Sessions panel deprecated — see Live Sessions group in left sidebar above)
 - **Progress bar at top:** Overall course completion percentage
 - **Loading states:** Skeleton loaders for content while fetching
 
@@ -1430,7 +1512,7 @@
 14. Announcement click → expand, show full text
 15. Discussion: Click on discussion → show replies and reply form
 16. Discussion: Type reply → submit → reply posted, thread updated
-17. Sessions panel: If hybrid course, show upcoming live sessions with join buttons
+17. Live Sessions sidebar group: Click an upcoming session → routes to `/courses/:slug/sessions/:uuid/lobby` (countdown + Join button + Add-to-Calendar). In-person sessions show venue card and no Join button. Click a past session with a published recording → routes to `/courses/:slug/sessions/:uuid/recording` (HTML5 video, throttled progress tracking via `recording-view` endpoint, resume on reload).
 18. Progress bar → updates as content completed
 19. Module status → updates as child content completed
 20. Scroll sidebar → module list scrolls while content area scrolls independently

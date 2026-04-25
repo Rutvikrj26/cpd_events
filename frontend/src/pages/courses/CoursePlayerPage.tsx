@@ -16,7 +16,6 @@ import {
 import { getCourseModules, getModuleContents } from '@/api/courses/modules';
 import { updateContentProgress } from '@/api/learning';
 import { Course, CourseModule, Assignment, AssignmentSubmission, CourseAnnouncement, CourseSession } from '@/api/courses/types';
-import { SessionsPanel } from '@/components/courses/SessionsPanel';
 import { LiveSessionRow } from '@/components/live/LiveSessionRow';
 import { DiscussionPanel } from '@/components/courses/discussion/DiscussionPanel';
 import { useAuth } from '@/contexts/AuthContext';
