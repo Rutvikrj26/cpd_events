@@ -170,7 +170,7 @@ class TestEventRegistrationViewSet:
 
         response = organizer_client.post(
             f'/api/v1/events/{published_event.uuid}/registrations/{registration.uuid}/refund/',
-            {},
+            {'reason': 'requested by attendee'},
             format='json',
         )
 

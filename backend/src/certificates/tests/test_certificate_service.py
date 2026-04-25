@@ -54,6 +54,11 @@ class TestCertificateService:
         assert result.get('already_issued') is True
         assert result['certificate'].uuid == certificate.uuid
 
+    @pytest.mark.skip(
+        reason="Per-subscription certificate-per-month limits were removed in "
+        "the single-tenant transition. Institutions issue certificates without "
+        "a SaaS gating layer."
+    )
     def test_issue_certificate_limit_reached(
         self, certificate_template, attended_registration, organizer
     ):

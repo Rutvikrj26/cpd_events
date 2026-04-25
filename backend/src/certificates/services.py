@@ -512,8 +512,8 @@ class CertificateService:
                         ]
                     )
 
-                if subscription and hasattr(subscription, 'increment_certificates'):
-                    subscription.increment_certificates()
+                # Subscription / per-org seat limits were removed in the
+                # single-tenant transition; nothing to increment here.
 
                 return {'success': True, 'certificate': certificate}
 

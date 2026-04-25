@@ -62,6 +62,10 @@ class TestCurrentUserView:
         user.refresh_from_db()
         assert user.email == original_email
 
+    @pytest.mark.skip(
+        reason="The 'account_type' field belonged to the SaaS multi-tenant "
+        "shape; removed in the single-tenant transition."
+    )
     def test_organizer_profile_fields(self, organizer_client, organizer):
         """Organizer gets additional fields in response."""
         response = organizer_client.get(self.endpoint)
@@ -74,6 +78,11 @@ class TestCurrentUserView:
 # =============================================================================
 
 
+@pytest.mark.skip(
+    reason="The /users/me/organizer-profile/ endpoint was removed in the "
+    "single-tenant transition. Organizers are now seeded by the institution "
+    "admin via setup_groups; there's no per-user organizer-profile surface."
+)
 @pytest.mark.django_db
 class TestOrganizerProfileView:
     """Tests for GET/PATCH /api/v1/users/me/organizer-profile/"""
@@ -146,6 +155,10 @@ class TestNotificationPreferencesView:
 # =============================================================================
 
 
+@pytest.mark.skip(
+    reason="Self-service attendee→organizer upgrade was a SaaS feature; "
+    "removed in the single-tenant transition (organizers are admin-provisioned)."
+)
 @pytest.mark.django_db
 class TestUpgradeToOrganizerView:
     """Tests for POST /api/v1/users/me/upgrade/"""
@@ -252,6 +265,10 @@ class TestDataExportView:
 # =============================================================================
 
 
+@pytest.mark.skip(
+    reason="Public organizer-profile pages were a SaaS marketplace feature; "
+    "removed in the single-tenant transition."
+)
 @pytest.mark.django_db
 class TestPublicOrganizerView:
     """Tests for GET /api/v1/organizers/{uuid}/"""
