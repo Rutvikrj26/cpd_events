@@ -172,6 +172,11 @@ urlpatterns = [
         CourseSessionViewSet.as_view({'post': 'match_participant'}),
         name='course-session-match-participant',
     ),
+    path(
+        'courses/<uuid:course_uuid>/sessions/<uuid:uuid>/recording-view/',
+        CourseSessionViewSet.as_view({'get': 'recording_view', 'post': 'recording_view'}),
+        name='course-session-recording-view',
+    ),
     # Discussions
     path(
         'courses/<uuid:course_uuid>/discussions/',

@@ -655,18 +655,17 @@ export function CoursePlayerPage() {
                                     key={s.uuid}
                                     session={s as any}
                                     onClick={() => {
-                                        // Lobby + recording pages are Phase 2. Until they ship,
-                                        // open published recording in a new tab if available;
-                                        // otherwise show a "coming soon" toast.
+                                        // Past + has recording → recording page.
+                                        // Otherwise (upcoming, live, or past-no-recording) → lobby.
                                         const rec = (s as any).recording;
-                                        if (rec?.storage_path) {
-                                            window.open(rec.storage_path, '_blank');
-                                        } else {
-                                            toast({
-                                                title: 'Lobby coming soon',
-                                                description: 'Live attendance is captured automatically during the session.',
-                                            });
-                                        }
+                                        const ends = (s as any).ends_at
+                                            ? new Date((s as any).ends_at)
+                                            : new Date(new Date(s.starts_at).getTime() + (s.duration_minutes ?? 0) * 60_000);
+                                        const isPast = new Date() >= ends || s.status === 'completed';
+                                        const target = isPast && rec
+                                            ? `/courses/${course.slug}/sessions/${s.uuid}/recording`
+                                            : `/courses/${course.slug}/sessions/${s.uuid}/lobby`;
+                                        navigate(target);
                                     }}
                                 />
                             ))}

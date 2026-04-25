@@ -26,7 +26,9 @@ export async function joinCourseSessionVideo(
   return response.data;
 }
 
-export async function getVideoRecordings(params?: { event_uuid?: string }): Promise<VideoRecording[]> {
+export async function getVideoRecordings(
+  params?: { event_uuid?: string; course_session_uuid?: string },
+): Promise<VideoRecording[]> {
   const response = await api.get('/video/recordings/', { params });
   return response.data.results || response.data;
 }

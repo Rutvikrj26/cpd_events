@@ -310,6 +310,33 @@ export const getCourseSessions = async (courseUuid: string): Promise<CourseSessi
     return Array.isArray(response.data) ? response.data : response.data.results || [];
 };
 
+export interface RecordingViewState {
+    watch_seconds: number;
+    last_position_seconds: number;
+    completed_at: string | null;
+}
+
+export const getRecordingView = async (
+    courseUuid: string, sessionUuid: string,
+): Promise<RecordingViewState | null> => {
+    const response = await client.get<RecordingViewState>(
+        `/courses/${courseUuid}/sessions/${sessionUuid}/recording-view/`,
+        { validateStatus: (s) => s === 200 || s === 204 },
+    );
+    return response.status === 204 ? null : response.data;
+};
+
+export const postRecordingView = async (
+    courseUuid: string, sessionUuid: string,
+    payload: { watch_seconds: number; last_position_seconds?: number; completed?: boolean },
+): Promise<RecordingViewState> => {
+    const response = await client.post<RecordingViewState>(
+        `/courses/${courseUuid}/sessions/${sessionUuid}/recording-view/`,
+        payload,
+    );
+    return response.data;
+};
+
 export const getCourseSession = async (courseUuid: string, sessionUuid: string): Promise<CourseSession> => {
     const response = await client.get<CourseSession>(`/courses/${courseUuid}/sessions/${sessionUuid}/`);
     return response.data;

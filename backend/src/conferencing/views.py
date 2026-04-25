@@ -473,6 +473,11 @@ class VideoRecordingViewSet(viewsets.ReadOnlyModelViewSet):
         if event_uuid:
             qs = qs.filter(event__uuid=event_uuid)
 
+        # Symmetric ?course_session_uuid= filter for the CourseSessionRecordingPage.
+        course_session_uuid = self.request.query_params.get('course_session_uuid')
+        if course_session_uuid:
+            qs = qs.filter(course_session__uuid=course_session_uuid)
+
         user = self.request.user
         if user.groups.filter(name="admin").exists():
             return qs

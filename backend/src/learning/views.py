@@ -1852,12 +1852,17 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
             CourseSessionCreateSerializer,
             CourseSessionListSerializer,
             CourseSessionSerializer,
+            LiveSessionSerializer,
         )
 
         if self.action == 'list':
             return CourseSessionListSerializer
         if self.action in ['create', 'update', 'partial_update']:
             return CourseSessionCreateSerializer
+        if self.action == 'retrieve':
+            # Learner-context shape with attendance / recording / join_url
+            # already resolved against request.user. Powers the lobby.
+            return LiveSessionSerializer
         return CourseSessionSerializer
 
     @action(detail=True, methods=['post', 'get'], url_path='recording-view')

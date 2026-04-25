@@ -25,6 +25,8 @@ import { EventDiscovery } from './pages/public/EventDiscovery';
 import { EventRegistration } from './pages/public/EventRegistration';
 import { EventLobbyPage } from './pages/events/EventLobbyPage';
 import { EventRecordingPage } from './pages/events/EventRecordingPage';
+import { CourseSessionLobbyPage } from './pages/courses/CourseSessionLobbyPage';
+import { CourseSessionRecordingPage } from './pages/courses/CourseSessionRecordingPage';
 import { CheckoutCancel, CheckoutSuccess } from './pages/public/CheckoutReturn';
 import { PublicCourseDetailPage } from './pages/courses/PublicCourseDetailPage';
 import { ProgramDiscoveryPage } from './pages/public/ProgramDiscoveryPage';
@@ -197,6 +199,9 @@ export default function App() {
                   {/* Pre-event lobby (auth) and post-event recording playback. */}
                   <Route path="/events/:id/lobby" element={<EventLobbyPage />} />
                   <Route path="/events/:id/recording" element={<EventRecordingPage />} />
+                  {/* Symmetric routes for course-session lobby / recording. */}
+                  <Route path="/courses/:slug/sessions/:sessionUuid/lobby" element={<CourseSessionLobbyPage />} />
+                  <Route path="/courses/:slug/sessions/:sessionUuid/recording" element={<CourseSessionRecordingPage />} />
                   <Route path="/events/:uuid/edit" element={
                     <ProtectedRoute requiredFeature="create_events">
                       <EventCreatePage />
