@@ -222,7 +222,11 @@ class UserSerializer(SoftDeleteModelSerializer):
             'pending_email',
             # Notification preferences
             'notify_event_reminders',
+            'notify_event_updates',
             'notify_certificate_issued',
+            'notify_badges',
+            'notify_recordings',
+            'notify_course_progress',
             # Timestamps
             'created_at',
             'updated_at',
@@ -268,7 +272,11 @@ class NotificationPreferencesSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'notify_event_reminders',
+            'notify_event_updates',
             'notify_certificate_issued',
+            'notify_badges',
+            'notify_recordings',
+            'notify_course_progress',
         ]
 
 

@@ -593,6 +593,52 @@ class PublicRegistrationView(generics.CreateAPIView):
             )
 
 
+@roles('public', route_name='registration_lobby')
+class RegistrationLobbyView(generics.GenericAPIView):
+    """GET /api/v1/public/registrations/{uuid}/lobby/
+
+    Public endpoint that returns the minimum info a guest registrant needs to
+    render the pre-event lobby: event details + their registration metadata.
+    Authenticated paths (``/events/:uuid/lobby``) load the same data via the
+    standard event endpoints; this exists so a non-User registrant can still
+    land on the lobby URL embedded in their reminder email.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+
+    def get(self, request, uuid=None):
+        from events.serializers import PublicEventDetailSerializer
+
+        try:
+            registration = Registration.objects.select_related('event').get(
+                uuid=uuid, deleted_at__isnull=True
+            )
+        except Registration.DoesNotExist:
+            return error_response(
+                'Registration not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        event = registration.event
+        if event.deleted_at is not None:
+            return error_response(
+                'Event no longer available.', code='EVENT_UNAVAILABLE', status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        event_data = PublicEventDetailSerializer(event, context={'request': request}).data
+        return Response({
+            'event': event_data,
+            'registration': {
+                'uuid': str(registration.uuid),
+                'email': registration.email,
+                'full_name': registration.full_name,
+                'status': registration.status,
+                'payment_status': registration.payment_status,
+                'attended': registration.attended,
+            },
+        })
+
+
 @roles('public', route_name='start_checkout')
 class StartCheckoutView(generics.GenericAPIView):
     """POST /api/v1/public/registrations/{uuid}/start-checkout/

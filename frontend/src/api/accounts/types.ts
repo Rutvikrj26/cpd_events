@@ -67,7 +67,11 @@ export interface PasswordChangeRequest {
 
 export interface NotificationPreferences {
     notify_event_reminders: boolean;
+    notify_event_updates: boolean;
     notify_certificate_issued: boolean;
+    notify_badges: boolean;
+    notify_recordings: boolean;
+    notify_course_progress: boolean;
 }
 
 export interface UserSession {

@@ -33,6 +33,7 @@ import { getOwnedCourses } from "@/api/courses";
 import { Course } from "@/api/courses/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { getRoleFlags } from "@/lib/role-utils";
+import { formatDate } from "@/lib/datetime";
 import { toast } from "sonner";
 
 export function OrganizerDashboard() {
@@ -229,7 +230,7 @@ export function OrganizerDashboard() {
                             </div>
                           </td>
                           <td className="px-6 py-4 text-muted-foreground">
-                            {new Date(event.starts_at).toLocaleDateString()}
+                            {formatDate(event.starts_at, user)}
                           </td>
                           <td className="px-6 py-4">
                             <Badge variant="outline" className={getStatusColor(event.status)}>

@@ -42,14 +42,22 @@ export function AttendeeDashboard() {
     fetchRegistrations();
   }, []);
 
+  // Only count confirmed registrations toward credits + upcoming counters.
+  // Waitlisted / cancelled / pending-payment rows otherwise inflate the
+  // dashboard and surface as "Join Session" CTAs the learner can't use.
+  const confirmedRegs = registrations.filter(r => r.status === 'confirmed');
   const stats = {
-    totalCredits: registrations.reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
+    totalCredits: confirmedRegs
+      .filter(r => r.attended || new Date(r.event.starts_at) <= new Date())
+      .reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
     certificates: registrations.filter(r => r.certificate_issued).length,
-    upcomingEvents: registrations.filter(r => new Date(r.event.starts_at) > new Date()).length,
-    learningHours: registrations.reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
+    upcomingEvents: confirmedRegs.filter(r => new Date(r.event.starts_at) > new Date()).length,
+    learningHours: confirmedRegs
+      .filter(r => r.attended)
+      .reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
   };
 
-  const upcomingRegistrations = registrations
+  const upcomingRegistrations = confirmedRegs
     .filter(r => new Date(r.event.starts_at) > new Date())
     .sort((a, b) => new Date(a.event.starts_at).getTime() - new Date(b.event.starts_at).getTime());
 

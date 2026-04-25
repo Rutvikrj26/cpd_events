@@ -43,6 +43,7 @@ export interface VideoRecording {
   view_count: number;
   unique_viewers: number;
   files: VideoRecordingFile[];
+  event_uuid?: string | null;
   created_at: string;
 }
 

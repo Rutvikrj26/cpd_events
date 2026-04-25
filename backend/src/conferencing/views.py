@@ -446,7 +446,7 @@ class VideoRoomViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
-@roles('organizer', 'admin', route_name='video_recordings')
+@roles('learner', 'instructor', 'organizer', 'admin', route_name='video_recordings')
 class VideoRecordingViewSet(viewsets.ReadOnlyModelViewSet):
     """
     GET /api/v1/video/recordings/ — List published recordings accessible to the user.
@@ -467,6 +467,12 @@ class VideoRecordingViewSet(viewsets.ReadOnlyModelViewSet):
             is_published=True,
             status=VideoRecording.Status.AVAILABLE,
         )
+
+        # Optional ?event_uuid=<uuid> filter for the EventRecordingPage.
+        event_uuid = self.request.query_params.get('event_uuid')
+        if event_uuid:
+            qs = qs.filter(event__uuid=event_uuid)
+
         user = self.request.user
         if user.groups.filter(name="admin").exists():
             return qs
@@ -474,10 +480,17 @@ class VideoRecordingViewSet(viewsets.ReadOnlyModelViewSet):
         from django.db.models import Q
         from events.models import Event
         from learning.models import Course, CourseEnrollment, CourseSession
+        from registrations.models import Registration
 
         user_event_ids = Event.objects.filter(
             owner=user, deleted_at__isnull=True
         ).values_list('id', flat=True)
+        # Learners who registered for an event get access to its recording.
+        registered_event_ids = Registration.objects.filter(
+            user=user,
+            status__in=[Registration.Status.CONFIRMED],
+            deleted_at__isnull=True,
+        ).values_list('event_id', flat=True)
 
         staff_course_ids = Course.objects.filter(
             Q(created_by=user) | Q(staff_assignments__user=user)
@@ -492,6 +505,7 @@ class VideoRecordingViewSet(viewsets.ReadOnlyModelViewSet):
 
         return qs.filter(
             Q(event_id__in=user_event_ids)
+            | Q(event_id__in=registered_event_ids)
             | Q(course_session_id__in=accessible_session_ids)
         )
 

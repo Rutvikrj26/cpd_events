@@ -9,6 +9,9 @@ from django.utils import timezone
 from common.config import AttendanceThresholds, EventDuplication, EventDuration, SessionDefaults
 from common.models import BaseModel, SoftDeleteModel
 
+# Default reminder schedule: T-7d, T-24h, T-1h, T-now (in minutes before starts_at).
+DEFAULT_REMINDER_OFFSETS_MINUTES = [10080, 1440, 60, 0]
+
 
 class Event(SoftDeleteModel):
     """
@@ -197,6 +200,17 @@ class Event(SoftDeleteModel):
     )
 
     # =========================================
+    # Reminder Settings
+    # =========================================
+    # Minutes before starts_at at which to send reminder emails to confirmed
+    # registrants. Default = T-7d, T-24h, T-1h, T-now.
+    reminder_offsets_minutes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of minutes-before-start to send reminders (e.g. [10080, 1440, 60, 0]).",
+    )
+
+    # =========================================
     # Certificate Settings
     # =========================================
     certificates_enabled = models.BooleanField(default=True, help_text="Issue certificates for this event")
@@ -286,6 +300,11 @@ class Event(SoftDeleteModel):
     def ends_at(self):
         """Calculate scheduled end time."""
         return self.starts_at + timezone.timedelta(minutes=self.duration_minutes)
+
+    @property
+    def effective_reminder_offsets_minutes(self):
+        """Reminder offsets to use, falling back to platform defaults if unset."""
+        return list(self.reminder_offsets_minutes) if self.reminder_offsets_minutes else list(DEFAULT_REMINDER_OFFSETS_MINUTES)
 
     @property
     def is_upcoming(self):

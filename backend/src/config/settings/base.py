@@ -73,6 +73,11 @@ GCS_EMULATOR_HOST = os.environ.get('GCS_EMULATOR_HOST', '')
 # Useful for initial deployments or debugging. Set to False to enable async Cloud Tasks.
 CLOUD_TASKS_SYNC = os.environ.get('CLOUD_TASKS_SYNC', 'true').lower() in ('true', '1', 'yes')
 
+# Cron tick endpoint shared secret. When set, the /api/common/cron/tick/
+# endpoint requires `Authorization: Bearer <secret>`. When unset, only
+# requests from localhost are accepted (dev fallback).
+CRON_SHARED_SECRET = os.environ.get('CRON_SHARED_SECRET', '')
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',

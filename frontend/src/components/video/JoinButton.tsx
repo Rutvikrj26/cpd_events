@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Video, Loader2 } from 'lucide-react';
+import { Video, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -17,7 +17,20 @@ interface JoinButtonProps {
   variant?: 'default' | 'outline' | 'secondary';
   size?: 'default' | 'sm' | 'lg';
   className?: string;
+  /**
+   * Disable the button with a contextual reason. Common values:
+   *   "not_provisioned" — VideoRoom is still being set up
+   *   "ended"           — event has finished, no joining
+   *   "not_yet"         — too early to join (lobby decides this)
+   */
+  disabledReason?: 'not_provisioned' | 'ended' | 'not_yet' | null;
 }
+
+const DISABLED_LABELS: Record<NonNullable<JoinButtonProps['disabledReason']>, string> = {
+  not_provisioned: 'Setting up room…',
+  ended: 'Event ended',
+  not_yet: 'Join when live',
+};
 
 export function JoinButton({
   eventUuid,
@@ -27,6 +40,7 @@ export function JoinButton({
   variant = 'default',
   size = 'default',
   className,
+  disabledReason = null,
 }: JoinButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,12 +70,19 @@ export function JoinButton({
       }
       setVideoSession(response);
     } catch (err: unknown) {
+      // Surface room-not-ready messages from the backend.
       const message = err instanceof Error ? err.message : 'Failed to join video room';
-      setError(message);
+      const friendly = /not configured|not ready|provision/i.test(message)
+        ? 'The video room isn\'t ready yet — please try again in a moment.'
+        : message;
+      setError(friendly);
     } finally {
       setLoading(false);
     }
   };
+
+  const effectiveLabel = disabledReason ? DISABLED_LABELS[disabledReason] : label;
+  const isDisabled = loading || disabledReason !== null;
 
   return (
     <>
@@ -70,14 +91,17 @@ export function JoinButton({
         size={size}
         className={className}
         onClick={handleJoin}
-        disabled={loading}
+        disabled={isDisabled}
+        title={disabledReason === 'not_provisioned' ? 'Refresh in a moment.' : undefined}
       >
         {loading ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : disabledReason ? (
+          <AlertCircle className="mr-2 h-4 w-4" />
         ) : (
           <Video className="mr-2 h-4 w-4" />
         )}
-        {label}
+        {effectiveLabel}
       </Button>
 
       {error && (

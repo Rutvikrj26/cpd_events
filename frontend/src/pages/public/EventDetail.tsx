@@ -235,23 +235,57 @@ export function EventDetail() {
     }
 
     if (isRegistrationOpen) {
+      const wrapClass = isLarge ? 'w-full' : 'inline-flex flex-col items-start';
+      const next = encodeURIComponent(`/events/${id}/details`);
       return (
-        <Link to={`/events/${id}/register`}>
-          <Button
-            size={isLarge ? "lg" : "default"}
-            className={isLarge ? 'w-full py-6 text-lg' : ''}
-          >
-            Register Now
-          </Button>
-        </Link>
+        <div className={wrapClass}>
+          <Link to={`/events/${id}/register`}>
+            <Button
+              size={isLarge ? "lg" : "default"}
+              className={isLarge ? 'w-full py-6 text-lg' : ''}
+            >
+              Register Now
+            </Button>
+          </Link>
+          {!isAuthenticated && (
+            <p className={`text-xs text-muted-foreground mt-2 ${isLarge ? 'text-center w-full' : ''}`}>
+              Already registered?{' '}
+              <Link to={`/login?returnUrl=${next}`} className="text-primary underline-offset-2 hover:underline">
+                Sign in
+              </Link>
+              {' '}to see your status.
+            </p>
+          )}
+        </div>
       );
     }
 
     return <Button disabled>Registration Closed</Button>;
   };
 
+  const nextUrl = encodeURIComponent(`/events/${id}/details`);
+
   return (
     <div className="bg-background min-h-screen pb-12">
+      {/* Mini auth bar — this route doesn't sit inside PublicLayout, so an
+          anon visitor would otherwise have no nav at all. */}
+      {!isAuthenticated && (
+        <div className="border-b border-border bg-card">
+          <div className="container mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 lg:px-8">
+            <Link to="/discover/events" className="text-sm text-muted-foreground hover:text-foreground">
+              ← Browse events
+            </Link>
+            <div className="flex items-center gap-2">
+              <Link to={`/login?returnUrl=${nextUrl}`}>
+                <Button size="sm" variant="ghost">Sign in</Button>
+              </Link>
+              <Link to={`/signup?returnUrl=${nextUrl}`}>
+                <Button size="sm" variant="outline">Create account</Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Hero Header */}
       <div className="bg-card border-b border-border">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">

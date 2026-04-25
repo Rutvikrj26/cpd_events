@@ -33,6 +33,11 @@ urlpatterns = [
         registration_views.StartCheckoutView.as_view(),
         name='public_registration_start_checkout',
     ),
+    path(
+        'api/v1/public/registrations/<uuid:uuid>/lobby/',
+        registration_views.RegistrationLobbyView.as_view(),
+        name='public_registration_lobby',
+    ),
     # Internal & Common
     path('api/common/', include('common.urls')),
 ]

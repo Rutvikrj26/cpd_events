@@ -1,0 +1,42 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<h1 style="margin-bottom: 12px;">Email Preview</h1>
+
+<form method="get" style="margin-bottom: 20px;">
+    <label for="template" style="font-weight: 600;">Template:</label>
+    <select id="template" name="template" onchange="this.form.submit()" style="margin-left: 8px;">
+        <option value="">— pick one —</option>
+        {% for key in template_keys %}
+        <option value="{{ key }}" {% if key == selected_template %}selected{% endif %}>{{ key }}</option>
+        {% endfor %}
+    </select>
+    {% if log %}
+    <span style="margin-left: 16px; color: #666;">Previewing against EmailLog #{{ log.id }} ({{ log.recipient_email }})</span>
+    <input type="hidden" name="log_id" value="{{ log.id }}">
+    {% endif %}
+</form>
+
+{% if error %}
+<div style="background-color: #fff5f5; color: #b32d2d; padding: 10px 14px; border-radius: 4px; border: 1px solid #f5c2c2; margin-bottom: 16px;">
+    {{ error }}
+</div>
+{% endif %}
+
+{% if rendered %}
+<div style="display: flex; gap: 24px;">
+    <div style="flex: 2; min-width: 0;">
+        <h3 style="margin-top: 0;">Rendered HTML</h3>
+        <iframe srcdoc="{{ rendered|escape }}"
+            style="width: 100%; min-height: 720px; border: 1px solid #ccc; border-radius: 4px;"></iframe>
+    </div>
+    <div style="flex: 1; min-width: 280px;">
+        <h3 style="margin-top: 0;">Fixture context</h3>
+        <pre style="background-color: #f4f5f7; padding: 12px; border-radius: 4px; overflow: auto; max-height: 720px; font-size: 12px;">{% for k, v in context_json.items %}{{ k }}: {{ v }}
+{% endfor %}</pre>
+    </div>
+</div>
+{% else %}
+<p style="color: #666;">Pick a template above to preview it.</p>
+{% endif %}
+{% endblock %}

@@ -63,6 +63,7 @@ class Command(BaseCommand):
             self._build_discussions(now, users, courses)
             self._build_billing(now, users, events, courses)
             self._build_promo_codes(now, users, events, registrations)
+            self._build_stripe_events_and_disputes(now, users, events, registrations)
             self._build_notifications(now, users, events, courses)
             self._build_audit_log(now, users)
             self._build_invitations(now, users)
@@ -70,9 +71,9 @@ class Command(BaseCommand):
             self._build_course_announcements(now, users, courses)
             self._build_submission_reviews(now, users)
             self._backfill_attendance_records(now, events, registrations)
+            self._build_video_rooms_and_recordings(now, events)
             self._refresh_denormalized_counts(events, courses, programs)
             self._reassert_event_statuses(events, now)
-            self._mark_courses_sold_out(courses)
 
         self.stdout.write(self.style.SUCCESS("Demo data seeded."))
         self.stdout.write("")
@@ -288,6 +289,35 @@ class Command(BaseCommand):
                 is_active=True,
             ),
         )
+        # Additional roster members so the Speakers page looks like a real
+        # pool, not a placeholder. These five aren't login personas — they're
+        # speaker-profile rows attached to events as needed elsewhere.
+        extras = [
+            ("Dr. Helen Yamamoto", "Pediatric ICU lead with a focus on respiratory therapy.",
+             "MD, FRCPC Pediatric Critical Care", "h.yamamoto@sickkids.ca",
+             "https://linkedin.com/in/helenyamamoto"),
+            ("Dr. Pierre Beaumont", "Health policy researcher and former CMO.",
+             "MD, MPH, FRCPC", "p.beaumont@toh.ca", ""),
+            ("Dr. Naomi Adeyemi", "Internal medicine consultant and faculty preceptor.",
+             "MD, FRCPC Internal Medicine", "n.adeyemi@sunnybrook.ca",
+             "https://linkedin.com/in/naomiadeyemi"),
+            ("Dr. Wei-Lin Chen", "Anesthesiologist and CPD curriculum designer.",
+             "MD, FRCPC Anesthesia", "w.chen@uhn.ca", ""),
+            ("Aria Patel, RN, MN", "Critical-care nurse educator and simulation lead.",
+             "RN, MN, CNCC(C)", "a.patel@vch.ca", "https://linkedin.com/in/ariapatel"),
+        ]
+        for name, bio, quals, email, linkedin in extras:
+            Speaker.objects.update_or_create(
+                name=name,
+                defaults=dict(
+                    owner=users["organizer"],
+                    bio=bio,
+                    qualifications=quals,
+                    email=email,
+                    linkedin_url=linkedin,
+                    is_active=True,
+                ),
+            )
         return {"singh": singh, "chang": chang, "ortiz": ortiz}
 
     # ------------------------------------------------------------------
@@ -424,6 +454,24 @@ class Command(BaseCommand):
         )
         events["live_now"].speakers.set([speakers["chang"]])
 
+        # An imminent webinar — starts in ~5 min so the lobby Join button
+        # activates immediately (within the 15-min gate) and reminders are
+        # close to firing. Lets demos walk the lobby state transitions live.
+        events["imminent"] = mk_event(
+            "icu-protocols-quick-update",
+            "ICU Protocols: Quick Update",
+            starts_at=now + timedelta(minutes=5),
+            duration=45,
+            status=Event.Status.PUBLISHED,
+            event_type=Event.EventType.WEBINAR,
+            price="0.00",
+            max_attendees=100,
+            cpd_type="clinical", cpd_value="0.75",
+            short_description="Bite-sized protocol changes for ICU teams. Starts in just a few minutes.",
+            video_enabled=True,
+            recording_enabled=True,
+        )
+
         events["waitlist_full"] = mk_event(
             "mental-health-first-aid",
             "Mental Health First Aid",
@@ -558,12 +606,15 @@ class Command(BaseCommand):
         def mk_reg(event, user, *, status=Registration.Status.CONFIRMED, payment_status=None,
                    attended=False, attendance_eligible=False, total_minutes=0,
                    waitlist_position=None, amount_paid=None, email=None, full_name=None,
+                   professional_title="", organization_name="",
                    created_at=None, cancelled_at=None):
             if payment_status is None:
                 payment_status = Registration.PaymentStatus.PAID if event.price and event.price > 0 else Registration.PaymentStatus.NA
             defaults = dict(
                 email=(email or (user.email if user else "guest@demo.test")),
                 full_name=(full_name or (user.full_name if user else "Guest Attendee")),
+                professional_title=professional_title or (user.professional_title if user else ""),
+                organization_name=organization_name or (user.organization_name if user else ""),
                 status=status,
                 payment_status=payment_status,
                 waitlist_position=waitlist_position,
@@ -606,11 +657,53 @@ class Command(BaseCommand):
         regs["emily_live"] = mk_reg(ln, users["emily"], attended=True, total_minutes=14, amount_paid="19.99", created_at=now - timedelta(days=3))
         regs["michael_live_pending"] = mk_reg(ln, users["michael"], status=Registration.Status.PENDING, payment_status=Registration.PaymentStatus.PENDING, amount_paid="19.99", created_at=now - timedelta(hours=1))
 
+        # Imminent event — confirmed registrations for Emily and Aisha so the
+        # lobby Join button activates immediately and reminders are visible
+        # in admin near their fire window. A guest registration too — exercises
+        # the public /r/<uuid>/lobby route.
+        imm = events["imminent"]
+        regs["emily_imminent"] = mk_reg(imm, users["emily"], created_at=now - timedelta(hours=2))
+        regs["aisha_imminent"] = mk_reg(imm, users["aisha"], created_at=now - timedelta(hours=1))
+        regs["guest_imminent"] = mk_reg(
+            imm, None,
+            email="guest_imminent_demo@example.com",
+            full_name="Guest Demo Attendee",
+            created_at=now - timedelta(minutes=30),
+        )
+
         # Waitlist-full event
         wf = events["waitlist_full"]
-        # Fill up to capacity with guest attendees (simulate all seats taken)
+        # Fill up to capacity with realistic guest attendees (simulate all seats
+        # taken). These names also drive the Contacts page via the
+        # registration→contact post_save signal, so spread them across
+        # plausible orgs/titles instead of "Attendee N".
+        _MHFA_GUESTS = [
+            ("Dr. Hannah Park", "MD, FRCPC", "Toronto General Hospital", "h.park@tgh.ca"),
+            ("Dr. Marcus Williams", "MD", "Sunnybrook Health Sciences", "m.williams@sunnybrook.ca"),
+            ("Dr. Priya Patel", "MD, MPH", "St. Michael's Hospital", "p.patel@smh.ca"),
+            ("Dr. Sofia Nakamura", "DO", "Mount Sinai Hospital", "s.nakamura@msh.ca"),
+            ("Nurse Practitioner Jamie Reed", "NP, MN", "Women's College Hospital", "j.reed@wch.ca"),
+            ("Dr. Andre Dubois", "MD, FRCSC", "Sainte-Justine Hospital", "a.dubois@chusj.org"),
+            ("Dr. Olivia Tran", "MD", "Vancouver General Hospital", "o.tran@vgh.ca"),
+            ("Dr. Benjamin Cohen", "MD, MSc", "Jewish General Hospital", "b.cohen@jgh.mcgill.ca"),
+            ("Dr. Yuki Tanaka", "MD, PhD", "Princess Margaret Cancer Centre", "y.tanaka@uhn.ca"),
+            ("Dr. Rachel Goldberg", "MD, FAAP", "Hospital for Sick Children", "r.goldberg@sickkids.ca"),
+            ("Dr. Carlos Mendoza", "DO", "Lakeridge Health", "c.mendoza@lh.ca"),
+            ("Dr. Aisling O'Brien", "MD, FRCPC", "London Health Sciences Centre", "a.obrien@lhsc.on.ca"),
+            ("Dr. David Klein", "MD", "Hamilton Health Sciences", "d.klein@hhsc.ca"),
+            ("Dr. Fatima Hassan", "MD, MPH", "The Ottawa Hospital", "f.hassan@toh.ca"),
+            ("Dr. Liam Murphy", "MD, FRCPC", "Kingston Health Sciences", "l.murphy@kingstonhsc.ca"),
+            ("Dr. Evelyn Chu", "MD, FRCPC", "Trillium Health Partners", "e.chu@thp.ca"),
+            ("Dr. Nathan Brooks", "DO", "Queensway Carleton Hospital", "n.brooks@qch.on.ca"),
+            ("Dr. Maya Subramanian", "MD, FACP", "Markham Stouffville Hospital", "m.subramanian@msh.on.ca"),
+            ("Dr. Tomás Rivera", "MD", "Humber River Hospital", "t.rivera@hrh.ca"),
+            ("Dr. Charlotte Wells", "MD, FRCPC", "Michael Garron Hospital", "c.wells@mgh.ca"),
+        ]
         for i in range(wf.max_attendees or 20):
-            mk_reg(wf, None, email=f"guest_mhfa_{i}@example.com", full_name=f"Attendee {i+1}", created_at=now - timedelta(days=10))
+            name, title, org, email = _MHFA_GUESTS[i % len(_MHFA_GUESTS)]
+            mk_reg(wf, None, email=email, full_name=name,
+                   professional_title=title, organization_name=org,
+                   created_at=now - timedelta(days=10 + i % 7))
         regs["aisha_waitlist_full"] = mk_reg(wf, users["aisha"], status=Registration.Status.WAITLISTED, waitlist_position=1, created_at=now - timedelta(days=7))
         regs["michael_waitlist_full"] = mk_reg(wf, users["michael"], status=Registration.Status.WAITLISTED, waitlist_position=2, created_at=now - timedelta(days=6))
 
@@ -737,8 +830,8 @@ class Command(BaseCommand):
             status="published",
             price_cents=9900, currency="CAD",
             cpd_credits="4.00", cpd_type="clinical",
-            max_enrollments=25, enrollment_count=25,
-            short_description="Advanced EHR workflows for modern clinicians — enrollment full.",
+            max_enrollments=50,
+            short_description="Advanced EHR workflows for modern clinicians.",
         )
         courses["pharma"] = mk_course(
             "pharmacology-refresher",
@@ -756,6 +849,22 @@ class Command(BaseCommand):
             cpd_credits="6.00", cpd_type="clinical",
             is_public=False,
             short_description="Upcoming advanced surgical skills course.",
+        )
+        # A free, published course intentionally NOT pre-enrolled for any
+        # persona — so the demo can showcase the enroll-via-Discover flow
+        # (P5 enrollment confirmation email + Notification + signal triggers).
+        courses["qi"] = mk_course(
+            "quality-improvement-foundations",
+            "Quality Improvement Foundations",
+            status="published",
+            price_cents=0,
+            cpd_credits="2.50", cpd_type="general",
+            short_description="Free intro course. Open to all — try the enrollment flow end-to-end.",
+            description=(
+                "A free, self-paced intro to QI in healthcare. Reserved as a sandbox so "
+                "demo users can walk through the enrollment confirmation, notification, "
+                "and progress flows without affecting other learners' state."
+            ),
         )
 
         # Assign instructor as staff on two courses
@@ -841,6 +950,25 @@ class Command(BaseCommand):
             completed_at=now - timedelta(days=180),
             certificate_issued=True, certificate_issued_at=now - timedelta(days=180),
             enrolled_days_ago=200,
+        )
+        # Digital Health Records — three live enrollments so the
+        # Enrollments tab matches the dashboard count instead of relying on
+        # a denormalised override with no backing rows.
+        enrollments["emily_records"] = mk_enroll(
+            courses["records"], users["emily"],
+            progress=35, modules_completed=1, current_score=82,
+            enrolled_days_ago=18,
+        )
+        enrollments["michael_records"] = mk_enroll(
+            courses["records"], users["michael"],
+            progress=10, modules_completed=0,
+            enrolled_days_ago=8,
+        )
+        enrollments["aisha_records"] = mk_enroll(
+            courses["records"], users["aisha"],
+            status=CourseEnrollment.Status.PENDING,
+            progress=0, modules_completed=0,
+            enrolled_days_ago=2,
         )
         return enrollments
 
@@ -928,6 +1056,43 @@ class Command(BaseCommand):
         mk_content(m_c_4, "External Reference", "external", 0, duration=15, content_data={"url": "https://example.com/cultural-competence", "open_in_new_tab": True})
         mk_content(m_c_4, "Lesson Bundle", "lesson", 1, duration=20, content_data={"video": {"url": "https://demo.example/cc.mp4"}, "text": {"body": "<p>Context.</p>"}})
         mk_content(m_c_5, "Capstone Brief", "text", 0, duration=5, content_data={"body": "<p>Submit the capstone.</p>"})
+
+        # ---- Digital Health Records course (published+priced, looked empty) ----
+        records = courses["records"]
+        m_dhr_1 = mk_module(records, "EHR Workflow Foundations", 0, cpd="1.00")
+        m_dhr_2 = mk_module(records, "Documentation & Coding Best Practices", 1, cpd="1.00")
+        m_dhr_3 = mk_module(records, "Privacy, Security & PHIPA", 2, cpd="1.00")
+        m_dhr_4 = mk_module(records, "Optimising Day-to-Day EHR Use", 3, prereq=m_dhr_3,
+                             release_type="prerequisite", cpd="1.00")
+
+        mk_content(m_dhr_1, "Module Overview", "text", 0, duration=8,
+                   content_data={"body": "<p>How modern EHRs reshape clinical workflows.</p>"})
+        mk_content(m_dhr_1, "EHR Tour Video", "video", 1, duration=18,
+                   content_data={"url": "https://demo.example/ehr-tour.mp4", "provider": "demo"})
+        mk_content(m_dhr_2, "Coding Reference Guide", "document", 0, duration=25,
+                   content_data={})
+        mk_content(m_dhr_2, "Documentation Quiz", "quiz", 1, duration=15,
+                   content_data={"questions": [
+                       {"q": "Which note type best supports billing review?",
+                        "choices": ["SOAP", "Free text", "Telephone encounter"], "answer": 0},
+                   ], "passing_score": 70})
+        mk_content(m_dhr_3, "Privacy & PHIPA Reading", "text", 0, duration=20,
+                   content_data={"body": "<p>Patient privacy obligations under PHIPA.</p>"})
+        mk_content(m_dhr_3, "External Reference: PHIPA Toolkit", "external", 1, duration=10,
+                   content_data={"url": "https://www.ipc.on.ca/", "open_in_new_tab": True})
+        mk_content(m_dhr_4, "EHR Power-User Tips", "video", 0, duration=22,
+                   content_data={"url": "https://demo.example/power-user.mp4"})
+        mk_content(m_dhr_4, "Wrap-up & Reflection", "text", 1, duration=10,
+                   content_data={"body": "<p>Reflect on three workflow improvements you'll try this month.</p>"})
+
+        # ---- Pharmacology Refresher (archived but listed) ----
+        pharma = courses["pharma"]
+        m_ph_1 = mk_module(pharma, "Refresher Highlights", 0, cpd="1.00")
+        m_ph_2 = mk_module(pharma, "Common Drug Interactions", 1, cpd="1.00")
+        mk_content(m_ph_1, "Refresher Reading", "text", 0, duration=15,
+                   content_data={"body": "<p>Archived course retained for alumni access.</p>"})
+        mk_content(m_ph_2, "Interaction Tables", "document", 0, duration=20,
+                   content_data={})
 
         # ---- Assignments ----
         a_eth = Assignment.objects.update_or_create(
@@ -1041,9 +1206,23 @@ class Command(BaseCommand):
                 course_enrollment=enroll, module=module, defaults=defaults,
             )
 
+        mp(enrollments["emily_ethics"], m_eth_1, ModuleProgress.Status.COMPLETED, 2, 2, score=95)
         mp(enrollments["emily_ethics"], m_eth_2, ModuleProgress.Status.COMPLETED, 2, 2, score=85)
         mp(enrollments["emily_ethics"], m_eth_3, ModuleProgress.Status.COMPLETED, 2, 2, score=92)
+        # Michael completed m1 so the m2 case-study assignment is reachable
+        # (he has a needs_revision submission there); m2 itself is in_progress.
+        mp(enrollments["michael_ethics"], m_eth_1, ModuleProgress.Status.COMPLETED, 2, 2, score=78)
         mp(enrollments["michael_ethics"], m_eth_2, ModuleProgress.Status.IN_PROGRESS, 0, 2)
+
+        # Comms course — Emily is at 60% (modules_completed=3). Mark the first
+        # three modules COMPLETED so the player's sequential-unlock gate
+        # actually opens m4 (Cultural Competence) for her. Without these rows
+        # ``Module.is_available_for`` blocks every module past m1.
+        mp(enrollments["emily_comms"], m_c_1, ModuleProgress.Status.COMPLETED, 1, 1, score=90)
+        mp(enrollments["emily_comms"], m_c_2, ModuleProgress.Status.COMPLETED, 1, 1, score=88)
+        mp(enrollments["emily_comms"], m_c_3, ModuleProgress.Status.COMPLETED, 2, 2, score=85)
+        mp(enrollments["michael_comms"], m_c_1, ModuleProgress.Status.COMPLETED, 1, 1, score=80)
+        mp(enrollments["michael_comms"], m_c_2, ModuleProgress.Status.IN_PROGRESS, 0, 1)
 
     # ------------------------------------------------------------------
     # Certificates
@@ -1092,6 +1271,24 @@ class Command(BaseCommand):
                 created_at=now - timedelta(days=issued_days_ago),
                 file_generated_at=now - timedelta(days=issued_days_ago),
             )
+            # Mirror the production cert-issuance service: flip the
+            # ``certificate_issued`` flag on the source row so denormalised
+            # counts (Event.certificate_count, Course.completion_count etc.)
+            # stay consistent for active certs. Revoked certs do not count.
+            if status == Certificate.Status.ACTIVE:
+                issued_at = now - timedelta(days=issued_days_ago)
+                if registration:
+                    from registrations.models import Registration
+                    Registration.objects.filter(pk=registration.pk).update(
+                        certificate_issued=True,
+                        certificate_issued_at=issued_at,
+                    )
+                else:
+                    from learning.models import CourseEnrollment
+                    CourseEnrollment.objects.filter(pk=course_enrollment.pk).update(
+                        certificate_issued=True,
+                        certificate_issued_at=issued_at,
+                    )
             return cert
 
         mk_cert(registration=registrations["emily_ethics"], issued_days_ago=33, view_count=3, download_count=1, cpd_type="ethics", cpd_credits="3.00")
@@ -1373,6 +1570,266 @@ class Command(BaseCommand):
             ),
         )
 
+        # Additional codes covering the variants the Promo Codes page filters
+        # by: a fully-redeemed code (hits the cap), a max-uses-per-user code,
+        # an org-wide percentage code with no event scope, an upcoming code
+        # not yet active, and a one-shot VIP code.
+        capped, _ = PromoCode.objects.update_or_create(
+            owner=users["organizer"], code="ETHICS50",
+            defaults=dict(
+                description="Half off the Ethics symposium — redeemed in full.",
+                currency="CAD",
+                discount_type=PromoCode.DiscountType.PERCENTAGE,
+                discount_value=Decimal("50.00"),
+                is_active=False,
+                valid_from=now - timedelta(days=120),
+                valid_until=now - timedelta(days=10),
+                max_uses=20,
+                max_uses_per_user=1,
+                current_uses=20,
+            ),
+        )
+        capped.events.add(events["pre_open"], events["ethics"])
+
+        org_wide, _ = PromoCode.objects.update_or_create(
+            owner=users["organizer"], code="ALUMNI10",
+            defaults=dict(
+                description="10% off any event for alumni — applies org-wide.",
+                currency="CAD",
+                discount_type=PromoCode.DiscountType.PERCENTAGE,
+                discount_value=Decimal("10.00"),
+                is_active=True,
+                valid_from=now - timedelta(days=14),
+                valid_until=now + timedelta(days=180),
+                max_uses=None,
+                max_uses_per_user=2,
+                current_uses=4,
+            ),
+        )
+        # No event linkage = applies to all owner's events.
+
+        PromoCode.objects.update_or_create(
+            owner=users["organizer"], code="EARLYFALL",
+            defaults=dict(
+                description="Early-fall preview promo. Activates next week.",
+                currency="CAD",
+                discount_type=PromoCode.DiscountType.FIXED_AMOUNT,
+                discount_value=Decimal("20.00"),
+                is_active=True,
+                valid_from=now + timedelta(days=7),
+                valid_until=now + timedelta(days=90),
+                max_uses=200,
+                max_uses_per_user=1,
+                current_uses=0,
+            ),
+        )
+
+        vip, _ = PromoCode.objects.update_or_create(
+            owner=users["organizer"], code="VIPGUEST",
+            defaults=dict(
+                description="Single-use VIP code — comp seat at the surgical workshop.",
+                currency="CAD",
+                discount_type=PromoCode.DiscountType.PERCENTAGE,
+                discount_value=Decimal("100.00"),
+                is_active=True,
+                valid_from=now - timedelta(days=30),
+                valid_until=now + timedelta(days=14),
+                max_uses=1,
+                max_uses_per_user=1,
+                current_uses=0,
+            ),
+        )
+        vip.events.add(events["hybrid"])
+
+        # A handful of redemptions on ALUMNI10 so the usage-history view has
+        # variety. Tied to existing past registrations.
+        for reg_key, original, discount, final in [
+            ("emily_telemed", "29.99", "3.00", "26.99"),
+            ("michael_telemed_failed", "29.99", "3.00", "26.99"),
+            ("emily_acls", "0.00", "0.00", "0.00"),
+            ("emily_ondemand", "0.00", "0.00", "0.00"),
+        ]:
+            reg = registrations.get(reg_key)
+            if reg is None:
+                continue
+            PromoCodeUsage.objects.update_or_create(
+                promo_code=org_wide, registration=reg,
+                defaults=dict(
+                    user_email=reg.email, user=reg.user,
+                    original_price=Decimal(original),
+                    discount_amount=Decimal(discount),
+                    final_price=Decimal(final),
+                ),
+            )
+
+    # ------------------------------------------------------------------
+    # Stripe webhook events + disputes (BillingAdminPage)
+    # ------------------------------------------------------------------
+    def _build_stripe_events_and_disputes(self, now, users, events, registrations):
+        """Populate StripeEvent rows + a couple of Disputes so the admin
+        Billing page has plausible Stripe webhook history, an open dispute,
+        and a closed (won) dispute. Reconcile drift remains zero by design —
+        every webhook here is marked processed.
+        """
+        from billing.models import CoursePurchase, Dispute, StripeEvent
+
+        def stripe_event(event_id, event_type, *, data, processed=True, error="", days_ago=1):
+            obj, _ = StripeEvent.objects.update_or_create(
+                event_id=event_id,
+                defaults=dict(
+                    event_type=event_type,
+                    payload={
+                        "id": event_id,
+                        "type": event_type,
+                        "api_version": "2024-04-10",
+                        "data": {"object": data},
+                        "livemode": False,
+                    },
+                    processed_at=(now - timedelta(days=days_ago, hours=-1)) if processed else None,
+                    error=error,
+                ),
+            )
+            StripeEvent.objects.filter(event_id=event_id).update(
+                received_at=now - timedelta(days=days_ago),
+            )
+            return obj
+
+        # checkout.session.completed for Emily's hybrid registration
+        reg_hybrid = registrations["emily_hybrid"]
+        stripe_event(
+            "evt_demo_checkout_emily_hybrid",
+            "checkout.session.completed",
+            data={
+                "id": "cs_demo_emily_hybrid",
+                "amount_total": 14900,
+                "currency": "cad",
+                "customer_email": reg_hybrid.email,
+                "metadata": {"registration_uuid": str(reg_hybrid.uuid), "kind": "event"},
+                "payment_intent": "pi_demo_emily_hybrid",
+                "payment_status": "paid",
+            },
+            days_ago=5,
+        )
+        stripe_event(
+            "evt_demo_charge_emily_hybrid",
+            "charge.succeeded",
+            data={
+                "id": "ch_demo_emily_hybrid",
+                "amount": 14900, "currency": "cad",
+                "payment_intent": "pi_demo_emily_hybrid",
+                "status": "succeeded",
+            },
+            days_ago=5,
+        )
+        # Michael's refunded course purchase — succeeded → refund.created
+        stripe_event(
+            "evt_demo_charge_michael_records",
+            "charge.succeeded",
+            data={
+                "id": "ch_demo_michael_records",
+                "amount": 9900, "currency": "cad",
+                "payment_intent": "pi_demo_michael_records_refunded",
+                "status": "succeeded",
+            },
+            days_ago=15,
+        )
+        stripe_event(
+            "evt_demo_refund_michael_records",
+            "charge.refunded",
+            data={
+                "id": "ch_demo_michael_records",
+                "amount_refunded": 9900,
+                "currency": "cad",
+                "payment_intent": "pi_demo_michael_records_refunded",
+                "refunded": True,
+            },
+            days_ago=10,
+        )
+        # A failed payment — Telemedicine attempt by Michael
+        stripe_event(
+            "evt_demo_pi_failed_michael_telemed",
+            "payment_intent.payment_failed",
+            data={
+                "id": "pi_demo_michael_telemed_failed",
+                "amount": 2999, "currency": "cad",
+                "last_payment_error": {"code": "card_declined", "message": "Your card was declined."},
+                "status": "requires_payment_method",
+            },
+            days_ago=1,
+        )
+        # An unprocessed event so the "unprocessed" filter has a hit
+        stripe_event(
+            "evt_demo_unprocessed_invoice",
+            "invoice.payment_succeeded",
+            data={
+                "id": "in_demo_unrelated",
+                "amount_paid": 19900, "currency": "cad",
+            },
+            processed=False,
+            days_ago=0,
+        )
+        # An errored event so the "errored" filter has a hit
+        stripe_event(
+            "evt_demo_errored_session",
+            "checkout.session.completed",
+            data={
+                "id": "cs_demo_errored",
+                "amount_total": 0, "currency": "cad",
+                "metadata": {"registration_uuid": "00000000-0000-0000-0000-000000000000"},
+            },
+            processed=True,
+            error="Registration not found for metadata.registration_uuid",
+            days_ago=2,
+        )
+        # Dispute lifecycle pair
+        stripe_event(
+            "evt_demo_dispute_created",
+            "charge.dispute.created",
+            data={"id": "dp_demo_open", "charge": "ch_demo_emily_hybrid", "amount": 14900, "currency": "cad"},
+            days_ago=3,
+        )
+        stripe_event(
+            "evt_demo_dispute_closed_won",
+            "charge.dispute.closed",
+            data={"id": "dp_demo_closed", "charge": "ch_demo_michael_ethics", "amount": 4900, "currency": "cad", "status": "won"},
+            days_ago=20,
+        )
+
+        # Disputes — one open (needs response), one closed-won.
+        michael_purchase = CoursePurchase.objects.filter(
+            stripe_payment_intent_id="pi_demo_michael_ethics",
+        ).first()
+        Dispute.objects.update_or_create(
+            stripe_dispute_id="dp_demo_open",
+            defaults=dict(
+                stripe_charge_id="ch_demo_emily_hybrid",
+                stripe_payment_intent_id="pi_demo_emily_hybrid",
+                registration=reg_hybrid,
+                course_purchase=None,
+                amount_cents=14900, currency="cad",
+                reason=Dispute.Reason.PRODUCT_NOT_RECEIVED,
+                status=Dispute.Status.NEEDS_RESPONSE,
+                evidence_due_by=now + timedelta(days=4),
+                raw_payload={"created_via": "demo seed"},
+            ),
+        )
+        Dispute.objects.update_or_create(
+            stripe_dispute_id="dp_demo_closed",
+            defaults=dict(
+                stripe_charge_id="ch_demo_michael_ethics",
+                stripe_payment_intent_id="pi_demo_michael_ethics",
+                registration=None,
+                course_purchase=michael_purchase,
+                amount_cents=4900, currency="cad",
+                reason=Dispute.Reason.GENERAL,
+                status=Dispute.Status.WON,
+                submitted_at=now - timedelta(days=25),
+                closed_at=now - timedelta(days=20),
+                outcome="won",
+                raw_payload={"created_via": "demo seed"},
+            ),
+        )
+
     # ------------------------------------------------------------------
     # Notifications
     # ------------------------------------------------------------------
@@ -1594,6 +2051,112 @@ class Command(BaseCommand):
             )
 
     # ------------------------------------------------------------------
+    # Video rooms + published recordings
+    # ------------------------------------------------------------------
+    def _build_video_rooms_and_recordings(self, now, events):
+        """Stand up VideoRoom rows for video-enabled events and a single
+        published VideoRecording (with a sample MP4) for the on-demand replay.
+
+        The room rows are recorded with status=ACTIVE for the live event,
+        SCHEDULED for upcoming events, and ENDED for past ones — so the join
+        flow has plausible state in admin even when the LiveKit provider
+        isn't running locally. The published recording lets the
+        ``/events/<uuid>/recording`` page render a real ``<video>`` element
+        end-to-end.
+        """
+        from django.contrib.contenttypes.models import ContentType
+
+        from conferencing.models import VideoRecording, VideoRecordingFile, VideoRoom
+        from events.models import Event
+
+        ct = ContentType.objects.get_for_model(Event)
+
+        def upsert_room(event, *, status, started_at=None, ended_at=None):
+            room_name = f"event-{event.uuid}"
+            obj, _ = VideoRoom.objects.update_or_create(
+                content_type=ct, object_id=event.id,
+                defaults=dict(
+                    room_id=f"demo-{event.uuid}",
+                    room_name=room_name,
+                    provider='livekit',
+                    status=status,
+                    started_at=started_at,
+                    ended_at=ended_at,
+                    settings={"enabled": True, "screen_share": True},
+                    max_participants=event.max_attendees or 0,
+                ),
+            )
+            return obj
+
+        # Live event — currently active
+        live_room = upsert_room(
+            events["live_now"], status=VideoRoom.Status.ACTIVE,
+            started_at=now - timedelta(minutes=15),
+        )
+        # Imminent event — scheduled, not yet started
+        upsert_room(events["imminent"], status=VideoRoom.Status.SCHEDULED)
+        # Hybrid (upcoming) — scheduled
+        upsert_room(events["hybrid"], status=VideoRoom.Status.SCHEDULED)
+        # On-demand replay — ended, recording was captured
+        ondemand_room = upsert_room(
+            events["ondemand"], status=VideoRoom.Status.ENDED,
+            started_at=events["ondemand"].starts_at,
+            ended_at=events["ondemand"].starts_at + timedelta(minutes=events["ondemand"].duration_minutes),
+        )
+
+        # Published recording on the on-demand replay event so the recording
+        # playback page renders a real <video> tag.
+        recording, _ = VideoRecording.objects.update_or_create(
+            event=events["ondemand"], video_room=ondemand_room,
+            defaults=dict(
+                egress_id=f"demo-egress-{events['ondemand'].uuid}",
+                provider='livekit',
+                recording_start=events["ondemand"].starts_at,
+                recording_end=events["ondemand"].starts_at + timedelta(minutes=75),
+                duration_seconds=75 * 60,
+                total_size_bytes=42_000_000,
+                status=VideoRecording.Status.AVAILABLE,
+                storage_path=f"recordings/event-{events['ondemand'].uuid}.mp4",
+                access_level=VideoRecording.AccessLevel.REGISTRANTS,
+                title=f"{events['ondemand'].title} — Recording",
+                description='Auto-published replay of the live session.',
+                is_published=True,
+                published_at=events["ondemand"].starts_at + timedelta(hours=2),
+                view_count=18,
+                unique_viewers=12,
+            ),
+        )
+        # A small public-domain MP4 we can point the demo recording at.
+        # BigBuckBunny is the canonical sample video used everywhere for tests.
+        VideoRecordingFile.objects.update_or_create(
+            recording=recording, file_type=VideoRecordingFile.FileType.VIDEO,
+            defaults=dict(
+                file_name=f"event-{events['ondemand'].uuid}.mp4",
+                file_extension='mp4',
+                file_size_bytes=42_000_000,
+                storage_url='https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+                is_visible=True,
+            ),
+        )
+
+        # Optional: also surface the live room as having an in-progress
+        # recording (no file yet) so the UI shows the "recording" status badge
+        # mid-event. Useful for showcasing the recording-active indicator.
+        if events["live_now"].recording_enabled:
+            VideoRecording.objects.update_or_create(
+                video_room=live_room, event=events["live_now"],
+                defaults=dict(
+                    egress_id=f"demo-egress-live-{events['live_now'].uuid}",
+                    provider='livekit',
+                    recording_start=events["live_now"].starts_at,
+                    status=VideoRecording.Status.RECORDING,
+                    access_level=VideoRecording.AccessLevel.REGISTRANTS,
+                    title=f"{events['live_now'].title} — Live Recording",
+                    is_published=False,
+                ),
+            )
+
+    # ------------------------------------------------------------------
     # Denormalized counts
     # ------------------------------------------------------------------
     def _refresh_denormalized_counts(self, events, courses, programs):
@@ -1628,20 +2191,6 @@ class Command(BaseCommand):
         for key, status in desired.items():
             event = events[key]
             Event.objects.filter(pk=event.pk).update(status=status)
-
-    def _mark_courses_sold_out(self, courses):
-        """Force a course to appear sold-out in discovery.
-
-        Must run AFTER ``_refresh_denormalized_counts`` — that helper calls
-        ``Course.update_counts()`` which rewrites ``enrollment_count`` to the
-        true number of enrollments and would otherwise overwrite this patch.
-        """
-        from learning.models import Course
-
-        sold_out = courses["records"]
-        if sold_out.max_enrollments:
-            Course.objects.filter(pk=sold_out.pk).update(enrollment_count=sold_out.max_enrollments)
-
 
 # Module-level helper to avoid referencing nested state in closures
 def _feedback_label_for(key):

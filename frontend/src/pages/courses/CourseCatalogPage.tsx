@@ -159,6 +159,7 @@ export const CourseCatalogPage: React.FC = () => {
                                             {!course.is_free && (
                                                 <div className="absolute top-3 right-3">
                                                     <Badge className="bg-background/90 text-foreground border backdrop-blur-sm">
+                                                        {(course.currency || 'USD').toUpperCase()}{' '}
                                                         ${(course.price_cents / 100).toFixed(0)}
                                                     </Badge>
                                                 </div>

@@ -544,6 +544,7 @@ class CourseListSerializer(serializers.ModelSerializer):
             'currency',
             'format',
             'enrollment_count',
+            'completion_count',
             'module_count',
             'estimated_hours',
             'user_role',

@@ -142,6 +142,11 @@ class User(AbstractBaseUser, PermissionsMixin, SoftDeleteModel):
     notify_event_reminders = models.BooleanField(default=True, help_text="Receive event reminders")
     notify_certificate_issued = models.BooleanField(default=True, help_text="Receive certificate notifications")
     notify_event_updates = models.BooleanField(default=True, help_text="Receive event change notifications")
+    notify_badges = models.BooleanField(default=True, help_text="Receive badge notifications")
+    notify_recordings = models.BooleanField(default=True, help_text="Receive notifications when event recordings are published")
+    notify_course_progress = models.BooleanField(
+        default=True, help_text="Receive course progress notifications (enrollment, module release, completion)"
+    )
 
     # =========================================
     # Engagement Stats (denormalized)
@@ -605,14 +610,19 @@ class CPDRequirement(BaseModel):
     def get_earned_credits(self):
         from decimal import Decimal
 
+        from django.db.models import Q
+
         from certificates.models import Certificate
 
         start, end = self.get_current_period_bounds()
 
+        # Active certs only (status is "active", not the legacy "issued"
+        # value), scoped to this user via either an event registration
+        # or a course/program enrollment, in this CPD type and period.
         certificates = Certificate.objects.filter(
-            registration__user=self.user,
+            Q(registration__user=self.user) | Q(course_enrollment__user=self.user),
             certificate_data__cpd_type=self.cpd_type,
-            status="issued",
+            status=Certificate.Status.ACTIVE,
             created_at__date__gte=start,
             created_at__date__lte=end,
         )
@@ -657,6 +667,18 @@ class Notification(BaseModel):
         DISCUSSION_REPLY = "discussion_reply", "Discussion Reply"
         DISCUSSION_MENTION = "discussion_mention", "Discussion Mention"
         DISCUSSION_FLAG_RESOLVED = "discussion_flag_resolved", "Discussion Flag Resolved"
+        # Learner lifecycle (added P4)
+        EVENT_REMINDER_24H = "event_reminder_24h", "Event Reminder (24h)"
+        EVENT_STARTING_SOON = "event_starting_soon", "Event Starting Soon"
+        EVENT_CANCELLED = "event_cancelled", "Event Cancelled"
+        EVENT_RESCHEDULED = "event_rescheduled", "Event Rescheduled"
+        WAITLIST_PROMOTED = "waitlist_promoted", "Waitlist Promoted"
+        RECORDING_AVAILABLE = "recording_available", "Recording Available"
+        CERTIFICATE_ISSUED = "certificate_issued", "Certificate Issued"
+        BADGE_ISSUED = "badge_issued", "Badge Issued"
+        COURSE_ENROLLED = "course_enrolled", "Course Enrolled"
+        MODULE_RELEASED = "module_released", "Module Released"
+        COURSE_COMPLETED = "course_completed", "Course Completed"
         SYSTEM = "system", "System"
 
     user = models.ForeignKey(

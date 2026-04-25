@@ -19,6 +19,7 @@ class VideoRoomSerializer(serializers.ModelSerializer):
 class VideoRecordingSerializer(serializers.ModelSerializer):
     files = serializers.SerializerMethodField()
     duration_display = serializers.CharField(read_only=True)
+    event_uuid = serializers.SerializerMethodField()
 
     class Meta:
         model = VideoRecording
@@ -28,9 +29,12 @@ class VideoRecordingSerializer(serializers.ModelSerializer):
             'duration_seconds', 'duration_display', 'total_size_bytes',
             'access_level', 'is_published', 'published_at',
             'view_count', 'unique_viewers',
-            'files', 'created_at',
+            'files', 'event_uuid', 'created_at',
         ]
         read_only_fields = fields
+
+    def get_event_uuid(self, obj):
+        return str(obj.event.uuid) if obj.event_id else None
 
     def get_files(self, obj):
         visible_files = obj.files.filter(is_visible=True)

@@ -38,6 +38,7 @@ resource "google_project_service" "required_apis" {
     "sql-component.googleapis.com",
     "sqladmin.googleapis.com",
     "cloudtasks.googleapis.com",
+    "cloudscheduler.googleapis.com",
     "artifactregistry.googleapis.com",
     "storage-api.googleapis.com",
     "secretmanager.googleapis.com",
@@ -271,6 +272,64 @@ resource "google_cloud_tasks_queue" "default" {
   }
 }
 
+# =============================================================================
+# Cron tick — Cloud Scheduler hits the backend every minute to fan out to
+# periodic Cloud Tasks (reminder dispatch, scheduled email dispatch, etc.).
+# Authorization is via a shared secret stored in Secret Manager and injected
+# into both the Cloud Run service and the Scheduler job's HTTP target.
+# =============================================================================
+
+resource "random_password" "cron_shared_secret" {
+  length  = 48
+  special = false
+}
+
+resource "google_secret_manager_secret" "cron_shared_secret" {
+  secret_id = "${local.app_name}-cron-shared-secret"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.required_apis]
+}
+
+resource "google_secret_manager_secret_version" "cron_shared_secret" {
+  secret      = google_secret_manager_secret.cron_shared_secret.id
+  secret_data = random_password.cron_shared_secret.result
+}
+
+resource "google_cloud_scheduler_job" "cron_tick" {
+  name        = "${local.app_name}-cron-tick"
+  description = "Periodic fan-out to /api/common/cron/tick/"
+  schedule    = "* * * * *"
+  region      = var.region
+  time_zone   = "UTC"
+
+  retry_config {
+    retry_count          = 1
+    min_backoff_duration = "10s"
+    max_backoff_duration = "60s"
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${try(google_cloud_run_service.backend.status[0].url, "")}/api/common/cron/tick/"
+
+    headers = {
+      "Content-Type"  = "application/json"
+      "Authorization" = "Bearer ${random_password.cron_shared_secret.result}"
+    }
+
+    body = base64encode("{}")
+  }
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_cloud_run_service.backend,
+  ]
+}
+
 # Cloud Run Service
 resource "google_cloud_run_service" "backend" {
   name     = local.app_name
@@ -356,6 +415,16 @@ resource "google_cloud_run_service" "backend" {
         env {
           name  = "CLOUD_TASKS_SYNC"
           value = tostring(var.cloud_tasks_sync)
+        }
+
+        env {
+          name = "CRON_SHARED_SECRET"
+          value_from {
+            secret_key_ref {
+              name = google_secret_manager_secret.cron_shared_secret.secret_id
+              key  = "latest"
+            }
+          }
         }
 
         env {

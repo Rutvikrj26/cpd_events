@@ -318,8 +318,8 @@ class EventListSerializer(SoftDeleteModelSerializer):
     owner_name = serializers.SerializerMethodField()
     registration_count = serializers.IntegerField(read_only=True)
     attendee_count = serializers.IntegerField(read_only=True)
-    attendee_count = serializers.IntegerField(read_only=True)
     waitlist_count = serializers.IntegerField(read_only=True)
+    certificate_count = serializers.IntegerField(read_only=True)
     featured_image_url = serializers.SerializerMethodField()
 
     class Meta(SoftDeleteModelSerializer.Meta):
@@ -339,6 +339,7 @@ class EventListSerializer(SoftDeleteModelSerializer):
             'registration_count',
             'attendee_count',
             'waitlist_count',
+            'certificate_count',
             'owner_name',
             'is_public',
             'featured_image_url',

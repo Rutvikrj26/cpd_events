@@ -23,6 +23,8 @@ import { PublicLayout } from './components/layout/PublicLayout';
 import { EventDetail } from './pages/public/EventDetail';
 import { EventDiscovery } from './pages/public/EventDiscovery';
 import { EventRegistration } from './pages/public/EventRegistration';
+import { EventLobbyPage } from './pages/events/EventLobbyPage';
+import { EventRecordingPage } from './pages/events/EventRecordingPage';
 import { CheckoutCancel, CheckoutSuccess } from './pages/public/CheckoutReturn';
 import { PublicCourseDetailPage } from './pages/courses/PublicCourseDetailPage';
 import { ProgramDiscoveryPage } from './pages/public/ProgramDiscoveryPage';
@@ -132,6 +134,9 @@ export default function App() {
               <Route path="/discover/courses" element={<CourseCatalogPage />} />
               <Route path="/events/:id/details" element={<EventDetail />} />
               <Route path="/events/:id/register" element={<EventRegistration />} />
+              {/* Guest pre-event lobby (no auth required) — landed on from
+                  the join URL we embed in reminder/confirmation emails. */}
+              <Route path="/r/:registrationUuid/lobby" element={<EventLobbyPage />} />
               <Route path="/courses/:slug" element={<PublicCourseDetailPage />} />
               <Route path="/programs" element={<ProgramDiscoveryPage />} />
               <Route path="/programs/:slug" element={<PublicProgramDetailPage />} />
@@ -189,6 +194,9 @@ export default function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="/events/:uuid" element={<EventDetailPage />} />
+                  {/* Pre-event lobby (auth) and post-event recording playback. */}
+                  <Route path="/events/:id/lobby" element={<EventLobbyPage />} />
+                  <Route path="/events/:id/recording" element={<EventRecordingPage />} />
                   <Route path="/events/:uuid/edit" element={
                     <ProtectedRoute requiredFeature="create_events">
                       <EventCreatePage />

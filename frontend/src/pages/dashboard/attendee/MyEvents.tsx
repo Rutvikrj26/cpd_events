@@ -202,14 +202,29 @@ function RegistrationCard({ registration, isPast = false }: { registration: Regi
           </div>
         )}
 
-        <div className="flex gap-2 pt-2">
-          <Link to={`/events/${event.slug || event.uuid}/details`} className="flex-1">
-            <Button variant="outline" size="sm" className="w-full">
-              View Event
-            </Button>
-          </Link>
+        <div className="flex gap-2 pt-2 flex-wrap">
+          {!isPast ? (
+            <Link to={`/events/${event.uuid}/lobby`} className="flex-1">
+              <Button variant="default" size="sm" className="w-full">
+                Open Lobby
+              </Button>
+            </Link>
+          ) : (
+            <Link to={`/events/${event.slug || event.uuid}/details`} className="flex-1">
+              <Button variant="outline" size="sm" className="w-full">
+                View Event
+              </Button>
+            </Link>
+          )}
           {!isPast && (
             <JoinButton eventUuid={event.uuid} size="sm" label="Join" />
+          )}
+          {isPast && (
+            <Link to={`/events/${event.uuid}/recording`}>
+              <Button size="sm" variant="outline">
+                Recording
+              </Button>
+            </Link>
           )}
           {isPast && registration.certificate_issued && registration.certificate_url && (
             <a href={registration.certificate_url} target="_blank" rel="noopener noreferrer">

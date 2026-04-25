@@ -18,9 +18,28 @@ const wasDismissedRecently = () => {
     return Date.now() - dismissedTime < sevenDays;
 };
 
+// Routes where the install prompt is allowed. Anywhere else (authed
+// dashboard, course player, admin tools) we suppress it — once a user has
+// signed in they're past the conversion moment, so the prompt becomes
+// noise rather than helpful.
+const PUBLIC_PROMPT_PATHS = [
+    "/", "/discover/events", "/discover/courses", "/programs",
+    "/events/", "/courses/", "/verify",
+    "/login", "/signup", "/forgot-password",
+    "/about", "/features", "/faq", "/contact", "/terms", "/privacy", "/cookies",
+];
+
+function isPublicRoute(pathname: string): boolean {
+    if (pathname === "/") return true;
+    return PUBLIC_PROMPT_PATHS.some(p => p !== "/" && pathname.startsWith(p));
+}
+
 export function InstallPrompt() {
     const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
     const [showPrompt, setShowPrompt] = useState(false);
+    const [pathname, setPathname] = useState<string>(
+        typeof window !== "undefined" ? window.location.pathname : "/",
+    );
     const isDev = import.meta.env.DEV;
 
     useEffect(() => {
@@ -38,6 +57,22 @@ export function InstallPrompt() {
         window.addEventListener("beforeinstallprompt", handler);
 
         return () => window.removeEventListener("beforeinstallprompt", handler);
+    }, []);
+
+    // Track location changes without coupling to react-router (this component
+    // is mounted above the Router in App.tsx).
+    useEffect(() => {
+        const onChange = () => setPathname(window.location.pathname);
+        window.addEventListener("popstate", onChange);
+        const orig = window.history.pushState;
+        window.history.pushState = function (...args) {
+            orig.apply(this, args);
+            onChange();
+        };
+        return () => {
+            window.removeEventListener("popstate", onChange);
+            window.history.pushState = orig;
+        };
     }, []);
 
     const handleInstall = async () => {
@@ -65,6 +100,7 @@ export function InstallPrompt() {
     };
 
     if (!showPrompt || !deferredPrompt) return null;
+    if (!isPublicRoute(pathname)) return null;
 
     return (
         <div className="fixed bottom-4 left-4 right-4 z-50 md:left-auto md:right-4 md:w-96">

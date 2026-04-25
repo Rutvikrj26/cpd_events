@@ -144,6 +144,25 @@ export const getPublicEvent = async (slug: string): Promise<Event> => {
     return response.data;
 };
 
+export interface RegistrationLobbyResponse {
+    event: Event;
+    registration: {
+        uuid: string;
+        email: string;
+        full_name: string;
+        status: 'pending' | 'confirmed' | 'waitlisted' | 'cancelled';
+        payment_status: 'pending' | 'paid' | 'failed' | 'refunded' | 'na';
+        attended: boolean;
+    };
+}
+
+export const getRegistrationLobby = async (registrationUuid: string): Promise<RegistrationLobbyResponse> => {
+    const response = await client.get<RegistrationLobbyResponse>(
+        `/public/registrations/${registrationUuid}/lobby/`
+    );
+    return response.data;
+};
+
 // Get registrations for an event (organizer)
 export const getEventRegistrations = async (eventUuid: string): Promise<any[]> => {
     const response = await client.get<any>(`/events/${eventUuid}/registrations/`);

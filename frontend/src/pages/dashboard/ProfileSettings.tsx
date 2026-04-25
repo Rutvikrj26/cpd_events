@@ -82,6 +82,26 @@ const securitySchema = z.object({
    path: ["new_password_confirm"],
 });
 
+interface PrefRowProps {
+   label: string;
+   description: string;
+   checked: boolean;
+   onChange: (value: boolean) => void;
+   disabled?: boolean;
+}
+
+function PrefRow({ label, description, checked, onChange, disabled }: PrefRowProps) {
+   return (
+      <div className="flex items-center justify-between space-x-2">
+         <div className="space-y-0.5">
+            <label className="text-sm font-medium leading-none">{label}</label>
+            <p className="text-sm text-muted-foreground">{description}</p>
+         </div>
+         <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} />
+      </div>
+   );
+}
+
 export function ProfileSettings() {
    const [isSubmitting, setIsSubmitting] = useState(false);
    const [user, setUser] = useState<UserType | null>(null);
@@ -586,33 +606,68 @@ export function ProfileSettings() {
                               </div>
                            ) : notifications ? (
                               <>
-                                 <div className="flex items-center justify-between space-x-2">
-                                    <div className="space-y-0.5">
-                                       <label className="text-sm font-medium leading-none">
-                                          Event Reminders
-                                       </label>
-                                       <p className="text-sm text-muted-foreground">Get notified before events start.</p>
+                                 <div>
+                                    <h4 className="text-sm font-semibold mb-3">Events</h4>
+                                    <div className="space-y-4">
+                                       <PrefRow
+                                          label="Event reminders"
+                                          description="Reminders before events you've registered for start (24h, 1h, now)."
+                                          checked={notifications.notify_event_reminders}
+                                          onChange={(v) => handleNotificationChange('notify_event_reminders', v)}
+                                          disabled={savingNotifications}
+                                       />
+                                       <PrefRow
+                                          label="Event updates"
+                                          description="Notifications when an event is rescheduled, cancelled, or you're promoted from the waitlist."
+                                          checked={notifications.notify_event_updates}
+                                          onChange={(v) => handleNotificationChange('notify_event_updates', v)}
+                                          disabled={savingNotifications}
+                                       />
+                                       <PrefRow
+                                          label="Recordings available"
+                                          description="Notifications when a recording is published for an event you attended."
+                                          checked={notifications.notify_recordings}
+                                          onChange={(v) => handleNotificationChange('notify_recordings', v)}
+                                          disabled={savingNotifications}
+                                       />
                                     </div>
-                                    <Switch
-                                       checked={notifications.notify_event_reminders}
-                                       onCheckedChange={(checked) => handleNotificationChange('notify_event_reminders', checked)}
-                                       disabled={savingNotifications}
-                                    />
                                  </div>
                                  <Separator />
-                                 <div className="flex items-center justify-between space-x-2">
-                                    <div className="space-y-0.5">
-                                       <label className="text-sm font-medium leading-none">
-                                          Certificate Notifications
-                                       </label>
-                                       <p className="text-sm text-muted-foreground">Get notified when certificates are issued.</p>
+                                 <div>
+                                    <h4 className="text-sm font-semibold mb-3">Achievements</h4>
+                                    <div className="space-y-4">
+                                       <PrefRow
+                                          label="Certificate issued"
+                                          description="Notifications when a certificate is issued to you."
+                                          checked={notifications.notify_certificate_issued}
+                                          onChange={(v) => handleNotificationChange('notify_certificate_issued', v)}
+                                          disabled={savingNotifications}
+                                       />
+                                       <PrefRow
+                                          label="Badge issued"
+                                          description="Notifications when you earn a digital badge."
+                                          checked={notifications.notify_badges}
+                                          onChange={(v) => handleNotificationChange('notify_badges', v)}
+                                          disabled={savingNotifications}
+                                       />
                                     </div>
-                                    <Switch
-                                       checked={notifications.notify_certificate_issued}
-                                       onCheckedChange={(checked) => handleNotificationChange('notify_certificate_issued', checked)}
-                                       disabled={savingNotifications}
-                                    />
                                  </div>
+                                 <Separator />
+                                 <div>
+                                    <h4 className="text-sm font-semibold mb-3">Courses</h4>
+                                    <div className="space-y-4">
+                                       <PrefRow
+                                          label="Course progress"
+                                          description="Enrollment confirmations, module unlocks, and completion summaries."
+                                          checked={notifications.notify_course_progress}
+                                          onChange={(v) => handleNotificationChange('notify_course_progress', v)}
+                                          disabled={savingNotifications}
+                                       />
+                                    </div>
+                                 </div>
+                                 <p className="text-xs text-muted-foreground pt-2">
+                                    Transactional emails (registration confirmations, password resets, payment receipts) ignore these settings and always send.
+                                 </p>
                               </>
                            ) : (
                               <p className="text-muted-foreground text-center py-4">

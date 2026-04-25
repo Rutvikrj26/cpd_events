@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks';
 import { Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -17,7 +17,8 @@ export default function ProtectedRoute({
     redirectTo = '/dashboard',
     children,
 }: ProtectedRouteProps) {
-    const { isAuthenticated, isLoading, manifest, hasRoute, hasFeature } = useAuth();
+    const { isAuthenticated, isLoading, manifest, user, hasRoute, hasFeature } = useAuth();
+    const location = useLocation();
 
     if (isLoading || (isAuthenticated && !manifest && (requiredRoute || requiredFeature))) {
         return (
@@ -29,6 +30,14 @@ export default function ProtectedRoute({
 
     if (!isAuthenticated) {
         return <Navigate to="/login" replace />;
+    }
+
+    // Force users with incomplete onboarding through the wizard, except when
+    // they are already on an onboarding route (we'd otherwise redirect-loop).
+    const onboardingPaths = ['/onboarding'];
+    const onOnboardingRoute = onboardingPaths.some(p => location.pathname.startsWith(p));
+    if (user && user.onboarding_completed === false && !onOnboardingRoute) {
+        return <Navigate to="/onboarding" replace />;
     }
 
     if (requiredRoute && !hasRoute(requiredRoute)) {

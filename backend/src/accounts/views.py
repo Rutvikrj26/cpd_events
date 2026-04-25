@@ -908,7 +908,12 @@ class CPDRequirementViewSet(viewsets.ModelViewSet):
 
         from decimal import Decimal
 
-        total_credits = request.user.total_cpd_credits or Decimal("0")
+        # Sum across this user's active requirements rather than the
+        # denormalised User.total_cpd_credits field, which no production
+        # code path keeps in sync.
+        total_credits = sum(
+            (r.get_earned_credits() for r in requirements), Decimal("0")
+        )
 
         data = {
             "total_requirements": requirements.count(),

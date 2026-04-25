@@ -171,14 +171,31 @@ class ScheduledEmail(BaseModel):
         indexes = [
             models.Index(fields=['status', 'send_at']),
             models.Index(fields=['batch_key']),
+            models.Index(fields=['event', 'template_key']),
+        ]
+        constraints = [
+            # Per-recipient idempotency for repeat enqueue calls under retries.
+            # NULL event/registration are allowed; SQL semantics treat them as
+            # distinct, but practical duplicates are keyed by (event,recipient,template,send_at).
+            models.UniqueConstraint(
+                fields=['event', 'recipient_email', 'template_key', 'send_at'],
+                name='uniq_scheduled_email_per_event_recipient_template_time',
+            ),
         ]
 
     def __str__(self):
         return f"{self.template_key} → {self.recipient_email} @ {self.send_at.isoformat()}"
 
     def dispatch(self):
-        """Create an EmailLog and enqueue send. Idempotent per ScheduledEmail."""
-        from integrations.tasks import send_email
+        """Render + send the email via EmailService, recording the result in
+        an ``EmailLog`` row. Idempotent per ``ScheduledEmail`` — repeat calls
+        on a non-PENDING row are no-ops.
+
+        Carries the stored ``self.context`` straight through to the template,
+        and attaches an ``.ics`` calendar invite for event-anchored templates
+        so calendar clients can register the event in one click.
+        """
+        from integrations.services import email_service
 
         if self.status != self.Status.PENDING:
             return None
@@ -201,8 +218,44 @@ class ScheduledEmail(BaseModel):
         self.status = self.Status.DISPATCHED
         self.dispatched_at = timezone.now()
         self.save(update_fields=['email_log', 'status', 'dispatched_at', 'updated_at'])
-        send_email.delay(log.id)
+
+        attachments = self._build_attachments()
+
+        try:
+            email_service.send_log(log, context=self.context, attachments=attachments)
+        except Exception as e:
+            self.error_message = str(e)[:500]
+            self.save(update_fields=['error_message', 'updated_at'])
+            raise
         return log
+
+    # Templates that should carry an .ics calendar invite when the
+    # ScheduledEmail is event-anchored.
+    _ICS_ATTACHED_TEMPLATES = {
+        'event_reminder',
+        'registration_confirmation',
+        'registration_confirm',
+        'waitlist_promotion',
+        'event_cancelled',
+        'invitation',
+    }
+
+    def _build_attachments(self):
+        if self.template_key not in self._ICS_ATTACHED_TEMPLATES or not self.event:
+            return None
+        try:
+            from events.services import build_event_ics
+
+            ics = build_event_ics(
+                self.event,
+                attendee_email=self.recipient_email,
+                attendee_name=self.recipient_name,
+            )
+        except Exception:
+            # ICS generation should never block the send.
+            return None
+        method = 'CANCEL' if self.event.status == 'cancelled' else 'PUBLISH'
+        return [('event.ics', ics, f'text/calendar; method={method}; charset=utf-8')]
 
     def cancel(self, reason=''):
         if self.status == self.Status.PENDING:

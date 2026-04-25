@@ -185,7 +185,10 @@ function StripeEventsTab() {
                                             <Badge className="bg-amber-500 text-black text-xs">Pending</Badge>
                                         )}
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-1">
+                                    <p
+                                        className="text-xs text-muted-foreground mt-1"
+                                        title={new Date(ev.received_at).toISOString()}
+                                    >
                                         Received {formatDistanceToNow(new Date(ev.received_at), { addSuffix: true })}
                                     </p>
                                     {ev.error ? (
@@ -293,7 +296,10 @@ function DisputesTab() {
                                         </div>
                                         <p className="text-sm mt-1 font-medium">{d.amount_display}</p>
                                         {d.evidence_due_by && isOpen && (
-                                            <p className="text-xs text-muted-foreground mt-1">
+                                            <p
+                                                className="text-xs text-muted-foreground mt-1"
+                                                title={new Date(d.evidence_due_by).toISOString()}
+                                            >
                                                 Evidence due{' '}
                                                 {formatDistanceToNow(new Date(d.evidence_due_by), { addSuffix: true })}
                                             </p>

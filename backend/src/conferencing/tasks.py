@@ -108,11 +108,16 @@ def stop_event_recording(event_id: int):
     recording.save(update_fields=['status', 'updated_at'])
 
 
+@CloudTask
 def create_video_room_for_object(content_type_id: int, object_id: int):
     """
     Create a LiveKit room for an Event, Course, or CourseSession.
 
-    Called from signals when video is enabled on a content object.
+    Called from signals (via ``.delay()``) when video is enabled on a content
+    object. Idempotent: existing ACTIVE/SCHEDULED rooms short-circuit; an
+    existing ERROR row is upgraded on retry. On provider failure the row is
+    written/updated to ERROR and the exception is re-raised so the Cloud
+    Tasks queue's retry policy applies in production.
     """
     from conferencing.models import VideoRoom
     from conferencing.service import get_video_provider
@@ -120,9 +125,9 @@ def create_video_room_for_object(content_type_id: int, object_id: int):
     ct = ContentType.objects.get(id=content_type_id)
     obj = ct.get_object_for_this_type(id=object_id)
 
-    # Don't create duplicate rooms
-    if VideoRoom.objects.filter(content_type=ct, object_id=object_id).exists():
-        logger.info("VideoRoom already exists for %s:%s", ct.model, object_id)
+    existing = VideoRoom.objects.filter(content_type=ct, object_id=object_id).first()
+    if existing and existing.status != VideoRoom.Status.ERROR:
+        logger.info("VideoRoom already exists for %s:%s (status=%s)", ct.model, object_id, existing.status)
         return
 
     # Generate a unique room name
@@ -138,6 +143,29 @@ def create_video_room_for_object(content_type_id: int, object_id: int):
             name=room_name,
             metadata={"content_type": ct.model, "object_id": object_id},
         )
+    except Exception as e:
+        logger.exception("Failed to create video room for %s:%s", ct.model, object_id)
+        defaults = {
+            'room_id': '',
+            'room_name': room_name,
+            'provider': 'livekit',
+            'status': VideoRoom.Status.ERROR,
+            'error': str(e)[:2000],
+            'error_at': timezone.now(),
+        }
+        VideoRoom.objects.update_or_create(
+            content_type=ct, object_id=object_id, defaults=defaults
+        )
+        raise
+
+    if existing:
+        existing.room_id = result.room_id
+        existing.room_name = result.room_name
+        existing.status = VideoRoom.Status.SCHEDULED
+        existing.error = ''
+        existing.error_at = None
+        existing.save(update_fields=['room_id', 'room_name', 'status', 'error', 'error_at', 'updated_at'])
+    else:
         VideoRoom.objects.create(
             content_type=ct,
             object_id=object_id,
@@ -145,20 +173,7 @@ def create_video_room_for_object(content_type_id: int, object_id: int):
             room_name=result.room_name,
             provider='livekit',
         )
-        logger.info("Created VideoRoom %s for %s:%s", room_name, ct.model, object_id)
-    except Exception as e:
-        logger.exception("Failed to create video room for %s:%s", ct.model, object_id)
-        # Create a room record in error state so it can be retried
-        VideoRoom.objects.create(
-            content_type=ct,
-            object_id=object_id,
-            room_id='',
-            room_name=room_name,
-            provider='livekit',
-            status=VideoRoom.Status.ERROR,
-            error=str(e)[:2000],
-            error_at=timezone.now(),
-        )
+    logger.info("Created VideoRoom %s for %s:%s", room_name, ct.model, object_id)
 
 
 def process_video_webhook(webhook_log_id: int):

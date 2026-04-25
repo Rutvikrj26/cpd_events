@@ -36,10 +36,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { FeedbackModal } from '@/components/feedback';
 import { getRegistrationFeedback } from '@/api/feedback';
+import { useAuth } from '@/contexts/AuthContext';
+import { formatDate } from '@/lib/datetime';
 import { EventFeedback } from '@/api/feedback/types';
 import { format } from 'date-fns';
 
 export const MyLearningPage = () => {
+    const { user } = useAuth();
     const [registrations, setRegistrations] = useState<Registration[]>([]);
     const [enrollments, setEnrollments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -111,8 +114,19 @@ export const MyLearningPage = () => {
     };
 
     const canLeaveFeedback = (reg: Registration) => {
-        const eventPassed = new Date(reg.event.starts_at) < new Date();
-        return (eventPassed || reg.attended) && reg.status !== 'cancelled';
+        // Event ended = either an explicit actual_end_at, or
+        // starts_at + duration_minutes is in the past. Live events whose
+        // start has passed but end has not should NOT yet allow feedback.
+        const now = Date.now();
+        const startMs = new Date(reg.event.starts_at).getTime();
+        const durationMs = (reg.event.duration_minutes ?? 0) * 60_000;
+        const explicitEnd = reg.event.actual_end_at
+            ? new Date(reg.event.actual_end_at).getTime()
+            : null;
+        const eventEnded = explicitEnd
+            ? explicitEnd < now
+            : startMs + durationMs < now;
+        return eventEnded && reg.status !== 'cancelled';
     };
 
     const handleLinkRegistrations = async () => {
@@ -207,11 +221,11 @@ export const MyLearningPage = () => {
                                                     {reg.event.title}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground mt-1">
-                                                    {reg.event.starts_at && new Date(reg.event.starts_at).toLocaleDateString()}
+                                                    {formatDate(reg.event.starts_at, user)}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-muted-foreground">
-                                                {new Date(reg.created_at).toLocaleDateString()}
+                                                {formatDate(reg.created_at, user)}
                                             </td>
                                             <td className="px-6 py-4">{getStatusBadge(reg.status)}</td>
                                             <td className="px-6 py-4">{getPaymentBadge(reg.payment_status)}</td>
