@@ -36,12 +36,6 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { login, completeLogin, deployment, isAuthenticated } = useAuth();
-  // Already-signed-in users hitting /login bounce straight to the dashboard
-  // (or to the explicit returnUrl if one was passed). (QA F-5)
-  const earlyReturnUrl = searchParams.get('returnUrl');
-  if (isAuthenticated) {
-    return <Navigate to={earlyReturnUrl || '/dashboard'} replace />;
-  }
   const [isLoading, setIsLoading] = React.useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
@@ -88,6 +82,13 @@ export function LoginPage() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  // Already-signed-in users hitting /login bounce straight to the dashboard
+  // (or to the explicit returnUrl if one was passed). Placed after all hooks
+  // so a post-login re-render can early-return without violating rules-of-hooks.
+  if (isAuthenticated) {
+    return <Navigate to={returnUrl || '/dashboard'} replace />;
   }
 
   async function onGoogle() {

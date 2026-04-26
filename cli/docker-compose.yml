@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   db:
@@ -68,8 +66,12 @@ services:
     env_file:
       - ../backend/.env.dev
     environment:
-      # Docker-specific overrides (DB host points to container)
+      # Docker-specific overrides (DB points to container)
       DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: cpd_events
+      DB_USER: cpd_user
+      DB_PASSWORD: cpd_password
       # GCP emulators for local development
       CLOUD_TASKS_EMULATOR_HOST: cloud-tasks-emulator:8123
       GCS_EMULATOR_HOST: http://gcs-emulator:4443
