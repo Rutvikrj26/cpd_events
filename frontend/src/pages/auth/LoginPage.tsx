@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -33,7 +33,13 @@ const formSchema = z.object({
 export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login, completeLogin, deployment } = useAuth();
+  const { login, completeLogin, deployment, isAuthenticated } = useAuth();
+  // Already-signed-in users hitting /login bounce straight to the dashboard
+  // (or to the explicit returnUrl if one was passed). (QA F-5)
+  const earlyReturnUrl = searchParams.get('returnUrl');
+  if (isAuthenticated) {
+    return <Navigate to={earlyReturnUrl || '/dashboard'} replace />;
+  }
   const [isLoading, setIsLoading] = React.useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);

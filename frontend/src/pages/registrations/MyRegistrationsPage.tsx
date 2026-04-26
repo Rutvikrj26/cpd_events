@@ -127,6 +127,13 @@ export const MyLearningPage = () => {
         return (explicitEnd ?? startMs + durationMs) < now;
     };
 
+    const isEventLive = (reg: Registration) => {
+        const now = Date.now();
+        const startMs = new Date(reg.event.starts_at).getTime();
+        const durationMs = (reg.event.duration_minutes ?? 0) * 60_000;
+        return startMs <= now && now < startMs + durationMs;
+    };
+
     const canLeaveFeedback = (reg: Registration) => {
         // Event ended = either an explicit actual_end_at, or
         // starts_at + duration_minutes is in the past. Live events whose
@@ -253,6 +260,18 @@ export const MyLearningPage = () => {
                                             <td className="px-6 py-4">{getPaymentBadge(reg.payment_status)}</td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
+                                                    {isEventLive(reg) && reg.status === 'confirmed' && (
+                                                        <Button
+                                                            asChild
+                                                            size="sm"
+                                                            className="text-xs h-7 bg-red-600 hover:bg-red-700 text-white"
+                                                        >
+                                                            <Link to={`/events/${reg.event.slug || reg.event.uuid}/lobby`}>
+                                                                <span className="mr-1 inline-block h-2 w-2 rounded-full bg-white animate-pulse" />
+                                                                Join Live Now
+                                                            </Link>
+                                                        </Button>
+                                                    )}
                                                     <Link to={`/events/${reg.event.slug || reg.event.uuid}/details`} className="text-primary hover:text-primary/80 font-medium text-xs">
                                                         View Event
                                                     </Link>

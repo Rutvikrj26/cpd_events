@@ -1,8 +1,14 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Layout } from "lucide-react";
 
 export function AuthLayout({ children }: { children: React.ReactNode }) {
+  // Pick footer copy by route. The "By signing in…" copy was being shown on
+  // /forgot-password and /signup too, where it doesn't apply. (QA F-3)
+  const { pathname } = useLocation();
+  const isLogin = pathname === '/login' || pathname.startsWith('/login/');
+  const isSignup = pathname === '/signup' || pathname.startsWith('/signup/');
+
   return (
     <div className="min-h-screen bg-secondary/20 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -20,16 +26,22 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="mt-6 text-center text-sm">
-          <p className="text-gray-600">
-            By signing in, you agree to our{" "}
-            <Link to="/terms" className="font-medium text-primary hover:text-primary/80">
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link to="/privacy" className="font-medium text-primary hover:text-primary/80">
-              Privacy Policy
+          {(isLogin || isSignup) ? (
+            <p className="text-gray-600">
+              By {isSignup ? 'creating an account' : 'signing in'}, you agree to our{" "}
+              <Link to="/terms" className="font-medium text-primary hover:text-primary/80">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link to="/privacy" className="font-medium text-primary hover:text-primary/80">
+                Privacy Policy
+              </Link>
+            </p>
+          ) : (
+            <Link to="/login" className="font-medium text-primary hover:text-primary/80">
+              ← Back to sign in
             </Link>
-          </p>
+          )}
         </div>
       </div>
     </div>

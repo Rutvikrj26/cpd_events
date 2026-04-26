@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { getInitials } from "@/lib/initials";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
     ArrowLeft,
@@ -147,7 +148,7 @@ export function AdminUserDetailPage() {
                     <Card>
                         <CardContent className="p-6 space-y-4 text-center">
                             <div className="mx-auto h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center text-2xl font-bold text-primary">
-                                {profile.full_name.charAt(0).toUpperCase()}
+                                {getInitials(profile.full_name)}
                             </div>
                             <div>
                                 <div className="text-lg font-semibold">{profile.full_name}</div>

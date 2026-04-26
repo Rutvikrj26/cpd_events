@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Activity, Loader2 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import client from "@/api/client";
 import { unwrapList } from "@/api/pagination";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,7 +67,7 @@ export function AdminLiveRoomsWidget() {
                                     <div className="min-w-0">
                                         <p className="font-medium truncate">{target.title || room.room_name}</p>
                                         <p className="text-xs text-muted-foreground">
-                                            Started {room.started_at ? new Date(room.started_at).toLocaleTimeString() : "recently"} · {target.kind === "event" ? "Event" : "Course session"}
+                                            Started {room.started_at ? `${formatDistanceToNow(new Date(room.started_at))} ago` : "recently"} · {target.kind === "event" ? "Event" : "Course session"}
                                         </p>
                                     </div>
                                     {target.kind === "event" ? (

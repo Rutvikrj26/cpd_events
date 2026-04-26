@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { getInitials } from "@/lib/initials";
 import { useParams, Link } from "react-router-dom";
 import {
   Calendar,
@@ -664,7 +665,7 @@ export function EventDetail() {
                   </div>
                 )}
 
-                {event.spots_remaining !== null && event.spots_remaining !== undefined && (
+                {!isPast && event.spots_remaining !== null && event.spots_remaining !== undefined && (
                   <div className="flex justify-between items-center py-2 border-b border-border">
                     <span className="text-muted-foreground">Spots Remaining</span>
                     <span className="text-foreground font-semibold">
@@ -722,7 +723,7 @@ export function EventDetail() {
                   <>
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded bg-info-subtle flex items-center justify-center text-info font-bold">
-                        {organizerName.charAt(0)}
+                        {getInitials(organizerName)}
                       </div>
                       <div>
                         <div className="font-medium text-foreground">{organizerName}</div>

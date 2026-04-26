@@ -8,6 +8,8 @@ import { DashboardStat } from "@/components/dashboard/DashboardStats";
 import { PageHeader } from "@/components/ui/page-header";
 import { getMyRegistrations } from "@/api/registrations";
 import { Registration } from "@/api/registrations/types";
+import { getMyCertificates } from "@/api/certificates";
+import { Certificate } from "@/api/certificates/types";
 import { useAuth } from "@/contexts/AuthContext";
 
 const TITLE_PREFIXES = new Set([
@@ -25,20 +27,29 @@ function friendlyFirstName(fullName?: string | null): string {
 export function AttendeeDashboard() {
   const { user } = useAuth();
   const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchRegistrations() {
+    async function fetchData() {
       try {
-        const data = await getMyRegistrations();
-        setRegistrations(data.results);
+        // Fetch the certificate list separately so the "Earned & Ready"
+        // dashboard tile reflects the same count the /certificates page
+        // shows (filtered by `is_valid`) — registration.certificate_issued
+        // stays true even after revocation, so it overcounts. (QA F-25)
+        const [regData, certData] = await Promise.all([
+          getMyRegistrations(),
+          getMyCertificates().catch(() => ({ results: [] as Certificate[] })),
+        ]);
+        setRegistrations(regData.results);
+        setCertificates(certData.results ?? []);
       } catch (error) {
-        console.error("Failed to fetch registrations", error);
+        console.error("Failed to fetch dashboard data", error);
       } finally {
         setLoading(false);
       }
     }
-    fetchRegistrations();
+    fetchData();
   }, []);
 
   // Only count confirmed registrations toward credits + upcoming counters.
@@ -49,7 +60,7 @@ export function AttendeeDashboard() {
     totalCredits: confirmedRegs
       .filter(r => r.attended || new Date(r.event.starts_at) <= new Date())
       .reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
-    certificates: registrations.filter(r => r.certificate_issued).length,
+    certificates: certificates.filter(c => c.is_valid !== false && c.status !== 'revoked').length,
     upcomingEvents: confirmedRegs.filter(r => new Date(r.event.starts_at) > new Date()).length,
     learningHours: confirmedRegs
       .filter(r => r.attended)

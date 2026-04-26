@@ -234,6 +234,13 @@ class AdminReconcileView(APIView):
         except (TypeError, ValueError):
             hours = 72
 
+        if hours < 1 or hours > 720:
+            return error_response(
+                "`hours` must be a whole number between 1 and 720.",
+                code="INVALID_HOURS",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             summary = reconcile(hours=hours)
         except Exception as exc:

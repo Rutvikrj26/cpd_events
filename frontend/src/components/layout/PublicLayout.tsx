@@ -11,6 +11,7 @@ import {
   ArrowRight
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { getInitials } from "@/lib/initials";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -151,7 +152,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                       <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm" className="flex items-center gap-2 border-border/60 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200">
                           <div className="h-6 w-6 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-xs font-medium">
-                            {(user?.full_name || user?.email || 'U').charAt(0).toUpperCase()}
+                            {getInitials(user?.full_name || user?.email || 'U')}
                           </div>
                           <span className="max-w-[80px] truncate text-sm">{user?.full_name?.split(' ')[0] || 'Account'}</span>
                           <ChevronDown className="h-3 w-3 text-muted-foreground" />

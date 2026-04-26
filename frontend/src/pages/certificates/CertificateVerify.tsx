@@ -310,7 +310,7 @@ export const CertificateVerify = () => {
                         <div className="bg-card rounded-xl shadow-sm border border-border p-6 text-center">
                             <h3 className="font-semibold text-foreground mb-3">Scan to verify</h3>
                             <img
-                                src={`/api/v1/public/certificates/verify/${code}/qr.svg`}
+                                src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'}/public/certificates/verify/${code}/qr.svg`}
                                 alt="Verification QR code"
                                 className="mx-auto h-44 w-44 p-2 bg-white rounded-lg border border-border"
                             />

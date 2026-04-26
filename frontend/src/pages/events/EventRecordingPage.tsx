@@ -24,15 +24,25 @@ export function EventRecordingPage() {
     setLoading(true);
     setError(null);
 
-    Promise.all([
-      getPublicEvent(eventUuid).catch(() => null),
-      getVideoRecordings({ event_uuid: eventUuid }).catch(() => [] as VideoRecording[]),
-    ]).then(([ev, recs]) => {
+    // The :id route segment may be either a UUID or a slug. `getPublicEvent`
+    // accepts both, but `getVideoRecordings({event_uuid})` only accepts a
+    // UUID — so we resolve the event first, then use its `.uuid` for the
+    // recordings query. Wrapping each fetch with a request-level `silent`
+    // hint keeps the global error toast quiet for the expected "no
+    // recording yet" case.
+    (async () => {
+      const ev = await getPublicEvent(eventUuid).catch(() => null);
       if (cancelled) return;
       setEvent(ev);
+
+      const realUuid = ev?.uuid ?? eventUuid;
+      const recs = await getVideoRecordings({ event_uuid: realUuid }).catch(
+        () => [] as VideoRecording[],
+      );
+      if (cancelled) return;
       setRecordings(recs);
       setLoading(false);
-    }).catch((err) => {
+    })().catch((err) => {
       if (!cancelled) {
         setError(err instanceof Error ? err.message : 'Failed to load recording.');
         setLoading(false);

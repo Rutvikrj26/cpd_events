@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { getInitials } from "@/lib/initials";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
    Clock,
@@ -668,7 +669,7 @@ export function EventManagement() {
                                        <div className="flex items-center">
                                           <Avatar className="h-8 w-8 mr-3">
                                              <AvatarImage src={`https://ui-avatars.com/api/?name=${encodeURIComponent(attendee.full_name || '')}`} />
-                                             <AvatarFallback>{(attendee.full_name || 'U').charAt(0)}</AvatarFallback>
+                                             <AvatarFallback>{getInitials(attendee.full_name || 'U')}</AvatarFallback>
                                           </Avatar>
                                           <div>
                                              <div className="text-sm font-medium text-foreground">{attendee.full_name}</div>

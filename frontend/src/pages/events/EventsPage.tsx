@@ -27,6 +27,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { getRoleFlags } from '@/lib/role-utils';
+import { getEventStatusStyle } from '@/lib/eventStatus';
 
 export const EventsPage = () => {
     const { user } = useAuth();
@@ -148,9 +149,12 @@ export const EventsPage = () => {
                                         <Calendar size={48} />
                                     </div>
                                     <Badge
-                                        variant={event.status === 'published' ? 'default' : event.status === 'draft' ? 'secondary' : 'outline'}
-                                        className="absolute top-4 left-4"
+                                        variant="outline"
+                                        className={`absolute top-4 left-4 ${getEventStatusStyle(event.status).className}`}
                                     >
+                                        {getEventStatusStyle(event.status).pulse && (
+                                            <span className="mr-1 inline-block h-2 w-2 rounded-full bg-current animate-pulse" />
+                                        )}
                                         {event.status}
                                     </Badge>
                                     {event.organization_info && (

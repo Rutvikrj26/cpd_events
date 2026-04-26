@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { getInitials } from "@/lib/initials";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -365,14 +366,7 @@ export function ProfileSettings() {
       }
    };
 
-   const getInitials = (name: string) => {
-      return name
-         .split(" ")
-         .map(n => n[0])
-         .join("")
-         .toUpperCase()
-         .slice(0, 2);
-   };
+   // getInitials lives in @/lib/initials and strips honorifics ("Dr. M Torres" → "MT").
 
    if (loadingProfile) {
       return (

@@ -30,7 +30,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, Mail, Upload, MoreVertical, RotateCw, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import client from '@/api/client';
+import client, { getApiErrorMessage } from '@/api/client';
 import { unwrapList } from '@/api/pagination';
 import { User } from '@/api/accounts/types';
 import {
@@ -694,7 +694,10 @@ function InviteDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpen
                 setPendingUuid(uuid);
                 setError('An invitation is already pending for this email.');
             } else {
-                setError(err?.response?.data?.error?.message || err?.response?.data?.detail || 'Failed to send invitation');
+                // Mirror the toast (which getApiErrorMessage already populates)
+                // so the inline banner shows the same specific reason as the
+                // toast, e.g. "Email: A user with this email already exists."
+                setError(getApiErrorMessage(err) || 'Failed to send invitation');
             }
         } finally {
             setIsLoading(false);

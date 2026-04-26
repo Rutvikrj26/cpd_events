@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 import { getPublicPrograms, ProgramListItem } from "@/api/programs";
 
 const formatPrice = (cents: number, currency: string): string => {
@@ -42,11 +43,12 @@ export function ProgramDiscoveryPage() {
     }, [fetchPrograms]);
 
     return (
-        <div className="container mx-auto py-8 px-4 max-w-7xl">
-            <PageHeader
-                title="Programs"
-                description="Curated bundles of courses — buy the whole program at a discount."
-            />
+        <PublicLayout>
+            <div className="container mx-auto py-8 px-4 max-w-7xl">
+                <PageHeader
+                    title="Programs"
+                    description="Curated bundles of courses — buy the whole program at a discount."
+                />
 
             <div className="my-6 flex gap-2">
                 <div className="relative flex-1 max-w-md">
@@ -112,7 +114,8 @@ export function ProgramDiscoveryPage() {
                     ))}
                 </div>
             )}
-        </div>
+            </div>
+        </PublicLayout>
     );
 }
 

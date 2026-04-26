@@ -151,12 +151,21 @@ export function getApiErrorMessage(error: unknown): string {
             const { message, details } = data.error;
 
             if (details && typeof details === 'object') {
+                // DRF's non-field-errors live under `__all__` (and were
+                // previously rendered as "All: …"). Treat those — plus
+                // explicit `non_field_errors` — as un-prefixed messages so
+                // the user sees a clean sentence.
+                const NON_FIELD_KEYS = new Set(['__all__', 'all', 'non_field_errors']);
                 const fieldErrors = Object.entries(details)
                     .map(([field, errors]) => {
+                        const text = Array.isArray(errors) ? errors.join(', ') : String(errors);
+                        if (NON_FIELD_KEYS.has(field.toLowerCase())) {
+                            return text;
+                        }
                         const cleanField = field
                             .replace(/_/g, ' ')
                             .replace(/\b\w/g, l => l.toUpperCase());
-                        return `${cleanField}: ${Array.isArray(errors) ? errors.join(', ') : errors}`;
+                        return `${cleanField}: ${text}`;
                     })
                     .join('\n');
                 return fieldErrors || message || 'An error occurred';

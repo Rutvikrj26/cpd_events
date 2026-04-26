@@ -340,6 +340,14 @@ function ReconcileTab() {
     const [running, setRunning] = useState(false);
 
     const run = async () => {
+        if (!Number.isFinite(hours) || hours < 1 || hours > 720) {
+            toast({
+                variant: 'destructive',
+                title: 'Invalid lookback',
+                description: 'Enter a whole number between 1 and 720 hours.',
+            });
+            return;
+        }
         setRunning(true);
         try {
             const resp = await client.post<ReconcileResult>('/admin/billing/reconcile/', { hours });
@@ -377,7 +385,14 @@ function ReconcileTab() {
                             min="1"
                             max="720"
                             value={hours}
-                            onChange={(e) => setHours(parseInt(e.target.value) || 72)}
+                            onChange={(e) => {
+                                const parsed = parseInt(e.target.value);
+                                if (Number.isNaN(parsed)) {
+                                    setHours(72);
+                                } else {
+                                    setHours(Math.min(720, Math.max(1, parsed)));
+                                }
+                            }}
                             disabled={running}
                         />
                     </div>
