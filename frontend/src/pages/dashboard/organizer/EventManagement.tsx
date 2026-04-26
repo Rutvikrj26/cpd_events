@@ -142,7 +142,8 @@ export function EventManagement() {
 
    const hasStarted = event ? new Date(event.starts_at) < new Date() : false;
    const hasEnded = event ? (event.ends_at ? new Date(event.ends_at) < new Date() : false) : false;
-   const isLive = hasStarted && !hasEnded && event?.format !== 'in_person';
+   const isTerminalStatus = event ? ['completed', 'cancelled', 'closed'].includes(event.status) : false;
+   const isLive = hasStarted && !hasEnded && !isTerminalStatus && event?.format !== 'in_person';
    const isEventHost = !!event?.is_current_user_host;
 
    const getRegistrationBadge = (attendee: any) => {
