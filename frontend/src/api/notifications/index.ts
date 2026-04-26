@@ -1,4 +1,5 @@
 import client from '@/api/client';
+import { unwrapList } from '@/api/pagination';
 
 export interface Notification {
     uuid: string;
@@ -17,8 +18,8 @@ export interface NotificationListParams {
 }
 
 export const getNotifications = async (params?: NotificationListParams): Promise<Notification[]> => {
-    const response = await client.get<Notification[]>('/users/me/notifications/inbox/', { params });
-    return response.data;
+    const response = await client.get('/users/me/notifications/inbox/', { params });
+    return unwrapList<Notification>(response.data);
 };
 
 export const markNotificationRead = async (uuid: string): Promise<Notification> => {

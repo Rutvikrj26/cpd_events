@@ -5,7 +5,7 @@ from .models import Certificate, CertificateStatusHistory, CertificateTemplate
 
 @admin.register(CertificateTemplate)
 class CertificateTemplateAdmin(admin.ModelAdmin):
-    list_display = ('name', 'owner', 'version', 'is_active', 'is_default', 'usage_count')
+    list_display = ('name', 'owner', 'is_active', 'is_default', 'usage_count')
     list_filter = ('is_active', 'is_default', 'orientation')
     search_fields = ('name', 'owner__email')
     ordering = ('-created_at',)

@@ -37,12 +37,17 @@ interface FieldPositionEditorProps {
 
 const DEFAULT_FIELDS: DraggableField[] = [
     // These IDs must match keys from backend's Certificate.build_certificate_data()
+    // and common/validators.py:validate_field_positions_schema allowed keys.
     { id: "attendee_name", label: "Attendee Name", x: 100, y: 100, fontSize: 24 },
-    { id: "event_title", label: "Event Title", x: 100, y: 150, fontSize: 20 },
-    { id: "event_date", label: "Event Date", x: 100, y: 200, fontSize: 16 },
-    { id: "cpd_credits", label: "CPD Credits", x: 100, y: 250, fontSize: 16 },
-    { id: "organizer_name", label: "Organizer", x: 100, y: 300, fontSize: 14 },
-    { id: "issued_date", label: "Issue Date", x: 100, y: 350, fontSize: 12 },
+    { id: "attendee_title", label: "Attendee Title", x: 100, y: 130, fontSize: 14 },
+    { id: "attendee_organization", label: "Attendee Organization", x: 100, y: 160, fontSize: 14 },
+    { id: "event_title", label: "Event / Course Title", x: 100, y: 200, fontSize: 20 },
+    { id: "event_date", label: "Event Date", x: 100, y: 250, fontSize: 16 },
+    { id: "cpd_credits", label: "CPD Credits", x: 100, y: 290, fontSize: 16 },
+    { id: "cpd_type", label: "CPD Type", x: 100, y: 320, fontSize: 14 },
+    { id: "organizer_name", label: "Organizer", x: 100, y: 360, fontSize: 14 },
+    { id: "issued_date", label: "Issue Date", x: 100, y: 400, fontSize: 12 },
+    { id: "certificate_code", label: "Certificate Code", x: 100, y: 430, fontSize: 10 },
 ];
 
 export function FieldPositionEditor({

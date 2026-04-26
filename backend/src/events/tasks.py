@@ -12,45 +12,49 @@ logger = logging.getLogger(__name__)
 
 
 @task()
-def send_event_reminders(hours_before: int = 24):
-    """
-    Send reminders for upcoming events.
+def send_event_reminders(lookahead_days: int = 14):
+    """Reconcile reminder ScheduledEmail rows for upcoming events.
+
+    The authoritative path enqueues reminders at registration confirmation
+    time via ``events.services.enqueue_event_reminders``. This task is a
+    self-healing backstop: it walks confirmed registrations on upcoming
+    events and re-runs the idempotent enqueue. The unique constraint on
+    ScheduledEmail prevents duplicates.
+
+    Runs cheaply on the cron tick — no work is done unless a registration
+    is missing reminders.
 
     Args:
-        hours_before: Hours before event to send reminder
+        lookahead_days: Only reconcile events starting within this window.
     """
     from events.models import Event
-    from integrations.services import email_service
+    from events.services import enqueue_event_reminders
     from registrations.models import Registration
 
     now = timezone.now()
-    target_time = now + timezone.timedelta(hours=hours_before)
+    horizon = now + timezone.timedelta(days=lookahead_days)
 
-    # Find events starting in the target window
     events = Event.objects.filter(
-        status__in=['published', 'live'], starts_at__gt=now, starts_at__lte=target_time + timezone.timedelta(minutes=30)
+        status__in=[Event.Status.PUBLISHED, Event.Status.LIVE],
+        starts_at__gt=now,
+        starts_at__lte=horizon,
+        deleted_at__isnull=True,
     )
 
-    count = 0
-    for event in events:
-        # Get confirmed registrations
-        registrations = Registration.objects.filter(event=event, status='confirmed').select_related('user')
+    total_reg = 0
+    total_rows = 0
+    for event in events.iterator():
+        confirmed = Registration.objects.filter(
+            event=event,
+            status=Registration.Status.CONFIRMED,
+            deleted_at__isnull=True,
+        )
+        for reg in confirmed.iterator():
+            total_reg += 1
+            total_rows += enqueue_event_reminders(reg)
 
-        for reg in registrations:
-            email_service.send_email(
-                template='event_reminder',
-                recipient=reg.user.email,
-                context={
-                    'user_name': reg.user.full_name,
-                    'event_title': event.title,
-                    'event_date': event.starts_at.strftime('%B %d, %Y at %I:%M %p'),
-                    'join_url': '',
-                },
-            )
-            count += 1
-
-    logger.info(f"Sent {count} event reminders")
-    return count
+    logger.info("Reminder reconciler scanned %s registrations, ensured %s rows", total_reg, total_rows)
+    return total_rows
 
 
 @task()

@@ -30,6 +30,25 @@ REGISTRATION_MODE: str = os.environ.get("REGISTRATION_MODE", "invite_only")
 
 INSTITUTION_NAME: str = os.environ.get("INSTITUTION_NAME", "Accredit")
 INSTITUTION_LOGO_URL: str = os.environ.get("INSTITUTION_LOGO_URL", "")
+INSTITUTION_FAVICON_URL: str = os.environ.get("INSTITUTION_FAVICON_URL", "")
+INSTITUTION_PRIMARY_COLOR: str = os.environ.get("INSTITUTION_PRIMARY_COLOR", "")
+INSTITUTION_SUPPORT_EMAIL: str = os.environ.get("INSTITUTION_SUPPORT_EMAIL", "")
+INSTITUTION_FOOTER_TEXT: str = os.environ.get("INSTITUTION_FOOTER_TEXT", "")
+INSTITUTION_WEBSITE_URL: str = os.environ.get("INSTITUTION_WEBSITE_URL", "")
+
+
+def get_branding() -> dict:
+    """Single source of truth for brand values exposed to API + templates."""
+    return {
+        "institution_name": INSTITUTION_NAME,
+        "institution_logo_url": INSTITUTION_LOGO_URL,
+        "institution_favicon_url": INSTITUTION_FAVICON_URL,
+        "institution_primary_color": INSTITUTION_PRIMARY_COLOR,
+        "institution_support_email": INSTITUTION_SUPPORT_EMAIL,
+        "institution_footer_text": INSTITUTION_FOOTER_TEXT,
+        "institution_website_url": INSTITUTION_WEBSITE_URL,
+    }
+
 
 # =============================================================================
 # Exports
@@ -40,4 +59,10 @@ __all__ = [
     "REGISTRATION_MODE",
     "INSTITUTION_NAME",
     "INSTITUTION_LOGO_URL",
+    "INSTITUTION_FAVICON_URL",
+    "INSTITUTION_PRIMARY_COLOR",
+    "INSTITUTION_SUPPORT_EMAIL",
+    "INSTITUTION_FOOTER_TEXT",
+    "INSTITUTION_WEBSITE_URL",
+    "get_branding",
 ]

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.5; color: #1a1a1a; margin: 0; background-color: #f4f5f7;">
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f5f7;">
+        <tr>
+            <td align="center" style="padding: 32px 16px;">
+                <table cellpadding="0" cellspacing="0" border="0"
+                    style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 10px; padding: 32px;">
+                    <tr>
+                        <td>
+                            <h2 style="margin: 0 0 12px; font-size: 22px; font-weight: 600;">You're enrolled in {{ course_title }}</h2>
+                            <p style="margin: 0 0 16px; font-size: 15px;">
+                                Welcome, {{ user_name|default:"there" }}! Your seat in
+                                <strong>{{ course_title }}</strong> is confirmed.
+                            </p>
+                            <table cellpadding="0" cellspacing="0" border="0"
+                                style="width: 100%; margin: 16px 0; border-collapse: separate;">
+                                <tr>
+                                    <td style="background-color: #f8f9fa; border: 1px solid #e6e8eb; border-radius: 8px; padding: 18px 22px;">
+                                        {% if instructor_name %}
+                                        <div style="font-size: 14px; color: #4a4a4a; margin-bottom: 6px;">
+                                            <strong>Instructor:</strong> {{ instructor_name }}
+                                        </div>
+                                        {% endif %}
+                                        {% if module_count %}
+                                        <div style="font-size: 14px; color: #4a4a4a; margin-bottom: 6px;">
+                                            <strong>Modules:</strong> {{ module_count }}
+                                        </div>
+                                        {% endif %}
+                                        {% if estimated_hours %}
+                                        <div style="font-size: 14px; color: #4a4a4a; margin-bottom: 6px;">
+                                            <strong>Estimated time:</strong> {{ estimated_hours }} hours
+                                        </div>
+                                        {% endif %}
+                                        {% if course_url %}
+                                        <div style="margin-top: 14px;">
+                                            <a href="{{ course_url }}"
+                                                style="display: inline-block; background-color: #0c66e4; color: #ffffff; padding: 10px 18px; text-decoration: none; border-radius: 6px; font-weight: 600;">Open
+                                                Course</a>
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                            {% if first_module_title %}
+                            <p style="margin: 16px 0; font-size: 14px;">
+                                Your first module — <strong>{{ first_module_title }}</strong> — is unlocked and ready
+                                to start.
+                            </p>
+                            {% endif %}
+                            {% if upcoming_session_count %}
+                            <p style="margin: 16px 0; font-size: 14px;">
+                                {{ upcoming_session_count }} live session{{ upcoming_session_count|pluralize }} scheduled —
+                                we'll send reminders before each.
+                            </p>
+                            {% endif %}
+                            <p style="margin: 24px 0 0; font-size: 13px; color: #9a9a9a;">
+                                — The Accredit Team
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>

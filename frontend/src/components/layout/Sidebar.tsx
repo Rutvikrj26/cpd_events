@@ -11,14 +11,14 @@ import {
     ChevronLeft,
     ChevronRight,
     FileText,
-    Search,
+    GraduationCap,
     Users,
     TrendingUp,
-    Video,
     Shield,
     Tag,
     Mic,
     BarChart3,
+    CreditCard,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -31,53 +31,53 @@ type NavItemConfig = {
     label: string;
     end?: boolean;
     learnerOnly?: boolean;
-    educatorOnly?: boolean;
-    courseManagerOnly?: boolean;
-    creatorOnly?: boolean;
+    organizerOnly?: boolean;
+    instructorOnly?: boolean;
+    // Visible to anyone who creates content (organizer or instructor).
+    organizerOrInstructor?: boolean;
     adminOnly?: boolean;
 };
 
 export const Sidebar = () => {
     const { user, logout, hasRoute, hasFeature, manifest } = useAuth();
     const [isCollapsed, setIsCollapsed] = useState(false);
-    const { isEducator, isCourseManager, isLearner, isCreator, isAdmin } = getRoleFlags(user);
+    const { isOrganizer, isInstructor, isLearner, isAdmin } = getRoleFlags(user);
 
     const institutionName = manifest?.deployment?.institution_name || 'Accredit';
     const portalLabel = isAdmin
         ? 'Admin Portal'
-        : isEducator
-            ? 'Educator Portal'
-            : isCourseManager
-                ? 'Course Manager Portal'
+        : isOrganizer
+            ? 'Organizer Portal'
+            : isInstructor
+                ? 'Instructor Portal'
                 : 'Learner Portal';
 
     const navItems: NavItemConfig[] = [
         { routeKey: 'dashboard', to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
 
         // Learner items
-        { routeKey: 'browse_events', to: '/events', icon: Search, label: 'Browse Events', learnerOnly: true },
-        { routeKey: 'browse_courses', to: '/courses', icon: BookOpen, label: 'Browse Courses', learnerOnly: true },
-        { routeKey: 'registrations', to: '/registrations', icon: BookOpen, label: 'My Registrations', learnerOnly: true },
-        { routeKey: 'certificates', to: '/certificates', icon: Award, label: 'My Certificates', learnerOnly: true },
-        { routeKey: 'badges', to: '/badges', icon: Award, label: 'My Badges', learnerOnly: true },
+        { routeKey: 'registrations', to: '/registrations', icon: GraduationCap, label: 'My Learning', learnerOnly: true },
+        { routeKey: 'accreditations', to: '/accreditations', icon: Award, label: 'My Accreditations', learnerOnly: true },
+        { routeKey: 'my_programs', to: '/my-programs', icon: BookOpen, label: 'My Programs', learnerOnly: true },
         { routeKey: 'cpd_tracking', to: '/cpd', icon: TrendingUp, label: 'CPD Tracking', learnerOnly: true },
 
-        // Educator items
-        { routeKey: 'my_events', to: '/events', icon: Calendar, label: 'My Events', educatorOnly: true },
-        { routeKey: 'creator_certificates', to: '/organizer/certificates', icon: Award, label: 'Certificates', creatorOnly: true },
-        { routeKey: 'event_badges', to: '/organizer/badges', icon: Award, label: 'Badges', creatorOnly: true },
-        { routeKey: 'video_rooms', to: '/organizer/video', icon: Video, label: 'Video Rooms', creatorOnly: true },
-        { routeKey: 'contacts', to: '/organizer/contacts', icon: Users, label: 'Contacts', educatorOnly: true },
-        { routeKey: 'speakers', to: '/organizer/speakers', icon: Mic, label: 'Speakers', educatorOnly: true },
-        { routeKey: 'promo_codes', to: '/organizer/promo-codes', icon: Tag, label: 'Promo Codes', educatorOnly: true },
-        { routeKey: 'reports', to: '/organizer/reports', icon: BarChart3, label: 'Reports', educatorOnly: true },
+        // Organizer items (event management)
+        { routeKey: 'manage_events', to: '/events', icon: Calendar, label: 'Manage Events', organizerOnly: true },
+        { routeKey: 'contacts', to: '/organizer/contacts', icon: Users, label: 'Contacts', organizerOnly: true },
+        { routeKey: 'speakers', to: '/organizer/speakers', icon: Mic, label: 'Speakers', organizerOnly: true },
+        { routeKey: 'promo_codes', to: '/organizer/promo-codes', icon: Tag, label: 'Promo Codes', organizerOnly: true },
+        { routeKey: 'reports', to: '/organizer/reports', icon: BarChart3, label: 'Reports', organizerOrInstructor: true },
 
-        // Course Manager items
-        { routeKey: 'courses', to: '/courses/manage', icon: FileText, label: 'Manage Courses', courseManagerOnly: true },
-        { routeKey: 'course_certificates', to: '/courses/certificates', icon: Award, label: 'Course Certificates', courseManagerOnly: true },
+        // Instructor items (course management)
+        { routeKey: 'courses', to: '/courses/manage', icon: FileText, label: 'Manage Courses', instructorOnly: true },
+        { routeKey: 'programs', to: '/programs/manage', icon: BookOpen, label: 'Manage Programs', instructorOnly: true },
+
+        // Shared creator items
+        { routeKey: 'manage_accreditations', to: '/manage/accreditations', icon: Award, label: 'Accreditations', organizerOrInstructor: true },
 
         // Admin items
         { routeKey: 'admin_users', to: '/admin/users', icon: Shield, label: 'User Management', adminOnly: true },
+        { routeKey: 'admin_billing', to: '/admin/billing', icon: CreditCard, label: 'Billing & Stripe', adminOnly: true },
 
         // Shared
         { routeKey: 'profile', to: '/settings', icon: UserCircle, label: 'Profile' },
@@ -86,31 +86,30 @@ export const Sidebar = () => {
     const visibleItems = navItems.filter(item => {
         // Role-based filtering
         if (item.learnerOnly && !isLearner) return false;
-        if (item.educatorOnly && !isEducator) return false;
-        if (item.courseManagerOnly && !isCourseManager) return false;
-        if (item.creatorOnly && !isCreator) return false;
+        if (item.organizerOnly && !isOrganizer) return false;
+        if (item.instructorOnly && !isInstructor) return false;
+        if (item.organizerOrInstructor && !(isOrganizer || isInstructor)) return false;
         if (item.adminOnly && !isAdmin) return false;
 
         // Feature flag filtering via manifest
         if (manifest && manifest.routes.length > 0) {
-            // Items that don't need feature checks (basic navigation)
-            const alwaysShow = ['dashboard', 'profile', 'browse_events', 'browse_courses', 'cpd_tracking', 'badges'];
+            // Items whose visibility is driven purely by role (no feature flag gate).
+            // Keep the list tight — everything else must map to a named feature.
+            const alwaysShow = ['dashboard', 'profile', 'cpd_tracking', 'courses', 'programs', 'accreditations', 'manage_accreditations', 'my_programs'];
             if (alwaysShow.includes(item.routeKey)) return true;
 
             // Map nav items to manifest features
-            if (item.routeKey === 'certificates') return hasFeature('view_own_certificates');
             if (item.routeKey === 'registrations') return hasFeature('view_own_registrations');
-            if (item.routeKey === 'my_events') return hasFeature('create_events');
+            if (item.routeKey === 'manage_events') return hasFeature('create_events');
             if (item.routeKey === 'contacts') return hasFeature('manage_contacts');
-            if (item.routeKey === 'creator_certificates') return hasFeature('manage_certificates');
-            if (item.routeKey === 'event_badges') return hasFeature('manage_badges');
-            if (item.routeKey === 'video_rooms') return hasFeature('manage_video');
             if (item.routeKey === 'speakers') return hasFeature('create_events');
             if (item.routeKey === 'promo_codes') return hasFeature('create_events');
-            if (item.routeKey === 'reports') return hasFeature('create_events');
-            if (item.routeKey === 'courses') return hasFeature('create_courses');
-            if (item.routeKey === 'course_certificates') return hasFeature('create_courses');
+            // Reports page has Events/Courses/Programs tabs — show if the user
+            // can see at least one of them.
+            if (item.routeKey === 'reports') return hasFeature('create_events') || hasFeature('create_courses');
             if (item.routeKey === 'admin_users') return hasFeature('manage_users');
+            // Admin-only billing observability page; gated purely on admin role.
+            if (item.routeKey === 'admin_billing') return isAdmin;
 
             return hasRoute(item.routeKey);
         }

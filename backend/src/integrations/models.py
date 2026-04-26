@@ -22,6 +22,8 @@ class EmailLog(BaseModel):
         INVITATION = 'invitation', 'Event Invitation'
         EVENT_UPDATE = 'event_update', 'Event Update'
         WAITLIST_PROMOTION = 'waitlist_promotion', 'Waitlist Promotion'
+        COURSE_SESSION_REMINDER = 'course_session_reminder', 'Course Session Reminder'
+        COURSE_SESSION_UPDATE = 'course_session_update', 'Course Session Update'
 
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'
@@ -121,3 +123,143 @@ class EmailLog(BaseModel):
         self.status = self.Status.FAILED
         self.error_message = error
         self.save(update_fields=['status', 'error_message', 'updated_at'])
+
+
+class ScheduledEmail(BaseModel):
+    """
+    Queued email intent. A periodic task dispatches due rows by creating an
+    EmailLog + enqueueing send. Used for reminders, speaker follow-ups, and any
+    future-dated send. Stagger large batches by spacing send_at values.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        DISPATCHED = 'dispatched', 'Dispatched'
+        CANCELLED = 'cancelled', 'Cancelled'
+        FAILED = 'failed', 'Failed'
+
+    recipient_email = models.EmailField(db_index=True)
+    recipient_name = models.CharField(max_length=255, blank=True)
+    recipient_user = models.ForeignKey(
+        'accounts.User', null=True, blank=True, on_delete=models.SET_NULL, related_name='scheduled_emails'
+    )
+
+    template_key = models.CharField(max_length=50, db_index=True)
+    subject = models.CharField(max_length=255)
+    context = models.JSONField(default=dict, blank=True)
+
+    event = models.ForeignKey(
+        'events.Event', null=True, blank=True, on_delete=models.CASCADE, related_name='scheduled_emails'
+    )
+    registration = models.ForeignKey(
+        'registrations.Registration', null=True, blank=True, on_delete=models.CASCADE, related_name='scheduled_emails'
+    )
+
+    send_at = models.DateTimeField(db_index=True)
+    batch_key = models.CharField(max_length=64, blank=True, db_index=True)
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    email_log = models.ForeignKey(
+        'integrations.EmailLog', null=True, blank=True, on_delete=models.SET_NULL, related_name='scheduled_sources'
+    )
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'scheduled_emails'
+        ordering = ['send_at']
+        indexes = [
+            models.Index(fields=['status', 'send_at']),
+            models.Index(fields=['batch_key']),
+            models.Index(fields=['event', 'template_key']),
+        ]
+        constraints = [
+            # Per-recipient idempotency for repeat enqueue calls under retries.
+            # NULL event/registration are allowed; SQL semantics treat them as
+            # distinct, but practical duplicates are keyed by (event,recipient,template,send_at).
+            models.UniqueConstraint(
+                fields=['event', 'recipient_email', 'template_key', 'send_at'],
+                name='uniq_scheduled_email_per_event_recipient_template_time',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.template_key} → {self.recipient_email} @ {self.send_at.isoformat()}"
+
+    def dispatch(self):
+        """Render + send the email via EmailService, recording the result in
+        an ``EmailLog`` row. Idempotent per ``ScheduledEmail`` — repeat calls
+        on a non-PENDING row are no-ops.
+
+        Carries the stored ``self.context`` straight through to the template,
+        and attaches an ``.ics`` calendar invite for event-anchored templates
+        so calendar clients can register the event in one click.
+        """
+        from integrations.services import email_service
+
+        if self.status != self.Status.PENDING:
+            return None
+
+        email_type = self.template_key
+        valid_types = {choice[0] for choice in EmailLog.EmailType.choices}
+        if email_type not in valid_types:
+            email_type = EmailLog.EmailType.EVENT_UPDATE
+
+        log = EmailLog.objects.create(
+            recipient_email=self.recipient_email,
+            recipient_name=self.recipient_name,
+            recipient_user=self.recipient_user,
+            email_type=email_type,
+            subject=self.subject,
+            event=self.event,
+            registration=self.registration,
+        )
+        self.email_log = log
+        self.status = self.Status.DISPATCHED
+        self.dispatched_at = timezone.now()
+        self.save(update_fields=['email_log', 'status', 'dispatched_at', 'updated_at'])
+
+        attachments = self._build_attachments()
+
+        try:
+            email_service.send_log(log, context=self.context, attachments=attachments)
+        except Exception as e:
+            self.error_message = str(e)[:500]
+            self.save(update_fields=['error_message', 'updated_at'])
+            raise
+        return log
+
+    # Templates that should carry an .ics calendar invite when the
+    # ScheduledEmail is event-anchored.
+    _ICS_ATTACHED_TEMPLATES = {
+        'event_reminder',
+        'registration_confirmation',
+        'registration_confirm',
+        'waitlist_promotion',
+        'event_cancelled',
+        'invitation',
+    }
+
+    def _build_attachments(self):
+        if self.template_key not in self._ICS_ATTACHED_TEMPLATES or not self.event:
+            return None
+        try:
+            from events.services import build_event_ics
+
+            ics = build_event_ics(
+                self.event,
+                attendee_email=self.recipient_email,
+                attendee_name=self.recipient_name,
+            )
+        except Exception:
+            # ICS generation should never block the send.
+            return None
+        method = 'CANCEL' if self.event.status == 'cancelled' else 'PUBLISH'
+        return [('event.ics', ics, f'text/calendar; method={method}; charset=utf-8')]
+
+    def cancel(self, reason=''):
+        if self.status == self.Status.PENDING:
+            self.status = self.Status.CANCELLED
+            if reason:
+                self.error_message = reason
+            self.save(update_fields=['status', 'error_message', 'updated_at'])

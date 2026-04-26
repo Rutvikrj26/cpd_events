@@ -6,7 +6,8 @@ import { EventsPage } from "../EventsPage";
 // Mock AuthContext
 const mockUser = {
     uuid: "test-uuid",
-    account_type: "organizer",
+    roles: ["organizer"],
+    primary_role: "organizer",
     display_name: "Test User",
 };
 
@@ -35,9 +36,9 @@ describe("EventsPage", () => {
         renderEventsPage();
 
         await waitFor(() => {
-            expect(screen.getByText("My Events")).toBeInTheDocument();
+            expect(screen.getByText("Manage Events")).toBeInTheDocument();
         });
-        expect(screen.getByText(/manage your cpd events/i)).toBeInTheDocument();
+        expect(screen.getByText(/your cpd events/i)).toBeInTheDocument();
     });
 
     it("has Create Event button for organizer", async () => {

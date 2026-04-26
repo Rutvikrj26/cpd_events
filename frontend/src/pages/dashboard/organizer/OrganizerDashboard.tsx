@@ -8,9 +8,13 @@ import {
   ArrowRight,
   MoreHorizontal,
   Activity,
-  Building2
+  Building2,
+  BookOpen,
+  GraduationCap,
+  CheckCircle2,
 } from "lucide-react";
 import { OnboardingChecklist } from "@/components/onboarding";
+import { AdminLiveRoomsWidget } from "@/components/dashboard/AdminLiveRoomsWidget";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -26,16 +30,37 @@ import { DashboardStat } from "@/components/dashboard/DashboardStats";
 import { PageHeader } from "@/components/ui/page-header";
 import { getEvents } from "@/api/events";
 import { Event } from "@/api/events/types";
+import { getOwnedCourses } from "@/api/courses";
+import { Course } from "@/api/courses/types";
+import { useAuth } from "@/contexts/AuthContext";
+import { getRoleFlags } from "@/lib/role-utils";
+import { formatDate } from "@/lib/datetime";
 import { toast } from "sonner";
 
 export function OrganizerDashboard() {
+  const { user } = useAuth();
+  const { isAdmin, isInstructor } = getRoleFlags(user);
   const [events, setEvents] = useState<Event[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     async function fetchData() {
       try {
-        const eventsData = await getEvents();
-        setEvents(eventsData.results);
+        // Instructors (and admins) also get course stats. Pure organizers skip the call.
+        const [eventsData, coursesData] = await Promise.all([
+          getEvents().catch((err) => {
+            console.error("Failed to fetch events", err);
+            return { results: [] } as any;
+          }),
+          isInstructor
+            ? getOwnedCourses().catch((err) => {
+                console.error("Failed to fetch courses", err);
+                return [];
+              })
+            : Promise.resolve([] as Course[]),
+        ]);
+        setEvents(eventsData.results ?? []);
+        setCourses(coursesData ?? []);
       } catch (error) {
         console.error("Failed to fetch dashboard data", error);
       } finally {
@@ -43,13 +68,17 @@ export function OrganizerDashboard() {
       }
     }
     fetchData();
-  }, []);
+  }, [isInstructor]);
 
   const stats = {
     totalEvents: events.length,
     activeEvents: events.filter(e => ['published', 'live'].includes(e.status)).length,
     totalRegistrations: events.reduce((acc, e) => acc + (e.registration_count || 0), 0),
     certificatesIssued: events.reduce((acc, e) => acc + (e.certificate_count || 0), 0),
+    totalCourses: courses.length,
+    publishedCourses: courses.filter(c => c.status === 'published').length,
+    courseEnrollments: courses.reduce((acc, c) => acc + (c.enrollment_count || 0), 0),
+    courseCompletions: courses.reduce((acc, c) => acc + (c.completion_count || 0), 0),
   };
 
   const recentEvents = [...events]
@@ -73,7 +102,7 @@ export function OrganizerDashboard() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <PageHeader
-        title="Organizer Dashboard"
+        title={isAdmin ? 'Admin Dashboard' : 'Organizer Dashboard'}
         description="Manage your professional events, track attendance, and issue certificates."
         actions={
           <Button asChild size="lg" className="shadow-sm">
@@ -85,6 +114,8 @@ export function OrganizerDashboard() {
         }
       />
 
+      {isAdmin && <AdminLiveRoomsWidget />}
+
       {/* Onboarding Checklist */}
       <OnboardingChecklist />
 
@@ -94,7 +125,7 @@ export function OrganizerDashboard() {
           title="Total Events"
           value={stats.totalEvents}
           icon={Calendar}
-          description="All time"
+          description="Your events, lifetime"
         />
         <DashboardStat
           title="Active Events"
@@ -106,7 +137,7 @@ export function OrganizerDashboard() {
           title="Total Registrations"
           value={stats.totalRegistrations}
           icon={Users}
-          description="Across all events"
+          description="Across your events"
         />
         <DashboardStat
           title="Certificates Issued"
@@ -115,6 +146,36 @@ export function OrganizerDashboard() {
           description="Total certificates awarded"
         />
       </div>
+
+      {/* Courses lens — shown to instructors (admins always count). Hidden for pure organizers. */}
+      {isInstructor && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <DashboardStat
+            title="Total Courses"
+            value={stats.totalCourses}
+            icon={BookOpen}
+            description="Your courses, lifetime"
+          />
+          <DashboardStat
+            title="Published Courses"
+            value={stats.publishedCourses}
+            icon={CheckCircle2}
+            description="Visible to learners"
+          />
+          <DashboardStat
+            title="Course Enrollments"
+            value={stats.courseEnrollments}
+            icon={GraduationCap}
+            description="Across all courses"
+          />
+          <DashboardStat
+            title="Course Completions"
+            value={stats.courseCompletions}
+            icon={Award}
+            description="Learners finished"
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Recent Events Table - Takes up 2/3 width */}
@@ -172,7 +233,7 @@ export function OrganizerDashboard() {
                             </div>
                           </td>
                           <td className="px-6 py-4 text-muted-foreground">
-                            {new Date(event.starts_at).toLocaleDateString()}
+                            {formatDate(event.starts_at, user)}
                           </td>
                           <td className="px-6 py-4">
                             <Badge variant="outline" className={getStatusColor(event.status)}>
@@ -229,6 +290,19 @@ export function OrganizerDashboard() {
                   </div>
                 </Link>
               </Button>
+              {isInstructor && (
+                <Button variant="outline" className="justify-start h-auto py-3 px-4 border-border hover:bg-muted/30 hover:text-primary transition-all group" asChild>
+                  <Link to="/courses/manage/new">
+                    <div className="bg-primary/10 p-2 rounded-md mr-3 group-hover:bg-primary/20 transition-colors">
+                      <BookOpen className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="text-left">
+                      <span className="font-semibold block text-foreground group-hover:text-primary">Create Course</span>
+                      <span className="text-xs text-muted-foreground font-normal">Build a new learning path</span>
+                    </div>
+                  </Link>
+                </Button>
+              )}
               <Button variant="outline" className="justify-start h-auto py-3 px-4 border-border hover:bg-muted/30 hover:text-primary transition-all group" asChild>
                 <Link to="/organizer/contacts">
                   <div className="bg-primary/10 p-2 rounded-md mr-3 group-hover:bg-primary/20 transition-colors">

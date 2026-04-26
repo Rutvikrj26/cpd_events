@@ -1,0 +1,34 @@
+[
+  {
+    "model": "auth.group",
+    "pk": 1,
+    "fields": {
+      "name": "learner",
+      "permissions": []
+    }
+  },
+  {
+    "model": "auth.group",
+    "pk": 2,
+    "fields": {
+      "name": "organizer",
+      "permissions": []
+    }
+  },
+  {
+    "model": "auth.group",
+    "pk": 3,
+    "fields": {
+      "name": "instructor",
+      "permissions": []
+    }
+  },
+  {
+    "model": "auth.group",
+    "pk": 4,
+    "fields": {
+      "name": "admin",
+      "permissions": []
+    }
+  }
+]

@@ -26,9 +26,27 @@ export async function joinCourseSessionVideo(
   return response.data;
 }
 
-export async function getVideoRecordings(): Promise<VideoRecording[]> {
-  const response = await api.get('/video/recordings/');
+export async function getVideoRecordings(
+  params?: { event_uuid?: string; course_session_uuid?: string; manage?: boolean },
+): Promise<VideoRecording[]> {
+  // `manage=true` opts host users into seeing unpublished + non-AVAILABLE rows
+  // (used by the EventManagement recording panel).
+  const query: Record<string, string> = {};
+  if (params?.event_uuid) query.event_uuid = params.event_uuid;
+  if (params?.course_session_uuid) query.course_session_uuid = params.course_session_uuid;
+  if (params?.manage) query.manage = 'true';
+  const response = await api.get('/video/recordings/', { params: query });
   return response.data.results || response.data;
+}
+
+export async function publishRecording(uuid: string): Promise<VideoRecording> {
+  const response = await api.post(`/video/recordings/${uuid}/publish/`);
+  return response.data;
+}
+
+export async function unpublishRecording(uuid: string): Promise<VideoRecording> {
+  const response = await api.post(`/video/recordings/${uuid}/unpublish/`);
+  return response.data;
 }
 
 export async function startRoomRecording(roomUuid: string): Promise<{ egress_id: string; status: string }> {
@@ -38,5 +56,25 @@ export async function startRoomRecording(roomUuid: string): Promise<{ egress_id:
 
 export async function stopRoomRecording(roomUuid: string): Promise<{ status: string }> {
   const response = await api.post(`/video/rooms/${roomUuid}/stop_recording/`);
+  return response.data;
+}
+
+export async function admitParticipant(
+  roomUuid: string,
+  identity: string
+): Promise<{ status: string; identity: string }> {
+  const response = await api.post(`/video/rooms/${roomUuid}/admit_participant/`, {
+    identity,
+  });
+  return response.data;
+}
+
+export async function denyParticipant(
+  roomUuid: string,
+  identity: string
+): Promise<{ status: string; identity: string }> {
+  const response = await api.post(`/video/rooms/${roomUuid}/deny_participant/`, {
+    identity,
+  });
   return response.data;
 }

@@ -27,7 +27,7 @@ from .models import AttendanceRecord, CustomFieldResponse, Registration
 
 
 class AttendanceRecordSerializer(BaseModelSerializer):
-    """Individual Zoom join/leave record."""
+    """Individual join/leave record from the video provider."""
 
     class Meta:
         model = AttendanceRecord
@@ -38,8 +38,8 @@ class AttendanceRecordSerializer(BaseModelSerializer):
             'duration_minutes',
             'join_method',
             'device_type',
-            'zoom_user_name',
-            'zoom_user_email',
+            'participant_name',
+            'participant_email',
             'is_matched',
             'created_at',
         ]
@@ -47,7 +47,7 @@ class AttendanceRecordSerializer(BaseModelSerializer):
 
 
 class UnmatchedAttendanceRecordSerializer(BaseModelSerializer):
-    """Unmatched Zoom attendance record with fuzzy match suggestions."""
+    """Unmatched attendance record with fuzzy match suggestions."""
 
     match_suggestions = serializers.SerializerMethodField()
 
@@ -55,8 +55,8 @@ class UnmatchedAttendanceRecordSerializer(BaseModelSerializer):
         model = AttendanceRecord
         fields = [
             'uuid',
-            'zoom_user_name',
-            'zoom_user_email',
+            'participant_name',
+            'participant_email',
             'join_time',
             'leave_time',
             'duration_minutes',
@@ -78,16 +78,16 @@ class UnmatchedAttendanceRecordSerializer(BaseModelSerializer):
         ).only('uuid', 'full_name', 'email')
 
         suggestions = []
-        zoom_email = (obj.zoom_user_email or '').lower()
-        zoom_name = (obj.zoom_user_name or '').lower()
+        attendee_email = (obj.participant_email or '').lower()
+        attendee_name = (obj.participant_name or '').lower()
 
         for reg in registrations:
             reg_email = (reg.email or '').lower()
             reg_name = (reg.full_name or '').lower()
 
             # Calculate similarity scores
-            email_score = SequenceMatcher(None, zoom_email, reg_email).ratio() if zoom_email and reg_email else 0
-            name_score = SequenceMatcher(None, zoom_name, reg_name).ratio() if zoom_name and reg_name else 0
+            email_score = SequenceMatcher(None, attendee_email, reg_email).ratio() if attendee_email and reg_email else 0
+            name_score = SequenceMatcher(None, attendee_name, reg_name).ratio() if attendee_name and reg_name else 0
 
             # Use best score
             best_score = max(email_score, name_score)
@@ -165,7 +165,13 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
     event_title = serializers.CharField(source='event.title', read_only=True)
     attendance_percent = serializers.IntegerField(read_only=True)
 
-    certificate_uuid = serializers.UUIDField(source='certificate.uuid', read_only=True, allow_null=True)
+    certificate_uuid = serializers.SerializerMethodField()
+
+    def get_certificate_uuid(self, obj):
+        cert = obj.certificates.filter(
+            status='active', deleted_at__isnull=True
+        ).order_by('-created_at').first()
+        return str(cert.uuid) if cert else None
 
     class Meta:
         model = Registration
@@ -178,13 +184,9 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
             'status',
             'payment_status',
             'amount_paid',
-            'platform_fee_amount',
-            'service_fee_amount',
-            'processing_fee_amount',
             'tax_amount',
             'total_amount',
-            'stripe_transfer_id',
-            'stripe_tax_transaction_id',
+            'stripe_checkout_session_id',
             'attended',
             'check_in_time',
             'total_attendance_minutes',
@@ -241,20 +243,12 @@ class RegistrationDetailSerializer(SoftDeleteModelSerializer):
             'can_receive_certificate',
             # Payment
             'amount_paid',
-            'platform_fee_amount',
-            'service_fee_amount',
-            'processing_fee_amount',
             'tax_amount',
             'total_amount',
-            'stripe_transfer_id',
-            'stripe_tax_transaction_id',
+            'payment_intent_id',
+            'stripe_checkout_session_id',
             # Privacy
             'allow_public_verification',
-            # Billing
-            'billing_country',
-            'billing_state',
-            'billing_postal_code',
-            'billing_city',
             # Custom fields
             'custom_field_responses',
             # Waitlist
@@ -284,11 +278,8 @@ class RegistrationCreateSerializer(serializers.Serializer):
     organization_name = serializers.CharField(required=False, max_length=255, allow_blank=True)
     custom_field_responses = serializers.DictField(required=False)
     allow_public_verification = serializers.BooleanField(default=True)
-    promo_code = serializers.CharField(required=False, max_length=50, allow_blank=True)
-    billing_country = serializers.CharField(required=False, max_length=2, allow_blank=True)
-    billing_state = serializers.CharField(required=False, max_length=100, allow_blank=True)
-    billing_postal_code = serializers.CharField(required=False, max_length=20, allow_blank=True)
-    billing_city = serializers.CharField(required=False, max_length=100, allow_blank=True)
+    # Promo codes are entered at Stripe Checkout (allow_promotion_codes=True),
+    # so we no longer accept them in the registration payload.
 
     def validate(self, attrs):
         request = self.context.get('request')
@@ -325,7 +316,7 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
     """Registration from attendee's perspective."""
 
     event = MinimalEventSerializer(read_only=True)
-    zoom_join_url = serializers.SerializerMethodField()
+    meeting_join_url = serializers.SerializerMethodField()
     can_join = serializers.SerializerMethodField()
     certificate_url = serializers.SerializerMethodField()
     attendance_percent = serializers.IntegerField(read_only=True)
@@ -345,28 +336,21 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
             'certificate_issued',
             'certificate_issued_at',
             'amount_paid',
-            'platform_fee_amount',
+            'tax_amount',
             'total_amount',
+            'stripe_checkout_session_id',
             'allow_public_verification',
             'waitlist_position',
             'promoted_from_waitlist_at',
-            'zoom_join_url',
+            'meeting_join_url',
             'can_join',
             'certificate_url',
             'created_at',
-            'amount_paid',
-            'platform_fee_amount',
-            'service_fee_amount',
-            'processing_fee_amount',
-            'tax_amount',
-            'total_amount',
-            'stripe_transfer_id',
-            'stripe_tax_transaction_id',
         ]
         read_only_fields = fields
 
-    def get_zoom_join_url(self, obj):
-        """Return video join URL if available. Zoom fields removed; always returns None."""
+    def get_meeting_join_url(self, obj):
+        """Return video join URL if available. Clients should use the in-app /join-video endpoint instead."""
         return None
 
     def get_can_join(self, obj):
@@ -375,8 +359,11 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
     def get_certificate_url(self, obj):
         if obj.certificate_issued:
             try:
-                cert = obj.certificate
-                return f"/api/v1/certificates/{cert.uuid}/"
+                cert = obj.certificates.filter(
+                    status='active', deleted_at__isnull=True
+                ).order_by('-created_at').first()
+                if cert:
+                    return f"/api/v1/certificates/{cert.uuid}/"
             except Exception as e:
                 logger.warning(f"Failed to resolve certificate for registration {obj.uuid}: {e}")
         return None
@@ -397,6 +384,12 @@ class RegistrationCancelSerializer(serializers.Serializer):
 
 
 class RegistrationRefundSerializer(serializers.Serializer):
-    """Refund registration request."""
+    """Refund registration request.
 
-    reason = serializers.CharField(required=False, max_length=500, allow_blank=True)
+    ``amount_cents`` is optional; if omitted, issues a full refund. ``reason``
+    is required because refunds are audit-logged and a blank reason makes the
+    audit entry useless during later review.
+    """
+
+    reason = serializers.CharField(required=True, max_length=500, allow_blank=False)
+    amount_cents = serializers.IntegerField(required=False, min_value=1)

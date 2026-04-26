@@ -35,6 +35,19 @@ from factories import (
 User = get_user_model()
 
 
+@pytest.fixture(autouse=True)
+def _setup_role_groups(db):
+    """Seed Django role groups + permissions before any test that touches the
+    DB. Without this, tests that rely on `has_perm("learning.can_create_course")`
+    or similar role-based gating fail with 403 because UserFactory creates the
+    'instructor' / 'organizer' groups via get_or_create — empty, with no perms
+    attached. Production sets these up via the `setup_groups` management
+    command; tests need the same seeding.
+    """
+    from django.core.management import call_command
+    call_command('setup_groups', verbosity=0)
+
+
 # =============================================================================
 # API Client Fixtures
 # =============================================================================
@@ -63,10 +76,10 @@ def organizer_client(organizer):
 
 
 @pytest.fixture
-def course_manager_client(course_manager):
-    """API client authenticated as a course manager."""
+def instructor_client(instructor):
+    """API client authenticated as an instructor."""
     client = APIClient()
-    client.force_authenticate(user=course_manager)
+    client.force_authenticate(user=instructor)
     return client
 
 
@@ -93,10 +106,11 @@ def admin_client(admin_user):
 
 @pytest.fixture
 def user(db):
-    """A regular attendee user."""
+    """A regular learner user."""
     return UserFactory(
         email='test@example.com',
         full_name='Test User',
+        groups=['learner'],
     )
 
 
@@ -111,47 +125,22 @@ def unverified_user(db):
 
 @pytest.fixture
 def organizer(db):
-    """An organizer user."""
-    organizer = OrganizerFactory(
+    """An organizer user. (Subscription model removed in single-tenant transition;
+    services already guard with getattr(user, 'subscription', None).)"""
+    return OrganizerFactory(
         email='organizer@example.com',
         full_name='Test Organizer',
-        organizer_slug='test-organizer',
     )
-
-    # Update subscription to organization plan with ACTIVE status so tests can create events
-    # Signal creates subscription with TRIALING status, we need ACTIVE to bypass trial expiration
-    from billing.models import Subscription
-
-    sub = Subscription.objects.get(user=organizer)
-    sub.plan = 'organization'
-    sub.status = 'active'  # Set to active to bypass trial expiration checks
-    sub.save()
-
-    # Refresh to ensure relationship is loaded
-    organizer.refresh_from_db()
-
-    return organizer
 
 
 @pytest.fixture
-def course_manager(db):
-    """A course manager user."""
-    user = UserFactory(
-        email='course-manager@example.com',
-        full_name='Course Manager',
-        account_type='course_manager',
+def instructor(db):
+    """An instructor user. (See organizer fixture re: subscription removal.)"""
+    return UserFactory(
+        email='instructor@example.com',
+        full_name='Test Instructor',
+        groups=['instructor'],
     )
-
-    # Update subscription to LMS plan with ACTIVE status so tests can create courses
-    from billing.models import Subscription
-
-    sub = Subscription.objects.get(user=user)
-    sub.plan = 'lms'
-    sub.status = 'active'  # Set to active to bypass trial expiration checks
-    sub.save()
-
-    user.refresh_from_db()
-    return user
 
 
 @pytest.fixture
@@ -160,18 +149,24 @@ def other_organizer(db):
     return OrganizerFactory(
         email='other-organizer@example.com',
         full_name='Other Organizer',
-        organizer_slug='other-organizer',
     )
 
 
 @pytest.fixture
 def admin_user(db):
-    """A Django superuser/admin."""
-    return User.objects.create_superuser(
+    """A Django superuser AND institution admin.
+
+    Post-Phase-3, application RBAC gates on `admin` group membership rather
+    than `is_staff`, so fixtures that want admin power in the app must also
+    be added to the admin group.
+    """
+    user = User.objects.create_superuser(
         email='admin@example.com',
         password='adminpass123',
         full_name='Admin User',
     )
+    user.assign_role("admin")
+    return user
 
 
 # =============================================================================
@@ -368,12 +363,11 @@ def tag(db, organizer):
 
 @pytest.fixture
 def subscription(db, organizer):
-    """A subscription for the organizer (may already exist from signal)."""
-    from billing.models import Subscription
-
-    # Signal auto-creates subscription for organizers, so get or update it
-    sub, created = Subscription.objects.get_or_create(user=organizer, defaults={'plan': 'free', 'status': 'active'})
-    return sub
+    """Stub — Subscription model was removed in the single-tenant transition.
+    Returns a MagicMock so any test still consuming this fixture doesn't blow
+    up at import time. Tests that actually exercise subscription behaviour
+    are skipped (see test_lms_plan_access.py)."""
+    return MagicMock(plan='free', status='active', user=organizer)
 
 
 # =============================================================================
@@ -411,10 +405,10 @@ def assignment(db, event_module):
 
 
 @pytest.fixture
-def course(db, course_manager):
-    """A course owned by the course manager."""
+def course(db, instructor):
+    """A course owned by the instructor."""
     return CourseFactory(
-        created_by=course_manager,
+        created_by=instructor,
         title='Test Course',
     )
 
@@ -503,35 +497,6 @@ def mock_cloud_tasks():
 
 @pytest.fixture
 def stripe_products(db):
-    from billing.models import StripePrice, StripeProduct
-
-    if not StripeProduct.objects.filter(plan='organizer').exists():
-        prod = StripeProduct.objects.create(
-            name='Organizer',
-            plan='organizer',
-            stripe_product_id='prod_test_org',
-            is_active=True,
-        )
-        StripePrice.objects.create(
-            product=prod,
-            stripe_price_id='price_test_org_month',
-            amount_cents=2900,
-            currency='usd',
-            billing_interval='month',
-            is_active=True,
-        )
-    if not StripeProduct.objects.filter(plan='lms').exists():
-        prod = StripeProduct.objects.create(
-            name='LMS',
-            plan='lms',
-            stripe_product_id='prod_test_lms',
-            is_active=True,
-        )
-        StripePrice.objects.create(
-            product=prod,
-            stripe_price_id='price_test_lms_month',
-            amount_cents=9900,
-            currency='usd',
-            billing_interval='month',
-            is_active=True,
-        )
+    """Stub — StripeProduct/StripePrice models were removed in the single-tenant
+    transition (per-seat plans replaced with one-time course/event purchases)."""
+    return None

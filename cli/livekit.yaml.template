@@ -1,0 +1,22 @@
+port: 7880
+rtc:
+  port_range_start: 7882
+  port_range_end: 7892
+  use_external_ip: false
+  tcp_port: 7881
+
+keys:
+  devkey: secret_dev_key_change_in_production
+
+# Redis is used for egress worker coordination. When LiveKit and egress
+# run on the same host network, both connect to localhost:6379.
+redis:
+  address: localhost:6379
+
+logging:
+  level: info
+
+webhook:
+  urls:
+    - ${LIVEKIT_WEBHOOK_URL}
+  api_key: devkey

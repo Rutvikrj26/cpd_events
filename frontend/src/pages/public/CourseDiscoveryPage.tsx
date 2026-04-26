@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Search, Filter, BookOpen, SlidersHorizontal, Award, X, Clock, Users } from "lucide-react";
+import { formatCpdLabel } from "@/lib/completion-criteria";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -130,15 +131,15 @@ export function CourseDiscoveryPage() {
   const getEmptyStateCTA = () => {
     if (!isAuthenticated) {
       return {
-        text: "Create a Course",
-        link: "/signup?role=course_manager&plan=lms",
-        secondary: { text: "View Pricing", link: "/pricing" }
+        text: "Create Account",
+        link: "/signup",
+        secondary: { text: "Sign In", link: "/login" }
       };
     }
-    
+
     // Check if user can create courses (from roles)
-    const canCreateCourses = user?.roles?.some(r => ['course_manager', 'admin'].includes(r));
-    
+    const canCreateCourses = user?.roles?.some(r => ['instructor', 'admin'].includes(r));
+
     if (canCreateCourses) {
       return {
         text: "Create a Course",
@@ -146,11 +147,11 @@ export function CourseDiscoveryPage() {
         secondary: { text: "Go to Dashboard", link: "/dashboard" }
       };
     }
-    
+
     return {
-      text: "Upgrade to Create Courses",
-      link: "/billing",
-      secondary: { text: "View Plans", link: "/pricing" }
+      text: "Go to Dashboard",
+      link: "/dashboard",
+      secondary: { text: "Browse Events", link: "/discover/events" }
     };
   };
 
@@ -440,7 +441,7 @@ function CourseCard({ course }: { course: Course }) {
             {course.cpd_credits && Number(course.cpd_credits) > 0 && (
               <div className="flex items-center gap-1">
                 <Award className="h-3 w-3" />
-                <span>{course.cpd_credits} CPD</span>
+                <span>{formatCpdLabel({ credits: course.cpd_credits, criteria: course.hybrid_completion_criteria, isCompleted: false })}</span>
               </div>
             )}
             {course.enrollment_count > 0 && (

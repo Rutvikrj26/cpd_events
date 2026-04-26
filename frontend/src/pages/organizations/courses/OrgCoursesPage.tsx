@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { getRoleFlags } from '@/lib/role-utils';
 import { Plus, Search, BookOpen, Clock, Users, MoreVertical, FileText, CheckCircle, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,7 +23,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from '@/components/ui/skeleton';
-import { getOrganizationCourses, getOwnedCourses, deleteCourse, Course } from '@/api/courses';
+import { getOwnedCourses, deleteCourse, Course } from '@/api/courses';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import {
@@ -38,9 +40,10 @@ import {
 const OrgCoursesPage = () => {
     const { slug } = useParams<{ slug: string }>();
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const { isAdmin, isInstructor } = getRoleFlags(user);
     const isPersonal = !slug;
-    // TODO: Replace with direct permission check when per-user role API is available
-    const isInstructor = false;
+    const canCreateCourses = isAdmin || isInstructor;
 
     const [courses, setCourses] = useState<Course[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -55,11 +58,7 @@ const OrgCoursesPage = () => {
     const loadCourses = async () => {
         setIsLoading(true);
         try {
-            if (!isPersonal && isInstructor) {
-                setCourses([]);
-                return;
-            }
-            const data = isPersonal ? await getOwnedCourses() : await getOrganizationCourses(slug as string);
+            const data = await getOwnedCourses();
             setCourses(data);
         } catch (error) {
             console.error('Failed to load courses', error);
@@ -112,38 +111,22 @@ const OrgCoursesPage = () => {
         );
     }
 
-    if (isInstructor) {
-        return (
-            <div className="container mx-auto py-8 px-4">
-                <Card>
-                    <CardContent className="py-12 text-center">
-                        <BookOpen className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                        <p className="text-muted-foreground mb-4">
-                            Instructors manage their assigned course from the instructor dashboard.
-                        </p>
-                        {slug && (
-                            <Button variant="outline" onClick={() => navigate(`/org/${slug}/instructor`)}>
-                                Go to Instructor Dashboard
-                            </Button>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
-        );
-    }
-
     return (
         <div className="container mx-auto py-8 px-4">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">{isPersonal ? 'My Courses' : 'Courses'}</h1>
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        {canCreateCourses ? 'Manage Courses' : 'Assigned Courses'}
+                    </h1>
                     <p className="text-muted-foreground">
-                        {isPersonal ? 'Manage your course catalog and content.' : 'Manage your self-paced learning content.'}
+                        {canCreateCourses
+                            ? 'Create and manage the courses you own.'
+                            : 'Courses you have been assigned to teach.'}
                     </p>
                 </div>
 
-                {(isPersonal || true) && (
-                    <Button onClick={() => navigate(isPersonal ? `/courses/manage/new` : `/org/${slug}/courses/new`)}>
+                {canCreateCourses && (
+                    <Button onClick={() => navigate(`/courses/manage/new`)}>
                         <Plus className="mr-2 h-4 w-4" />
                         Create Course
                     </Button>
@@ -249,13 +232,13 @@ const OrgCoursesPage = () => {
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onClick={() => navigate(isPersonal ? `/courses/manage/${course.slug}` : `/org/${slug}/courses/${course.slug}`)}>
+                                                            <DropdownMenuItem onClick={() => navigate(`/courses/manage/${course.slug}`)}>
                                                                 Manage Course
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => navigate(`/courses/${course.slug}`)}>
                                                                 View Public Page
                                                             </DropdownMenuItem>
-                                                            {course.status === 'draft' && (
+                                                            {course.user_role !== 'instructor' && course.status === 'draft' && (
                                                                 <DropdownMenuItem
                                                                     className="text-destructive focus:text-destructive"
                                                                     onClick={() => setCourseToDelete(course)}

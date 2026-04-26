@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -17,7 +17,9 @@ import {
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { initiateGoogleSignIn } from "@/api/auth/googleAuth";
+import { signInWithFirebase } from "@/api/accounts";
+import { getGoogleIdToken, isFirebaseConfigured } from "@/lib/firebase";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 const formSchema = z.object({
   email: z.string().email({
@@ -30,13 +32,26 @@ const formSchema = z.object({
 });
 
 export function LoginPage() {
+  useDocumentTitle('Sign in');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login } = useAuth();
+  const { login, completeLogin, deployment, isAuthenticated } = useAuth();
   const [isLoading, setIsLoading] = React.useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const returnUrl = searchParams.get('returnUrl');
+  const oauthError = searchParams.get('error');
+  const firebaseReady = isFirebaseConfigured();
+  const registrationMode = deployment?.registration_mode ?? 'open';
+  const signupAllowed = registrationMode !== 'invite_only';
+
+  React.useEffect(() => {
+    if (oauthError === 'invite_only') {
+      toast.error(
+        'Registration is by invitation only. Contact your institution administrator for access.'
+      );
+    }
+  }, [oauthError]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema) as any,
@@ -69,12 +84,32 @@ export function LoginPage() {
     }
   }
 
-  async function handleGoogleSignIn() {
+  // Already-signed-in users hitting /login bounce straight to the dashboard
+  // (or to the explicit returnUrl if one was passed). Placed after all hooks
+  // so a post-login re-render can early-return without violating rules-of-hooks.
+  if (isAuthenticated) {
+    return <Navigate to={returnUrl || '/dashboard'} replace />;
+  }
+
+  async function onGoogle() {
+    if (!firebaseReady) {
+      toast.error("Google sign-in isn't configured for this environment.");
+      return;
+    }
     setIsGoogleLoading(true);
     try {
-      await initiateGoogleSignIn();
-    } catch (error) {
-      toast.error("Failed to initiate Google sign-in");
+      const idToken = await getGoogleIdToken();
+      const { access, refresh } = await signInWithFirebase(idToken);
+      await completeLogin(access, refresh);
+      toast.success("Signed in with Google");
+      navigate(returnUrl ?? "/dashboard");
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.error?.message ||
+        err?.message ||
+        "Google sign-in failed.";
+      toast.error(msg);
+    } finally {
       setIsGoogleLoading(false);
     }
   }
@@ -86,12 +121,42 @@ export function LoginPage() {
           Sign in to your account
         </h1>
         <p className="text-sm text-muted-foreground">
-          Or{" "}
-          <Link to={returnUrl ? `/signup?returnUrl=${encodeURIComponent(returnUrl)}` : "/signup"} className="font-medium text-primary hover:text-primary/80">
-            create a new account
-          </Link>
+          {signupAllowed ? (
+            <>
+              New here?{" "}
+              <Link to="/signup" className="font-medium text-primary hover:text-primary/80">
+                Create an account
+              </Link>
+              .
+            </>
+          ) : (
+            "Accounts on this platform are created by invitation only. Contact your administrator for access."
+          )}
         </p>
       </div>
+
+      {firebaseReady && (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={onGoogle}
+            disabled={isGoogleLoading || isLoading}
+          >
+            {isGoogleLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Continue with Google
+          </Button>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">or</span>
+            </div>
+          </div>
+        </>
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-6">
@@ -102,7 +167,13 @@ export function LoginPage() {
               <FormItem>
                 <FormLabel>Email address</FormLabel>
                 <FormControl>
-                  <Input placeholder="name@company.com" {...field} />
+                  <Input
+                    type="email"
+                    autoComplete="username"
+                    inputMode="email"
+                    placeholder="name@company.com"
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -127,6 +198,7 @@ export function LoginPage() {
                   <div className="relative">
                     <Input
                       type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
                       placeholder="••••••••"
                       {...field}
                     />
@@ -179,33 +251,6 @@ export function LoginPage() {
           </Button>
         </form>
       </Form>
-
-      {/* Divider */}
-      <div className="relative my-6">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
-        </div>
-      </div>
-
-      {/* Google Sign-In */}
-      <Button
-        variant="outline"
-        className="w-full"
-        onClick={handleGoogleSignIn}
-        disabled={isGoogleLoading || isLoading}
-      >
-        {isGoogleLoading ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
-            <path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
-          </svg>
-        )}
-        Sign in with Google
-      </Button>
     </div>
   );
 }

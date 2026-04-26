@@ -218,24 +218,30 @@ class TestCourseViewSet:
 
     endpoint = '/api/v1/courses/'
 
-    def test_list_courses(self, course_manager_client, course):
+    def test_list_courses(self, instructor_client, course):
         """Course manager can list their courses."""
-        response = course_manager_client.get(self.endpoint)
+        response = instructor_client.get(self.endpoint)
         assert response.status_code == status.HTTP_200_OK
 
-    def test_create_course(self, course_manager_client):
-        """Course manager can create a course."""
+    def test_create_course(self, admin_client):
+        """Admins can create courses."""
         data = {
             'title': 'New Course',
             'slug': 'new-course',
             'description': 'Course description',
         }
-        response = course_manager_client.post(self.endpoint, data)
+        response = admin_client.post(self.endpoint, data)
         assert response.status_code == status.HTTP_201_CREATED
 
-    def test_publish_course(self, course_manager_client, course):
-        """Course manager can publish a course."""
-        response = course_manager_client.post(f'{self.endpoint}{course.uuid}/publish/')
+    def test_instructor_can_create_course(self, instructor_client):
+        """Course managers can create courses."""
+        data = {'title': 'Managed Course', 'slug': 'managed-course', 'description': ''}
+        response = instructor_client.post(self.endpoint, data)
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_publish_course(self, admin_client, course):
+        """Admin can publish a course."""
+        response = admin_client.post(f'{self.endpoint}{course.uuid}/publish/')
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
 
 

@@ -1,5 +1,6 @@
 import client from '../client';
-import { Event, EventCreateRequest, EventUpdateRequest, EventSession, EventCustomField } from './types';
+import { unwrapList } from '../pagination';
+import { Event, EventCreateRequest, EventUpdateRequest, EventSession, EventCustomField, EventCustomFieldInput } from './types';
 import { PaginatedResponse, PaginationParams } from '../types';
 
 // -- Organizer / Admin Routes --
@@ -8,6 +9,11 @@ export interface EventListParams extends PaginationParams {
     status?: string;
     search?: string;
 }
+
+export const getMySpeakingEvents = async (): Promise<Event[]> => {
+    const response = await client.get<PaginatedResponse<Event> | Event[]>('/events/my-speaking/');
+    return unwrapList(response.data);
+};
 
 export const getEvents = async (params?: EventListParams): Promise<PaginatedResponse<Event>> => {
     const response = await client.get<PaginatedResponse<Event>>('/events/', { params });
@@ -69,8 +75,47 @@ export const deleteEventSession = async (eventUuid: string, sessionUuid: string)
 // -- Nested: Custom Fields --
 
 export const getEventCustomFields = async (eventUuid: string): Promise<EventCustomField[]> => {
-    const response = await client.get<EventCustomField[]>(`/events/${eventUuid}/custom-fields/`);
+    const response = await client.get(`/events/${eventUuid}/custom-fields/`);
+    return unwrapList<EventCustomField>(response.data);
+};
+
+export const createEventCustomField = async (
+    eventUuid: string,
+    data: EventCustomFieldInput,
+): Promise<EventCustomField> => {
+    const response = await client.post<EventCustomField>(
+        `/events/${eventUuid}/custom-fields/`,
+        data,
+    );
     return response.data;
+};
+
+export const updateEventCustomField = async (
+    eventUuid: string,
+    fieldUuid: string,
+    data: Partial<EventCustomFieldInput>,
+): Promise<EventCustomField> => {
+    const response = await client.patch<EventCustomField>(
+        `/events/${eventUuid}/custom-fields/${fieldUuid}/`,
+        data,
+    );
+    return response.data;
+};
+
+export const deleteEventCustomField = async (
+    eventUuid: string,
+    fieldUuid: string,
+): Promise<void> => {
+    await client.delete(`/events/${eventUuid}/custom-fields/${fieldUuid}/`);
+};
+
+export const reorderEventCustomFields = async (
+    eventUuid: string,
+    orderedUuids: string[],
+): Promise<void> => {
+    await client.post(`/events/${eventUuid}/custom-fields/reorder/`, {
+        order: orderedUuids,
+    });
 };
 
 // -- Public Routes --
@@ -101,6 +146,25 @@ export const getPublicEvents = async (params?: PublicEventListParams): Promise<P
 
 export const getPublicEvent = async (slug: string): Promise<Event> => {
     const response = await client.get<Event>(`/public/events/${slug}/`);
+    return response.data;
+};
+
+export interface RegistrationLobbyResponse {
+    event: Event;
+    registration: {
+        uuid: string;
+        email: string;
+        full_name: string;
+        status: 'pending' | 'confirmed' | 'waitlisted' | 'cancelled';
+        payment_status: 'pending' | 'paid' | 'failed' | 'refunded' | 'na';
+        attended: boolean;
+    };
+}
+
+export const getRegistrationLobby = async (registrationUuid: string): Promise<RegistrationLobbyResponse> => {
+    const response = await client.get<RegistrationLobbyResponse>(
+        `/public/registrations/${registrationUuid}/lobby/`
+    );
     return response.data;
 };
 
@@ -178,10 +242,9 @@ export const syncEventAttendance = async (eventUuid: string): Promise<{ task_id:
 
 export const matchParticipant = async (eventUuid: string, data: {
     registration_uuid: string;
-    // TODO: Rename these API fields when backend is updated to use generic participant fields
-    zoom_user_email?: string;
-    zoom_user_name?: string;
-    zoom_join_time?: string;
+    participant_email?: string;
+    participant_name?: string;
+    join_time?: string;
     attendance_minutes?: number;
 }): Promise<void> => {
     await client.post(`/events/${eventUuid}/match_participant/`, data);

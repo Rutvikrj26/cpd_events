@@ -10,6 +10,8 @@ export interface MinimalEvent {
     price?: number;
     currency?: string;
     is_free?: boolean;
+    duration_minutes?: number;
+    actual_end_at?: string | null;
 }
 
 export interface Registration {
@@ -18,11 +20,9 @@ export interface Registration {
     status: 'pending' | 'confirmed' | 'waitlisted' | 'cancelled';
     payment_status: 'pending' | 'paid' | 'failed' | 'refunded' | 'na';
     amount_paid?: number;
-    platform_fee_amount?: number;
-    service_fee_amount?: number;
-    processing_fee_amount?: number;
     tax_amount?: number;
     total_amount?: number;
+    stripe_checkout_session_id?: string;
     email: string;
     full_name: string;
     attended: boolean;
@@ -45,47 +45,28 @@ export interface RegistrationCreateRequest {
     organization_name?: string;
     custom_field_responses?: Record<string, any>;
     allow_public_verification?: boolean;
-    promo_code?: string;
-    billing_country?: string;
-    billing_state?: string;
-    billing_postal_code?: string;
-    billing_city?: string;
-}
-
-export interface RegistrationPaymentIntentRequest {
-    billing_country: string;
-    billing_state?: string;
-    billing_postal_code: string;
-    billing_city?: string;
 }
 
 /**
  * Response from public registration endpoint.
- * For paid events, includes client_secret for Stripe payment.
+ * Paid events include ``checkout_url`` — the frontend redirects there.
  */
 export interface RegistrationResponse extends Registration {
     registration_uuid?: string;
-    client_secret?: string;
-    amount?: number;
-    currency?: string;
     requires_payment?: boolean;
+    checkout_url?: string;
+    checkout_session_id?: string;
+    amount?: number;
     ticket_price?: number;
-    platform_fee?: number;
-    stripe_account_id?: string;
-    // Promo code info
-    promo_code?: string;
-    original_price?: string;
-    discount_amount?: string;
-    final_price?: string;
-    service_fee?: number;
-    processing_fee?: number;
-    tax_amount?: number;
-    total_amount?: number;
+    currency?: string;
+    message?: string;
 }
 
-export interface ConfirmPaymentResponse {
-    status: 'paid' | 'processing' | 'failed' | 'event_full' | 'error';
-    registration_uuid?: string;
-    amount_paid?: number;
-    message?: string;
+export interface StartCheckoutResponse {
+    registration_uuid: string;
+    session_id: string;
+    url: string;
+    status: string;
+    amount_paid: number;
+    currency: string;
 }

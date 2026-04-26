@@ -1,4 +1,4 @@
-export type CourseFormat = 'online' | 'hybrid';
+export type CourseFormat = 'online' | 'live' | 'hybrid';
 
 export interface Course {
     uuid: string;
@@ -37,6 +37,10 @@ export interface Course {
     enrollment_open: boolean;
     max_enrollments?: number | null;
     enrollment_requires_approval: boolean;
+    enrollment_opens_at?: string | null;
+    enrollment_closes_at?: string | null;
+    enrollment_window_state?: 'upcoming' | 'open' | 'closed' | 'unbounded';
+    is_enrollable?: boolean;
 
     // Completion
     estimated_hours: string | number;
@@ -62,9 +66,31 @@ export interface Course {
     created_at: string;
     updated_at?: string;
 
+    // Permission
+    user_role?: 'admin' | 'instructor' | null;
+    is_current_user_host?: boolean; // Server-computed: creator | course staff | platform admin
+
     // Relations
     organization_slug?: string;
     modules?: CourseModule[];
+    programs?: CourseProgramSummary[];
+}
+
+export interface CourseProgramSummary {
+    uuid: string;
+    title: string;
+    slug: string;
+    short_description: string;
+    price_cents: number;
+    currency: string;
+}
+
+export interface CourseStaffMember {
+    uuid: string;
+    user_email: string;
+    user_name: string;
+    role: string;
+    created_at: string;
 }
 
 export interface CourseCreateRequest {
@@ -81,6 +107,8 @@ export interface CourseCreateRequest {
     price_cents?: number;
     enrollment_open?: boolean;
     max_enrollments?: number;
+    enrollment_opens_at?: string | null;
+    enrollment_closes_at?: string | null;
     estimated_hours?: number;
     passing_score?: number;
     hybrid_completion_criteria?: 'modules_only' | 'sessions_only' | 'both' | 'either' | 'min_sessions';
@@ -94,6 +122,7 @@ export interface CourseCreateRequest {
     auto_issue_badges?: boolean;
     // Format & Virtual fields
     format?: CourseFormat;
+    video_settings?: Record<string, any>;
     live_session_start?: string;
     live_session_end?: string;
     live_session_timezone?: string;
@@ -151,6 +180,75 @@ export interface CourseAnnouncement {
     updated_at?: string;
 }
 
+// ============================================
+// Discussion Board
+// ============================================
+
+export interface CourseMemberMini {
+    uuid: string;
+    full_name: string;
+    email: string;
+    role: 'learner' | 'staff';
+}
+
+export type FlagReason = 'spam' | 'harassment' | 'off_topic' | 'other';
+export type FlagStatus = 'open' | 'resolved_kept' | 'resolved_hidden';
+export type FlagResolveAction = 'keep' | 'hide';
+
+export interface UserMini {
+    uuid: string;
+    full_name: string;
+    email: string;
+}
+
+export interface DiscussionThreadList {
+    uuid: string;
+    title: string;
+    author: UserMini | null;
+    is_pinned: boolean;
+    is_locked: boolean;
+    is_hidden: boolean;
+    reply_count: number;
+    last_activity_at: string;
+    open_flag_count: number;
+    created_at: string;
+}
+
+export interface DiscussionReply {
+    uuid: string;
+    thread: number | string;
+    author: UserMini | null;
+    body_html: string;
+    is_hidden: boolean;
+    mentions: UserMini[];
+    can_moderate: boolean;
+    created_at: string;
+    updated_at?: string;
+}
+
+export interface DiscussionThread extends DiscussionThreadList {
+    body_html: string;
+    mentions: UserMini[];
+    replies: DiscussionReply[];
+    can_moderate: boolean;
+    updated_at?: string;
+}
+
+export interface DiscussionFlag {
+    uuid: string;
+    reporter: UserMini | null;
+    reason: FlagReason;
+    note: string;
+    status: FlagStatus;
+    target_type: 'thread' | 'reply';
+    target_snippet: string;
+    thread_uuid: string | null;
+    thread: number | null;
+    reply: number | null;
+    resolved_at: string | null;
+    created_at: string;
+}
+
 export interface EventModule {
     uuid: string;
     title: string;
@@ -174,18 +272,30 @@ export interface CourseModule {
 export interface CourseEnrollment {
     uuid: string;
     course: Course;
-    status: 'active' | 'completed' | 'dropped';
+    status: 'pending' | 'active' | 'completed' | 'dropped' | 'expired';
     enrolled_at: string;
     started_at?: string;
     completed_at?: string;
     progress_percent: number;
     modules_completed: number;
+    /** Average score across the learner's graded passing submissions; null until first graded submission. */
+    current_score?: number | null;
     certificate_issued: boolean;
     certificate_issued_at?: string;
 }
 
-// Course Sessions (for hybrid courses with multiple live sessions)
+// Course Sessions (for live and hybrid courses with multiple live lectures)
 export type SessionType = 'live' | 'recorded' | 'hybrid';
+export type CourseSessionStatus = 'scheduled' | 'live' | 'completed' | 'cancelled';
+
+export interface PublishedSessionRecording {
+    uuid: string;
+    storage_path: string;
+    duration_seconds: number;
+    recording_end?: string | null;
+}
+
+export type SessionDeliveryMode = 'online' | 'in_person' | 'hybrid';
 
 export interface CourseSession {
     uuid: string;
@@ -194,17 +304,27 @@ export interface CourseSession {
     order: number;
     session_type: SessionType;
     session_type_display?: string;
+    delivery_mode?: SessionDeliveryMode;
     starts_at: string;
     ends_at?: string;
     duration_minutes: number;
     timezone: string;
+    video_settings?: Record<string, any>;
+    recording_enabled?: boolean;
+    recording_auto_publish?: boolean;
     cpd_credits: number | string;
     is_mandatory: boolean;
     minimum_attendance_percent: number;
     is_published: boolean;
+    status?: CourseSessionStatus;
+    cancelled_reason?: string;
+    cancelled_at?: string;
+    actual_start_at?: string;
+    actual_end_at?: string;
     is_upcoming?: boolean;
     is_live?: boolean;
     is_past?: boolean;
+    published_recording?: PublishedSessionRecording | null;
     created_at?: string;
     updated_at?: string;
 }
@@ -214,9 +334,13 @@ export interface CourseSessionCreateRequest {
     description?: string;
     order?: number;
     session_type?: SessionType;
+    delivery_mode?: SessionDeliveryMode;
     starts_at: string;
     duration_minutes?: number;
     timezone?: string;
+    video_settings?: Record<string, any>;
+    recording_enabled?: boolean;
+    recording_auto_publish?: boolean;
     cpd_credits?: number;
     is_mandatory?: boolean;
     minimum_attendance_percent?: number;

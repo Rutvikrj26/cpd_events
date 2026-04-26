@@ -4,6 +4,7 @@ Registrations app models - Registration, AttendanceRecord, CustomFieldResponse.
 
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -91,37 +92,18 @@ class Registration(SoftDeleteModel):
     # Payment Tracking
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.NA, db_index=True)
     payment_intent_id = models.CharField(max_length=255, blank=True, db_index=True)
+    stripe_checkout_session_id = models.CharField(
+        max_length=255, blank=True, null=True, unique=True, db_index=True,
+        help_text="Stripe Checkout Session id (cs_...) that fulfilled this registration",
+    )
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    platform_fee_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, help_text="Platform service fee charged to attendee"
-    )
-    service_fee_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, help_text="Service fee charged to attendee"
-    )
-    processing_fee_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, help_text="Payment processing fee charged to attendee"
-    )
     tax_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, help_text="Tax amount charged on ticket and service fee"
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Tax reported by Stripe Checkout (automatic_tax)",
     )
     total_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, help_text="Total amount charged (ticket + fees + tax)"
+        max_digits=10, decimal_places=2, default=0, help_text="Total amount charged (ticket + tax)"
     )
-    stripe_tax_calculation_id = models.CharField(
-        max_length=255, blank=True, help_text="Stripe Tax Calculation ID used for this charge"
-    )
-    stripe_tax_transaction_id = models.CharField(
-        max_length=255, blank=True, help_text="Stripe Tax Transaction ID created from the tax calculation"
-    )
-    stripe_transfer_id = models.CharField(
-        max_length=255, blank=True, help_text="Stripe Transfer ID created for organizer payout"
-    )
-
-    # Billing address (for tax calculation)
-    billing_country = models.CharField(max_length=2, blank=True, help_text="Billing country code")
-    billing_state = models.CharField(max_length=100, blank=True, help_text="Billing state/province")
-    billing_postal_code = models.CharField(max_length=20, blank=True, help_text="Billing postal/ZIP code")
-    billing_city = models.CharField(max_length=100, blank=True, help_text="Billing city")
 
     source = models.CharField(
         max_length=20, choices=Source.choices, default=Source.SELF, help_text="How this registration was created"
@@ -256,7 +238,13 @@ class Registration(SoftDeleteModel):
             next_waitlisted.promote_from_waitlist()
 
     def promote_from_waitlist(self):
-        """Promote from waitlist to confirmed."""
+        """Promote from waitlist to confirmed.
+
+        Free event → CONFIRMED outright. Paid event → PENDING; the learner
+        then visits ``/start-checkout/`` (or a resume link in the promotion
+        email) to pay via Stripe Checkout, which flips the row to CONFIRMED
+        on ``checkout.session.completed``.
+        """
         if self.status != self.Status.WAITLISTED:
             return
 
@@ -268,9 +256,6 @@ class Registration(SoftDeleteModel):
             self.payment_status = self.PaymentStatus.PENDING
             ticket_price = Decimal(str(self.event.price or 0))
             self.amount_paid = ticket_price
-            self.platform_fee_amount = Decimal('0.00')
-            self.service_fee_amount = Decimal('0.00')
-            self.processing_fee_amount = Decimal('0.00')
             self.tax_amount = Decimal('0.00')
             self.total_amount = ticket_price
 
@@ -281,9 +266,6 @@ class Registration(SoftDeleteModel):
                 'status',
                 'payment_status',
                 'amount_paid',
-                'platform_fee_amount',
-                'service_fee_amount',
-                'processing_fee_amount',
                 'tax_amount',
                 'total_amount',
                 'promoted_from_waitlist_at',
@@ -303,8 +285,7 @@ class Registration(SoftDeleteModel):
             context={
                 'user_name': self.full_name,
                 'event_title': self.event.title,
-                # Assuming standard frontend route structure
-                'action_url': f"https://cpdevents.com/events/{self.event.slug}",
+                'action_url': f"{settings.FRONTEND_URL}/events/{self.event.slug or self.event.uuid}/details",
             },
         )
 
@@ -320,7 +301,7 @@ class Registration(SoftDeleteModel):
         total_minutes = sum(r.duration_minutes for r in records)
         self.total_attendance_minutes = total_minutes
 
-        # Attended if joined Zoom OR checked in physically (Hybrid support)
+        # Attended if joined the video room OR checked in physically (hybrid support)
         self.attended = (total_minutes > 0) or (self.check_in_time is not None)
 
         if records.exists():
@@ -407,10 +388,10 @@ class Registration(SoftDeleteModel):
 
 class AttendanceRecord(BaseModel):
     """
-    Individual attendance record from Zoom.
+    Individual attendance record from the video conferencing provider.
 
     A registration can have multiple records (join → leave → rejoin → leave).
-    Records are created from Zoom webhook events or participant reports.
+    Records are created from video webhook events or participant reports.
     """
 
     event = models.ForeignKey('events.Event', on_delete=models.CASCADE, related_name='attendance_records')
@@ -425,14 +406,18 @@ class AttendanceRecord(BaseModel):
     )
 
     # =========================================
-    # Zoom Participant Info
+    # Participant Info
     # =========================================
-    zoom_participant_id = models.CharField(
-        max_length=100, blank=True, help_text="Zoom participant ID (unique per meeting session)"
+    participant_id = models.CharField(
+        max_length=100, blank=True, help_text="Provider participant ID (unique per meeting session)"
     )
-    zoom_user_id = models.CharField(max_length=100, blank=True, help_text="Zoom user ID (for registered Zoom users)")
-    zoom_user_email = LowercaseEmailField(blank=True, db_index=True, help_text="Email from Zoom (for matching)")
-    zoom_user_name = models.CharField(max_length=255, blank=True, help_text="Display name in Zoom")
+    external_user_id = models.CharField(
+        max_length=100, blank=True, help_text="External user id (for registered provider users)"
+    )
+    participant_email = LowercaseEmailField(
+        blank=True, db_index=True, help_text="Email from the video provider (for matching)"
+    )
+    participant_name = models.CharField(max_length=255, blank=True, help_text="Display name in the meeting")
 
     # =========================================
     # Join Method
@@ -470,15 +455,15 @@ class AttendanceRecord(BaseModel):
         indexes = [
             models.Index(fields=['event', 'registration']),
             models.Index(fields=['event', 'is_matched']),
-            models.Index(fields=['zoom_user_email']),
-            models.Index(fields=['zoom_participant_id']),
+            models.Index(fields=['participant_email']),
+            models.Index(fields=['participant_id']),
             models.Index(fields=['join_time']),
         ]
         verbose_name = 'Attendance Record'
         verbose_name_plural = 'Attendance Records'
 
     def __str__(self):
-        name = self.zoom_user_name or self.zoom_user_email or 'Unknown'
+        name = self.participant_name or self.participant_email or 'Unknown'
         return f"{name} @ {self.event.title}"
 
     @property
@@ -489,7 +474,7 @@ class AttendanceRecord(BaseModel):
     @property
     def display_name(self):
         """Best available name for display."""
-        return self.zoom_user_name or self.zoom_user_email or 'Unknown Participant'
+        return self.participant_name or self.participant_email or 'Unknown Participant'
 
     def calculate_duration(self):
         """Calculate and update duration from join/leave times."""

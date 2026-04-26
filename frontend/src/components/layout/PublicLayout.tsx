@@ -11,6 +11,7 @@ import {
   ArrowRight
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { getInitials } from "@/lib/initials";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,7 +34,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const location = useLocation();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, deployment } = useAuth();
+  const signupAllowed = (deployment?.registration_mode ?? 'open') !== 'invite_only';
 
   const isActive = (path: string) => location.pathname === path;
   const isActivePrefix = (prefix: string) => location.pathname.startsWith(prefix);
@@ -99,23 +101,15 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                           Webinars, workshops, and conferences
                         </ListItem>
                         <ListItem href="/courses/browse" title="Courses">
-                          Self-paced professional development
+                          Self-paced and live professional development
+                        </ListItem>
+                        <ListItem href="/programs" title="Programs">
+                          Curated bundles of courses at a discount
                         </ListItem>
                       </ul>
                     </NavigationMenuContent>
                   </NavigationMenuItem>
 
-                  <NavigationMenuItem>
-                    <Link
-                      to="/pricing"
-                      className={cn(
-                        "group inline-flex h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground focus:outline-none",
-                        isActive('/pricing') ? 'text-foreground bg-muted' : 'text-muted-foreground'
-                      )}
-                    >
-                      Pricing
-                    </Link>
-                  </NavigationMenuItem>
 
                   <NavigationMenuItem>
                     <NavigationMenuTrigger>Resources</NavigationMenuTrigger>
@@ -158,7 +152,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                       <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm" className="flex items-center gap-2 border-border/60 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200">
                           <div className="h-6 w-6 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-xs font-medium">
-                            {(user?.full_name || user?.email || 'U').charAt(0).toUpperCase()}
+                            {getInitials(user?.full_name || user?.email || 'U')}
                           </div>
                           <span className="max-w-[80px] truncate text-sm">{user?.full_name?.split(' ')[0] || 'Account'}</span>
                           <ChevronDown className="h-3 w-3 text-muted-foreground" />
@@ -199,12 +193,14 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                         Log in
                       </Button>
                     </Link>
-                    <Link to="/pricing">
-                      <Button size="sm" className="font-medium shadow-sm hover:shadow-md transition-all duration-200 glow-primary">
-                        Get Started
-                        <ArrowRight className="ml-1 h-4 w-4" />
-                      </Button>
-                    </Link>
+                    {signupAllowed && (
+                      <Link to="/signup">
+                        <Button size="sm" className="font-medium shadow-sm hover:shadow-md transition-all duration-200 glow-primary">
+                          Sign up
+                          <ArrowRight className="ml-1 h-4 w-4" />
+                        </Button>
+                      </Link>
+                    )}
                   </>
                 )}
               </div>
@@ -273,6 +269,13 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 >
                   Courses
                 </Link>
+                <Link
+                  to="/programs"
+                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Programs
+                </Link>
               </div>
 
               {/* Resources Group */}
@@ -280,13 +283,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Resources
                 </div>
-                <Link
-                  to="/pricing"
-                  className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Pricing
-                </Link>
                 <Link
                   to="/faq"
                   className="px-4 py-2 text-base font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
@@ -328,9 +324,11 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     <Link to="/login" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
                       <Button variant="outline" className="w-full justify-center h-11">Log in</Button>
                     </Link>
-                    <Link to="/pricing" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
-                      <Button className="w-full justify-center h-11">Get Started</Button>
-                    </Link>
+                    {signupAllowed && (
+                      <Link to="/signup" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
+                        <Button className="w-full justify-center h-11">Sign up</Button>
+                      </Link>
+                    )}
                   </>
                 )}
               </div>
@@ -379,7 +377,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 <li><Link to="/features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</Link></li>
                 <li><Link to="/features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Video Conferencing</Link></li>
                 <li><Link to="/features/certificates" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Certificates</Link></li>
-                <li><Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</Link></li>
               </ul>
             </div>
 

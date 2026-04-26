@@ -6,10 +6,12 @@ import {
     AssignmentSubmission,
     AssignmentSubmissionStaff,
     CourseAnnouncement,
+    CourseStaffMember,
 } from './types';
 import { PaginatedResponse, PaginationParams } from '../types';
 
 export * from './types';
+export * from './discussions';
 
 // ============================================
 // Organization Courses (Admin/Course Manager)
@@ -29,8 +31,16 @@ export const getOwnedCourses = async (): Promise<Course[]> => {
     return Array.isArray(response.data) ? response.data : response.data.results || [];
 };
 
-export const getCourse = async (uuid: string): Promise<Course> => {
-    const response = await client.get<Course>(`/courses/${uuid}/`);
+export const getCourse = async (
+    uuid: string,
+    options: { silent?: boolean } = {},
+): Promise<Course> => {
+    const response = await client.get<Course>(`/courses/${uuid}/`, {
+        // Forwarded to the axios interceptor — when set, the global toast
+        // for non-401 errors is suppressed so callers can render an inline
+        // empty/404 state without a duplicate red toast.
+        ...(options.silent ? { silent: true } : {}),
+    } as any);
     return response.data;
 };
 
@@ -61,7 +71,10 @@ export const getCourseBySlug = async (
         params: { slug, ...filters }
     });
     const results = Array.isArray(response.data) ? response.data : response.data.results;
-    return results && results.length > 0 ? results[0] : null;
+    if (!results || results.length === 0) return null;
+    // Fetch full detail (includes modules) via the retrieve endpoint
+    const detail = await client.get<Course>(`/courses/${results[0].uuid}/`);
+    return detail.data;
 };
 
 export const enrollInCourse = async (courseUuid: string): Promise<any> => {
@@ -297,6 +310,33 @@ export const getCourseSessions = async (courseUuid: string): Promise<CourseSessi
     return Array.isArray(response.data) ? response.data : response.data.results || [];
 };
 
+export interface RecordingViewState {
+    watch_seconds: number;
+    last_position_seconds: number;
+    completed_at: string | null;
+}
+
+export const getRecordingView = async (
+    courseUuid: string, sessionUuid: string,
+): Promise<RecordingViewState | null> => {
+    const response = await client.get<RecordingViewState>(
+        `/courses/${courseUuid}/sessions/${sessionUuid}/recording-view/`,
+        { validateStatus: (s) => s === 200 || s === 204 },
+    );
+    return response.status === 204 ? null : response.data;
+};
+
+export const postRecordingView = async (
+    courseUuid: string, sessionUuid: string,
+    payload: { watch_seconds: number; last_position_seconds?: number; completed?: boolean },
+): Promise<RecordingViewState> => {
+    const response = await client.post<RecordingViewState>(
+        `/courses/${courseUuid}/sessions/${sessionUuid}/recording-view/`,
+        payload,
+    );
+    return response.data;
+};
+
 export const getCourseSession = async (courseUuid: string, sessionUuid: string): Promise<CourseSession> => {
     const response = await client.get<CourseSession>(`/courses/${courseUuid}/sessions/${sessionUuid}/`);
     return response.data;
@@ -360,10 +400,9 @@ export interface UnmatchedParticipant {
 
 export interface MatchParticipantData {
     enrollment_uuid: string;
-    // TODO: Rename these API fields when backend is updated to use generic participant fields
-    zoom_user_email?: string;
-    zoom_user_name?: string;
-    zoom_join_time?: string;
+    participant_email?: string;
+    participant_name?: string;
+    join_time?: string;
     attendance_minutes?: number;
 }
 
@@ -400,4 +439,23 @@ export interface AttendanceStats {
 export const getAttendanceStats = async (courseUuid: string): Promise<AttendanceStats> => {
     const response = await client.get<AttendanceStats>(`/courses/${courseUuid}/attendance_stats/`);
     return response.data;
+};
+
+// ============================================
+// Course Staff
+// ============================================
+
+export const getCourseStaff = async (courseUuid: string): Promise<CourseStaffMember[]> => {
+    const response = await client.get(`/courses/${courseUuid}/staff/`);
+    const data = response.data;
+    return Array.isArray(data) ? data : (data.results || []);
+};
+
+export const addCourseStaff = async (courseUuid: string, data: { user_uuid: string; role?: string }): Promise<CourseStaffMember> => {
+    const response = await client.post<CourseStaffMember>(`/courses/${courseUuid}/staff/`, data);
+    return response.data;
+};
+
+export const removeCourseStaff = async (courseUuid: string, staffUuid: string): Promise<void> => {
+    await client.delete(`/courses/${courseUuid}/staff/${staffUuid}/`);
 };

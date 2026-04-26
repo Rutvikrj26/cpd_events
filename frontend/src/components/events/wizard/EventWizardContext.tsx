@@ -54,6 +54,12 @@ const initialFormData: Partial<EventCreateRequest> = {
     badges_enabled: false,
     auto_issue_badges: false,
     badge_template: null,
+    video_settings: {
+        enabled: false,
+        recording_enabled: false,
+        screen_share: true,
+        waiting_room_enabled: true,
+    },
 
     // Payment Settings
     price: 0,

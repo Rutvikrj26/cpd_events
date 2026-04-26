@@ -18,7 +18,63 @@ from django.db import models
 from django.utils import timezone
 
 from common.config import AssignmentDefaults, ModuleDefaults
-from common.models import BaseModel
+from common.models import BaseModel, SoftDeleteModel
+
+
+def validate_module_content_data(content_type: str, content_data):
+    """
+    Shape-check ``ModuleContent.content_data`` for a given content_type.
+
+    Canonical shapes:
+      text:     {"body": "<html>"}
+      lesson:   {"video"?: {"url": str}, "text"?: {"body": "<html>"}}
+      video:    {"url": str, "provider"?: str, "thumbnail"?: str}
+      document: {}                  # binary lives on the `file` field
+      quiz:     {"questions": [...], "passing_score": int}
+      external: {"url": str, "open_in_new_tab"?: bool}
+    """
+    if content_data is None or content_data == {}:
+        return
+    if not isinstance(content_data, dict):
+        raise ValidationError({'content_data': 'content_data must be a JSON object.'})
+
+    def _text_block(value, field):
+        if not isinstance(value, dict) or not isinstance(value.get('body'), str):
+            raise ValidationError(
+                {'content_data': f'{field} must be an object with a "body" string.'}
+            )
+
+    if content_type == 'text':
+        if not isinstance(content_data.get('body'), str):
+            raise ValidationError(
+                {'content_data': 'text content requires {"body": "<html>"}.'}
+            )
+    elif content_type == 'lesson':
+        if 'video' in content_data and content_data['video'] is not None:
+            video = content_data['video']
+            if not isinstance(video, dict) or not isinstance(video.get('url'), str):
+                raise ValidationError(
+                    {'content_data': 'lesson.video must be {"url": "..."}.'}
+                )
+        if 'text' in content_data and content_data['text'] is not None:
+            _text_block(content_data['text'], 'lesson.text')
+    elif content_type == 'video':
+        if not isinstance(content_data.get('url'), str):
+            raise ValidationError(
+                {'content_data': 'video content requires {"url": "..."}.'}
+            )
+    elif content_type == 'quiz':
+        if not isinstance(content_data.get('questions'), list):
+            raise ValidationError(
+                {'content_data': 'quiz content requires a "questions" list.'}
+            )
+    elif content_type == 'external':
+        if not isinstance(content_data.get('url'), str):
+            raise ValidationError(
+                {'content_data': 'external content requires {"url": "..."}.'}
+            )
+    elif content_type == 'document':
+        pass
 
 
 class EventModule(BaseModel):
@@ -87,6 +143,26 @@ class EventModule(BaseModel):
 
         if not self.is_published:
             return False
+
+        # Course sequential gating: previous module (by order) must be completed
+        if course_enrollment:
+            course_modules = list(
+                CourseModule.objects.filter(course=course_enrollment.course)
+                .select_related('module')
+                .order_by('order')
+            )
+            for i, cm in enumerate(course_modules):
+                if cm.module_id == self.id and i > 0:
+                    prev_module = course_modules[i - 1].module
+                    try:
+                        prev_progress = ModuleProgress.objects.get(
+                            course_enrollment=course_enrollment, module=prev_module
+                        )
+                        if prev_progress.status != ModuleProgress.Status.COMPLETED:
+                            return False
+                    except ModuleProgress.DoesNotExist:
+                        return False
+                    break
 
         if self.release_type == self.ReleaseType.IMMEDIATE:
             return True
@@ -160,13 +236,15 @@ class ModuleContent(BaseModel):
     # Duration in minutes (for tracking)
     duration_minutes = models.PositiveIntegerField(default=0)
 
-    # Content data (JSON) - structure depends on content_type
-    # video: {url, provider, video_id, thumbnail}
-    # document: {url, filename, file_type, size}
-    # text: {html_content}
-    # quiz: {questions: [...], passing_score}
-    # external: {url, open_in_new_tab}
-    content_data = models.JSONField(default=dict)
+    # Content data (JSON) — shape depends on content_type (enforced by
+    # validate_module_content_data below):
+    #   text:     {"body": "<html>"}
+    #   lesson:   {"video"?: {"url": "..."}, "text"?: {"body": "<html>"}}
+    #   video:    {"url": "...", "provider"?: "...", "thumbnail"?: "..."}
+    #   document: {} (the binary lives on the `file` field)
+    #   quiz:     {"questions": [...], "passing_score": int}
+    #   external: {"url": "...", "open_in_new_tab"?: bool}
+    content_data = models.JSONField(default=dict, blank=True)
     file = models.FileField(
         upload_to="learning/modules/", blank=True, null=True, help_text="Uploaded file (for document/video)"
     )
@@ -182,8 +260,48 @@ class ModuleContent(BaseModel):
         ordering = ["module", "order"]
         unique_together = [["module", "order"]]
 
+    def clean(self):
+        super().clean()
+        validate_module_content_data(self.content_type, self.content_data)
+
+    def save(self, *args, **kwargs):
+        # Normalize legacy content_data shapes on write so we never persist
+        # drift even if a caller bypasses the serializer validator.
+        self.content_data = _normalize_module_content_data(
+            self.content_type, self.content_data
+        )
+        validate_module_content_data(self.content_type, self.content_data)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.module.title} - {self.title}"
+
+
+def _normalize_module_content_data(content_type: str, content_data):
+    """Rewrite known legacy shapes into the canonical ones."""
+    if not isinstance(content_data, dict):
+        return content_data or {}
+    data = dict(content_data)
+
+    if content_type == 'text':
+        # Accept legacy {"text": "html"} or {"text": {"body": "html"}} and
+        # flatten to {"body": "html"}.
+        if 'body' not in data:
+            legacy = data.pop('text', None)
+            if isinstance(legacy, str):
+                data['body'] = legacy
+            elif isinstance(legacy, dict) and isinstance(legacy.get('body'), str):
+                data['body'] = legacy['body']
+    elif content_type == 'lesson':
+        # lesson.text may arrive as a plain string — wrap it.
+        text_block = data.get('text')
+        if isinstance(text_block, str):
+            data['text'] = {'body': text_block}
+        # lesson.video may arrive as a plain URL string — wrap it.
+        video_block = data.get('video')
+        if isinstance(video_block, str):
+            data['video'] = {'url': video_block}
+    return data
 
 
 class Assignment(BaseModel):
@@ -423,6 +541,17 @@ class ContentProgress(BaseModel):
         user = self.registration.user if self.registration else self.course_enrollment.user
         return f"{user.email} - {self.content.title}"
 
+    def save(self, *args, **kwargs):
+        # Mirror CourseEnrollment.save() invariant: status=COMPLETED ⟺
+        # progress_percent=100 + completed_at set. Lets the player drop the
+        # defensive "status===completed || progress===100" dual check.
+        if self.status == self.Status.COMPLETED:
+            if self.progress_percent != 100:
+                self.progress_percent = 100
+            if self.completed_at is None:
+                self.completed_at = timezone.now()
+        super().save(*args, **kwargs)
+
     def start(self):
         """Mark content as started."""
         if self.status == self.Status.NOT_STARTED:
@@ -430,23 +559,32 @@ class ContentProgress(BaseModel):
             self.started_at = timezone.now()
             self.save()
 
-    def complete(self):
+    def complete(self, time_spent=0, position=None):
         """Mark content as completed."""
         self.status = self.Status.COMPLETED
         self.progress_percent = 100
-        self.completed_at = timezone.now()
+        if not self.completed_at:
+            self.completed_at = timezone.now()
+        if time_spent:
+            self.time_spent_seconds += time_spent
+        if position is not None:
+            self.last_position = position
         self.save()
 
     def update_progress(self, percent, time_spent=0, position=None):
         """Update progress."""
         self.progress_percent = min(percent, 100)
         self.time_spent_seconds += time_spent
-        if position:
+        if position is not None:
             self.last_position = position
 
         if percent >= 100:
-            self.complete()
+            self.complete(position=position)
         else:
+            if self.status == self.Status.NOT_STARTED and percent > 0:
+                self.status = self.Status.IN_PROGRESS
+                if not self.started_at:
+                    self.started_at = timezone.now()
             self.save()
 
 
@@ -520,7 +658,7 @@ class ModuleProgress(BaseModel):
 
     def update_from_content(self):
         """Update progress based on content progress."""
-        required_contents = self.module.contents.filter(is_required=True)
+        required_contents = self.module.contents.filter(is_required=True, is_published=True)
         self.contents_total = required_contents.count()
 
         # Context-aware lookup
@@ -535,11 +673,16 @@ class ModuleProgress(BaseModel):
 
         if self.contents_completed >= self.contents_total and self.contents_total > 0:
             self.status = self.Status.COMPLETED
-            self.completed_at = timezone.now()
+            if not self.completed_at:
+                self.completed_at = timezone.now()
         elif self.contents_completed > 0:
             self.status = self.Status.IN_PROGRESS
             if not self.started_at:
                 self.started_at = timezone.now()
+            self.completed_at = None
+        else:
+            self.status = self.Status.NOT_STARTED
+            self.completed_at = None
 
         self.save()
 
@@ -585,7 +728,8 @@ class Course(BaseModel):
     # =========================================
     class CourseFormat(models.TextChoices):
         ONLINE = "online", "Online (Self-Paced)"
-        HYBRID = "hybrid", "Hybrid (Includes Live Sessions)"
+        LIVE = "live", "Live (Lectures)"
+        HYBRID = "hybrid", "Hybrid (Modules + Live Sessions)"
 
     title = models.CharField(max_length=255, help_text="Course title")
     format = models.CharField(
@@ -638,6 +782,8 @@ class Course(BaseModel):
     enrollment_open = models.BooleanField(default=True, help_text="Accept new enrollments")
     max_enrollments = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum enrollments (null = unlimited)")
     enrollment_requires_approval = models.BooleanField(default=False, help_text="Require approval for enrollment")
+    enrollment_opens_at = models.DateTimeField(null=True, blank=True, help_text="Enrollments accepted from this time")
+    enrollment_closes_at = models.DateTimeField(null=True, blank=True, help_text="Enrollments close at this time")
 
     # =========================================
     # Duration & Completion
@@ -727,16 +873,31 @@ class Course(BaseModel):
         return self.title
 
     def can_manage(self, user) -> bool:
-        """Check if user can manage this course."""
+        """Check if user has full course-management access."""
         if not user or not getattr(user, "is_authenticated", False):
             return False
-        if user.is_staff:
+        if user.groups.filter(name="admin").exists():
             return True
-        return self.created_by_id == user.id
+        if self.created_by_id == user.id:
+            return True
+        return self.staff_assignments.filter(user=user).exists()
 
     def can_instruct(self, user) -> bool:
-        """Check if user is an instructor for this course (same as can_manage in single-tenant mode)."""
+        """Check if user has instructional access for this course.
+
+        Course staff are all instructors under the unified role model;
+        the per-course role distinction was retired with `course_manager`.
+        """
         return self.can_manage(user)
+
+    def get_staff_role(self, user) -> str | None:
+        """Return the effective course role for the given user."""
+        if not user or not getattr(user, 'is_authenticated', False):
+            return None
+        if user.groups.filter(name="admin").exists() or self.created_by_id == user.id:
+            return 'admin'
+        assignment = self.staff_assignments.filter(user=user).first()
+        return assignment.role if assignment else None
 
     @property
     def is_free(self):
@@ -768,8 +929,81 @@ class Course(BaseModel):
             return None
         return max(0, self.max_enrollments - self.enrollment_count)
 
+    @property
+    def enrollment_window_state(self):
+        """Return 'upcoming' | 'open' | 'closed' | 'unbounded' based on the window fields only."""
+        from django.utils import timezone as _tz
+        now = _tz.now()
+        if self.enrollment_opens_at and now < self.enrollment_opens_at:
+            return 'upcoming'
+        if self.enrollment_closes_at and now > self.enrollment_closes_at:
+            return 'closed'
+        if not self.enrollment_opens_at and not self.enrollment_closes_at:
+            return 'unbounded'
+        return 'open'
+
+    @property
+    def is_enrollable(self):
+        """Fully-qualified check: toggle + window + capacity."""
+        return self.check_enrollable()[0]
+
+    def check_enrollable(self):
+        """
+        Return (ok, code, message). Used by every enrollment entry point so
+        clients see a consistent error. Codes: ENROLLMENT_CLOSED,
+        ENROLLMENT_UPCOMING, COURSE_FULL.
+        """
+        if not self.enrollment_open:
+            return False, 'ENROLLMENT_CLOSED', 'Enrollments are closed for this course.'
+        state = self.enrollment_window_state
+        if state == 'upcoming':
+            return False, 'ENROLLMENT_UPCOMING', f'Enrollment opens on {self.enrollment_opens_at.isoformat()}.'
+        if state == 'closed':
+            return False, 'ENROLLMENT_CLOSED', f'Enrollment closed on {self.enrollment_closes_at.isoformat()}.'
+        if self.is_full:
+            return False, 'COURSE_FULL', 'Course enrollment is full.'
+        return True, '', ''
+
+    def validate_for_publish(self):
+        """
+        Check that the course is structurally valid for publication.
+
+        Raises ValidationError if:
+        - hybrid: must have at least one module AND at least one published session
+        - live:   must have at least one published session
+        - online: must have at least one module
+        """
+        from django.core.exceptions import ValidationError
+
+        errors = {}
+        has_modules = self.modules.exists()
+        has_published_sessions = self.sessions.filter(is_published=True).exists()
+
+        if self.format == self.CourseFormat.ONLINE:
+            if not has_modules:
+                errors['modules'] = 'A self-paced course must have at least one module.'
+        elif self.format == self.CourseFormat.LIVE:
+            if not has_published_sessions:
+                errors['sessions'] = 'A live course must have at least one published session.'
+            if self.hybrid_completion_criteria == self.HybridCompletionCriteria.MIN_SESSIONS:
+                published_count = self.sessions.filter(is_published=True).count()
+                if self.min_sessions_required > published_count:
+                    errors['min_sessions_required'] = (
+                        f'Required sessions ({self.min_sessions_required}) exceeds '
+                        f'available published sessions ({published_count}).'
+                    )
+        elif self.format == self.CourseFormat.HYBRID:
+            if not has_modules:
+                errors['modules'] = 'A hybrid course must have at least one module.'
+            if not has_published_sessions:
+                errors['sessions'] = 'A hybrid course must have at least one published session.'
+
+        if errors:
+            raise ValidationError(errors)
+
     def publish(self):
-        """Publish the course."""
+        """Publish the course (after structural validation)."""
+        self.validate_for_publish()
         self.status = self.Status.PUBLISHED
         self.save(update_fields=["status", "updated_at"])
 
@@ -790,10 +1024,23 @@ class Course(BaseModel):
 
 class CourseAnnouncement(BaseModel):
     """
-    Announcements for a course.
+    Announcements for a course OR a program.
+
+    Exactly one of ``course`` / ``program`` is set. Named CourseAnnouncement
+    for historical reasons — the program case was added later and re-uses
+    the same table rather than creating a parallel model.
     """
 
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="announcements")
+    course = models.ForeignKey(
+        Course, on_delete=models.CASCADE, null=True, blank=True, related_name="announcements"
+    )
+    program = models.ForeignKey(
+        "learning.Program",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="announcements",
+    )
     title = models.CharField(max_length=255)
     body = models.TextField()
     is_published = models.BooleanField(default=True)
@@ -808,11 +1055,12 @@ class CourseAnnouncement(BaseModel):
     class Meta:
         db_table = "course_announcements"
         ordering = ["-created_at"]
-        verbose_name = "Course Announcement"
-        verbose_name_plural = "Course Announcements"
+        verbose_name = "Course/Program Announcement"
+        verbose_name_plural = "Course/Program Announcements"
 
     def __str__(self):
-        return f"{self.course.title} - {self.title}"
+        parent = self.course or self.program
+        return f"{parent} - {self.title}"
 
 
 class CourseModule(BaseModel):
@@ -836,6 +1084,31 @@ class CourseModule(BaseModel):
 
     def __str__(self):
         return f"{self.course.title} - {self.module.title}"
+
+
+class CourseStaff(BaseModel):
+    """
+    Assigns users as staff on a course.
+
+    All course staff are instructors under the unified role model; staff
+    assignment grants both management and instructional access for the
+    assigned course.
+    """
+
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='staff_assignments')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='course_staff_assignments'
+    )
+    role = models.CharField(max_length=30, default='instructor')
+
+    class Meta:
+        db_table = 'course_staff'
+        unique_together = ['course', 'user']
+        verbose_name = 'Course Staff'
+        verbose_name_plural = 'Course Staff'
+
+    def __str__(self):
+        return f"{self.user.email} - {self.course.title} ({self.role})"
 
 
 class CourseEnrollment(BaseModel):
@@ -867,6 +1140,19 @@ class CourseEnrollment(BaseModel):
 
     # Billing
     stripe_checkout_session_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe Checkout Session ID")
+
+    # Provenance — set when this row was auto-seeded by a ProgramEnrollment.
+    # NULL means the learner enrolled in the course directly. Used by the
+    # program-refund cascade to revoke access only on program-seeded rows.
+    from_program_enrollment = models.ForeignKey(
+        "learning.ProgramEnrollment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="seeded_course_enrollments",
+        db_index=True,
+        help_text="The ProgramEnrollment that seeded this row, if any.",
+    )
 
     # Timestamps
     enrolled_at = models.DateTimeField(auto_now_add=True, help_text="When user enrolled")
@@ -914,6 +1200,18 @@ class CourseEnrollment(BaseModel):
     def __str__(self):
         return f"{self.user.email} - {self.course.title}"
 
+    def save(self, *args, **kwargs):
+        # Invariant: status=COMPLETED ⟺ progress_percent=100 + completed_at set.
+        # Catches every code path that flips status without normalising the
+        # accompanying fields (seed updates, admin actions, future bugs).
+        if self.status == self.Status.COMPLETED:
+            if self.progress_percent != 100:
+                self.progress_percent = 100
+            if self.completed_at is None:
+                from django.utils import timezone as _tz
+                self.completed_at = _tz.now()
+        super().save(*args, **kwargs)
+
     @property
     def is_active(self):
         """Check if enrollment is active."""
@@ -943,24 +1241,23 @@ class CourseEnrollment(BaseModel):
         self.completed_at = timezone.now()
         self.progress_percent = 100
 
-        # Issue certificate if enabled
-        if not self.certificate_issued:
-            if self.course.certificates_enabled and self.course.auto_issue_certificates and self.course.certificate_template:
-                from certificates.models import Certificate
+        # Issue certificate via the service so we get PDF generation, snapshot,
+        # subscription counters, and the unique-active-cert constraint.
+        if (
+            not self.certificate_issued
+            and self.course.certificates_enabled
+            and self.course.auto_issue_certificates
+            and self.course.certificate_template
+        ):
+            from certificates.services import certificate_service
 
-                # Check for existing cert first (avoid duplicates)
-                if not Certificate.objects.filter(course_enrollment=self).exists():
-                    cert = Certificate.objects.create(
-                        course_enrollment=self,
-                        template=self.course.certificate_template,
-                        status=Certificate.Status.ACTIVE,
-                        issued_by=self.course.created_by or self.user,  # Fallback to user if creator deleted? Or system user?
-                    )
-                    cert.build_certificate_data()
-                    cert.save()
-
-                    self.certificate_issued = True
-                    self.certificate_issued_at = timezone.now()
+            result = certificate_service.issue_certificate(
+                course_enrollment=self,
+                issued_by=self.course.created_by or self.user,
+            )
+            if result.get('success'):
+                # Service already set certificate_issued / certificate_issued_at on self.
+                self.refresh_from_db(fields=['certificate_issued', 'certificate_issued_at'])
 
         # Issue badge if enabled
         if self.course.badges_enabled and self.course.auto_issue_badges and self.course.badge_template:
@@ -987,33 +1284,230 @@ class CourseEnrollment(BaseModel):
         )
         self.course.update_counts()
 
+        # If this user has any active program enrollments that include this
+        # course, re-evaluate program completion.
+        for prog_enrollment in ProgramEnrollment.objects.filter(
+            user=self.user,
+            program__program_courses__course=self.course,
+            status=ProgramEnrollment.Status.ACTIVE,
+        ).distinct():
+            prog_enrollment.check_completion()
+
     def drop(self):
         """Drop the enrollment."""
         self.status = self.Status.DROPPED
         self.save(update_fields=["status", "updated_at"])
         self.course.update_counts()
 
+    def _required_course_modules(self):
+        """Published required modules are the learner-visible module requirements."""
+        return (
+            self.course.modules.filter(is_required=True, module__is_published=True)
+            .select_related("module")
+            .order_by("order")
+        )
+
+    def _has_passing_submission(self, assignment) -> bool:
+        return (
+            AssignmentSubmission.objects.filter(
+                assignment=assignment,
+                course_enrollment=self,
+                status__in=[
+                    AssignmentSubmission.Status.GRADED,
+                    AssignmentSubmission.Status.APPROVED,
+                ],
+            )
+            .filter(score__gte=assignment.passing_score)
+            .exists()
+        )
+
+    def _module_requirement_progress(self) -> dict:
+        """
+        Requirement-weighted progress for self-paced coursework.
+
+        Required, published content counts as one unit each. Assignments in
+        required modules count as one unit each because the Assignment model
+        has no separate required/optional flag.
+        """
+        completed_units = 0
+        total_units = 0
+        modules_completed = 0
+        total_modules = 0
+
+        for course_module in self._required_course_modules():
+            module = course_module.module
+            total_modules += 1
+            module_completed_units = 0
+            module_total_units = 0
+
+            required_contents = module.contents.filter(is_required=True, is_published=True)
+            completed_content_ids = set(
+                ContentProgress.objects.filter(
+                    course_enrollment=self,
+                    content__in=required_contents,
+                    status=ContentProgress.Status.COMPLETED,
+                ).values_list("content_id", flat=True)
+            )
+
+            for content in required_contents:
+                module_total_units += 1
+                if content.id in completed_content_ids:
+                    module_completed_units += 1
+
+            for assignment in module.assignments.all():
+                module_total_units += 1
+                if self._has_passing_submission(assignment):
+                    module_completed_units += 1
+
+            total_units += module_total_units
+            completed_units += module_completed_units
+            if module_total_units > 0 and module_completed_units == module_total_units:
+                modules_completed += 1
+
+        return {
+            "completed_units": completed_units,
+            "total_units": total_units,
+            "modules_completed": modules_completed,
+            "total_modules": total_modules,
+        }
+
+    def _session_requirement_progress(self) -> dict:
+        """Requirement-weighted progress for live-session attendance.
+
+        CANCELLED sessions are excluded from both numerator and denominator
+        (per D2 in docs/design/hybrid-course-experience.md). Attendance rows
+        for cancelled sessions survive in the audit log but stop counting.
+        """
+        course = self.course
+        criteria = course.hybrid_completion_criteria
+
+        if criteria == Course.HybridCompletionCriteria.MIN_SESSIONS:
+            total_units = course.min_sessions_required
+            completed_units = CourseSessionAttendance.objects.filter(
+                enrollment=self,
+                is_eligible=True,
+                session__course=course,
+                session__is_published=True,
+            ).exclude(session__status=CourseSession.Status.CANCELLED).count()
+            return {
+                "completed_units": min(completed_units, total_units),
+                "total_units": total_units,
+            }
+
+        mandatory_sessions = course.sessions.filter(
+            is_mandatory=True, is_published=True
+        ).exclude(status=CourseSession.Status.CANCELLED)
+        total_units = mandatory_sessions.count()
+        completed_units = CourseSessionAttendance.objects.filter(
+            enrollment=self,
+            is_eligible=True,
+            session__in=mandatory_sessions,
+        ).count()
+        return {
+            "completed_units": min(completed_units, total_units),
+            "total_units": total_units,
+        }
+
+    @staticmethod
+    def _percent(completed: int, total: int) -> int:
+        if total <= 0:
+            return 0
+        return int((completed / total) * 100)
+
+    def _progress_snapshot(self) -> dict:
+        """Calculate the learner-facing progress counter from required work."""
+        module_progress = self._module_requirement_progress()
+        session_progress = self._session_requirement_progress()
+        course = self.course
+
+        if course.format == Course.CourseFormat.ONLINE:
+            progress_percent = self._percent(
+                module_progress["completed_units"],
+                module_progress["total_units"],
+            )
+        elif course.format == Course.CourseFormat.LIVE:
+            progress_percent = self._percent(
+                session_progress["completed_units"],
+                session_progress["total_units"],
+            )
+        else:
+            criteria = course.hybrid_completion_criteria
+            module_percent = self._percent(
+                module_progress["completed_units"],
+                module_progress["total_units"],
+            )
+            session_percent = self._percent(
+                session_progress["completed_units"],
+                session_progress["total_units"],
+            )
+            if criteria == Course.HybridCompletionCriteria.MODULES_ONLY:
+                progress_percent = module_percent
+            elif criteria == Course.HybridCompletionCriteria.SESSIONS_ONLY:
+                progress_percent = session_percent
+            elif criteria == Course.HybridCompletionCriteria.EITHER:
+                progress_percent = max(module_percent, session_percent)
+            else:
+                completed = module_progress["completed_units"] + session_progress["completed_units"]
+                total = module_progress["total_units"] + session_progress["total_units"]
+                progress_percent = self._percent(completed, total)
+
+        return {
+            "progress_percent": min(progress_percent, 100),
+            "modules_completed": module_progress["modules_completed"],
+            "module_units_completed": module_progress["completed_units"],
+            "module_units_total": module_progress["total_units"],
+            "session_units_completed": session_progress["completed_units"],
+            "session_units_total": session_progress["total_units"],
+        }
+
+    def _apply_progress_snapshot(self):
+        snapshot = self._progress_snapshot()
+        self.modules_completed = snapshot["modules_completed"]
+        self.progress_percent = snapshot["progress_percent"]
+        # Refresh current_score from graded passing submissions. Used by
+        # is_passing and by the cert-issuance path (final_score on the
+        # certificate). Without this update the field stays at its initial
+        # value forever — the bug that made cert final_score always null
+        # for every learner whose enrollment wasn't manually patched.
+        self._refresh_current_score()
+        return snapshot
+
+    def _refresh_current_score(self):
+        """Average score across the learner's passing graded submissions.
+
+        Returns None if no graded submissions exist (preserves null instead
+        of writing 0, which would make is_passing return False spuriously).
+        """
+        submissions = self.assignment_submissions.filter(
+            status__in=[
+                AssignmentSubmission.Status.GRADED,
+                AssignmentSubmission.Status.APPROVED,
+            ],
+            score__isnull=False,
+        ).values_list("score", flat=True)
+        scores = list(submissions)
+        if scores:
+            self.current_score = round(sum(scores) / len(scores))
+        else:
+            self.current_score = None
+
     def update_progress(self):
-        """Update progress from module progress."""
-        total_modules = self.course.modules.filter(is_required=True).count()
-        if total_modules == 0:
+        """Update stored progress from all learner requirements.
+
+        Once the enrollment is marked COMPLETED it represents an immutable
+        historical fact (the learner finished, the certificate has been
+        issued). Recomputing from leaf data after that point would erase
+        progress for archived courses with no surviving ContentProgress
+        rows, and would also undo manual instructor completion overrides.
+        """
+        if self.status == self.Status.COMPLETED:
             return
 
-        # Count completed modules
-        completed = 0
-        for course_module in self.course.modules.filter(is_required=True):
-            try:
-                progress = ModuleProgress.objects.get(
-                    course_enrollment=self,
-                    module=course_module.module,
-                )
-                if progress.status == ModuleProgress.Status.COMPLETED:
-                    completed += 1
-            except ModuleProgress.DoesNotExist:
-                pass
+        self._apply_progress_snapshot()
 
-        self.modules_completed = completed
-        self.progress_percent = int((completed / total_modules) * 100)
+        if self.status != self.Status.ACTIVE:
+            self.save(update_fields=["modules_completed", "progress_percent", "updated_at"])
+            return
 
         # Check completion after updating progress
         self.check_completion()
@@ -1030,6 +1524,8 @@ class CourseEnrollment(BaseModel):
         """
         if self.status != self.Status.ACTIVE:
             return False
+
+        self._apply_progress_snapshot()
 
         # Check for manual completion override
         if getattr(self, "manually_completed", False):
@@ -1059,14 +1555,16 @@ class CourseEnrollment(BaseModel):
         """
         course = self.course
 
-        # Check module/assignment requirements
+        # Pure self-paced: only modules matter
+        if course.format == Course.CourseFormat.ONLINE:
+            return self._check_module_requirements()
+
+        # Pure live: only sessions matter
+        if course.format == Course.CourseFormat.LIVE:
+            return self._check_session_requirements()
+
+        # Hybrid: criteria decides
         modules_passed = self._check_module_requirements()
-
-        # For self-paced courses, just check modules
-        if course.format != Course.CourseFormat.HYBRID:
-            return modules_passed
-
-        # For hybrid courses, check based on completion criteria
         sessions_passed = self._check_session_requirements()
 
         criteria = course.hybrid_completion_criteria
@@ -1085,61 +1583,71 @@ class CourseEnrollment(BaseModel):
 
     def _check_module_requirements(self) -> bool:
         """Check if module/assignment requirements are passed."""
-        # Get all required modules for this course
-        required_modules = self.course.modules.filter(is_required=True).values_list("module_id", flat=True)
+        required_modules = list(self._required_course_modules())
 
         if not required_modules:
             # No required modules, check if 100% progress
             return self.progress_percent >= 100
 
-        # Get all assignments from required modules
-        required_assignments = Assignment.objects.filter(module_id__in=required_modules)
+        module_ids = [course_module.module_id for course_module in required_modules]
 
-        if not required_assignments.exists():
-            # No assignments, just check module progress
-            return self.progress_percent >= 100
+        required_contents = ModuleContent.objects.filter(
+            module_id__in=module_ids,
+            is_required=True,
+            is_published=True,
+        )
+        for content in required_contents:
+            if not ContentProgress.objects.filter(
+                course_enrollment=self,
+                content=content,
+                status=ContentProgress.Status.COMPLETED,
+            ).exists():
+                return False
+
+        # Get all assignments from required modules. All assignments are
+        # required because Assignment currently has no optional flag.
+        required_assignments = Assignment.objects.filter(module_id__in=module_ids)
 
         # Check each required assignment has a passing submission
         for assignment in required_assignments:
-            has_passing = (
-                AssignmentSubmission.objects.filter(
-                    assignment=assignment,
-                    course_enrollment=self,
-                    status__in=[
-                        AssignmentSubmission.Status.GRADED,
-                        AssignmentSubmission.Status.APPROVED,
-                    ],
-                )
-                .filter(score__gte=assignment.passing_score)
-                .exists()
-            )
-
-            if not has_passing:
+            if not self._has_passing_submission(assignment):
                 return False
 
-        return True
+        return required_contents.exists() or required_assignments.exists() or self.progress_percent >= 100
 
     def _check_session_requirements(self) -> bool:
-        """Check if session attendance requirements are met for hybrid courses."""
+        """Check if session attendance requirements are met."""
         course = self.course
         criteria = course.hybrid_completion_criteria
 
+        # CANCELLED sessions are excluded from both denominator and numerator
+        # — see D2 (docs/design/hybrid-course-experience.md).
+        active_sessions = course.sessions.exclude(status=CourseSession.Status.CANCELLED)
+
         # If strict session count is required, use that logic regardless of "mandatory" flags
         if criteria == Course.HybridCompletionCriteria.MIN_SESSIONS:
+            published_count = active_sessions.filter(is_published=True).count()
+            if published_count < course.min_sessions_required:
+                return False
             eligible_count = CourseSessionAttendance.objects.filter(
                 enrollment=self, is_eligible=True, session__course=course
-            ).count()
+            ).exclude(session__status=CourseSession.Status.CANCELLED).count()
             return eligible_count >= course.min_sessions_required
 
-        # Otherwise (SESSIONS_ONLY, BOTH, EITHER), use Mandatory flags
-        # Get all mandatory sessions
-        mandatory_sessions = course.sessions.filter(is_mandatory=True, is_published=True)
+        # Otherwise (SESSIONS_ONLY, BOTH, EITHER): use mandatory-session attendance.
+        mandatory_sessions = active_sessions.filter(is_mandatory=True, is_published=True)
 
         if not mandatory_sessions.exists():
-            return True
+            # For session-driven courses (live, or hybrid with SESSIONS_ONLY/BOTH/EITHER)
+            # we can't auto-pass when there are no mandatory sessions to attend —
+            # that would mark every brand-new enrollment complete.
+            session_driven = course.format == Course.CourseFormat.LIVE or criteria in (
+                Course.HybridCompletionCriteria.SESSIONS_ONLY,
+                Course.HybridCompletionCriteria.BOTH,
+                Course.HybridCompletionCriteria.EITHER,
+            )
+            return not session_driven
 
-        # Check attendance for each mandatory session
-        # Optimization: count passed mandatory sessions
         count_passed = CourseSessionAttendance.objects.filter(
             session__in=mandatory_sessions, enrollment=self, is_eligible=True
         ).count()
@@ -1177,6 +1685,17 @@ class CourseSession(BaseModel):
         RECORDED = "recorded", "Recorded/On-demand"
         HYBRID = "hybrid", "Hybrid"
 
+    class Status(models.TextChoices):
+        SCHEDULED = "scheduled", "Scheduled"
+        LIVE = "live", "Live"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    class DeliveryMode(models.TextChoices):
+        ONLINE = "online", "Online"
+        IN_PERSON = "in_person", "In Person"
+        HYBRID = "hybrid", "Hybrid (in-person + remote)"
+
     # Relationships
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="sessions")
 
@@ -1186,13 +1705,26 @@ class CourseSession(BaseModel):
     order = models.PositiveIntegerField(default=0, help_text="Display order")
     session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.LIVE)
 
+    # Delivery mode — drives whether a VideoRoom is provisioned (in_person → no
+    # room). Sessions are by definition live; an "asynchronous" choice here
+    # would be a contradiction (recordings are tracked separately via
+    # CourseSessionRecordingView).
+    delivery_mode = models.CharField(
+        max_length=20, choices=DeliveryMode.choices, default=DeliveryMode.ONLINE,
+        help_text="How attendees join: online, in person, or both.",
+    )
+
     # Schedule
     starts_at = models.DateTimeField(help_text="Session start time")
     duration_minutes = models.PositiveIntegerField(default=60, help_text="Duration in minutes")
     timezone = models.CharField(max_length=50, default="UTC", help_text="Session timezone")
+    actual_start_at = models.DateTimeField(null=True, blank=True, help_text="When the session actually started")
+    actual_end_at = models.DateTimeField(null=True, blank=True, help_text="When the session actually ended")
 
     # Video conferencing (per-session)
     video_settings = models.JSONField(default=dict, blank=True, help_text="Video conferencing settings")
+    recording_enabled = models.BooleanField(default=False, help_text="Enable cloud recording")
+    recording_auto_publish = models.BooleanField(default=False, help_text="Auto-publish recording when available")
 
     # CPD credits for this session
     cpd_credits = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="CPD credits for attending")
@@ -1203,7 +1735,12 @@ class CourseSession(BaseModel):
         default=80, help_text="Minimum attendance percentage for eligibility"
     )
 
-    # Status
+    # Status & Lifecycle
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.SCHEDULED, db_index=True
+    )
+    cancelled_reason = models.TextField(blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
     is_published = models.BooleanField(default=True)
 
     class Meta:
@@ -1239,6 +1776,59 @@ class CourseSession(BaseModel):
         """Check if session has ended."""
         return timezone.now() > self.ends_at
 
+    def _recording_enabled(self) -> bool:
+        if not self.recording_enabled:
+            return False
+        if self.delivery_mode == self.DeliveryMode.IN_PERSON:
+            return False  # No video stream → nothing to record.
+        settings = self.video_settings if isinstance(self.video_settings, dict) else {}
+        return bool(settings.get('enabled'))
+
+    def start(self):
+        """Mark the session as live."""
+        if self.status == self.Status.CANCELLED:
+            raise ValueError("Cannot start a cancelled session.")
+        self.status = self.Status.LIVE
+        self.actual_start_at = timezone.now()
+        self.save(update_fields=['status', 'actual_start_at', 'updated_at'])
+
+        if self._recording_enabled():
+            from conferencing.tasks import start_course_session_recording
+
+            start_course_session_recording.delay(self.id)
+
+    def complete(self):
+        """Mark the session as completed."""
+        if self.status == self.Status.CANCELLED:
+            raise ValueError("Cannot complete a cancelled session.")
+        self.status = self.Status.COMPLETED
+        self.actual_end_at = timezone.now()
+        self.save(update_fields=['status', 'actual_end_at', 'updated_at'])
+
+        if self._recording_enabled():
+            from conferencing.tasks import stop_course_session_recording
+
+            stop_course_session_recording.delay(self.id)
+
+    def cancel(self, reason: str = '', user=None):
+        """Cancel the session."""
+        if self.status == self.Status.COMPLETED:
+            raise ValueError("Cannot cancel a completed session.")
+        self.status = self.Status.CANCELLED
+        self.cancelled_reason = reason
+        self.cancelled_at = timezone.now()
+        self.save(update_fields=['status', 'cancelled_reason', 'cancelled_at', 'updated_at'])
+
+    def reschedule(self, new_starts_at, new_duration_minutes=None):
+        """Move the session to a new time."""
+        if self.status in (self.Status.COMPLETED, self.Status.CANCELLED):
+            raise ValueError(f"Cannot reschedule a {self.status} session.")
+        self.starts_at = new_starts_at
+        if new_duration_minutes is not None:
+            self.duration_minutes = new_duration_minutes
+        self.status = self.Status.SCHEDULED
+        self.save(update_fields=['starts_at', 'duration_minutes', 'status', 'updated_at'])
+
 
 class CourseSessionAttendance(BaseModel):
     """
@@ -1255,11 +1845,11 @@ class CourseSessionAttendance(BaseModel):
     attendance_minutes = models.PositiveIntegerField(default=0, help_text="Minutes attended")
     is_eligible = models.BooleanField(default=False, help_text="Met minimum attendance %")
 
-    # Zoom participant data (for syncing)
-    zoom_participant_id = models.CharField(max_length=255, blank=True)
-    zoom_user_email = models.EmailField(blank=True)
-    zoom_join_time = models.DateTimeField(null=True, blank=True)
-    zoom_leave_time = models.DateTimeField(null=True, blank=True)
+    # Video participant data (for syncing — provider-agnostic, populated from LiveKit identity)
+    participant_id = models.CharField(max_length=255, blank=True)
+    participant_email = models.EmailField(blank=True)
+    join_time = models.DateTimeField(null=True, blank=True)
+    leave_time = models.DateTimeField(null=True, blank=True)
 
     # Manual override
     is_manual_override = models.BooleanField(default=False)
@@ -1280,7 +1870,7 @@ class CourseSessionAttendance(BaseModel):
         verbose_name_plural = "Course Session Attendance"
         indexes = [
             models.Index(fields=["session", "enrollment"]),
-            models.Index(fields=["zoom_user_email"]),
+            models.Index(fields=["participant_email"]),
         ]
 
     def __str__(self):
@@ -1305,3 +1895,452 @@ class CourseSessionAttendance(BaseModel):
         self.override_by = user
         self.override_reason = reason
         self.save()
+
+
+class CourseSessionRecordingView(BaseModel):
+    """Tracks recording-playback events for a learner.
+
+    Per D3 in docs/design/hybrid-course-experience.md, this is observability
+    + product signal — it never feeds CourseSessionAttendance.is_eligible.
+    Manual instructor override remains the only way to credit a missed-live
+    attendee based on a recording.
+    """
+
+    course_enrollment = models.ForeignKey(
+        CourseEnrollment, on_delete=models.CASCADE, related_name="recording_views"
+    )
+    session = models.ForeignKey(
+        CourseSession, on_delete=models.CASCADE, related_name="recording_views"
+    )
+
+    watch_seconds = models.PositiveIntegerField(default=0, help_text="Cumulative seconds watched")
+    last_position_seconds = models.PositiveIntegerField(default=0, help_text="Resume point")
+    completed_at = models.DateTimeField(null=True, blank=True, help_text="When the learner watched to the end")
+
+    class Meta:
+        db_table = "course_session_recording_views"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["course_enrollment", "session"],
+                name="unique_enrollment_session_recording",
+            ),
+        ]
+        verbose_name = "Course Session Recording View"
+        verbose_name_plural = "Course Session Recording Views"
+
+    def __str__(self):
+        return f"{self.course_enrollment.user.email} - {self.session.title} ({self.watch_seconds}s)"
+
+
+# =============================================================================
+# Programs (curated bundles of courses)
+# =============================================================================
+
+
+class Program(BaseModel):
+    """
+    A curated bundle of multiple courses.
+
+    Learners can either purchase the courses individually OR buy the bundle to
+    get all member courses at the program's bundle price (typically a discount
+    vs. the sum of individual prices). Buying the bundle auto-enrolls the
+    learner in every member course.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Published"
+        ARCHIVED = "archived", "Archived"
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_programs",
+    )
+
+    title = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=100)
+    description = models.TextField(blank=True, max_length=5000)
+    short_description = models.CharField(max_length=300, blank=True)
+    featured_image = models.ImageField(upload_to="programs/images/", null=True, blank=True)
+    featured_image_url = models.URLField(blank=True)
+
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.DRAFT, db_index=True
+    )
+    is_public = models.BooleanField(default=True)
+
+    # Bundle pricing (separate from per-course pricing)
+    price_cents = models.PositiveIntegerField(default=0, help_text="Bundle price in cents")
+    currency = models.CharField(max_length=3, default="USD")
+    stripe_product_id = models.CharField(max_length=255, blank=True)
+    stripe_price_id = models.CharField(max_length=255, blank=True)
+
+    # Denormalized
+    course_count = models.PositiveIntegerField(default=0)
+    enrollment_count = models.PositiveIntegerField(default=0)
+
+    courses = models.ManyToManyField(
+        Course,
+        through="ProgramCourse",
+        related_name="programs",
+    )
+
+    class Meta:
+        db_table = "programs"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["created_by", "slug"], name="unique_program_slug_per_owner",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["is_public", "status"]),
+        ]
+        verbose_name = "Program"
+        verbose_name_plural = "Programs"
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def is_published(self):
+        return self.status == self.Status.PUBLISHED
+
+    @property
+    def is_free(self):
+        return self.price_cents == 0
+
+    @property
+    def effective_image_url(self):
+        if self.featured_image:
+            return self.featured_image.url
+        return self.featured_image_url or ""
+
+    def can_manage(self, user) -> bool:
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        if user.groups.filter(name="admin").exists():
+            return True
+        return self.created_by_id == user.id
+
+    def validate_for_publish(self):
+        from django.core.exceptions import ValidationError
+        if not self.program_courses.exists():
+            raise ValidationError({'courses': 'A program must contain at least one course.'})
+
+    def publish(self):
+        self.validate_for_publish()
+        self.status = self.Status.PUBLISHED
+        self.save(update_fields=["status", "updated_at"])
+
+    def archive(self):
+        self.status = self.Status.ARCHIVED
+        self.save(update_fields=["status", "updated_at"])
+
+    def update_counts(self):
+        self.course_count = self.program_courses.count()
+        self.enrollment_count = self.enrollments.filter(
+            status__in=[ProgramEnrollment.Status.ACTIVE, ProgramEnrollment.Status.COMPLETED]
+        ).count()
+        self.save(update_fields=["course_count", "enrollment_count", "updated_at"])
+
+    def sum_individual_price_cents(self) -> int:
+        """Sum of member courses' individual prices — used to display savings."""
+        return sum(
+            (c.price_cents or 0)
+            for c in self.courses.all()
+        )
+
+
+class ProgramCourse(BaseModel):
+    """Through-table linking a Program to a Course with ordering."""
+
+    program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name="program_courses")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="program_memberships")
+    order = models.PositiveIntegerField(default=0)
+    is_required = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "program_courses"
+        ordering = ["program", "order"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["program", "course"], name="unique_program_course",
+            ),
+        ]
+        verbose_name = "Program Course"
+        verbose_name_plural = "Program Courses"
+
+    def __str__(self):
+        return f"{self.program.title} → {self.course.title}"
+
+
+class ProgramEnrollment(BaseModel):
+    """A learner's enrollment in a Program (and, transitively, its courses)."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACTIVE = "active", "Active"
+        COMPLETED = "completed", "Completed"
+        DROPPED = "dropped", "Dropped"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="program_enrollments",
+    )
+    program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name="enrollments")
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+
+    enrolled_at = models.DateTimeField(default=timezone.now)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    stripe_checkout_session_id = models.CharField(max_length=255, blank=True)
+    course_enrollments_seeded = models.BooleanField(
+        default=False,
+        help_text="True once member-course CourseEnrollments have been auto-created.",
+    )
+
+    class Meta:
+        db_table = "program_enrollments"
+        ordering = ["-enrolled_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "program"], name="unique_program_enrollment_per_user",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "status"]),
+            models.Index(fields=["program", "status"]),
+        ]
+        verbose_name = "Program Enrollment"
+        verbose_name_plural = "Program Enrollments"
+
+    def __str__(self):
+        return f"{self.user.email} → {self.program.title} ({self.status})"
+
+    def activate(self):
+        """Mark active and seed per-course enrollments for every member course."""
+        was_pending = self.status == self.Status.PENDING
+        self.status = self.Status.ACTIVE
+        if not self.started_at:
+            self.started_at = timezone.now()
+        self.save(update_fields=["status", "started_at", "updated_at"])
+        if was_pending or not self.course_enrollments_seeded:
+            self._seed_course_enrollments()
+
+    def _seed_course_enrollments(self):
+        """Create or activate CourseEnrollments for each member course (idempotent).
+
+        New rows are stamped with ``from_program_enrollment=self`` so the
+        refund-cascade can identify them. Pre-existing direct enrollments
+        are left alone — we never overwrite their provenance (NULL stays
+        NULL) so a direct self-enrollment is not cascade-dropped if the
+        learner later refunds a program containing that course.
+        """
+        for member in self.program.program_courses.select_related("course"):
+            course = member.course
+            existing = CourseEnrollment.objects.filter(course=course, user=self.user).first()
+            if existing is None:
+                CourseEnrollment.objects.create(
+                    course=course,
+                    user=self.user,
+                    status=CourseEnrollment.Status.ACTIVE,
+                    enrolled_at=timezone.now(),
+                    access_type=CourseEnrollment.AccessType.LIFETIME,
+                    from_program_enrollment=self,
+                )
+            elif existing.status not in (
+                CourseEnrollment.Status.ACTIVE,
+                CourseEnrollment.Status.COMPLETED,
+            ):
+                existing.status = CourseEnrollment.Status.ACTIVE
+                if not existing.enrolled_at:
+                    existing.enrolled_at = timezone.now()
+                existing.save(update_fields=["status", "enrolled_at", "updated_at"])
+        self.course_enrollments_seeded = True
+        self.save(update_fields=["course_enrollments_seeded", "updated_at"])
+
+    def check_completion(self) -> bool:
+        """Mark COMPLETED when every required member course is completed by the learner."""
+        if self.status != self.Status.ACTIVE:
+            return False
+
+        required_courses = self.program.program_courses.filter(is_required=True).values_list(
+            "course_id", flat=True
+        )
+        if not required_courses:
+            return False
+
+        completed_required = CourseEnrollment.objects.filter(
+            user=self.user,
+            course_id__in=required_courses,
+            status=CourseEnrollment.Status.COMPLETED,
+        ).count()
+
+        if completed_required >= len(required_courses):
+            self.status = self.Status.COMPLETED
+            self.completed_at = timezone.now()
+            self.save(update_fields=["status", "completed_at", "updated_at"])
+            return True
+        return False
+
+    def drop(self):
+        self.status = self.Status.DROPPED
+        self.save(update_fields=["status", "updated_at"])
+
+
+class DiscussionThread(SoftDeleteModel):
+    """Top-level discussion thread on a course."""
+
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="discussion_threads")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="discussion_threads",
+    )
+    title = models.CharField(max_length=255)
+    body_html = models.TextField()
+    body_plain = models.TextField(blank=True)
+    is_pinned = models.BooleanField(default=False, db_index=True)
+    is_locked = models.BooleanField(default=False)
+    is_hidden = models.BooleanField(default=False, db_index=True)
+    last_activity_at = models.DateTimeField(default=timezone.now, db_index=True)
+    reply_count = models.PositiveIntegerField(default=0)
+    mentions = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="discussion_thread_mentions",
+    )
+
+    class Meta:
+        db_table = "discussion_threads"
+        ordering = ["-is_pinned", "-last_activity_at"]
+        indexes = [
+            models.Index(fields=["course", "-last_activity_at"]),
+            models.Index(fields=["course", "is_pinned"]),
+        ]
+        verbose_name = "Discussion Thread"
+        verbose_name_plural = "Discussion Threads"
+
+    def __str__(self):
+        return f"{self.course.title} — {self.title}"
+
+    def touch_activity(self):
+        self.last_activity_at = timezone.now()
+        self.save(update_fields=["last_activity_at", "updated_at"])
+
+
+class DiscussionReply(SoftDeleteModel):
+    """Flat (single-level) reply to a DiscussionThread."""
+
+    thread = models.ForeignKey(DiscussionThread, on_delete=models.CASCADE, related_name="replies")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="discussion_replies",
+    )
+    body_html = models.TextField()
+    body_plain = models.TextField(blank=True)
+    is_hidden = models.BooleanField(default=False, db_index=True)
+    mentions = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="discussion_reply_mentions",
+    )
+
+    class Meta:
+        db_table = "discussion_replies"
+        ordering = ["created_at"]
+        indexes = [models.Index(fields=["thread", "created_at"])]
+        verbose_name = "Discussion Reply"
+        verbose_name_plural = "Discussion Replies"
+
+    def __str__(self):
+        return f"Reply by {self.author} on {self.thread.title}"
+
+
+class DiscussionFlag(BaseModel):
+    """Learner-raised flag on a thread or reply; resolved by staff."""
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        RESOLVED_KEPT = "resolved_kept", "Resolved — Content Kept"
+        RESOLVED_HIDDEN = "resolved_hidden", "Resolved — Content Hidden"
+
+    class Reason(models.TextChoices):
+        SPAM = "spam", "Spam"
+        HARASSMENT = "harassment", "Harassment"
+        OFF_TOPIC = "off_topic", "Off-topic"
+        OTHER = "other", "Other"
+
+    thread = models.ForeignKey(
+        DiscussionThread,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="flags",
+    )
+    reply = models.ForeignKey(
+        DiscussionReply,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="flags",
+    )
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="discussion_flags_raised",
+    )
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    note = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.OPEN,
+        db_index=True,
+    )
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="discussion_flags_resolved",
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "discussion_flags"
+        indexes = [models.Index(fields=["status", "-created_at"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(thread__isnull=False, reply__isnull=True)
+                    | models.Q(thread__isnull=True, reply__isnull=False)
+                ),
+                name="discussion_flag_exactly_one_target",
+            ),
+        ]
+        verbose_name = "Discussion Flag"
+        verbose_name_plural = "Discussion Flags"
+
+    def __str__(self):
+        target = self.thread_id and f"thread {self.thread_id}" or f"reply {self.reply_id}"
+        return f"Flag on {target} ({self.reason}, {self.status})"
+
+    @property
+    def course(self):
+        return self.thread.course if self.thread_id else self.reply.thread.course

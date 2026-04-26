@@ -3,10 +3,12 @@
 from django.contrib import admin
 from django.urls import include, path
 
+from billing.webhooks import StripeWebhookView
 from registrations import views as registration_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/v1/webhooks/stripe/', StripeWebhookView.as_view(), name='stripe-webhook'),
     # API v1
     path('api/v1/', include('accounts.urls')),
     path('api/v1/', include('events.urls')),
@@ -27,14 +29,14 @@ urlpatterns = [
         name='public_event_register',
     ),
     path(
-        'api/v1/public/registrations/<uuid:uuid>/payment-intent/',
-        registration_views.RegistrationPaymentIntentView.as_view(),
-        name='public_registration_payment_intent',
+        'api/v1/public/registrations/<uuid:uuid>/start-checkout/',
+        registration_views.StartCheckoutView.as_view(),
+        name='public_registration_start_checkout',
     ),
     path(
-        'api/v1/public/registrations/<uuid:uuid>/confirm-payment/',
-        registration_views.ConfirmPaymentView.as_view(),
-        name='public_registration_confirm_payment',
+        'api/v1/public/registrations/<uuid:uuid>/lobby/',
+        registration_views.RegistrationLobbyView.as_view(),
+        name='public_registration_lobby',
     ),
     # Internal & Common
     path('api/common/', include('common.urls')),

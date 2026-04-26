@@ -3,13 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import App from "@/App";
 import * as accountsApi from "@/api/accounts";
 import * as manifestApi from "@/api/auth/manifest";
-import * as billingApi from "@/api/billing";
 import * as registrationsApi from "@/api/registrations";
 
 // Mock API modules
 vi.mock("@/api/accounts");
 vi.mock("@/api/auth/manifest");
-vi.mock("@/api/billing");
 vi.mock("@/api/registrations");
 
 // Mock scroll to top to avoid errors in JSDOM
@@ -50,7 +48,6 @@ describe("Integration: Login Flow", () => {
             features: {},
         });
 
-        (billingApi.getSubscription as any).mockResolvedValue(null);
         (registrationsApi.getMyRegistrations as any).mockResolvedValue([]);
     });
 

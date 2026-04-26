@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+// TAGGING-DISABLED: Link + TagIcon imports removed while tag UI is hidden.
+// import { Link } from "react-router-dom";
 import {
     Search,
     Download,
@@ -10,6 +12,7 @@ import {
     Loader2,
     Pencil,
     Trash2,
+    // Tag as TagIcon, // TAGGING-DISABLED
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,24 +39,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
     getContacts,
-    getTags,
+    // getTags, // TAGGING-DISABLED: UI hidden while feature is deferred
     exportContacts,
     Contact,
-    Tag
+    // Tag, // TAGGING-DISABLED
 } from "@/api/contacts";
 import {
     ContactFormDialog,
     DeleteContactDialog,
-    TagFilter,
-    ImportDialog
+    // TagFilter, // TAGGING-DISABLED
+    ImportDialog,
 } from "@/components/contacts";
 
 export function ContactsPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [contacts, setContacts] = useState<Contact[]>([]);
-    const [tags, setTags] = useState<Tag[]>([]);
+    // TAGGING-DISABLED: tag state retained as comments for easy restore.
+    // const [tags, setTags] = useState<Tag[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedTagUuids, setSelectedTagUuids] = useState<string[]>([]);
+    // const [selectedTagUuids, setSelectedTagUuids] = useState<string[]>([]);
 
     // Dialog states
     const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -67,19 +71,15 @@ export function ContactsPage() {
         fetchData();
     }, []);
 
-    useEffect(() => {
-        fetchContacts(searchTerm, selectedTagUuids);
-    }, [selectedTagUuids]);
+    // TAGGING-DISABLED: tag-filter effect removed.
+    // useEffect(() => { fetchContacts(searchTerm, undefined /* TAGGING-DISABLED: selectedTagUuids */); }, [selectedTagUuids]);
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [contactsRes, tagsRes] = await Promise.all([
-                getContacts(),
-                getTags()
-            ]);
+            const contactsRes = await getContacts();
             setContacts(contactsRes.results);
-            setTags(tagsRes.results);
+            // TAGGING-DISABLED: tag fetch removed. Restore with getTags() + setTags.
         } catch (error) {
             console.error("Failed to fetch contacts data", error);
             toast.error("Failed to load contacts.");
@@ -93,9 +93,8 @@ export function ContactsPage() {
         try {
             const params: Record<string, string> = {};
             if (search) params.search = search;
-            if (tagUuids && tagUuids.length > 0) {
-                params.tags = tagUuids.join(',');
-            }
+            // TAGGING-DISABLED: tag filter param dropped.
+            // if (tagUuids && tagUuids.length > 0) { params.tags = tagUuids.join(','); }
             const response = await getContacts(params);
             setContacts(response.results);
         } catch (error) {
@@ -107,12 +106,11 @@ export function ContactsPage() {
 
     const handleSearch = (term: string) => {
         setSearchTerm(term);
-        fetchContacts(term, selectedTagUuids);
+        fetchContacts(term, undefined /* TAGGING-DISABLED: selectedTagUuids */);
     };
 
-    const handleTagsChange = (uuids: string[]) => {
-        setSelectedTagUuids(uuids);
-    };
+    // TAGGING-DISABLED: handler unused while tag filter is hidden.
+    // const handleTagsChange = (uuids: string[]) => { setSelectedTagUuids(uuids); };
 
     const handleExport = async () => {
         setExporting(true);
@@ -141,24 +139,31 @@ export function ContactsPage() {
     };
 
     const handleContactSaved = () => {
-        fetchContacts(searchTerm, selectedTagUuids);
+        fetchContacts(searchTerm, undefined /* TAGGING-DISABLED: selectedTagUuids */);
     };
 
     const handleContactDeleted = () => {
-        fetchContacts(searchTerm, selectedTagUuids);
+        fetchContacts(searchTerm, undefined /* TAGGING-DISABLED: selectedTagUuids */);
     };
 
     const handleImportComplete = () => {
-        fetchContacts(searchTerm, selectedTagUuids);
+        fetchContacts(searchTerm, undefined /* TAGGING-DISABLED: selectedTagUuids */);
     };
 
     return (
         <div className="space-y-6">
             <PageHeader
                 title="Contacts"
-                description="Manage your contacts. Use tags to organize and segment."
+                description="Manage your contacts."
                 actions={
                     <div className="flex gap-2">
+                        {/* TAGGING-DISABLED: restore Manage tags link when re-enabling.
+                        <Button asChild variant="outline" className="flex items-center gap-2">
+                            <Link to="/organizer/contacts/tags">
+                                <TagIcon className="h-4 w-4" /> Manage tags
+                            </Link>
+                        </Button>
+                        */}
                         <Button onClick={() => setImportDialogOpen(true)} variant="outline" className="flex items-center gap-2">
                             <Upload className="h-4 w-4" /> Import
                         </Button>
@@ -185,12 +190,14 @@ export function ContactsPage() {
                                 onChange={(e) => handleSearch(e.target.value)}
                             />
                         </div>
+                        {/* TAGGING-DISABLED: restore TagFilter when re-enabling.
                         <TagFilter
                             tags={tags}
                             selectedTagUuids={selectedTagUuids}
                             onTagsChange={handleTagsChange}
                             loading={loading}
                         />
+                        */}
                     </div>
 
                     {/* Contact table */}
@@ -205,9 +212,10 @@ export function ContactsPage() {
                                     <TableRow>
                                         <TableHead className="w-[250px]">Name</TableHead>
                                         <TableHead>Organization</TableHead>
-                                        <TableHead>Tags</TableHead>
+                                        {/* TAGGING-DISABLED: <TableHead>Tags</TableHead> */}
                                         <TableHead>Status</TableHead>
                                         <TableHead className="text-right">Events</TableHead>
+                                        <TableHead className="text-right">Courses</TableHead>
                                         <TableHead className="w-[50px]"></TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -226,6 +234,7 @@ export function ContactsPage() {
                                                     <span className="text-xs text-muted-foreground">{contact.organization_name || '-'}</span>
                                                 </div>
                                             </TableCell>
+                                            {/* TAGGING-DISABLED: tag cell hidden. Restore when tag UI returns.
                                             <TableCell>
                                                 <div className="flex flex-wrap gap-1">
                                                     {contact.tags.slice(0, 3).map(tag => (
@@ -245,6 +254,7 @@ export function ContactsPage() {
                                                     )}
                                                 </div>
                                             </TableCell>
+                                            */}
                                             <TableCell>
                                                 {contact.email_bounced ? (
                                                     <Badge variant="destructive">Bounced</Badge>
@@ -258,6 +268,12 @@ export function ContactsPage() {
                                                 <div className="flex flex-col text-sm">
                                                     <span className="font-medium">{contact.events_attended_count} attended</span>
                                                     <span className="text-xs text-muted-foreground">{contact.events_invited_count} invited</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex flex-col text-sm">
+                                                    <span className="font-medium">{contact.courses_enrolled_count ?? 0} enrolled</span>
+                                                    <span className="text-xs text-muted-foreground">{contact.courses_completed_count ?? 0} completed</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
@@ -297,8 +313,8 @@ export function ContactsPage() {
                                     icon={Users}
                                     title="No contacts found"
                                     description={
-                                        searchTerm || selectedTagUuids.length > 0
-                                            ? "Try adjusting your search or filters"
+                                        searchTerm
+                                            ? "Try adjusting your search"
                                             : "You haven't added any contacts yet."
                                     }
                                     action={

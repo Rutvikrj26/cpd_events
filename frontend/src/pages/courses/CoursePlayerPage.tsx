@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import {
     getCourse,
     getCourseProgress,
@@ -9,14 +11,21 @@ import {
     submitSubmission,
     getCourseAnnouncements,
     getCourseSessions,
+    getEnrollments,
 } from '@/api/courses';
 import { getCourseModules, getModuleContents } from '@/api/courses/modules';
 import { updateContentProgress } from '@/api/learning';
 import { Course, CourseModule, Assignment, AssignmentSubmission, CourseAnnouncement, CourseSession } from '@/api/courses/types';
-import { SessionsPanel } from '@/components/courses/SessionsPanel';
+import { LiveSessionRow } from '@/components/live/LiveSessionRow';
+import { JoinButton } from '@/components/video/JoinButton';
+import { DiscussionPanel } from '@/components/courses/discussion/DiscussionPanel';
+import { useAuth } from '@/contexts/AuthContext';
+import { deriveProgressDisplay } from '@/lib/progress';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
@@ -39,7 +48,9 @@ import {
     Award,
     ExternalLink,
     ClipboardCheck,
-    Info
+    Info,
+    Lock,
+    MessageSquare
 } from 'lucide-react';
 
 interface ModuleContent {
@@ -79,6 +90,10 @@ export function CoursePlayerPage() {
     const [contentLoading, setContentLoading] = useState(false);
     const [completedContents, setCompletedContents] = useState<Set<string>>(new Set());
     const [isEnrollmentBlocked, setIsEnrollmentBlocked] = useState(false);
+    const [moduleAvailability, setModuleAvailability] = useState<Record<string, boolean>>({});
+    const [contentProgressMap, setContentProgressMap] = useState<Record<string, any>>({});
+    const [enrollmentProgress, setEnrollmentProgress] = useState<number>(0);
+    const [enrollmentStatus, setEnrollmentStatus] = useState<string>('');
     const [submissions, setSubmissions] = useState<AssignmentSubmission[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [assignmentDraft, setAssignmentDraft] = useState({
@@ -88,6 +103,8 @@ export function CoursePlayerPage() {
     });
     const [announcements, setAnnouncements] = useState<CourseAnnouncement[]>([]);
     const [showAnnouncements, setShowAnnouncements] = useState(false);
+    const [showDiscussion, setShowDiscussion] = useState(false);
+    const { user } = useAuth();
     const [sessions, setSessions] = useState<CourseSession[]>([]);
 
     // Fetch course and modules on mount
@@ -100,17 +117,78 @@ export function CoursePlayerPage() {
             setSubmissions([]);
             setAnnouncements([]);
             try {
-                // Fetch course details
-                const courseData = await getCourse(courseUuid);
+                // Fetch course details. Pass silent=true so a 404 doesn't
+                // fire a red toast on top of the inline "Course not found"
+                // empty state we already render below.
+                const courseData = await getCourse(courseUuid, { silent: true });
                 setCourse(courseData);
+
+                // Check enrollment — redirect to detail page if not enrolled
+                try {
+                    const enrollments = await getEnrollments();
+                    const enrolled = enrollments.some(
+                        (e: any) => e.course?.uuid === courseUuid && ['active', 'completed'].includes(e.status)
+                    );
+                    if (!enrolled) {
+                        navigate(`/courses/${courseData.slug || courseUuid}`, { replace: true });
+                        return;
+                    }
+                } catch {
+                    // If enrollment check fails, allow access (staff/admin previews)
+                }
 
                 // Fetch modules
                 const modulesData = await getCourseModules(courseUuid);
 
-                // Fetch contents for each module
+                // Fetch progress FIRST to determine module availability
+                let completed = new Set<string>();
+                let availability: Record<string, boolean> = {};
+                let progressMap: Record<string, any> = {};
+                let savedEnrollmentProgress = 0;
+
+                let sessionsFromProgress = false;
+                try {
+                    const progress = await getCourseProgress(courseUuid);
+                    // The progress endpoint returns sessions with attendance,
+                    // recording, and join-window already resolved against the
+                    // current user (via LiveSessionSerializer). Prefer it over
+                    // the separate getCourseSessions call which uses the
+                    // anonymous list serializer.
+                    if (Array.isArray((progress as any).sessions)) {
+                        setSessions((progress as any).sessions);
+                        sessionsFromProgress = true;
+                    }
+                    progress.modules.forEach((module: any) => {
+                        const mUuid = module.module?.uuid || module.module?.id;
+                        availability[mUuid] = module.is_available;
+                        module.content_progress.forEach((progressItem: any) => {
+                            progressMap[progressItem.content] = progressItem;
+                            if (progressItem.status === 'completed') {
+                                completed.add(progressItem.content);
+                            }
+                        });
+                    });
+                    savedEnrollmentProgress = progress.enrollment?.progress_percent ?? 0;
+                    setEnrollmentStatus(progress.enrollment?.status ?? '');
+                } catch {
+                    // Progress unavailable (staff preview) — default all available
+                    modulesData.forEach((mod: any) => {
+                        availability[mod.module?.uuid || mod.uuid] = true;
+                    });
+                }
+
+                setCompletedContents(completed);
+                setModuleAvailability(availability);
+                setContentProgressMap(progressMap);
+                setEnrollmentProgress(savedEnrollmentProgress);
+
+                // Fetch contents only for AVAILABLE modules (skip locked ones to avoid 403)
                 const modulesWithContents = await Promise.all(
                     modulesData.map(async (mod) => {
                         const moduleUuid = mod.module?.uuid || mod.uuid;
+                        if (availability[moduleUuid] === false) {
+                            return { ...mod, contents: [], expanded: false };
+                        }
                         try {
                             const contents = await getModuleContents(courseUuid, moduleUuid);
                             return {
@@ -137,8 +215,11 @@ export function CoursePlayerPage() {
                     console.error('Failed to load announcements:', error);
                 }
 
-                // Load sessions for hybrid courses
-                if (courseData.format === 'hybrid') {
+                // Sessions are now sourced from the progress endpoint above
+                // (hydrated with attendance + recording per request user). The
+                // anonymous list endpoint is kept as a fallback only when the
+                // progress fetch failed (staff preview, unenrolled).
+                if (!sessionsFromProgress && (courseData.format === 'hybrid' || courseData.format === 'live')) {
                     try {
                         const courseSessions = await getCourseSessions(courseUuid);
                         setSessions(courseSessions.filter((s: CourseSession) => s.is_published));
@@ -147,38 +228,23 @@ export function CoursePlayerPage() {
                     }
                 }
 
-                // Pull progress to restore completed items
-                try {
-                    const progress = await getCourseProgress(courseUuid);
-                    const completed = new Set<string>();
-                    progress.modules.forEach(module => {
-                        module.content_progress.forEach(progressItem => {
-                            if (progressItem.status === 'completed' || progressItem.progress_percent === 100) {
-                                completed.add(progressItem.content);
-                            }
-                        });
-                    });
-                    setCompletedContents(completed);
+                // Auto-select first incomplete content in an available module
+                const firstIncomplete = sortedModules
+                    .flatMap((mod) => {
+                        const moduleUuid = mod.module?.uuid || mod.uuid;
+                        if (!availability[moduleUuid]) return [];
+                        return (mod.contents || []).map(content => ({ content, moduleUuid }));
+                    })
+                    .find(({ content }) => !completed.has(content.uuid));
 
-                    // Auto-select first incomplete content
-                    const firstIncomplete = sortedModules
-                        .flatMap((mod) => {
-                            const moduleUuid = mod.module?.uuid || mod.uuid;
-                            return (mod.contents || []).map(content => ({ content, moduleUuid }));
-                        })
-                        .find(({ content }) => !completed.has(content.uuid));
-
-                    if (firstIncomplete) {
-                        setCurrentItem({ type: 'content', item: firstIncomplete.content, moduleUuid: firstIncomplete.moduleUuid });
-                        setCurrentModuleUuid(firstIncomplete.moduleUuid);
-                        didSelectContent = true;
-                        setModules(prev => prev.map((m) => ({
-                            ...m,
-                            expanded: (m.module?.uuid || m.uuid) === firstIncomplete.moduleUuid
-                        })));
-                    }
-                } catch (error: any) {
-                    // Progress may be unavailable for staff previews; ignore.
+                if (firstIncomplete) {
+                    setCurrentItem({ type: 'content', item: firstIncomplete.content, moduleUuid: firstIncomplete.moduleUuid });
+                    setCurrentModuleUuid(firstIncomplete.moduleUuid);
+                    didSelectContent = true;
+                    setModules(prev => prev.map((m) => ({
+                        ...m,
+                        expanded: (m.module?.uuid || m.uuid) === firstIncomplete.moduleUuid
+                    })));
                 }
 
                 // Fallback: Auto-select first content
@@ -208,6 +274,9 @@ export function CoursePlayerPage() {
                 const status = (error as any)?.response?.status;
                 if (status === 403) {
                     setIsEnrollmentBlocked(true);
+                } else if (status === 404) {
+                    // Inline "Course not found" empty state below covers this;
+                    // no need for a red toast on top of it.
                 } else {
                     toast({
                         variant: 'destructive',
@@ -233,11 +302,13 @@ export function CoursePlayerPage() {
 
     // Select content
     const selectContent = (content: ContentWithProgress, moduleUuid: string) => {
+        if (!moduleAvailability[moduleUuid]) return;
         setCurrentItem({ type: 'content', item: content, moduleUuid });
         setCurrentModuleUuid(moduleUuid);
     };
 
     const selectAssignment = (assignment: Assignment, moduleUuid: string) => {
+        if (!moduleAvailability[moduleUuid]) return;
         setCurrentItem({ type: 'assignment', item: assignment, moduleUuid });
         setCurrentModuleUuid(moduleUuid);
         const latest = getLatestSubmission(assignment.uuid);
@@ -248,15 +319,80 @@ export function CoursePlayerPage() {
         });
     };
 
-    // Mark content as complete
+    // Refresh module availability and fetch contents for newly unlocked modules
+    const refreshProgress = async () => {
+        if (!courseUuid) return;
+        try {
+            const progress = await getCourseProgress(courseUuid);
+            if (Array.isArray((progress as any).sessions)) {
+                setSessions((progress as any).sessions);
+            }
+            const completed = new Set<string>();
+            const availability: Record<string, boolean> = {};
+            const progressMap: Record<string, any> = {};
+
+            progress.modules.forEach((module: any) => {
+                const mUuid = module.module?.uuid || module.module?.id;
+                availability[mUuid] = module.is_available;
+                module.content_progress.forEach((progressItem: any) => {
+                    progressMap[progressItem.content] = progressItem;
+                    if (progressItem.status === 'completed') {
+                        completed.add(progressItem.content);
+                    }
+                });
+            });
+            setCompletedContents(completed);
+            setModuleAvailability(availability);
+            setContentProgressMap(progressMap);
+            setEnrollmentProgress(progress.enrollment?.progress_percent ?? 0);
+
+            // Fetch contents for any newly unlocked modules that have no contents loaded yet
+            setModules(prev => {
+                const needsFetch: number[] = [];
+                prev.forEach((mod, idx) => {
+                    const mUuid = mod.module?.uuid || mod.uuid;
+                    if (availability[mUuid] && (!mod.contents || mod.contents.length === 0)) {
+                        needsFetch.push(idx);
+                    }
+                });
+                if (needsFetch.length > 0) {
+                    // Fetch in background, then update modules
+                    Promise.all(
+                        needsFetch.map(async (idx) => {
+                            const mod = prev[idx];
+                            const mUuid = mod.module?.uuid || mod.uuid;
+                            try {
+                                const contents = await getModuleContents(courseUuid, mUuid);
+                                return { idx, contents: contents.sort((a: any, b: any) => a.order - b.order) };
+                            } catch {
+                                return { idx, contents: [] };
+                            }
+                        })
+                    ).then(results => {
+                        setModules(current => current.map((mod, idx) => {
+                            const result = results.find(r => r.idx === idx);
+                            return result ? { ...mod, contents: result.contents } : mod;
+                        }));
+                    });
+                }
+                return prev;
+            });
+        } catch {
+            // ignore
+        }
+    };
+
     const markComplete = async () => {
         if (!courseUuid || !currentItem || currentItem.type !== 'content') return;
 
         try {
             await updateContentProgress(currentItem.item.uuid, { progress_percent: 100, completed: true });
 
-            // Update local state
+            // Update local state immediately
             setCompletedContents(prev => new Set([...prev, currentItem.item.uuid]));
+
+            // Refresh availability (may unlock next module)
+            await refreshProgress();
 
             toast({
                 title: 'Progress saved!',
@@ -290,11 +426,12 @@ export function CoursePlayerPage() {
             return;
         }
 
-        // Try first content of next module
+        // Try first content of next available module
         for (let i = moduleIndex + 1; i < modules.length; i++) {
-            if (modules[i].contents && modules[i].contents!.length > 0) {
-                setCurrentItem({ type: 'content', item: modules[i].contents![0], moduleUuid: modules[i].module?.uuid || modules[i].uuid });
-                setCurrentModuleUuid(modules[i].module?.uuid || modules[i].uuid);
+            const nextModuleUuid = modules[i].module?.uuid || modules[i].uuid;
+            if (moduleAvailability[nextModuleUuid] !== false && modules[i].contents && modules[i].contents!.length > 0) {
+                setCurrentItem({ type: 'content', item: modules[i].contents![0], moduleUuid: nextModuleUuid });
+                setCurrentModuleUuid(nextModuleUuid);
                 setModules(prev => prev.map((m, idx) => ({ ...m, expanded: idx === i })));
                 return;
             }
@@ -321,9 +458,14 @@ export function CoursePlayerPage() {
         }
     };
 
-    // Calculate progress
-    const totalContents = modules.reduce((sum, m) => sum + (m.contents?.length || 0), 0);
-    const progressPercent = totalContents > 0 ? Math.round((completedContents.size / totalContents) * 100) : 0;
+    // Progress from backend (source of truth). Locked at 100% when status is
+    // 'completed' so archived/historically-completed enrollments without
+    // surviving leaf data still render correctly.
+    const progressDisplay = deriveProgressDisplay({
+        status: enrollmentStatus,
+        progress_percent: enrollmentProgress,
+    });
+    const progressPercent = progressDisplay.percent;
 
     const getLatestSubmission = (assignmentUuid: string) => {
         return submissions
@@ -458,7 +600,7 @@ export function CoursePlayerPage() {
         return (
             <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
                 <p className="text-muted-foreground">Course not found</p>
-                <Button onClick={() => navigate('/my-courses')}>Back to My Courses</Button>
+                <Button onClick={() => navigate('/registrations?tab=courses')}>Back to My Courses</Button>
             </div>
         );
     }
@@ -468,7 +610,7 @@ export function CoursePlayerPage() {
             <div className="flex h-[80vh] flex-col items-center justify-center gap-4 text-center">
                 <p className="text-muted-foreground">You are not enrolled in this course yet.</p>
                 <div className="flex gap-2">
-                    <Button onClick={() => navigate('/my-courses')}>Back to My Courses</Button>
+                    <Button onClick={() => navigate('/registrations?tab=courses')}>Back to My Courses</Button>
                     {course.slug && (
                         <Button variant="outline" onClick={() => navigate(`/courses/${course.slug}`)}>
                             View Course Page
@@ -485,7 +627,7 @@ export function CoursePlayerPage() {
             <div className="w-80 border-r bg-muted/30 flex flex-col">
                 {/* Course Header */}
                 <div className="p-4 border-b bg-background">
-                    <Button variant="ghost" size="sm" className="mb-2 -ml-2" onClick={() => navigate('/my-courses')}>
+                    <Button variant="ghost" size="sm" className="mb-2 -ml-2" onClick={() => navigate('/registrations?tab=courses')}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
                         Back to Courses
                     </Button>
@@ -499,24 +641,73 @@ export function CoursePlayerPage() {
                     </div>
                 </div>
 
-                {/* Module List */}
+                {/* Sidebar — two-track for live/hybrid: sessions above modules.
+                    Pure-online courses skip the sessions group; pure-live skip
+                    modules. See docs/design/hybrid-course-experience.md §B. */}
                 <div className="flex-1 overflow-y-auto">
+                    {(course.format === 'live' || course.format === 'hybrid') && sessions.length > 0 && (
+                        <div className="p-2 border-b">
+                            <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Live Sessions
+                            </div>
+                            {sessions.map((s) => {
+                                const rec = (s as any).recording;
+                                const ends = (s as any).ends_at
+                                    ? new Date((s as any).ends_at)
+                                    : new Date(new Date(s.starts_at).getTime() + (s.duration_minutes ?? 0) * 60_000);
+                                const isPast = new Date() >= ends || s.status === 'completed';
+                                const isInPerson = s.delivery_mode === 'in_person';
+                                const showHostPill =
+                                    !!course.is_current_user_host && !isPast && !isInPerson;
+                                return (
+                                    <div key={s.uuid} className="flex items-center gap-1 px-1">
+                                        <div className="flex-1 min-w-0">
+                                            <LiveSessionRow
+                                                session={s as any}
+                                                onClick={() => {
+                                                    const target = isPast && rec
+                                                        ? `/courses/${course.slug}/sessions/${s.uuid}/recording`
+                                                        : `/courses/${course.slug}/sessions/${s.uuid}/lobby`;
+                                                    navigate(target);
+                                                }}
+                                            />
+                                        </div>
+                                        {showHostPill && (
+                                            <JoinButton
+                                                courseUuid={course.uuid}
+                                                sessionUuid={s.uuid}
+                                                role="host"
+                                                state={s.status === 'live' ? 'live' : 'pre_event'}
+                                                size="sm"
+                                                variant="outline"
+                                                className="shrink-0 h-7 px-2 text-xs"
+                                            />
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                    {course.format !== 'live' && (
                     <div className="p-2">
                         {modules.map((mod, modIdx) => {
                             const moduleUuid = mod.module?.uuid || mod.uuid;
                             const moduleTitle = mod.module?.title || `Module ${modIdx + 1}`;
                             const moduleCompleted = mod.contents?.every(c => completedContents.has(c.uuid));
+                            const isLocked = moduleAvailability[moduleUuid] === false;
 
                             return (
-                                <div key={moduleUuid} className="mb-2">
+                                <div key={moduleUuid} className={`mb-2 ${isLocked ? 'opacity-60' : ''}`}>
                                     <button
-                                        onClick={() => toggleModule(moduleUuid)}
-                                        className="w-full flex items-center gap-2 p-3 rounded-lg hover:bg-muted transition-colors text-left"
+                                        onClick={() => !isLocked && toggleModule(moduleUuid)}
+                                        className={`w-full flex items-center gap-2 p-3 rounded-lg transition-colors text-left ${isLocked ? 'cursor-not-allowed' : 'hover:bg-muted'}`}
                                     >
                                         <ChevronRight className={`h-4 w-4 transition-transform ${mod.expanded ? 'rotate-90' : ''}`} />
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
-                                                {moduleCompleted ? (
+                                                {isLocked ? (
+                                                    <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                ) : moduleCompleted ? (
                                                     <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
                                                 ) : (
                                                     <span className="w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-medium shrink-0">
@@ -526,7 +717,7 @@ export function CoursePlayerPage() {
                                                 <span className="font-medium truncate">{moduleTitle}</span>
                                             </div>
                                             <span className="text-xs text-muted-foreground">
-                                                {mod.contents?.length || 0} items
+                                                {isLocked ? 'Complete previous module to unlock' : `${mod.contents?.length || 0} items`}
                                             </span>
                                         </div>
                                     </button>
@@ -548,7 +739,10 @@ export function CoursePlayerPage() {
                                                             }`}
                                                     >
                                                         {getContentIcon(content.content_type, isCompleted)}
-                                                        <span className="truncate">{content.title}</span>
+                                                        <span className="truncate flex-1">{content.title}</span>
+                                                        {!content.is_required && (
+                                                            <span className="text-[10px] text-muted-foreground shrink-0">Optional</span>
+                                                        )}
                                                     </button>
                                                 );
                                             })}
@@ -580,6 +774,7 @@ export function CoursePlayerPage() {
                             );
                         })}
                     </div>
+                    )}
                 </div>
             </div>
 
@@ -606,6 +801,10 @@ export function CoursePlayerPage() {
                                 </div>
                             </div>
                             <div className="flex gap-2">
+                                <Button variant="outline" onClick={() => setShowDiscussion(true)}>
+                                    <MessageSquare className="mr-2 h-4 w-4" />
+                                    Discussion
+                                </Button>
                                 {announcements.length > 0 && (
                                     <Button variant="outline" onClick={() => setShowAnnouncements(true)}>
                                         <Info className="mr-2 h-4 w-4" />
@@ -629,6 +828,15 @@ export function CoursePlayerPage() {
 
                         {/* Content Viewer */}
                         <div className="flex-1 overflow-y-auto p-6">
+                          {currentItem && moduleAvailability[currentItem.moduleUuid] === false ? (
+                            <div className="flex flex-col items-center justify-center h-full text-center p-12">
+                                <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center mb-6">
+                                    <Lock className="h-10 w-10 text-muted-foreground" />
+                                </div>
+                                <h3 className="text-xl font-semibold">{activeContent?.title || activeAssignment?.title}</h3>
+                                <p className="text-muted-foreground mt-2 max-w-md">Complete the previous module to unlock this content.</p>
+                            </div>
+                          ) : (
                             <div className="max-w-4xl mx-auto">
                                 {activeContent && activeContent.content_type === 'video' && (
                                     <div className="aspect-video bg-black rounded-lg overflow-hidden">
@@ -656,8 +864,8 @@ export function CoursePlayerPage() {
                                 {activeContent && activeContent.content_type === 'text' && (
                                     <Card>
                                         <CardContent className="pt-6 prose max-w-none">
-                                            {activeContent.content_data?.text ? (
-                                                <div dangerouslySetInnerHTML={{ __html: activeContent.content_data.text }} />
+                                            {activeContent.content_data?.body ? (
+                                                <div dangerouslySetInnerHTML={{ __html: activeContent.content_data.body }} />
                                             ) : (
                                                 <p className="text-muted-foreground">No content available.</p>
                                             )}
@@ -709,10 +917,10 @@ export function CoursePlayerPage() {
                                                     )}
                                                 </div>
                                             )}
-                                            {(activeContent.content_data?.text?.body || activeContent.content_data?.text) && (
+                                            {activeContent.content_data?.text?.body && (
                                                 <div
                                                     className="prose max-w-none"
-                                                    dangerouslySetInnerHTML={{ __html: activeContent.content_data?.text?.body || activeContent.content_data?.text }}
+                                                    dangerouslySetInnerHTML={{ __html: activeContent.content_data.text.body }}
                                                 />
                                             )}
                                             {activeContent.file && (
@@ -745,9 +953,15 @@ export function CoursePlayerPage() {
                                     <QuizContent
                                         key={activeContent.uuid}
                                         content={activeContent}
-                                        onComplete={async () => {
-                                            await updateContentProgress(activeContent.uuid, { progress_percent: 100, completed: true });
+                                        savedProgress={contentProgressMap[activeContent.uuid]}
+                                        onComplete={async (quizResult?: { answers: Record<string, string[]>; score: number }) => {
+                                            await updateContentProgress(activeContent.uuid, {
+                                                progress_percent: 100,
+                                                completed: true,
+                                                position: quizResult ? { quiz_answers: quizResult.answers, score: quizResult.score, passed: true } : undefined,
+                                            });
                                             setCompletedContents(prev => new Set([...prev, activeContent.uuid]));
+                                            await refreshProgress();
                                         }}
                                     />
                                 )}
@@ -765,27 +979,39 @@ export function CoursePlayerPage() {
                                     />
                                 )}
                             </div>
+                          )}
                         </div>
                     </>
                 ) : (
                     <div className="flex-1 overflow-y-auto p-6">
                         <div className="max-w-4xl mx-auto">
-                            {/* Show sessions for hybrid courses */}
-                            {course.format === 'hybrid' && sessions.length > 0 && (
-                                <SessionsPanel sessions={sessions} courseTitle={course.title} courseUuid={course.uuid} />
+                            {/* Sessions are rendered in the sidebar (two-track layout).
+                                The empty-state branch only fires for pure-live courses
+                                with no sessions yet — keep that, drop the duplicate
+                                SessionsPanel render that pre-dated the sidebar. */}
+                            {course.format === 'live' && sessions.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
+                                    <h3 className="text-lg font-medium mb-2">No sessions scheduled yet</h3>
+                                    <p className="text-muted-foreground">
+                                        Live sessions will appear here once the instructor schedules them.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="text-center py-12">
+                                    <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
+                                    <h3 className="text-lg font-medium mb-2">
+                                        {sessions.length > 0 ? 'Continue Learning' : 'No content selected'}
+                                    </h3>
+                                    <p className="text-muted-foreground">
+                                        {course.format === 'live'
+                                            ? 'Join an upcoming live session above, or watch a past recording.'
+                                            : sessions.length > 0
+                                                ? 'Join a live session above or select a lesson from the sidebar.'
+                                                : 'Select a lesson from the sidebar to begin.'}
+                                    </p>
+                                </div>
                             )}
-
-                            <div className="text-center py-12">
-                                <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                                <h3 className="text-lg font-medium mb-2">
-                                    {sessions.length > 0 ? 'Continue Learning' : 'No content selected'}
-                                </h3>
-                                <p className="text-muted-foreground">
-                                    {sessions.length > 0
-                                        ? 'Join a live session above or select a lesson from the sidebar.'
-                                        : 'Select a lesson from the sidebar to begin.'}
-                                </p>
-                            </div>
                         </div>
                     </div>
                 )}
@@ -818,6 +1044,21 @@ export function CoursePlayerPage() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <Dialog open={showDiscussion} onOpenChange={setShowDiscussion}>
+                <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Discussion</DialogTitle>
+                    </DialogHeader>
+                    {courseUuid && (
+                        <DiscussionPanel
+                            courseUuid={courseUuid}
+                            currentUserUuid={user?.uuid}
+                            isStaff={false}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
@@ -825,16 +1066,36 @@ export function CoursePlayerPage() {
 const QuizContent = ({
     content,
     onComplete,
+    savedProgress,
 }: {
     content: ContentWithProgress;
-    onComplete: () => Promise<void>;
+    onComplete: (quizResult?: { answers: Record<string, string[]>; score: number }) => Promise<void>;
+    savedProgress?: any;
 }) => {
-    const [answers, setAnswers] = useState<Record<string, string[]>>({});
-    const [result, setResult] = useState<{ scorePercent: number; passed: boolean } | null>(null);
+    const savedQuiz = savedProgress?.last_position;
+    const alreadyPassed = savedQuiz?.passed === true;
+
+    const [answers, setAnswers] = useState<Record<string, string[]>>(
+        alreadyPassed && savedQuiz?.quiz_answers ? savedQuiz.quiz_answers : {}
+    );
+    const [result, setResult] = useState<{ scorePercent: number; passed: boolean } | null>(
+        alreadyPassed ? { scorePercent: savedQuiz.score, passed: true } : null
+    );
 
     const quizData = content.content_data || {};
-    const questions = quizData.questions || [];
+    const rawQuestions = quizData.questions || [];
     const passingScore = quizData.passing_score ?? 70;
+
+    // Normalize questions: handle both string[] options and {id, text, isCorrect}[] options
+    const questions = rawQuestions.map((q: any) => {
+        const options = (q.options || []).map((opt: any, idx: number) => {
+            if (typeof opt === 'string') {
+                return { id: String(idx), text: opt, isCorrect: q.correct_answer === idx };
+            }
+            return { id: opt.id ?? String(idx), text: opt.text ?? opt, isCorrect: opt.isCorrect ?? false };
+        });
+        return { ...q, id: String(q.id), options, points: q.points ?? 1 };
+    });
 
     const handleSingleSelect = (questionId: string, optionId: string) => {
         setAnswers(prev => ({ ...prev, [questionId]: [optionId] }));
@@ -855,16 +1116,16 @@ const QuizContent = ({
         let earnedPoints = 0;
 
         questions.forEach((question: any) => {
-            const correctOptions = (question.options || []).filter((opt: any) => opt.isCorrect).map((opt: any) => opt.id);
+            const correctOptions = question.options.filter((opt: any) => opt.isCorrect).map((opt: any) => opt.id);
             const selected = answers[question.id] || [];
-            totalPoints += question.points || 0;
+            totalPoints += question.points;
 
             const isCorrect =
                 correctOptions.length === selected.length &&
                 correctOptions.every((id: string) => selected.includes(id));
 
             if (isCorrect) {
-                earnedPoints += question.points || 0;
+                earnedPoints += question.points;
             }
         });
 
@@ -873,14 +1134,24 @@ const QuizContent = ({
 
         setResult({ scorePercent, passed });
         if (passed) {
-            await onComplete();
+            await onComplete({ answers, score: scorePercent });
         }
+    };
+
+    const handleRetry = () => {
+        setAnswers({});
+        setResult(null);
     };
 
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Quiz</CardTitle>
+                <div className="flex items-center justify-between">
+                    <CardTitle>Quiz</CardTitle>
+                    {alreadyPassed && (
+                        <Badge className="bg-success">Passed — {savedQuiz.score}%</Badge>
+                    )}
+                </div>
             </CardHeader>
             <CardContent className="space-y-6">
                 {questions.length === 0 && (
@@ -892,32 +1163,46 @@ const QuizContent = ({
                             <Badge variant="outline">Q{index + 1}</Badge>
                             <p className="font-medium">{question.text}</p>
                         </div>
-                        <div className="space-y-2">
-                            {(question.options || []).map((option: any) => (
-                                <label key={option.id} className="flex items-center gap-2 text-sm">
-                                    <input
-                                        type={question.type === 'multiple' ? 'checkbox' : 'radio'}
-                                        name={question.id}
-                                        checked={(answers[question.id] || []).includes(option.id)}
-                                        onChange={() =>
-                                            question.type === 'multiple'
-                                                ? handleMultipleSelect(question.id, option.id)
-                                                : handleSingleSelect(question.id, option.id)
-                                        }
-                                    />
-                                    <span>{option.text}</span>
-                                </label>
-                            ))}
-                        </div>
+                        {question.type === 'multiple' ? (
+                            <div className="space-y-2 pl-2">
+                                {question.options.map((option: any) => (
+                                    <label key={option.id} className="flex items-center gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50 cursor-pointer text-sm">
+                                        <Checkbox
+                                            checked={(answers[question.id] || []).includes(option.id)}
+                                            onCheckedChange={() => handleMultipleSelect(question.id, option.id)}
+                                        />
+                                        <span>{option.text}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        ) : (
+                            <RadioGroup
+                                value={(answers[question.id] || [])[0] ?? ''}
+                                onValueChange={(value) => handleSingleSelect(question.id, value)}
+                                className="pl-2"
+                            >
+                                {question.options.map((option: any) => (
+                                    <label key={option.id} className="flex items-center gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50 cursor-pointer text-sm">
+                                        <RadioGroupItem value={option.id} />
+                                        <span>{option.text}</span>
+                                    </label>
+                                ))}
+                            </RadioGroup>
+                        )}
                     </div>
                 ))}
 
                 <div className="flex items-center justify-between">
-                    <Button onClick={handleSubmit}>Submit Quiz</Button>
+                    <Button onClick={handleSubmit} disabled={result?.passed}>Submit Quiz</Button>
                     {result && (
-                        <Badge className={result.passed ? 'bg-success' : 'bg-warning'}>
-                            {result.scorePercent}% {result.passed ? 'Passed' : 'Try again'}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                            <Badge className={result.passed ? 'bg-success' : 'bg-destructive'}>
+                                {result.scorePercent}% {result.passed ? 'Passed' : 'Try again'}
+                            </Badge>
+                            {!result.passed && (
+                                <Button variant="outline" size="sm" onClick={handleRetry}>Retry</Button>
+                            )}
+                        </div>
                     )}
                 </div>
             </CardContent>
@@ -983,12 +1268,19 @@ const AssignmentContent = ({
                 {(assignment.submission_type === 'text' || assignment.submission_type === 'mixed' || !assignment.submission_type) && (
                     <div className="space-y-2">
                         <p className="text-sm font-medium">Response</p>
-                        <textarea
-                            className="w-full min-h-[140px] border rounded-md p-3 text-sm"
-                            value={draft.text}
-                            disabled={!canEdit}
-                            onChange={(event) => onDraftChange({ ...draft, text: event.target.value })}
-                        />
+                        {canEdit ? (
+                            <ReactQuill
+                                theme="snow"
+                                value={draft.text}
+                                onChange={(value) => onDraftChange({ ...draft, text: value })}
+                                className="bg-background rounded-md"
+                            />
+                        ) : (
+                            <div
+                                className="border rounded-md p-4 bg-muted/30 text-sm prose prose-sm max-w-none opacity-80"
+                                dangerouslySetInnerHTML={{ __html: draft.text || submission?.content?.text || '<em>No response submitted</em>' }}
+                            />
+                        )}
                     </div>
                 )}
 
@@ -1017,14 +1309,23 @@ const AssignmentContent = ({
                     </div>
                 )}
 
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={onSaveDraft} disabled={!canEdit || isSubmitting}>
-                        Save Draft
-                    </Button>
-                    <Button onClick={onSubmit} disabled={!canEdit || isSubmitting}>
-                        Submit Assignment
-                    </Button>
-                </div>
+                {canEdit ? (
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={onSaveDraft} disabled={isSubmitting}>
+                            Save Draft
+                        </Button>
+                        <Button onClick={onSubmit} disabled={isSubmitting}>
+                            Submit Assignment
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="rounded-md bg-muted/50 border p-3 text-sm text-muted-foreground">
+                        {submission?.status === 'submitted' && 'Your submission is under review by the instructor.'}
+                        {submission?.status === 'graded' && `Graded — Score: ${submission.score ?? 'N/A'}`}
+                        {submission?.status === 'approved' && 'Your submission has been approved.'}
+                        {!['submitted', 'graded', 'approved'].includes(submission?.status || '') && 'Contact your instructor if you need to resubmit.'}
+                    </div>
+                )}
             </CardContent>
         </Card>
     );

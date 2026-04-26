@@ -1,17 +1,15 @@
 import client from '../client';
 import {
-    ConfirmPaymentResponse,
     Registration,
     RegistrationCreateRequest,
-    RegistrationPaymentIntentRequest,
     RegistrationResponse,
+    StartCheckoutResponse,
 } from './types';
 import { PaginatedResponse, PaginationParams } from '../types';
 
 // My Registrations (Attendee)
 export const getMyRegistrations = async (params?: PaginationParams): Promise<PaginatedResponse<Registration>> => {
     const response = await client.get<PaginatedResponse<Registration>>('/registrations/', { params });
-    // Handle both paginated and non-paginated responses
     if (Array.isArray(response.data)) {
         return {
             count: response.data.length,
@@ -31,34 +29,25 @@ export const getMyRegistration = async (uuid: string): Promise<Registration> => 
     return response.data;
 };
 
-// Link Registrations - Links guest registrations to the current user's account
+// Link guest registrations to the current user's account.
 export const linkRegistrations = async (): Promise<{ linked_count: number; message: string }> => {
     const response = await client.post<{ linked_count: number; message: string }>('/registrations/users/me/link-registrations/');
     return response.data;
 };
 
-// Public Registration
-// Returns RegistrationResponse which may include client_secret for paid events
-export const registerForEvent = async (eventUuid: string, data: RegistrationCreateRequest): Promise<RegistrationResponse> => {
-    // path('public/events/<uuid:event_uuid>/register/', ...)
+// Public Registration — paid events come back with ``checkout_url``.
+export const registerForEvent = async (
+    eventUuid: string,
+    data: RegistrationCreateRequest,
+): Promise<RegistrationResponse> => {
     const response = await client.post<RegistrationResponse>(`/public/events/${eventUuid}/register/`, data);
     return response.data;
 };
 
-// Resume payment for a pending registration
-export const getRegistrationPaymentIntent = async (
-    registrationUuid: string,
-    data?: RegistrationPaymentIntentRequest
-): Promise<RegistrationResponse> => {
-    const response = await client.post<RegistrationResponse>(
-        `/public/registrations/${registrationUuid}/payment-intent/`,
-        data
+// Resume a PENDING paid registration — returns a fresh Stripe Checkout URL.
+export const startRegistrationCheckout = async (registrationUuid: string): Promise<StartCheckoutResponse> => {
+    const response = await client.post<StartCheckoutResponse>(
+        `/public/registrations/${registrationUuid}/start-checkout/`,
     );
-    return response.data;
-};
-
-// Confirm payment after Stripe.js succeeds
-export const confirmRegistrationPayment = async (registrationUuid: string): Promise<ConfirmPaymentResponse> => {
-    const response = await client.post<ConfirmPaymentResponse>(`/public/registrations/${registrationUuid}/confirm-payment/`);
     return response.data;
 };

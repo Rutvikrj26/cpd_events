@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { getInitials } from "@/lib/initials";
 import { useParams, Link } from "react-router-dom";
 import {
   Calendar,
@@ -14,7 +15,8 @@ import {
   Building2,
   Globe,
   Mail,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +31,7 @@ import { getMyRegistrations } from "@/api/registrations";
 import { Event } from "@/api/events/types";
 import { Registration } from "@/api/registrations/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { sanitizeHtml, hasVisibleContent } from "@/lib/sanitize";
 
 export function EventDetail() {
   const { id } = useParams<{ id: string }>();
@@ -127,7 +130,7 @@ export function EventDetail() {
           <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-foreground">Event Not Found</h2>
           <p className="text-muted-foreground mt-2">{error || "The event you're looking for doesn't exist."}</p>
-          <Link to="/events/browse">
+          <Link to="/events">
             <Button className="mt-4">Browse Events</Button>
           </Link>
         </div>
@@ -136,12 +139,18 @@ export function EventDetail() {
   }
 
   // Derive states from event data
-  const isPast = new Date(event.starts_at) < new Date();
+  const isPast = event.ends_at
+    ? new Date(event.ends_at) < new Date()
+    : new Date(event.starts_at) < new Date();
+  const eventStarted = new Date(event.starts_at) <= new Date();
   const isRegistrationOpen = event.is_registration_open ?? event.registration_enabled;
   const organizerName = event.organizer?.display_name || event.organizer_name || event.owner?.display_name || "Unknown Organizer";
 
   // Check if current user is the organizer (check both nested objects as per API variant)
   const isEventOwner = isAuthenticated && (user?.uuid === event.owner?.uuid || user?.uuid === event.organizer?.uuid);
+  // Host = owner + listed speaker + platform admin; computed on the server.
+  // Falls back to ownership for legacy responses missing the flag.
+  const isEventHost = isAuthenticated && (event.is_current_user_host ?? isEventOwner);
 
   // Calculate duration display
   const getDurationDisplay = () => {
@@ -179,7 +188,11 @@ export function EventDetail() {
     }
 
     if (isPast) {
-      return <Button disabled>Event Ended</Button>;
+      return (
+        <Button disabled>
+          {event.status === 'completed' ? 'Event Completed' : 'Event Ended'}
+        </Button>
+      );
     }
 
     if (hasRegistration) {
@@ -227,23 +240,57 @@ export function EventDetail() {
     }
 
     if (isRegistrationOpen) {
+      const wrapClass = isLarge ? 'w-full' : 'inline-flex flex-col items-start';
+      const next = encodeURIComponent(`/events/${id}/details`);
       return (
-        <Link to={`/events/${id}/register`}>
-          <Button
-            size={isLarge ? "lg" : "default"}
-            className={isLarge ? 'w-full py-6 text-lg' : ''}
-          >
-            Register Now
-          </Button>
-        </Link>
+        <div className={wrapClass}>
+          <Link to={`/events/${id}/register`}>
+            <Button
+              size={isLarge ? "lg" : "default"}
+              className={isLarge ? 'w-full py-6 text-lg' : ''}
+            >
+              Register Now
+            </Button>
+          </Link>
+          {!isAuthenticated && (
+            <p className={`text-xs text-muted-foreground mt-2 ${isLarge ? 'text-center w-full' : ''}`}>
+              Already registered?{' '}
+              <Link to={`/login?returnUrl=${next}`} className="text-primary underline-offset-2 hover:underline">
+                Sign in
+              </Link>
+              {' '}to see your status.
+            </p>
+          )}
+        </div>
       );
     }
 
     return <Button disabled>Registration Closed</Button>;
   };
 
+  const nextUrl = encodeURIComponent(`/events/${id}/details`);
+
   return (
     <div className="bg-background min-h-screen pb-12">
+      {/* Mini auth bar — this route doesn't sit inside PublicLayout, so an
+          anon visitor would otherwise have no nav at all. */}
+      {!isAuthenticated && (
+        <div className="border-b border-border bg-card">
+          <div className="container mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 lg:px-8">
+            <Link to="/discover/events" className="text-sm text-muted-foreground hover:text-foreground">
+              ← Browse events
+            </Link>
+            <div className="flex items-center gap-2">
+              <Link to={`/login?returnUrl=${nextUrl}`}>
+                <Button size="sm" variant="ghost">Sign in</Button>
+              </Link>
+              <Link to={`/signup?returnUrl=${nextUrl}`}>
+                <Button size="sm" variant="outline">Create account</Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Hero Header */}
       <div className="bg-card border-b border-border">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
@@ -283,6 +330,24 @@ export function EventDetail() {
               <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
                 {event.title}
               </h1>
+
+              {isEventHost && eventStarted && !isPast && (event.format === 'online' || event.format === 'hybrid') && (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
+                  <span className="flex items-center gap-2 text-sm font-medium text-destructive">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75 animate-ping" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
+                    </span>
+                    Event is live now
+                  </span>
+                  <JoinButton
+                    eventUuid={event.uuid}
+                    role="host"
+                    state="live"
+                    size="sm"
+                  />
+                </div>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 text-muted-foreground pt-2">
                 <div className="flex items-center gap-2">
@@ -385,9 +450,16 @@ export function EventDetail() {
               <TabsContent value="about" className="pt-6 space-y-6">
                 <div>
                   <h3 className="text-xl font-semibold text-foreground mb-3">Event Description</h3>
-                  <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
-                    {event.description || event.short_description || "No description available."}
-                  </p>
+                  {hasVisibleContent(event.description) ? (
+                    <div
+                      className="text-muted-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(event.description) }}
+                    />
+                  ) : event.short_description ? (
+                    <p className="text-muted-foreground leading-relaxed">{event.short_description}</p>
+                  ) : (
+                    <p className="text-muted-foreground leading-relaxed italic">No description available.</p>
+                  )}
                 </div>
 
                 {event.cpd_credits && Number(event.cpd_credits) > 0 && (
@@ -405,6 +477,25 @@ export function EventDetail() {
                     </div>
                   </>
                 )}
+
+                <Separator />
+                <div>
+                  <h3 className="text-xl font-semibold text-foreground mb-4">Verifiable Certificate</h3>
+                  <div className="flex items-center justify-between gap-3 bg-info-subtle p-4 rounded-lg border border-info">
+                    <div className="flex items-center gap-3">
+                      <ShieldCheck className="h-8 w-8 text-info" />
+                      <div>
+                        <p className="font-medium text-foreground">Certificate of completion</p>
+                        <p className="text-sm text-muted-foreground">
+                          Eligible attendees receive a verifiable certificate. Anyone can verify any certificate using its code.
+                        </p>
+                      </div>
+                    </div>
+                    <Link to="/verify">
+                      <Button variant="outline" size="sm">Verify a certificate</Button>
+                    </Link>
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="schedule" className="pt-6">
@@ -574,7 +665,7 @@ export function EventDetail() {
                   </div>
                 )}
 
-                {event.spots_remaining !== null && event.spots_remaining !== undefined && (
+                {!isPast && event.spots_remaining !== null && event.spots_remaining !== undefined && (
                   <div className="flex justify-between items-center py-2 border-b border-border">
                     <span className="text-muted-foreground">Spots Remaining</span>
                     <span className="text-foreground font-semibold">
@@ -620,10 +711,10 @@ export function EventDetail() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Link to={`/organizations/${event.organization_info.slug}/public`}>
+                      <Link to="/discover/events">
                         <Button variant="outline" className="w-full text-xs h-8">
                           <Building2 className="h-3 w-3 mr-1" />
-                          View Profile
+                          Browse Events
                         </Button>
                       </Link>
                     </div>
@@ -632,7 +723,7 @@ export function EventDetail() {
                   <>
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded bg-info-subtle flex items-center justify-center text-info font-bold">
-                        {organizerName.charAt(0)}
+                        {getInitials(organizerName)}
                       </div>
                       <div>
                         <div className="font-medium text-foreground">{organizerName}</div>
@@ -656,10 +747,34 @@ export function EventDetail() {
                       <Video className="h-4 w-4 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="font-medium text-foreground">Online Event</p>
-                        {isConfirmedRegistration ? (
+                        {isPast ? (
+                          <div className="mt-1 space-y-1">
+                            <p className="text-muted-foreground">This session has ended.</p>
+                            {isConfirmedRegistration && (
+                              <p className="text-xs text-muted-foreground">
+                                If the organizer recorded the session, it will appear here once it's ready.
+                              </p>
+                            )}
+                          </div>
+                        ) : (isConfirmedRegistration || isEventHost) ? (
                           <div className="mt-2 space-y-2">
-                            <JoinButton eventUuid={event.uuid} size="sm" label="Join Video" />
-                            <p className="text-xs text-muted-foreground">Check your email for meeting details</p>
+                            {isEventHost ? (
+                              <JoinButton
+                                eventUuid={event.uuid}
+                                size="sm"
+                                role="host"
+                                state={eventStarted ? "live" : "pre_event"}
+                              />
+                            ) : (
+                              <Button size="sm" asChild>
+                                <Link to={`/events/${event.uuid}/lobby`}>
+                                  <Video className="h-3 w-3 mr-1" /> Go to lobby
+                                </Link>
+                              </Button>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              {isEventHost ? "You'll join as host" : "Check your email for meeting details"}
+                            </p>
                           </div>
                         ) : isPendingPayment ? (
                           <div className="mt-1 space-y-1">
@@ -680,10 +795,25 @@ export function EventDetail() {
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="font-medium text-foreground">Hybrid Event</p>
-                        {isConfirmedRegistration ? (
+                        {(isConfirmedRegistration || isEventHost) ? (
                           <div className="mt-2 space-y-2">
-                            <JoinButton eventUuid={event.uuid} size="sm" label="Join Online" />
-                            <p className="text-xs text-muted-foreground">Check your email for meeting details</p>
+                            {isEventHost ? (
+                              <JoinButton
+                                eventUuid={event.uuid}
+                                size="sm"
+                                role="host"
+                                state={eventStarted ? "live" : "pre_event"}
+                              />
+                            ) : (
+                              <Button size="sm" asChild>
+                                <Link to={`/events/${event.uuid}/lobby`}>
+                                  <Video className="h-3 w-3 mr-1" /> Go to lobby
+                                </Link>
+                              </Button>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              {isEventHost ? "You'll join as host" : "Check your email for meeting details"}
+                            </p>
                           </div>
                         ) : isPendingPayment ? (
                           <div className="mt-1 space-y-1">
@@ -734,7 +864,7 @@ export function EventDetail() {
                   Explore other events from this organization
                 </p>
               </div>
-              <Link to={`/organizations/${event.organization_info.slug}/public`}>
+              <Link to="/discover/events">
                 <Button variant="outline">
                   View All
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -785,7 +915,7 @@ export function EventDetail() {
                             {relatedEvent.cpd_credits} CPD
                           </Badge>
                         )}
-                        <Link to={`/events/${relatedEvent.slug || relatedEvent.uuid}`} className="ml-auto">
+                        <Link to={`/events/${relatedEvent.slug || relatedEvent.uuid}/details`} className="ml-auto">
                           <Button variant="ghost" size="sm" className="text-xs">
                             View Details
                             <ArrowRight className="ml-1 h-3 w-3" />

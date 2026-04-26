@@ -3,7 +3,7 @@ export interface User {
     email: string;
     full_name: string;
     roles: string[];
-    primary_role: 'learner' | 'educator' | 'course_manager' | 'admin';
+    primary_role: 'learner' | 'organizer' | 'instructor' | 'admin';
     email_verified?: boolean;
     onboarding_completed?: boolean;
     is_active: boolean;
@@ -13,6 +13,8 @@ export interface User {
     professional_title?: string;
     bio?: string;
     timezone?: string;
+    pending_email?: string;
+    gst_hst_number?: string;
 }
 
 
@@ -26,6 +28,8 @@ export interface SignupRequest {
     password: string;
     password_confirm: string;
     full_name: string;
+    professional_title?: string;
+    organization_name?: string;
 }
 
 export interface RefreshTokenRequest {
@@ -63,7 +67,11 @@ export interface PasswordChangeRequest {
 
 export interface NotificationPreferences {
     notify_event_reminders: boolean;
+    notify_event_updates: boolean;
     notify_certificate_issued: boolean;
+    notify_badges: boolean;
+    notify_recordings: boolean;
+    notify_course_progress: boolean;
 }
 
 export interface UserSession {

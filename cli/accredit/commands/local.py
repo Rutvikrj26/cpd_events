@@ -17,9 +17,46 @@ console = Console()
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 BACKEND_DIR = REPO_ROOT / "backend"
 FRONTEND_DIR = REPO_ROOT / "frontend"
+CLI_SRC_DIR = REPO_ROOT / "cli"
 CLI_DIR = REPO_ROOT / ".cli"
 LOGS_DIR = CLI_DIR / "logs"
 PIDS_DIR = CLI_DIR / "pids"
+
+LIVEKIT_CONTAINER_NAME = "cpd_livekit_dev"
+REDIS_CONTAINER_NAME = "cpd_livekit_redis"
+EGRESS_CONTAINER_NAME = "cpd_livekit_egress"
+LIVEKIT_CONFIG_DIR = CLI_DIR / "livekit"
+LIVEKIT_CONFIG_FILE = LIVEKIT_CONFIG_DIR / "livekit.yaml"
+EGRESS_CONFIG_FILE = LIVEKIT_CONFIG_DIR / "egress.yaml"
+RECORDINGS_DIR = CLI_DIR / "recordings"
+LIVEKIT_TEMPLATE_FILE = CLI_SRC_DIR / "livekit.yaml.template"
+EGRESS_TEMPLATE_FILE = CLI_SRC_DIR / "egress.yaml.template"
+
+
+def render_livekit_config():
+    """Render cli/livekit.yaml.template into .cli/livekit/livekit.yaml.
+
+    Substitutes ${LIVEKIT_WEBHOOK_URL} with a host-reachable URL so the
+    docker-hosted LiveKit container can POST back to a natively-running
+    backend on the host machine.
+    """
+    LIVEKIT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    template = LIVEKIT_TEMPLATE_FILE.read_text()
+    webhook_url = os.environ.get(
+        'LIVEKIT_WEBHOOK_URL',
+        'http://localhost:8000/api/v1/webhooks/video/',
+    )
+    rendered = template.replace('${LIVEKIT_WEBHOOK_URL}', webhook_url)
+    LIVEKIT_CONFIG_FILE.write_text(rendered)
+    return LIVEKIT_CONFIG_FILE
+
+
+def render_egress_config():
+    """Render cli/egress.yaml.template into .cli/livekit/egress.yaml."""
+    LIVEKIT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    template = EGRESS_TEMPLATE_FILE.read_text()
+    EGRESS_CONFIG_FILE.write_text(template)
+    return EGRESS_CONFIG_FILE
 
 def ensure_dirs():
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -93,7 +130,7 @@ def up(backend, frontend):
             console.print("[green]Starting Backend...[/green]")
             start_process(
                 "backend",
-                ["uv", "run", "python", "src/manage.py", "runserver"],
+                ["uv", "run", "python", "src/manage.py", "runserver", "0.0.0.0:8000"],
                 BACKEND_DIR,
                 LOGS_DIR / "backend.log",
                 backend_pid
@@ -235,6 +272,186 @@ def shell():
         pass
 
 @local.command()
+@click.option('--reset', is_flag=True, help='Flush the database before loading fixtures')
+def seed(reset):
+    """Load demo fixture data into the database."""
+    fixtures = [
+        "00_groups",
+        "01_accounts",
+        "02_events",
+        "03_registrations",
+        "04_certificates",
+        "05_learning",
+        "06_billing",
+        "07_conferencing",
+        "08_contacts",
+        "09_badges",
+        "10_feedback",
+        "11_promo_codes",
+        "12_integrations",
+    ]
+
+    if reset:
+        console.print("[yellow]Flushing database...[/yellow]")
+        result = subprocess.run(
+            ["uv", "run", "python", "src/manage.py", "flush", "--no-input"],
+            cwd=BACKEND_DIR,
+        )
+        if result.returncode != 0:
+            console.print("[red]Failed to flush database.[/red]")
+            return
+
+        console.print("[cyan]Re-running migrations...[/cyan]")
+        subprocess.run(
+            ["uv", "run", "python", "src/manage.py", "migrate"],
+            cwd=BACKEND_DIR,
+        )
+
+    console.print(f"[bold]Loading {len(fixtures)} fixtures...[/bold]")
+
+    # Load all fixtures in a single call so Django defers FK constraint
+    # checks until every object is in the database.
+    result = subprocess.run(
+        ["uv", "run", "python", "src/manage.py", "loaddata"] + fixtures,
+        cwd=BACKEND_DIR,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        for fixture in fixtures:
+            console.print(f"  [green]✓[/green] {fixture}")
+        console.print("[bold green]Demo data loaded successfully![/bold green]")
+    else:
+        console.print(f"[red]Failed to load fixtures:[/red]\n{result.stderr.strip()}")
+        return
+
+    # Fixtures create groups by pk but don't attach Django permissions.
+    # Run after loaddata so group→permission assignments match the code
+    # definition in accounts/management/commands/setup_groups.py.
+    console.print("[cyan]Syncing group permissions...[/cyan]")
+    subprocess.run(
+        ["uv", "run", "python", "src/manage.py", "setup_groups"],
+        cwd=BACKEND_DIR,
+    )
+
+    # Content fixtures are intentionally empty — `seed_demo` builds a rich,
+    # time-anchored demo graph using the ORM so dates stay current and every
+    # learner-facing UI branch has data to render.
+    console.print("[cyan]Seeding demo content...[/cyan]")
+    result = subprocess.run(
+        ["uv", "run", "python", "src/manage.py", "seed_demo"],
+        cwd=BACKEND_DIR,
+    )
+    if result.returncode != 0:
+        console.print("[red]seed_demo failed.[/red]")
+        return
+    console.print("[bold green]Demo data seeded successfully![/bold green]")
+
+
+@local.command()
+def livekit():
+    """Start local LiveKit + Redis + Egress dev containers (docker required).
+
+    Recording requires the full stack: LiveKit server, Redis (for egress
+    worker coordination), and the Egress service (runs headless Chrome to
+    record rooms). All three use host networking so they can talk to each
+    other on localhost.
+    """
+    if not LIVEKIT_TEMPLATE_FILE.exists():
+        console.print(f"[red]Missing template:[/red] {LIVEKIT_TEMPLATE_FILE}")
+        sys.exit(1)
+    if not EGRESS_TEMPLATE_FILE.exists():
+        console.print(f"[red]Missing template:[/red] {EGRESS_TEMPLATE_FILE}")
+        sys.exit(1)
+
+    livekit_config = render_livekit_config()
+    egress_config = render_egress_config()
+    RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    # Egress runs as uid 1001 inside its container; the host dir may be
+    # owned by a different uid (e.g. 1000). 0o777 lets egress write files
+    # without introducing a user-namespace or chown step.
+    RECORDINGS_DIR.chmod(0o777)
+    console.print(f"[cyan]Rendered[/cyan] {livekit_config}")
+    console.print(f"[cyan]Rendered[/cyan] {egress_config}")
+    console.print(f"[cyan]Recordings →[/cyan] {RECORDINGS_DIR}")
+
+    # Stop any previous dev containers (ignore errors — they may not exist).
+    for name in (EGRESS_CONTAINER_NAME, LIVEKIT_CONTAINER_NAME, REDIS_CONTAINER_NAME):
+        subprocess.run(
+            ["docker", "rm", "-f", name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # --- Redis -------------------------------------------------------------
+    # Bound to 127.0.0.1 only so the dev Redis is not exposed on the LAN.
+    redis_cmd = [
+        "docker", "run", "-d",
+        "--name", REDIS_CONTAINER_NAME,
+        "--network", "host",
+        "redis:7-alpine",
+        "redis-server", "--bind", "127.0.0.1", "--port", "6379",
+    ]
+    result = subprocess.run(redis_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        console.print(f"[red]redis docker run failed:[/red] {result.stderr.strip()}")
+        sys.exit(1)
+    console.print(f"[green]Redis started[/green] as [cyan]{REDIS_CONTAINER_NAME}[/cyan] on localhost:6379")
+
+    # --- LiveKit server ----------------------------------------------------
+    livekit_cmd = [
+        "docker", "run", "-d",
+        "--name", LIVEKIT_CONTAINER_NAME,
+        "--network", "host",
+        "-v", f"{livekit_config}:/etc/livekit.yaml:ro",
+        "livekit/livekit-server:latest",
+        "--config", "/etc/livekit.yaml",
+        "--bind", "0.0.0.0",
+    ]
+    result = subprocess.run(livekit_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        console.print(f"[red]livekit docker run failed:[/red] {result.stderr.strip()}")
+        sys.exit(1)
+    console.print(
+        f"[bold green]LiveKit started[/bold green] "
+        f"as [cyan]{LIVEKIT_CONTAINER_NAME}[/cyan] on ws://localhost:7880"
+    )
+
+    # --- Egress ------------------------------------------------------------
+    # The egress image embeds Xvfb + headless Chrome for room-composite
+    # recording. It registers itself with LiveKit via Redis; once up, the
+    # `start_room_composite_egress` API will hand jobs to it.
+    egress_cmd = [
+        "docker", "run", "-d",
+        "--name", EGRESS_CONTAINER_NAME,
+        "--network", "host",
+        "-e", f"EGRESS_CONFIG_FILE=/egress.yaml",
+        "-v", f"{egress_config}:/egress.yaml:ro",
+        "-v", f"{RECORDINGS_DIR}:/out",
+        # Chrome in the egress image needs a larger /dev/shm and SYS_ADMIN
+        # to run its sandbox cleanly.
+        "--shm-size=1gb",
+        "--cap-add=SYS_ADMIN",
+        "livekit/egress:latest",
+    ]
+    result = subprocess.run(egress_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        console.print(f"[yellow]egress docker run failed (recording will not work):[/yellow] {result.stderr.strip()}")
+    else:
+        console.print(
+            f"[bold green]Egress started[/bold green] "
+            f"as [cyan]{EGRESS_CONTAINER_NAME}[/cyan] — "
+            f"recordings will land in {RECORDINGS_DIR}"
+        )
+
+    console.print(
+        "Backend env must expose LIVEKIT_API_KEY=devkey, "
+        "LIVEKIT_API_SECRET=secret_dev_key_change_in_production, "
+        "LIVEKIT_HOST=http://localhost:7880, LIVEKIT_WS_URL=ws://localhost:7880"
+    )
+
+
+@local.command()
 def setup():
     """Run initial setup (install dependencies, migrate)."""
     console.print("[bold]Running setup...[/bold]")
@@ -258,6 +475,9 @@ def setup():
 
     console.print("[cyan]Backend: Running migrations...[/cyan]")
     subprocess.run(["uv", "run", "python", "src/manage.py", "migrate"], cwd=BACKEND_DIR)
+
+    console.print("[cyan]Backend: Syncing group permissions...[/cyan]")
+    subprocess.run(["uv", "run", "python", "src/manage.py", "setup_groups"], cwd=BACKEND_DIR)
 
     # Frontend Setup
     console.print("[cyan]Frontend: Installing dependencies...[/cyan]")

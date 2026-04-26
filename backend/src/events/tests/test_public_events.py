@@ -172,7 +172,7 @@ class TestPublicEventDetailView:
         response = api_client.get(f'/api/v1/public/events/{published_event.uuid}/')
         assert response.status_code == status.HTTP_200_OK
         # Should not expose internal fields
-        assert 'zoom_meeting_password' not in response.data
+        assert 'meeting_password' not in response.data
 
     def test_registration_info_included(self, api_client, published_event):
         """Public event includes registration availability info."""

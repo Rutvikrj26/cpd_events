@@ -78,6 +78,14 @@ export const setDefaultTemplate = async (uuid: string): Promise<CertificateTempl
     return response.data;
 };
 
+export const duplicateCertificateTemplate = async (uuid: string, name?: string): Promise<CertificateTemplate> => {
+    const response = await client.post<CertificateTemplate>(
+        `/certificate-templates/${uuid}/duplicate/`,
+        name ? { name } : {}
+    );
+    return response.data;
+};
+
 export const uploadTemplateFile = async (uuid: string, file: File): Promise<{ file_url: string; file_size: number }> => {
     const formData = new FormData();
     formData.append('file', file);
@@ -127,13 +135,58 @@ export const getEventCertificates = async (eventUuid: string): Promise<Certifica
     return Array.isArray(response.data) ? response.data : response.data.results || [];
 };
 
-export const issueCertificates = async (eventUuid: string, data: CertificateIssueRequest): Promise<{ issued: number; skipped: number }> => {
-    const response = await client.post<{ issued: number; skipped: number }>(`/events/${eventUuid}/certificates/issue/`, data);
+export interface CertificateIssueResult {
+    issued_count: number;
+    skipped_count: number;
+    issued: string[];
+    skipped: Array<{ uuid: string; reason: string; detail?: string }>;
+}
+
+export const issueCertificates = async (
+    eventUuid: string,
+    data: CertificateIssueRequest
+): Promise<CertificateIssueResult> => {
+    const response = await client.post<CertificateIssueResult>(
+        `/events/${eventUuid}/certificates/issue/`,
+        data
+    );
+    return response.data;
+};
+
+export const reissueCertificate = async (
+    eventUuid: string,
+    registrationUuid: string
+): Promise<CertificateIssueResult> =>
+    issueCertificates(eventUuid, { registration_uuids: [registrationUuid], force: true });
+
+export const issueCertificatesGeneric = async (
+    data: CertificateIssueRequest
+): Promise<CertificateIssueResult> => {
+    const response = await client.post<CertificateIssueResult>('/certificates/issue/', data);
+    return response.data;
+};
+
+export const getOrganizationCertificates = async (params?: {
+    search?: string;
+    event?: string;
+    course?: string;
+    status?: string;
+    page?: number;
+}): Promise<{ count: number; results: Certificate[] }> => {
+    const response = await client.get<{ count: number; results: Certificate[] }>(
+        '/certificates/organization/',
+        { params }
+    );
     return response.data;
 };
 
 export const revokeCertificate = async (eventUuid: string, certUuid: string, reason: string): Promise<Certificate> => {
     const response = await client.post<Certificate>(`/events/${eventUuid}/certificates/${certUuid}/revoke/`, { reason });
+    return response.data;
+};
+
+export const revokeCertificateDirect = async (certUuid: string, reason: string): Promise<Certificate> => {
+    const response = await client.post<Certificate>(`/certificates/${certUuid}/revoke/`, { reason });
     return response.data;
 };
 

@@ -2,6 +2,7 @@
 Contacts app views and viewsets.
 """
 
+from django.db.models import Count, Q
 from django_filters import rest_framework as filters
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
@@ -9,7 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from common.permissions import IsEducatorOrAdmin
+from common.permissions import IsOrganizerOrAdmin
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import BaseModelViewSet
@@ -42,7 +43,7 @@ class ContactFilter(filters.FilterSet):
 # =============================================================================
 
 
-@roles('educator', 'admin', route_name='tags')
+@roles('organizer', 'admin', route_name='tags')
 class TagViewSet(BaseModelViewSet):
     """
     Manage tags.
@@ -54,10 +55,10 @@ class TagViewSet(BaseModelViewSet):
     DELETE /api/v1/tags/{uuid}/
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
 
     def get_queryset(self):
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             return Tag.objects.all()
         return Tag.objects.filter(owner=self.request.user)
 
@@ -97,7 +98,7 @@ class TagViewSet(BaseModelViewSet):
 # =============================================================================
 
 
-@roles('educator', 'admin', route_name='contact_lists')
+@roles('organizer', 'admin', route_name='contact_lists')
 class ContactListViewSet(BaseModelViewSet):
     """
     Manage contact lists.
@@ -109,10 +110,10 @@ class ContactListViewSet(BaseModelViewSet):
     DELETE /api/v1/contact-lists/{uuid}/
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
 
     def get_queryset(self):
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             return ContactList.objects.all()
         return ContactList.objects.filter(owner=self.request.user)
 
@@ -225,7 +226,7 @@ class ContactListViewSet(BaseModelViewSet):
 # =============================================================================
 
 
-@roles('educator', 'admin', route_name='contacts')
+@roles('organizer', 'admin', route_name='contacts')
 class ContactViewSet(BaseModelViewSet):
     """
     Manage contacts.
@@ -240,7 +241,7 @@ class ContactViewSet(BaseModelViewSet):
     Tags are used for segmentation instead of multiple lists.
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
     filterset_class = ContactFilter
     search_fields = ['email', 'full_name', 'organization_name']
     ordering_fields = ['full_name', 'email', 'created_at', 'events_attended_count']
@@ -251,10 +252,21 @@ class ContactViewSet(BaseModelViewSet):
         return ContactList.get_or_create_for_user(self.request.user)
 
     def get_queryset(self):
-        if self.request.user.is_staff:
-            return Contact.objects.all().prefetch_related('tags')
-        contact_list = self._get_user_list()
-        return Contact.objects.filter(contact_list=contact_list).prefetch_related('tags')
+        if self.request.user.groups.filter(name="admin").exists():
+            qs = Contact.objects.all()
+        else:
+            contact_list = self._get_user_list()
+            qs = Contact.objects.filter(contact_list=contact_list)
+        # Annotate course enrollment counts via the optional User link.
+        # distinct=True prevents double-counting through the tags prefetch join path.
+        return qs.prefetch_related('tags').annotate(
+            courses_enrolled_count=Count('user__course_enrollments', distinct=True),
+            courses_completed_count=Count(
+                'user__course_enrollments',
+                filter=Q(user__course_enrollments__status='completed'),
+                distinct=True,
+            ),
+        )
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -378,3 +390,122 @@ class ContactViewSet(BaseModelViewSet):
             )
 
         return response
+
+    IMPORT_COLUMNS = [
+        'email',
+        'full_name',
+        'professional_title',
+        'organization_name',
+        'phone',
+        'notes',
+    ]
+
+    @swagger_auto_schema(
+        operation_summary="Download import template",
+        operation_description="Download a CSV template with the expected columns for /import-csv/.",
+    )
+    @action(detail=False, methods=['get'], url_path='import-template')
+    def import_template(self, request):
+        """Empty CSV template for the CSV import flow."""
+        import csv
+
+        from django.http import HttpResponse
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="contacts_import_template.csv"'
+        writer = csv.writer(response)
+        writer.writerow(self.IMPORT_COLUMNS)
+        writer.writerow([
+            'attendee@example.com',
+            'Jane Doe',
+            'MD',
+            'Example Clinic',
+            '+1 555 0123',
+            'Met at conference',
+        ])
+        return response
+
+    @swagger_auto_schema(
+        operation_summary="Import contacts from CSV",
+        operation_description="Upload a CSV file (multipart/form-data, field name 'file') with columns from /import-template/.",
+    )
+    @action(detail=False, methods=['post'], url_path='import-csv')
+    def import_csv(self, request):
+        """Parse an uploaded CSV into contacts with row-level error reporting."""
+        import csv
+        import io
+
+        upload = request.FILES.get('file')
+        if not upload:
+            return Response({'error': 'No file uploaded under the "file" field.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        skip_duplicates = request.data.get('skip_duplicates', 'true')
+        skip_duplicates = str(skip_duplicates).lower() not in ('false', '0', 'no')
+
+        try:
+            decoded = upload.read().decode('utf-8-sig')
+        except UnicodeDecodeError:
+            return Response({'error': 'File must be UTF-8 encoded.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        reader = csv.DictReader(io.StringIO(decoded))
+        if not reader.fieldnames:
+            return Response({'error': 'CSV is empty.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        normalized = [(name or '').strip().lower() for name in reader.fieldnames]
+        missing = [col for col in ('email', 'full_name') if col not in normalized]
+        if missing:
+            return Response(
+                {'error': f'Missing required column(s): {", ".join(missing)}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        contact_list = self._get_user_list()
+        created: list[str] = []
+        skipped: list[dict] = []
+        errors: list[dict] = []
+
+        for index, raw_row in enumerate(reader, start=2):  # row 1 = header
+            row = {(k or '').strip().lower(): (v or '').strip() for k, v in raw_row.items()}
+            email = row.get('email', '').lower()
+            full_name = row.get('full_name', '')
+
+            if not email or '@' not in email:
+                errors.append({'row': index, 'email': email, 'error': 'Invalid email'})
+                continue
+            if not full_name:
+                errors.append({'row': index, 'email': email, 'error': 'full_name is required'})
+                continue
+
+            if Contact.objects.filter(contact_list=contact_list, email__iexact=email).exists():
+                if skip_duplicates:
+                    skipped.append({'row': index, 'email': email})
+                    continue
+                errors.append({'row': index, 'email': email, 'error': 'Duplicate email'})
+                continue
+
+            try:
+                contact = Contact.objects.create(
+                    contact_list=contact_list,
+                    email=email,
+                    full_name=full_name,
+                    professional_title=row.get('professional_title', ''),
+                    organization_name=row.get('organization_name', ''),
+                    phone=row.get('phone', ''),
+                    notes=row.get('notes', ''),
+                    source='import',
+                )
+                created.append(str(contact.uuid))
+            except Exception as e:
+                errors.append({'row': index, 'email': email, 'error': str(e)[:200]})
+
+        contact_list.update_contact_count()
+
+        return Response(
+            {
+                'created': len(created),
+                'skipped': len(skipped),
+                'errors': errors,
+                'skipped_rows': skipped,
+            },
+            status=status.HTTP_200_OK if errors else status.HTTP_201_CREATED,
+        )

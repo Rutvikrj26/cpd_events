@@ -1,42 +1,73 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Calendar, Award, Clock, Video, GraduationCap, ExternalLink, Users } from "lucide-react";
+import { ArrowRight, Calendar, Award, Clock, Video, GraduationCap, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { JoinButton } from "@/components/video/JoinButton";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DashboardStat } from "@/components/dashboard/DashboardStats";
 import { PageHeader } from "@/components/ui/page-header";
 import { getMyRegistrations } from "@/api/registrations";
 import { Registration } from "@/api/registrations/types";
+import { getMyCertificates } from "@/api/certificates";
+import { Certificate } from "@/api/certificates/types";
 import { useAuth } from "@/contexts/AuthContext";
+
+const TITLE_PREFIXES = new Set([
+  'dr', 'dr.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.',
+  'prof', 'prof.', 'professor', 'sir', 'madam', 'rev', 'rev.',
+]);
+
+function friendlyFirstName(fullName?: string | null): string {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(/\s+/);
+  const first = parts.find(p => !TITLE_PREFIXES.has(p.toLowerCase()) && p.length > 1);
+  return (first || parts[0] || '').replace(/,$/, '');
+}
+
 export function AttendeeDashboard() {
   const { user } = useAuth();
   const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchRegistrations() {
+    async function fetchData() {
       try {
-        const data = await getMyRegistrations();
-        setRegistrations(data.results);
+        // Fetch the certificate list separately so the "Earned & Ready"
+        // dashboard tile reflects the same count the /certificates page
+        // shows (filtered by `is_valid`) — registration.certificate_issued
+        // stays true even after revocation, so it overcounts. (QA F-25)
+        const [regData, certData] = await Promise.all([
+          getMyRegistrations(),
+          getMyCertificates().catch(() => ({ results: [] as Certificate[] })),
+        ]);
+        setRegistrations(regData.results);
+        setCertificates(certData.results ?? []);
       } catch (error) {
-        console.error("Failed to fetch registrations", error);
+        console.error("Failed to fetch dashboard data", error);
       } finally {
         setLoading(false);
       }
     }
-    fetchRegistrations();
+    fetchData();
   }, []);
 
+  // Only count confirmed registrations toward credits + upcoming counters.
+  // Waitlisted / cancelled / pending-payment rows otherwise inflate the
+  // dashboard and surface as "Join Session" CTAs the learner can't use.
+  const confirmedRegs = registrations.filter(r => r.status === 'confirmed');
   const stats = {
-    totalCredits: registrations.reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
-    certificates: registrations.filter(r => r.certificate_issued).length,
-    upcomingEvents: registrations.filter(r => new Date(r.event.starts_at) > new Date()).length,
-    learningHours: registrations.reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
+    totalCredits: confirmedRegs
+      .filter(r => r.attended || new Date(r.event.starts_at) <= new Date())
+      .reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
+    certificates: certificates.filter(c => c.is_valid !== false && c.status !== 'revoked').length,
+    upcomingEvents: confirmedRegs.filter(r => new Date(r.event.starts_at) > new Date()).length,
+    learningHours: confirmedRegs
+      .filter(r => r.attended)
+      .reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
   };
 
-  const upcomingRegistrations = registrations
+  const upcomingRegistrations = confirmedRegs
     .filter(r => new Date(r.event.starts_at) > new Date())
     .sort((a, b) => new Date(a.event.starts_at).getTime() - new Date(b.event.starts_at).getTime());
 
@@ -55,13 +86,13 @@ export function AttendeeDashboard() {
       {/* Welcome Header */}
       <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary to-primary/80 p-8 text-white shadow-lg">
         <div className="relative z-10">
-          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user?.full_name?.split(' ')[0] || 'Professional'}!</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {friendlyFirstName(user?.full_name) || 'Professional'}!</h1>
           <p className="mt-2 text-primary-foreground/90 max-w-xl">
             Track your professional development, manage upcoming events, and view your earned certificates.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button asChild variant="secondary" className="font-semibold shadow-sm">
-              <Link to="/events">Browse Events</Link>
+              <Link to="/registrations">My Learning</Link>
             </Button>
             <Button asChild variant="outline" className="bg-transparent text-white border-white/30 hover:bg-card/10 hover:text-white hover:border-white/50">
               <Link to="/settings">View Profile</Link>
@@ -152,7 +183,7 @@ export function AttendeeDashboard() {
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                            <Link to={`/events/${reg.event.slug || reg.event.uuid}`}>
+                            <Link to={`/events/${reg.event.slug || reg.event.uuid}/details`}>
                               <span className="absolute inset-0" aria-hidden="true" />
                               {reg.event.title}
                             </Link>
@@ -175,14 +206,13 @@ export function AttendeeDashboard() {
 
                       {/* Action Area */}
                       <div className="mt-4 flex items-center gap-3 relative z-10">
-                        <JoinButton
-                          eventUuid={reg.event.uuid}
-                          size="sm"
-                          label="Join Session"
-                          className="h-8 shadow-sm"
-                        />
+                        <Button size="sm" className="h-8 shadow-sm" asChild>
+                          <Link to={`/events/${reg.event.uuid}/lobby`}>
+                            <Video className="h-3 w-3 mr-1" /> Go to lobby
+                          </Link>
+                        </Button>
                         <Button variant="outline" size="sm" className="h-8" asChild>
-                          <Link to={`/events/${reg.event.slug || reg.event.uuid}`}>View Details</Link>
+                          <Link to={`/events/${reg.event.slug || reg.event.uuid}/details`}>View Details</Link>
                         </Button>
                       </div>
                     </div>
@@ -193,30 +223,8 @@ export function AttendeeDashboard() {
           )}
         </div>
 
-        {/* Side Column: Certificates & Upsell */}
+        {/* Side Column */}
         <div className="space-y-6">
-
-
-          {/* Organizer Upsell */}
-          <Card className="bg-foreground text-background border-none overflow-hidden relative shadow-lg">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-              <Users size={100} />
-            </div>
-            <CardHeader className="relative z-10">
-              <CardTitle className="text-lg">Host Your Own Events</CardTitle>
-              <CardDescription className="text-muted">
-                Ready to share your knowledge?
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="relative z-10">
-              <p className="text-sm text-muted mb-4 font-medium">
-                Upgrade to an Organizer account to create events, issue certificates, and track attendance automatically.
-              </p>
-              <Button asChild className="w-full bg-card text-foreground hover:bg-muted font-bold border-0" size="sm">
-                <Link to="/billing">Become an Organizer</Link>
-              </Button>
-            </CardContent>
-          </Card>
         </div>
       </div>
 

@@ -89,7 +89,7 @@ export function CertificatesList() {
 function CertificateCard({ cert }: { cert: Certificate }) {
   const eventLink = cert.event?.event_type === 'course'
     ? `/courses/${cert.event?.uuid}` // We might want slug here but UUID is guaranteed
-    : `/events/${cert.event?.uuid}`;
+    : `/events/${cert.event?.uuid}/details`;
 
   return (
     <Card className="flex flex-col h-full hover:shadow-md transition-shadow group">

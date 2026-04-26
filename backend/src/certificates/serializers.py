@@ -25,9 +25,7 @@ class CertificateTemplateListSerializer(SoftDeleteModelSerializer):
             'file_url',
             'file_type',
             'field_positions',
-            'version',
             'is_default',
-            'is_latest_version',
             'usage_count',
             'created_at',
         ]
@@ -43,7 +41,6 @@ class CertificateTemplateDetailSerializer(SoftDeleteModelSerializer):
             'uuid',
             'name',
             'description',
-            'version',
             'file_url',
             'file_type',
             'field_positions',
@@ -51,18 +48,13 @@ class CertificateTemplateDetailSerializer(SoftDeleteModelSerializer):
             'height_px',
             'orientation',
             'is_default',
-            'is_latest_version',
             'usage_count',
-            'original_template',
             'created_at',
             'updated_at',
         ]
         read_only_fields = [
             'uuid',
-            'version',
-            'is_latest_version',
             'usage_count',
-            'original_template',
             'created_at',
             'updated_at',
         ]
@@ -84,22 +76,17 @@ class CertificateTemplateCreateSerializer(serializers.ModelSerializer):
             'height_px',
             'orientation',
             'is_default',
-            'version',
             'usage_count',
             'created_at',
         ]
-        read_only_fields = ['uuid', 'version', 'usage_count', 'created_at']
+        read_only_fields = ['uuid', 'usage_count', 'created_at']
         extra_kwargs = {
             'file_url': {'required': False, 'default': ''},
         }
 
 
 class CertificateTemplateUpdateSerializer(serializers.ModelSerializer):
-    """
-    Update template with versioning (H1).
-
-    If template has been used, creates new version instead of updating.
-    """
+    """Update template in place."""
 
     class Meta:
         model = CertificateTemplate
@@ -115,21 +102,6 @@ class CertificateTemplateUpdateSerializer(serializers.ModelSerializer):
             'is_default',
         ]
 
-    def update(self, instance, validated_data):
-        # Check if template has been used
-        if instance.usage_count > 0:
-            # Create new version instead of updating
-            new_template = instance.create_new_version()
-
-            # Apply changes to new version
-            for key, value in validated_data.items():
-                setattr(new_template, key, value)
-            new_template.save()
-
-            return new_template
-
-        return super().update(instance, validated_data)
-
 
 # =============================================================================
 # Certificate Serializers
@@ -139,8 +111,9 @@ class CertificateTemplateUpdateSerializer(serializers.ModelSerializer):
 class CertificateListSerializer(SoftDeleteModelSerializer):
     """Lightweight certificate for list views."""
 
-    event_title = serializers.CharField(source='event.title', read_only=True)
-    registrant_name = serializers.CharField(source='registration.full_name', read_only=True)
+    event_title = serializers.SerializerMethodField()
+    registrant_name = serializers.SerializerMethodField()
+    kind = serializers.SerializerMethodField()
 
     class Meta:
         model = Certificate
@@ -148,12 +121,33 @@ class CertificateListSerializer(SoftDeleteModelSerializer):
             'uuid',
             'event_title',
             'registrant_name',
+            'kind',
             'status',
-            'short_code',
             'short_code',
             'created_at',
         ]
         read_only_fields = fields
+
+    def get_event_title(self, obj):
+        if obj.registration and obj.registration.event:
+            return obj.registration.event.title
+        if obj.course_enrollment and obj.course_enrollment.course:
+            return obj.course_enrollment.course.title
+        return None
+
+    def get_registrant_name(self, obj):
+        if obj.registration:
+            return obj.registration.full_name
+        if obj.course_enrollment and obj.course_enrollment.user:
+            return obj.course_enrollment.user.display_name or obj.course_enrollment.user.full_name
+        return None
+
+    def get_kind(self, obj):
+        if obj.registration:
+            return 'event'
+        if obj.course_enrollment:
+            return 'course'
+        return None
 
 
 class CertificateDetailSerializer(SoftDeleteModelSerializer):
@@ -192,13 +186,18 @@ class CertificateDetailSerializer(SoftDeleteModelSerializer):
         read_only_fields = fields
 
     def get_event(self, obj):
+        event = obj.event
+        if event is None:
+            return None
         return {
-            'uuid': str(obj.event.uuid),
-            'title': obj.event.title,
-            'date': obj.event.starts_at.isoformat() if obj.event.starts_at else None,
+            'uuid': str(event.uuid),
+            'title': event.title,
+            'date': event.starts_at.isoformat() if getattr(event, 'starts_at', None) else None,
         }
 
     def get_registration(self, obj):
+        if obj.registration is None:
+            return None
         return {
             'uuid': str(obj.registration.uuid),
             'full_name': obj.registration.full_name,
@@ -220,15 +219,23 @@ class CertificateDetailSerializer(SoftDeleteModelSerializer):
 
 
 class CertificateIssueSerializer(serializers.Serializer):
-    """Issue certificate to registration(s)."""
+    """Issue certificate to registration(s) or course enrollment(s)."""
 
     registration_uuids = serializers.ListField(child=serializers.UUIDField(), required=False)
+    course_enrollment_uuids = serializers.ListField(child=serializers.UUIDField(), required=False)
     issue_all_eligible = serializers.BooleanField(default=False)
     send_email = serializers.BooleanField(default=True)
+    force = serializers.BooleanField(default=False)
 
     def validate(self, attrs):
-        if not attrs.get('registration_uuids') and not attrs.get('issue_all_eligible'):
-            raise serializers.ValidationError('Either registration_uuids or issue_all_eligible is required.')
+        if (
+            not attrs.get('registration_uuids')
+            and not attrs.get('course_enrollment_uuids')
+            and not attrs.get('issue_all_eligible')
+        ):
+            raise serializers.ValidationError(
+                'Provide registration_uuids, course_enrollment_uuids, or set issue_all_eligible.'
+            )
         return attrs
 
 

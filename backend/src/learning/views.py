@@ -2,12 +2,17 @@
 Learning API views.
 """
 
+import logging
+
 from django.db import models
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import parsers, permissions, serializers, status, views, viewsets
+from rest_framework import generics, parsers, permissions, serializers, status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+
+logger = logging.getLogger(__name__)
 
 from common.permissions import IsContentCreator
 from common.rbac import roles
@@ -21,9 +26,16 @@ from .models import (
     CourseAnnouncement,
     CourseEnrollment,
     CourseModule,
+    CourseStaff,
+    DiscussionFlag,
+    DiscussionReply,
+    DiscussionThread,
     EventModule,
     ModuleContent,
     ModuleProgress,
+    Program,
+    ProgramCourse,
+    ProgramEnrollment,
     SubmissionReview,
 )
 from .serializers import (
@@ -35,23 +47,40 @@ from .serializers import (
     ContentProgressSerializer,
     ContentProgressUpdateSerializer,
     CourseAnnouncementSerializer,
+    CourseMemberMiniSerializer,
+    DiscussionFlagCreateSerializer,
+    DiscussionFlagSerializer,
+    DiscussionReplyCreateSerializer,
+    DiscussionReplySerializer,
+    DiscussionThreadCreateSerializer,
+    DiscussionThreadDetailSerializer,
+    DiscussionThreadListSerializer,
+    DiscussionThreadUpdateSerializer,
     CourseCreateSerializer,
     CourseEnrollmentRosterSerializer,
     CourseEnrollmentSerializer,
     CourseListSerializer,
     CourseModuleSerializer,
     CourseSerializer,
+    CourseStaffCreateSerializer,
+    CourseStaffSerializer,
     EventModuleCreateSerializer,
     EventModuleListSerializer,
     EventModuleSerializer,
     ModuleContentCreateSerializer,
     ModuleContentSerializer,
     ModuleProgressSerializer,
+    ProgramCourseEntrySerializer,
+    ProgramCreateSerializer,
+    ProgramEnrollmentRosterSerializer,
+    ProgramEnrollmentSerializer,
+    ProgramListSerializer,
+    ProgramSerializer,
     SubmissionGradeSerializer,
 )
 
 
-@roles('educator', 'course_manager', 'admin', route_name='event_modules')
+@roles('organizer', 'instructor', 'admin', route_name='event_modules')
 class EventModuleViewSet(viewsets.ModelViewSet):
     """
     Event module management.
@@ -70,7 +99,7 @@ class EventModuleViewSet(viewsets.ModelViewSet):
         from events.models import Event
 
         event_uuid = self.kwargs.get('event_uuid')
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             return get_object_or_404(Event, uuid=event_uuid)
         return get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
 
@@ -116,7 +145,7 @@ class EventModuleViewSet(viewsets.ModelViewSet):
         return Response(EventModuleSerializer(module).data)
 
 
-@roles('educator', 'course_manager', 'admin', route_name='module_content')
+@roles('organizer', 'instructor', 'admin', route_name='module_content')
 class ModuleContentViewSet(viewsets.ModelViewSet):
     """
     Module content management.
@@ -134,7 +163,7 @@ class ModuleContentViewSet(viewsets.ModelViewSet):
         event_uuid = self.kwargs.get('event_uuid')
         module_uuid = self.kwargs.get('module_uuid')
 
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             event = get_object_or_404(Event, uuid=event_uuid)
         else:
             event = get_object_or_404(Event, uuid=event_uuid, owner=self.request.user)
@@ -159,12 +188,12 @@ def _get_event_for_user(user, event_uuid):
     """Helper: get event, allowing admin to access any event."""
     from events.models import Event
 
-    if user.is_staff:
+    if user.groups.filter(name="admin").exists():
         return get_object_or_404(Event, uuid=event_uuid)
     return get_object_or_404(Event, uuid=event_uuid, owner=user)
 
 
-@roles('educator', 'course_manager', 'admin', route_name='assignments')
+@roles('organizer', 'instructor', 'admin', route_name='assignments')
 class AssignmentViewSet(viewsets.ModelViewSet):
     """
     Assignment management.
@@ -194,7 +223,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         serializer.save(module=module)
 
 
-@roles('learner', 'educator', 'course_manager', 'admin', route_name='attendee_submissions')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='attendee_submissions')
 class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
     """
     Attendee's assignment submissions.
@@ -292,7 +321,7 @@ class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
         return Response(AssignmentSubmissionSerializer(submission).data)
 
 
-@roles('educator', 'course_manager', 'admin', route_name='organizer_submissions')
+@roles('organizer', 'instructor', 'admin', route_name='organizer_submissions')
 class OrganizerSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Organizer view of all submissions for their events.
@@ -304,7 +333,7 @@ class OrganizerSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = AssignmentSubmission.objects.select_related('assignment', 'registration', 'registration__user')
-        if self.request.user.is_staff:
+        if self.request.user.groups.filter(name="admin").exists():
             return qs
         return qs.filter(assignment__module__event__owner=self.request.user)
 
@@ -351,7 +380,7 @@ class OrganizerSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(AssignmentSubmissionSerializer(submission).data)
 
 
-@roles('learner', 'educator', 'course_manager', 'admin', route_name='my_learning')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='my_learning')
 class MyLearningViewSet(viewsets.GenericViewSet):
     """
     Attendee's learning dashboard.
@@ -444,7 +473,7 @@ class MyLearningViewSet(viewsets.GenericViewSet):
         return Response({'event_uuid': event.uuid, 'event_title': event.title, 'modules': module_data})
 
 
-@roles('learner', 'educator', 'course_manager', 'admin', route_name='content_progress')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='content_progress')
 class ContentProgressView(views.APIView):
     """
     Update content progress.
@@ -480,6 +509,7 @@ class ContentProgressView(views.APIView):
             if not enrollments.exists():
                 return error_response('Not enrolled in course', code='NOT_ENROLLED')
             course_enrollment = enrollments.first()
+            course_enrollment.start()
             progress, created = ContentProgress.objects.get_or_create(course_enrollment=course_enrollment, content=content)
             module_prog, _ = ModuleProgress.objects.get_or_create(course_enrollment=course_enrollment, module=content.module)
 
@@ -491,7 +521,7 @@ class ContentProgressView(views.APIView):
             progress.start()
 
         if data.get('completed'):
-            progress.complete()
+            progress.complete(time_spent=data.get('time_spent', 0), position=data.get('position'))
         else:
             progress.update_progress(
                 percent=data['progress_percent'], time_spent=data.get('time_spent', 0), position=data.get('position')
@@ -507,7 +537,7 @@ class ContentProgressView(views.APIView):
         return Response(ContentProgressSerializer(progress).data)
 
 
-@roles('learner', 'educator', 'course_manager', 'admin', route_name='courses')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='courses')
 class CourseViewSet(viewsets.ModelViewSet):
     """
     Course management.
@@ -525,25 +555,43 @@ class CourseViewSet(viewsets.ModelViewSet):
         if slug:
             queryset = queryset.filter(slug=slug)
 
-        owned = self.request.query_params.get('owned')
-        if owned and user.is_authenticated:
-            queryset = queryset.filter(created_by=user)
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                models.Q(title__icontains=search)
+                | models.Q(short_description__icontains=search)
+                | models.Q(description__icontains=search)
+            )
+
+        # Admin sees everything (regardless of owned param)
+        if user.groups.filter(name="admin").exists():
+            return queryset.distinct()
 
         # Public visibility logic for non-authenticated users
         if not user.is_authenticated:
             return queryset.filter(is_public=True, status=Course.Status.PUBLISHED)
 
-        # Admin sees everything
-        if user.is_staff:
-            return queryset.distinct()
+        owned = self.request.query_params.get('owned')
+        if owned:
+            return queryset.filter(
+                models.Q(created_by=user) | models.Q(staff_assignments__user=user)
+            ).distinct()
 
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'progress']:
+            # Learners must keep access to courses they have an enrollment
+            # in, even after the course is archived — otherwise the Review
+            # button on completed cards 404s, and the cert/badge they earned
+            # has no backing artifact to review.
             return queryset.filter(
                 models.Q(is_public=True, status=Course.Status.PUBLISHED)
                 | models.Q(created_by=user)
+                | models.Q(staff_assignments__user=user)
+                | models.Q(enrollments__user=user)
             ).distinct()
 
-        return queryset.filter(created_by=user).distinct()
+        return queryset.filter(
+            models.Q(created_by=user) | models.Q(staff_assignments__user=user)
+        ).distinct()
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -562,22 +610,216 @@ class CourseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         from rest_framework.exceptions import PermissionDenied
 
-        if not self.request.user.groups.filter(name__in=['course_manager', 'admin']).exists():
-            raise PermissionDenied("Course manager or admin role required to create courses.")
+        if not self.request.user.has_perm("learning.can_create_course"):
+            raise PermissionDenied("You do not have permission to create courses.")
 
+        # Subscription gate — best-effort in institutional mode. If the user's
+        # subscription exposes limits, respect them; otherwise let staff proceed.
         subscription = getattr(self.request.user, 'subscription', None)
-        if not subscription or not subscription.can_create_courses:
-            raise PermissionDenied("Your subscription does not allow course creation.")
-
-        subscription.increment_courses()
+        if subscription is not None and hasattr(subscription, 'can_create_courses'):
+            if not subscription.can_create_courses:
+                raise PermissionDenied("Your subscription does not allow course creation.")
+            if hasattr(subscription, 'increment_courses'):
+                subscription.increment_courses()
 
         serializer.save(created_by=self.request.user)
 
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+        if not serializer.instance.can_manage(self.request.user):
+            raise PermissionDenied("You do not have permission to update this course.")
+
+        # Capture price/currency before save so we can audit any change.
+        old = serializer.instance
+        old_price_cents = old.price_cents
+        old_currency = old.currency
+
+        instance = serializer.save()
+
+        if instance.price_cents != old_price_cents or instance.currency != old_currency:
+            try:
+                from accounts.audit import log_audit_event
+
+                log_audit_event(
+                    actor=self.request.user,
+                    action='course.price_changed',
+                    object_type='Course',
+                    object_uuid=str(instance.uuid),
+                    metadata={
+                        'from_price_cents': old_price_cents,
+                        'to_price_cents': instance.price_cents,
+                        'from_currency': old_currency,
+                        'to_currency': instance.currency,
+                    },
+                    request=self.request,
+                )
+            except Exception:
+                logger.warning('audit log failed for course price change %s', instance.uuid, exc_info=True)
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+        if not instance.can_manage(self.request.user):
+            raise PermissionDenied("You do not have permission to delete this course.")
+        instance.delete()
+
     @action(detail=True, methods=['post'])
     def publish(self, request, uuid=None):
+        from rest_framework.exceptions import PermissionDenied
         course = self.get_object()
+        if not course.can_manage(request.user):
+            raise PermissionDenied("You do not have permission to publish this course.")
         course.publish()
         return Response(CourseSerializer(course).data)
+
+    @action(detail=False, methods=['get'])
+    def reports(self, request):
+        """Summary, trends, and recent activity for the requester's courses."""
+        from datetime import datetime, timedelta
+
+        from django.db.models import Count
+        from django.db.models.functions import TruncDate
+        from django.utils import timezone
+        from rest_framework.exceptions import PermissionDenied
+
+        user = request.user
+        if not user.groups.filter(name__in=['instructor', 'admin']).exists():
+            raise PermissionDenied('Course reports are limited to instructors and admins.')
+
+        if user.groups.filter(name='admin').exists():
+            courses = Course.objects.all()
+        else:
+            courses = Course.objects.filter(
+                models.Q(created_by=user) | models.Q(staff_assignments__user=user)
+            ).distinct()
+
+        now = timezone.now()
+        period = request.query_params.get('period', 'last-30-days')
+        if period == 'last-7-days':
+            start = now - timedelta(days=7)
+        elif period == 'last-90-days':
+            start = now - timedelta(days=90)
+        elif period == 'this-year':
+            start = timezone.make_aware(datetime(now.year, 1, 1))
+        else:
+            start = now - timedelta(days=30)
+
+        enrollments = CourseEnrollment.objects.filter(
+            course__in=courses,
+            enrolled_at__gte=start,
+            enrolled_at__lte=now,
+        )
+
+        total_enrollments = enrollments.count()
+        completions_in_period = CourseEnrollment.objects.filter(
+            course__in=courses,
+            completed_at__gte=start,
+            completed_at__lte=now,
+        ).count()
+
+        completion_rate = None
+        if total_enrollments:
+            completion_rate = round((completions_in_period / total_enrollments) * 100, 1)
+
+        trends = []
+        for row in (
+            enrollments.annotate(day=TruncDate('enrolled_at'))
+            .values('day')
+            .annotate(count=Count('id'))
+            .order_by('day')
+        ):
+            trends.append(
+                {
+                    'date': row['day'].isoformat() if row['day'] else None,
+                    'count': row['count'],
+                }
+            )
+
+        status_breakdown = [
+            {'label': 'Active', 'count': enrollments.filter(status=CourseEnrollment.Status.ACTIVE).count()},
+            {'label': 'Completed', 'count': enrollments.filter(status=CourseEnrollment.Status.COMPLETED).count()},
+            {'label': 'Dropped', 'count': enrollments.filter(status=CourseEnrollment.Status.DROPPED).count()},
+        ]
+
+        recent_enrollments = [
+            {
+                'enrollment_uuid': str(e.uuid),
+                'course_title': e.course.title if e.course else '',
+                'user_name': getattr(e.user, 'full_name', None) or getattr(e.user, 'email', ''),
+                'progress_percent': e.progress_percent,
+                'status': e.status,
+                'enrolled_at': e.enrolled_at.isoformat(),
+            }
+            for e in enrollments.select_related('course', 'user').order_by('-enrolled_at')[:5]
+        ]
+
+        top_courses = [
+            {
+                'uuid': str(c.uuid),
+                'title': c.title,
+                'enrollments': c.period_enrollments,
+            }
+            for c in courses.annotate(
+                period_enrollments=Count(
+                    'enrollments',
+                    filter=models.Q(
+                        enrollments__enrolled_at__gte=start,
+                        enrollments__enrolled_at__lte=now,
+                    ),
+                )
+            ).order_by('-period_enrollments')[:5]
+            if c.period_enrollments
+        ]
+
+        # --- Revenue (CoursePurchase, course-scoped) ---------------------
+        from django.db.models import Sum
+
+        from billing.models import CoursePurchase
+
+        purchases_in_period = CoursePurchase.objects.filter(
+            course__in=courses,
+            created_at__gte=start,
+            created_at__lte=now,
+        )
+        completed = purchases_in_period.filter(status=CoursePurchase.Status.COMPLETED)
+        refunded = purchases_in_period.filter(status=CoursePurchase.Status.REFUNDED)
+
+        gross_cents = completed.aggregate(total=Sum('amount_cents'))['total'] or 0
+        refund_cents = refunded.aggregate(total=Sum('amount_cents'))['total'] or 0
+        net_cents = gross_cents - refund_cents
+
+        recent_transactions = [
+            {
+                'purchase_uuid': str(p.uuid),
+                'course_title': p.course.title if p.course else '',
+                'user_name': getattr(p.user, 'full_name', None) or getattr(p.user, 'email', ''),
+                'amount_cents': p.amount_cents,
+                'currency': p.currency,
+                'status': p.status,
+                'created_at': p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in purchases_in_period.select_related('course', 'user').order_by('-created_at')[:10]
+        ]
+
+        return Response(
+            {
+                'summary': {
+                    'total_enrollments': total_enrollments,
+                    'completions': completions_in_period,
+                    'completion_rate': completion_rate,
+                    'courses_published': courses.filter(status=Course.Status.PUBLISHED).count(),
+                    'gross_revenue_cents': gross_cents,
+                    'refunds_cents': refund_cents,
+                    'net_revenue_cents': net_cents,
+                    'purchase_count': completed.count(),
+                    'refund_count': refunded.count(),
+                },
+                'trends': trends,
+                'status_breakdown': status_breakdown,
+                'recent_enrollments': recent_enrollments,
+                'top_courses': top_courses,
+                'recent_transactions': recent_transactions,
+            }
+        )
 
     @action(detail=True, methods=['get'], url_path='enrollments')
     def enrollments(self, request, uuid=None):
@@ -590,6 +832,130 @@ class CourseViewSet(viewsets.ModelViewSet):
 
         enrollments = CourseEnrollment.objects.filter(course=course).select_related('user').order_by('-enrolled_at')
         return Response(CourseEnrollmentRosterSerializer(enrollments, many=True).data)
+
+    @action(detail=True, methods=['post'], url_path='refund-enrollment')
+    def refund_enrollment(self, request, uuid=None):
+        """Refund a learner's course purchase and revoke their enrollment.
+
+        Body: ``{enrollment_uuid: UUID, reason: str, amount_cents?: int}``.
+
+        Matches the CoursePurchase for the same (user, course) pair, calls
+        Stripe with an optional partial amount, marks the purchase REFUNDED
+        (full only), drops the enrollment, and writes an audit entry.
+        """
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+
+        from billing.models import CoursePurchase
+        from billing.services import refund_payment_intent
+
+        course = self.get_object()
+        if not (course.can_manage(request.user) or course.can_instruct(request.user)):
+            raise PermissionDenied("You do not have permission to refund enrollments for this course.")
+
+        enrollment_uuid = request.data.get('enrollment_uuid')
+        reason = (request.data.get('reason') or '').strip()
+        amount_cents = request.data.get('amount_cents')
+
+        if not enrollment_uuid:
+            raise ValidationError({'enrollment_uuid': 'required'})
+        if not reason:
+            raise ValidationError({'reason': 'required'})
+        if amount_cents is not None:
+            try:
+                amount_cents = int(amount_cents)
+            except (TypeError, ValueError):
+                raise ValidationError({'amount_cents': 'must be an integer'}) from None
+            if amount_cents <= 0:
+                raise ValidationError({'amount_cents': 'must be positive'})
+
+        enrollment = (
+            CourseEnrollment.objects
+            .filter(course=course, uuid=enrollment_uuid)
+            .select_related('user', 'from_program_enrollment__program')
+            .first()
+        )
+        if enrollment is None:
+            return Response({'error': {'code': 'ENROLLMENT_NOT_FOUND'}}, status=status.HTTP_404_NOT_FOUND)
+
+        # Refunds for program-seeded enrollments must be issued at the program
+        # level so the cascade revokes access to every member course. Surfacing
+        # that here keeps the data invariant explicit.
+        if enrollment.from_program_enrollment_id:
+            parent = enrollment.from_program_enrollment
+            return Response(
+                {
+                    'error': {
+                        'code': 'PROGRAM_SEEDED',
+                        'message': 'This enrollment was created by a program purchase. Refund the program instead.',
+                        'program_uuid': str(parent.program.uuid),
+                        'program_enrollment_uuid': str(parent.uuid),
+                        'program_title': parent.program.title,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        purchase = (
+            CoursePurchase.objects
+            .filter(user=enrollment.user, course=course)
+            .exclude(status=CoursePurchase.Status.REFUNDED)
+            .order_by('-created_at')
+            .first()
+        )
+        if purchase is None:
+            return Response(
+                {'error': {'code': 'NO_PURCHASE', 'message': 'No refundable purchase found for this enrollment.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not purchase.stripe_payment_intent_id:
+            return Response(
+                {'error': {'code': 'NO_PAYMENT_INTENT'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if amount_cents is not None and amount_cents > purchase.amount_cents:
+            return Response(
+                {'error': {'code': 'REFUND_EXCEEDS_AMOUNT'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            stripe_result = refund_payment_intent(
+                purchase.stripe_payment_intent_id,
+                amount_cents=amount_cents,
+                reason='requested_by_customer',
+            )
+        except Exception as exc:
+            return Response({'error': {'code': 'REFUND_FAILED', 'message': str(exc)}}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_partial = amount_cents is not None and amount_cents < purchase.amount_cents
+        if not is_partial:
+            purchase.status = CoursePurchase.Status.REFUNDED
+            purchase.save(update_fields=['status', 'updated_at'])
+            enrollment.status = CourseEnrollment.Status.DROPPED
+            enrollment.save(update_fields=['status', 'updated_at'])
+
+        try:
+            from accounts.audit import log_audit_event
+
+            log_audit_event(
+                actor=request.user,
+                action='course_purchase.refunded',
+                object_type='CoursePurchase',
+                object_uuid=str(purchase.uuid),
+                metadata={
+                    'course_uuid': str(course.uuid),
+                    'enrollment_uuid': str(enrollment.uuid),
+                    'amount_cents': stripe_result.get('amount_cents'),
+                    'partial': is_partial,
+                    'reason': reason,
+                    'stripe_refund_id': stripe_result.get('refund_id'),
+                },
+                request=request,
+            )
+        except Exception:
+            logger.warning('audit log failed for course refund %s', purchase.uuid, exc_info=True)
+
+        return Response(CourseEnrollmentRosterSerializer(enrollment).data)
 
     @action(detail=True, methods=['get'], url_path='progress')
     def progress(self, request, uuid=None):
@@ -605,6 +971,9 @@ class CourseViewSet(viewsets.ModelViewSet):
 
         if not enrollment:
             raise PermissionDenied("You are not enrolled in this course.")
+
+        enrollment.update_progress()
+        enrollment.refresh_from_db()
 
         modules = CourseModule.objects.filter(course=course).select_related('module').prefetch_related('module__contents')
 
@@ -627,14 +996,56 @@ class CourseViewSet(viewsets.ModelViewSet):
                 }
             )
 
-        return Response(
-            {
-                'course_uuid': course.uuid,
-                'course_title': course.title,
-                'enrollment': CourseEnrollmentSerializer(enrollment).data,
-                'modules': module_data,
+        # Hydrate module/session breakdown from the snapshot the learner-side
+        # progress was just computed from. Pure-online courses get no
+        # session_progress key (absent, not zero) so the client can branch
+        # without re-checking course.format. See
+        # docs/design/hybrid-course-experience.md §B.
+        snapshot = enrollment._progress_snapshot()
+        enrollment_data = CourseEnrollmentSerializer(enrollment).data
+        from learning.models import CourseSession
+        modules_total = CourseModule.objects.filter(course=course).count()
+        enrollment_data['module_progress'] = {
+            'units_completed': snapshot['module_units_completed'],
+            'units_total': snapshot['module_units_total'],
+            'modules_completed': snapshot['modules_completed'],
+            'modules_total': modules_total,
+        }
+
+        sessions_payload = None
+        if course.format in (Course.CourseFormat.LIVE, Course.CourseFormat.HYBRID):
+            from .serializers import LiveSessionSerializer
+            sessions_qs = (
+                CourseSession.objects.filter(course=course, is_published=True)
+                .exclude(status=CourseSession.Status.CANCELLED)
+                .order_by('order', 'starts_at')
+            )
+            sessions_payload = LiveSessionSerializer(
+                sessions_qs, many=True, context={'request': request},
+            ).data
+            mandatory_sessions = sessions_qs.filter(is_mandatory=True).count()
+            attended_sessions = sessions_qs.filter(
+                attendance_records__enrollment=enrollment,
+                attendance_records__is_eligible=True,
+                is_mandatory=True,
+            ).count()
+            enrollment_data['session_progress'] = {
+                'units_completed': snapshot['session_units_completed'],
+                'units_total': snapshot['session_units_total'],
+                'sessions_attended': attended_sessions,
+                'sessions_total': mandatory_sessions,
+                'criteria': course.hybrid_completion_criteria,
             }
-        )
+
+        response_data = {
+            'course_uuid': course.uuid,
+            'course_title': course.title,
+            'enrollment': enrollment_data,
+            'modules': module_data,
+        }
+        if sessions_payload is not None:
+            response_data['sessions'] = sessions_payload
+        return Response(response_data)
 
 
     @action(detail=True, methods=['get'])
@@ -685,7 +1096,62 @@ class CourseViewSet(viewsets.ModelViewSet):
         })
 
 
-@roles('learner', 'educator', 'course_manager', 'admin', route_name='course_enrollments')
+@roles('organizer', 'instructor', 'admin', route_name='course_staff')
+class CourseStaffViewSet(viewsets.ModelViewSet):
+    """
+    Manage course staff assignments.
+
+    Only admins and course owners can assign/remove staff.
+    GET /courses/{course_uuid}/staff/
+    POST /courses/{course_uuid}/staff/
+    DELETE /courses/{course_uuid}/staff/{uuid}/
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = CourseStaffSerializer
+    lookup_field = 'uuid'
+    http_method_names = ['get', 'post', 'delete']
+
+    def get_queryset(self):
+        course_uuid = self.kwargs.get('course_uuid')
+        course = get_object_or_404(Course, uuid=course_uuid)
+        if not course.can_manage(self.request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to manage course staff.")
+        return CourseStaff.objects.filter(course=course).select_related('user')
+
+    def create(self, request, course_uuid=None):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        course = get_object_or_404(Course, uuid=course_uuid)
+        if not course.can_manage(request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to manage course staff.")
+
+        serializer = CourseStaffCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = get_object_or_404(User, uuid=serializer.validated_data['user_uuid'])
+        role = serializer.validated_data.get('role', 'instructor')
+
+        staff, created = CourseStaff.objects.get_or_create(
+            course=course, user=user, defaults={'role': role}
+        )
+        if not created:
+            return Response({'detail': 'User is already assigned to this course.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(CourseStaffSerializer(staff).data, status=status.HTTP_201_CREATED)
+
+    def perform_destroy(self, instance):
+        course = instance.course
+        if not course.can_manage(self.request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to manage course staff.")
+        instance.delete()
+
+
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_enrollments')
 class CourseEnrollmentViewSet(viewsets.ModelViewSet):
     """
     User enrollments in courses.
@@ -699,13 +1165,17 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
         return CourseEnrollment.objects.filter(user=self.request.user).select_related('course')
 
     def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+
         course_uuid = self.request.data.get('course_uuid')
         course = get_object_or_404(Course, uuid=course_uuid)
 
         if not course.is_free:
-            from rest_framework.exceptions import PermissionDenied
-
             raise PermissionDenied("This course requires payment. Please initiate checkout.")
+
+        ok, code, message = course.check_enrollable()
+        if not ok:
+            raise ValidationError({'error': message, 'code': code})
 
         serializer.save(user=self.request.user, course=course)
 
@@ -762,18 +1232,10 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
         """
 
         course_uuid = request.data.get('course_uuid')
-        success_url = request.data.get('success_url')
-        cancel_url = request.data.get('cancel_url')
 
         if not course_uuid:
             return Response(
                 {'error': 'course_uuid is required'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not success_url or not cancel_url:
-            return Response(
-                {'error': 'success_url and cancel_url are required'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -799,12 +1261,9 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check if course is full
-        if course.is_full:
-            return Response(
-                {'error': 'Course enrollment is full'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        ok, code, message = course.check_enrollable()
+        if not ok:
+            return Response({'error': message, 'code': code}, status=status.HTTP_400_BAD_REQUEST)
 
         # Free courses don't need checkout
         if course.is_free:
@@ -823,150 +1282,20 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_201_CREATED,
             )
 
-        # Create Stripe checkout session for paid course
-        result = self._create_course_checkout_session(
-            user=request.user,
-            course=course,
-            success_url=success_url,
-            cancel_url=cancel_url,
-        )
-
-        if result.get('success'):
-            return Response(
-                {
-                    'session_id': result['session_id'],
-                    'url': result['url'],
-                }
-            )
-        else:
-            return Response(
-                {'error': result.get('error', 'Failed to create checkout session')},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    @swagger_auto_schema(
-        operation_summary="Confirm course enrollment",
-        operation_description="Confirm enrollment after Stripe Checkout. Synchrnously creates/activates enrollment.",
-        request_body=serializers.Serializer(),
-        responses={200: CourseEnrollmentSerializer, 400: '{"error": "..."}'},
-    )
-    @action(detail=False, methods=['post'], url_path='confirm-checkout')
-    def confirm_checkout(self, request):
-        """
-        Confirm course enrollment from Stripe Checkout.
-        Expects: {"session_id": "cs_test_..."}
-        """
-        session_id = request.data.get('session_id')
-        if not session_id:
-            return error_response('session_id is required', code='MISSING_SESSION_ID')
-
-        from .services import CourseService
-        service = CourseService()
-
-        result = service.confirm_enrollment(request.user, session_id)
-
-        if result['success']:
-            serializer = self.get_serializer(result['enrollment'])
-            return Response(serializer.data)
-        else:
-             return error_response(result.get('error', 'Enrollment confirmation failed'), code='ENROLLMENT_FAILED')
-
-    def _create_course_checkout_session(self, user, course, success_url: str, cancel_url: str) -> dict:
-        """
-        Create Stripe checkout session for course enrollment.
-
-        Uses Stripe Checkout with course-specific metadata for webhook handling.
-        """
-        import logging
-
-        from django.conf import settings
-
-        logger = logging.getLogger(__name__)
+        # Create Stripe Checkout Session for a paid course.
+        from billing.checkout import checkout_service
 
         try:
-            import stripe
-
-            stripe.api_key = settings.STRIPE_SECRET_KEY
-
-            # Create or get Stripe customer
-            from billing.services import stripe_service
-
-            customer_id = stripe_service.create_customer(user)
-
-            # Build line items
-            # Use course's stripe_price_id if configured, otherwise create ad-hoc price
-            if course.stripe_price_id:
-                line_items = [
-                    {
-                        'price': course.stripe_price_id,
-                        'quantity': 1,
-                    }
-                ]
-            else:
-                # Create ad-hoc price for one-time purchase
-                line_items = [
-                    {
-                        'price_data': {
-                            'currency': course.currency.lower(),
-                            'product_data': {
-                                'name': course.title,
-                                'description': (
-                                    course.short_description or course.description[:500] if course.description else None
-                                ),
-                            },
-                            'unit_amount': course.price_cents,
-                        },
-                        'quantity': 1,
-                    }
-                ]
-
-            # Create checkout session
-            session = stripe.checkout.Session.create(
-                customer=customer_id,
-                mode='payment',  # One-time payment for course
-                line_items=line_items,
-                success_url=f"{success_url}?session_id={{CHECKOUT_SESSION_ID}}",
-                cancel_url=cancel_url,
-                metadata={
-                    'type': 'course_enrollment',
-                    'course_uuid': str(course.uuid),
-                    'course_title': course.title,
-                    'user_id': str(user.id),
-                    'user_email': user.email,
-                },
-                payment_intent_data={
-                    'metadata': {
-                        'type': 'course_enrollment',
-                        'course_uuid': str(course.uuid),
-                        'user_id': str(user.id),
-                    },
-                },
-                # Transfer to course organization's connected account if applicable
-                **(self._get_transfer_data(course) or {}),
+            result = checkout_service.for_course_enrollment(request.user, course)
+        except Exception as exc:
+            return Response(
+                {'error': f'Failed to create checkout session: {exc}'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-
-            logger.info(f"Created course checkout session {session.id} for course {course.uuid}")
-
-            return {
-                'success': True,
-                'session_id': session.id,
-                'url': session.url,
-            }
-
-        except Exception as e:
-            logger.error(f"Course checkout session creation failed: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-            }
-
-    def _get_transfer_data(self, course) -> dict | None:
-        """Get Stripe Connect transfer data for course payment."""
-        # In single-tenant mode, transfer data is handled at the owner level if applicable
-        return None
+        return Response({'session_id': result.session_id, 'url': result.url})
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_modules')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_modules')
 class CourseModuleViewSet(viewsets.ModelViewSet):
     """
     Manage modules within a course.
@@ -1014,7 +1343,7 @@ class CourseModuleViewSet(viewsets.ModelViewSet):
         course_uuid = self.kwargs.get('course_uuid')
         course = get_object_or_404(Course, uuid=course_uuid)
 
-        if not course.can_manage(self.request.user):
+        if not course.can_instruct(self.request.user):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("You do not have access to this course.")
@@ -1034,7 +1363,7 @@ class CourseModuleViewSet(viewsets.ModelViewSet):
 
         course_uuid = self.kwargs.get('course_uuid')
         course = get_object_or_404(Course, uuid=course_uuid)
-        if not course.can_manage(self.request.user):
+        if not course.can_instruct(self.request.user):
             raise PermissionDenied("You do not have access to this course.")
         instance.delete()
 
@@ -1059,7 +1388,7 @@ class CourseModuleViewSet(viewsets.ModelViewSet):
     def update_content(self, request, course_uuid=None, uuid=None):
         """Update the underlying module content (title, desc, etc)."""
         course_link = self.get_object()  # This is CourseModule
-        if not course_link.course.can_manage(self.request.user):
+        if not course_link.course.can_instruct(self.request.user):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("You do not have access to this course.")
@@ -1072,7 +1401,7 @@ class CourseModuleViewSet(viewsets.ModelViewSet):
         return Response(CourseModuleSerializer(course_link).data)
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_module_content')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_module_content')
 class CourseModuleContentViewSet(viewsets.ModelViewSet):
     """
     Content management for course modules.
@@ -1098,18 +1427,22 @@ class CourseModuleContentViewSet(viewsets.ModelViewSet):
         if course.can_manage(self.request.user) or course.can_instruct(self.request.user):
             return base_queryset.order_by('order')
 
-        enrolled = CourseEnrollment.objects.filter(
+        from rest_framework.exceptions import PermissionDenied
+
+        enrollment = CourseEnrollment.objects.filter(
             user=self.request.user,
             course=course,
             status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
-        ).exists()
-        if enrolled:
+        ).first()
+        if enrollment:
+            # Enforce module-level gating
+            module = get_object_or_404(EventModule, uuid=module_uuid)
+            if not module.is_available_for(self.request.user, course_enrollment=enrollment):
+                raise PermissionDenied("Complete the previous module first.")
             return base_queryset.filter(
                 module__is_published=True,
                 is_published=True,
             ).order_by('order')
-
-        from rest_framework.exceptions import PermissionDenied
 
         raise PermissionDenied("You do not have access to this course.")
 
@@ -1124,7 +1457,7 @@ class CourseModuleContentViewSet(viewsets.ModelViewSet):
 
         # Verify access
         course = get_object_or_404(Course, uuid=course_uuid)
-        if not course.can_manage(self.request.user):
+        if not course.can_instruct(self.request.user):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("You do not have access to this course.")
@@ -1152,7 +1485,7 @@ class CourseModuleContentViewSet(viewsets.ModelViewSet):
 
         course_uuid = self.kwargs.get('course_uuid')
         course = get_object_or_404(Course, uuid=course_uuid)
-        if not course.can_manage(self.request.user):
+        if not course.can_instruct(self.request.user):
             raise PermissionDenied("You do not have access to this course.")
         serializer.save()
 
@@ -1161,12 +1494,12 @@ class CourseModuleContentViewSet(viewsets.ModelViewSet):
 
         course_uuid = self.kwargs.get('course_uuid')
         course = get_object_or_404(Course, uuid=course_uuid)
-        if not course.can_manage(self.request.user):
+        if not course.can_instruct(self.request.user):
             raise PermissionDenied("You do not have access to this course.")
         instance.delete()
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_assignments')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_assignments')
 class CourseAssignmentViewSet(viewsets.ModelViewSet):
     """
     Assignment management for course modules.
@@ -1239,7 +1572,7 @@ class CourseAssignmentViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-@roles('educator', 'course_manager', 'instructor', 'admin', route_name='course_submissions')
+@roles('organizer', 'instructor', 'admin', route_name='course_submissions')
 class CourseSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Course staff view of submissions for a course.
@@ -1297,14 +1630,20 @@ class CourseSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
         review.to_status = submission.status
         review.save()
 
-        # Check if course should be completed after grading
+        # Check if course should be completed after grading. Even when
+        # completion criteria aren't met, refresh progress_percent so the
+        # learner's bar reflects the new submission state. update_progress()
+        # is a no-op once status=COMPLETED, so this is safe to call.
         if submission.course_enrollment:
             submission.course_enrollment.check_completion()
+            submission.course_enrollment.refresh_from_db()
+            if submission.course_enrollment.status == CourseEnrollment.Status.ACTIVE:
+                submission.course_enrollment.update_progress()
 
         return Response(AssignmentSubmissionStaffSerializer(submission).data)
 
 
-@roles('learner', 'educator', 'course_manager', 'instructor', 'admin', route_name='course_announcements')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_announcements')
 class CourseAnnouncementViewSet(viewsets.ModelViewSet):
     """
     Announcements for a course.
@@ -1365,7 +1704,106 @@ class CourseAnnouncementViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-@roles('educator', 'course_manager', 'instructor', 'admin', route_name='course_sessions')
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='program_announcements')
+class ProgramAnnouncementViewSet(viewsets.ModelViewSet):
+    """Announcements for a program. Re-uses the ``CourseAnnouncement`` table
+    with the ``program`` FK populated (``course`` is NULL)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = CourseAnnouncementSerializer
+    lookup_field = 'uuid'
+
+    def get_program(self):
+        program_uuid = self.kwargs.get('program_uuid')
+        return get_object_or_404(Program, uuid=program_uuid)
+
+    def _is_program_staff(self, program):
+        return program.can_manage(self.request.user)
+
+    def get_queryset(self):
+        program = self.get_program()
+        queryset = CourseAnnouncement.objects.filter(program=program)
+
+        if self._is_program_staff(program):
+            return queryset
+
+        enrolled = ProgramEnrollment.objects.filter(
+            user=self.request.user,
+            program=program,
+            status__in=[ProgramEnrollment.Status.ACTIVE, ProgramEnrollment.Status.COMPLETED],
+        ).exists()
+        if not enrolled:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("You do not have access to this program.")
+
+        return queryset.filter(is_published=True)
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self.get_program()
+        if not self._is_program_staff(program):
+            raise PermissionDenied("You do not have access to this program.")
+        serializer.save(program=program, created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self.get_program()
+        if not self._is_program_staff(program):
+            raise PermissionDenied("You do not have access to this program.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self.get_program()
+        if not self._is_program_staff(program):
+            raise PermissionDenied("You do not have access to this program.")
+        instance.delete()
+
+
+@roles('organizer', 'instructor', 'admin', route_name='program_discussion')
+class ProgramDiscussionView(generics.GenericAPIView):
+    """Aggregated discussion view across a program's member courses.
+
+    We intentionally don't fork the Discussion model for programs —
+    learners discuss inside individual courses. This endpoint surfaces
+    recent threads across every member course so an admin has one place
+    to see what's active at the program level.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, program_uuid=None):
+        from rest_framework.exceptions import PermissionDenied
+
+        from learning.models import DiscussionThread
+        from learning.serializers import DiscussionThreadListSerializer
+
+        program = get_object_or_404(Program, uuid=program_uuid)
+        if not program.can_manage(request.user):
+            raise PermissionDenied("You do not have access to this program.")
+
+        course_ids = list(
+            program.program_courses.values_list('course_id', flat=True)
+        )
+        threads = (
+            DiscussionThread.objects
+            .filter(course_id__in=course_ids, deleted_at__isnull=True)
+            .select_related('course', 'author')
+            .order_by('-last_activity_at')[:50]
+        )
+        return Response(
+            {
+                'threads': DiscussionThreadListSerializer(threads, many=True).data,
+                'member_course_count': len(course_ids),
+            }
+        )
+
+
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_sessions')
 class CourseSessionViewSet(viewsets.ModelViewSet):
     """
     Live session management for hybrid courses.
@@ -1414,13 +1852,76 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
             CourseSessionCreateSerializer,
             CourseSessionListSerializer,
             CourseSessionSerializer,
+            LiveSessionSerializer,
         )
 
         if self.action == 'list':
             return CourseSessionListSerializer
         if self.action in ['create', 'update', 'partial_update']:
             return CourseSessionCreateSerializer
+        if self.action == 'retrieve':
+            # Learner-context shape with attendance / recording / join_url
+            # already resolved against request.user. Powers the lobby.
+            return LiveSessionSerializer
         return CourseSessionSerializer
+
+    @action(detail=True, methods=['post', 'get'], url_path='recording-view')
+    def recording_view(self, request, course_uuid=None, uuid=None):
+        """Track recording playback. POST upserts the (enrollment, session)
+        row; GET returns the caller's current row (or 204 if none yet).
+
+        Body (POST): { watch_seconds: int, last_position_seconds?: int, completed?: bool }
+
+        Watch_seconds is monotone — never decreases. Caller (frontend player)
+        is expected to throttle to ~one POST per 15s of playback.
+
+        Per D3 (docs/design/hybrid-course-experience.md): this endpoint NEVER
+        flips CourseSessionAttendance.is_eligible — it's tracking only.
+        """
+        from .models import CourseEnrollment, CourseSessionRecordingView
+
+        session = self.get_object()
+        enrollment = CourseEnrollment.objects.filter(
+            user=request.user, course=session.course,
+        ).first()
+        if not enrollment:
+            return error_response(
+                'You must be enrolled to track recording playback.',
+                code='NOT_ENROLLED', status_code=403,
+            )
+
+        if request.method == 'GET':
+            view = CourseSessionRecordingView.objects.filter(
+                course_enrollment=enrollment, session=session,
+            ).first()
+            if not view:
+                return Response(status=204)
+            return Response({
+                'watch_seconds': view.watch_seconds,
+                'last_position_seconds': view.last_position_seconds,
+                'completed_at': view.completed_at.isoformat() if view.completed_at else None,
+            })
+
+        watch_seconds = int(request.data.get('watch_seconds') or 0)
+        last_position = int(request.data.get('last_position_seconds') or 0)
+        mark_completed = bool(request.data.get('completed'))
+
+        view, _ = CourseSessionRecordingView.objects.get_or_create(
+            course_enrollment=enrollment, session=session,
+        )
+        # Monotone: never lower stored watch_seconds.
+        if watch_seconds > view.watch_seconds:
+            view.watch_seconds = watch_seconds
+        view.last_position_seconds = last_position
+        if mark_completed and not view.completed_at:
+            view.completed_at = timezone.now()
+        view.save()
+
+        return Response({
+            'watch_seconds': view.watch_seconds,
+            'last_position_seconds': view.last_position_seconds,
+            'completed_at': view.completed_at.isoformat() if view.completed_at else None,
+        })
 
     @action(detail=True, methods=['post'])
     def sync_attendance(self, request, course_uuid=None, uuid=None):
@@ -1463,7 +1964,7 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
 
         # 1. Get matched participant identities from attendance records
         matched_records = CourseSessionAttendance.objects.filter(session=session)
-        matched_identities = set(r.zoom_participant_id for r in matched_records if r.zoom_participant_id)
+        matched_identities = set(r.participant_id for r in matched_records if r.participant_id)
 
         # 2. Get participant join events from webhook logs
         join_logs = VideoWebhookLog.objects.filter(
@@ -1516,15 +2017,18 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
              session=session,
              enrollment=enrollment,
              defaults={
-                 'zoom_user_email': data.get('zoom_user_email'),
-                 'zoom_user_name': data.get('zoom_user_name'),
-                 'zoom_join_time': data.get('zoom_join_time'),
+                 'participant_email': data.get('participant_email', ''),
+                 'join_time': data.get('join_time'),
+                 'leave_time': data.get('leave_time'),
                  'attendance_minutes': data.get('attendance_minutes', 0),
                  'is_manual_override': True,
                  'override_reason': 'Manual reconciliation',
                  'override_by': request.user,
              }
         )
+        record.calculate_eligibility()
+        record.save(update_fields=['is_eligible', 'updated_at'])
+        enrollment.update_progress()
 
         return Response({'status': 'matched'})
 
@@ -1593,3 +2097,1060 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
         session.is_published = False
         session.save()
         return Response(CourseSessionSerializer(session).data)
+
+    @action(detail=True, methods=['post'])
+    def start(self, request, course_uuid=None, uuid=None):
+        """Mark a session as live (kicks off recording if enabled)."""
+        from rest_framework.exceptions import PermissionDenied
+
+        from .serializers import CourseSessionSerializer
+
+        session = self.get_object()
+        if not self._is_course_staff(self.get_course()):
+            raise PermissionDenied("You do not have permission to start this session.")
+        try:
+            session.start()
+        except ValueError as exc:
+            return error_response(str(exc), code='INVALID_TRANSITION', status_code=400)
+        return Response(CourseSessionSerializer(session).data)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, course_uuid=None, uuid=None):
+        """Mark a session as completed (stops recording if enabled)."""
+        from rest_framework.exceptions import PermissionDenied
+
+        from .serializers import CourseSessionSerializer
+
+        session = self.get_object()
+        if not self._is_course_staff(self.get_course()):
+            raise PermissionDenied("You do not have permission to complete this session.")
+        try:
+            session.complete()
+        except ValueError as exc:
+            return error_response(str(exc), code='INVALID_TRANSITION', status_code=400)
+        return Response(CourseSessionSerializer(session).data)
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, course_uuid=None, uuid=None):
+        """Cancel a session and notify enrolled learners."""
+        from rest_framework.exceptions import PermissionDenied
+
+        from .serializers import CourseSessionSerializer
+
+        session = self.get_object()
+        if not self._is_course_staff(self.get_course()):
+            raise PermissionDenied("You do not have permission to cancel this session.")
+        reason = request.data.get('reason', '')
+        try:
+            session.cancel(reason=reason, user=request.user)
+        except ValueError as exc:
+            return error_response(str(exc), code='INVALID_TRANSITION', status_code=400)
+        from .tasks import notify_course_session_cancelled
+
+        notify_course_session_cancelled.delay(session.id)
+        return Response(CourseSessionSerializer(session).data)
+
+    @action(detail=True, methods=['get'], url_path='calendar.ics')
+    def calendar(self, request, course_uuid=None, uuid=None):
+        """Return an .ics calendar invite for this session."""
+        from django.http import HttpResponse
+
+        from .services import build_session_ics
+
+        session = self.get_object()
+        ics = build_session_ics(session, user=request.user)
+        response = HttpResponse(ics, content_type='text/calendar; charset=utf-8')
+        response['Content-Disposition'] = (
+            f'attachment; filename="course-session-{session.uuid}.ics"'
+        )
+        return response
+
+    @action(detail=True, methods=['post'])
+    def reschedule(self, request, course_uuid=None, uuid=None):
+        """Move a session to a new start time / duration."""
+        from rest_framework.exceptions import PermissionDenied
+
+        from .serializers import CourseSessionSerializer
+
+        session = self.get_object()
+        if not self._is_course_staff(self.get_course()):
+            raise PermissionDenied("You do not have permission to reschedule this session.")
+        new_starts_at = request.data.get('starts_at')
+        new_duration = request.data.get('duration_minutes')
+        if not new_starts_at:
+            return error_response('starts_at is required', code='MISSING_FIELD', status_code=400)
+        from django.utils.dateparse import parse_datetime
+
+        parsed = parse_datetime(new_starts_at)
+        if parsed is None:
+            return error_response('starts_at must be a valid datetime', code='INVALID_FORMAT', status_code=400)
+        try:
+            session.reschedule(new_starts_at=parsed, new_duration_minutes=new_duration)
+        except ValueError as exc:
+            return error_response(str(exc), code='INVALID_TRANSITION', status_code=400)
+        return Response(CourseSessionSerializer(session).data)
+
+
+# =============================================================================
+# Programs
+# =============================================================================
+
+
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='programs')
+class ProgramViewSet(viewsets.ModelViewSet):
+    """
+    Program (course bundle) management.
+
+    Mirrors CourseViewSet's public-vs-owner visibility pattern.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
+
+    def get_queryset(self):
+        queryset = Program.objects.all()
+        user = self.request.user
+
+        slug = self.request.query_params.get('slug')
+        if slug:
+            queryset = queryset.filter(slug=slug)
+
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                models.Q(title__icontains=search)
+                | models.Q(short_description__icontains=search)
+                | models.Q(description__icontains=search)
+            )
+
+        if user.is_authenticated and user.groups.filter(name='admin').exists():
+            return queryset.distinct()
+
+        if not user.is_authenticated:
+            return queryset.filter(is_public=True, status=Program.Status.PUBLISHED)
+
+        owned = self.request.query_params.get('owned')
+        if owned:
+            return queryset.filter(created_by=user).distinct()
+
+        # ``enroll_free`` is a learner-facing action on any published public
+        # program — not just programs the learner owns. Treat it like retrieve.
+        if self.action in ['list', 'retrieve', 'enroll_free']:
+            return queryset.filter(
+                models.Q(is_public=True, status=Program.Status.PUBLISHED)
+                | models.Q(created_by=user)
+            ).distinct()
+
+        return queryset.filter(created_by=user)
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [permissions.IsAuthenticatedOrReadOnly()]
+        return [permissions.IsAuthenticated()]
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ProgramListSerializer
+        if self.action in ['create', 'update', 'partial_update']:
+            return ProgramCreateSerializer
+        return ProgramSerializer
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        if not self.request.user.has_perm('learning.can_create_course'):
+            raise PermissionDenied('You do not have permission to create programs.')
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        if not serializer.instance.can_manage(self.request.user):
+            raise PermissionDenied('You do not have permission to update this program.')
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+
+        if not instance.can_manage(self.request.user):
+            raise PermissionDenied('You do not have permission to delete this program.')
+        instance.delete()
+
+    @action(detail=True, methods=['post'])
+    def publish(self, request, uuid=None):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self.get_object()
+        if not program.can_manage(request.user):
+            raise PermissionDenied('You do not have permission to publish this program.')
+        try:
+            program.publish()
+        except DjangoValidationError as exc:
+            return Response(
+                exc.message_dict if hasattr(exc, 'message_dict') else {'detail': exc.messages},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(ProgramSerializer(program).data)
+
+    @action(detail=True, methods=['get'], url_path='analytics')
+    def analytics(self, request, uuid=None):
+        """Per-program analytics: enrollments, completions, revenue.
+
+        Uses the same ``period`` shape as the cohort ``reports`` action but
+        scoped to a single program. Revenue is drawn from
+        ``CoursePurchase.program`` so it only exists once the program has
+        been purchased since the schema landed; legacy Stripe Sessions are
+        surfaced via /admin/billing/reconcile if missing.
+        """
+        from datetime import datetime, timedelta
+
+        from django.db.models import Count, Sum
+        from django.db.models.functions import TruncDate
+        from django.utils import timezone
+        from rest_framework.exceptions import PermissionDenied
+
+        from billing.models import CoursePurchase
+
+        program = self.get_object()
+        if not program.can_manage(request.user):
+            raise PermissionDenied("You do not have access to this program's analytics.")
+
+        now = timezone.now()
+        period = request.query_params.get('period', 'last-30-days')
+        if period == 'last-7-days':
+            start = now - timedelta(days=7)
+        elif period == 'last-90-days':
+            start = now - timedelta(days=90)
+        elif period == 'this-year':
+            start = timezone.make_aware(datetime(now.year, 1, 1))
+        else:
+            start = now - timedelta(days=30)
+
+        enrollments = ProgramEnrollment.objects.filter(
+            program=program, enrolled_at__gte=start, enrolled_at__lte=now,
+        )
+        total_enrollments = enrollments.count()
+        completions = ProgramEnrollment.objects.filter(
+            program=program, completed_at__gte=start, completed_at__lte=now,
+        ).count()
+        completion_rate = round((completions / total_enrollments) * 100, 1) if total_enrollments else None
+
+        trends = [
+            {'date': row['day'].isoformat() if row['day'] else None, 'count': row['count']}
+            for row in (
+                enrollments.annotate(day=TruncDate('enrolled_at'))
+                .values('day').annotate(count=Count('id')).order_by('day')
+            )
+        ]
+
+        status_breakdown = [
+            {'label': 'Active', 'count': enrollments.filter(status=ProgramEnrollment.Status.ACTIVE).count()},
+            {'label': 'Completed', 'count': enrollments.filter(status=ProgramEnrollment.Status.COMPLETED).count()},
+            {'label': 'Dropped', 'count': enrollments.filter(status=ProgramEnrollment.Status.DROPPED).count()},
+        ]
+
+        purchases_in_period = CoursePurchase.objects.filter(
+            program=program, created_at__gte=start, created_at__lte=now,
+        )
+        completed = purchases_in_period.filter(status=CoursePurchase.Status.COMPLETED)
+        refunded = purchases_in_period.filter(status=CoursePurchase.Status.REFUNDED)
+        gross_cents = completed.aggregate(total=Sum('amount_cents'))['total'] or 0
+        refund_cents = refunded.aggregate(total=Sum('amount_cents'))['total'] or 0
+
+        recent_transactions = [
+            {
+                'purchase_uuid': str(p.uuid),
+                'user_name': getattr(p.user, 'full_name', None) or getattr(p.user, 'email', ''),
+                'amount_cents': p.amount_cents,
+                'currency': p.currency,
+                'status': p.status,
+                'created_at': p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in purchases_in_period.select_related('user').order_by('-created_at')[:10]
+        ]
+
+        return Response(
+            {
+                'summary': {
+                    'total_enrollments': total_enrollments,
+                    'completions': completions,
+                    'completion_rate': completion_rate,
+                    'gross_revenue_cents': gross_cents,
+                    'refunds_cents': refund_cents,
+                    'net_revenue_cents': gross_cents - refund_cents,
+                    'purchase_count': completed.count(),
+                    'refund_count': refunded.count(),
+                },
+                'trends': trends,
+                'status_breakdown': status_breakdown,
+                'recent_transactions': recent_transactions,
+            }
+        )
+
+    @action(detail=True, methods=['post'], url_path='sync-stripe')
+    def sync_stripe(self, request, uuid=None):
+        """Create or refresh the Stripe Product + Price for this program.
+
+        Without this, checkout falls back to inline ``price_data`` every
+        time — which works, but the price isn't reusable for promo codes
+        or Stripe Dashboard reporting. Writing stripe_product_id /
+        stripe_price_id lets Stripe reconcile purchases to a canonical
+        product record.
+        """
+        from rest_framework.exceptions import PermissionDenied
+
+        from billing.client import get_stripe
+
+        program = self.get_object()
+        if not program.can_manage(request.user):
+            raise PermissionDenied('You do not have permission to sync this program.')
+
+        if program.price_cents <= 0:
+            return Response(
+                {'error': {'code': 'NOT_PAID', 'message': 'Free programs do not need a Stripe product.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        stripe = get_stripe()
+        try:
+            if not program.stripe_product_id:
+                product = stripe.Product.create(
+                    name=program.title,
+                    description=(program.short_description or program.title)[:500],
+                    metadata={'program_uuid': str(program.uuid)},
+                    idempotency_key=f'program_product:{program.uuid}:v1',
+                )
+                program.stripe_product_id = product.id
+
+            # Always create a new Price row if the price or currency shifts
+            # (Stripe Prices are immutable — new values require a new Price).
+            price = stripe.Price.create(
+                currency=(program.currency or 'USD').lower(),
+                unit_amount=program.price_cents,
+                product=program.stripe_product_id,
+                metadata={'program_uuid': str(program.uuid)},
+            )
+            program.stripe_price_id = price.id
+            program.save(update_fields=['stripe_product_id', 'stripe_price_id', 'updated_at'])
+        except Exception as exc:
+            return Response(
+                {'error': {'code': 'STRIPE_ERROR', 'message': str(exc)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(ProgramSerializer(program).data)
+
+    @action(detail=True, methods=['post'])
+    def archive(self, request, uuid=None):
+        """Archive a program: hidden from discovery, blocks new enrollments.
+
+        Existing ProgramEnrollments keep access. Admin can un-archive by
+        calling ``publish`` again, which validates + flips the status back
+        to PUBLISHED.
+        """
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self.get_object()
+        if not program.can_manage(request.user):
+            raise PermissionDenied('You do not have permission to archive this program.')
+        program.archive()
+        return Response(ProgramSerializer(program).data)
+
+    @action(detail=True, methods=['post'], url_path='enroll')
+    def enroll_free(self, request, uuid=None):
+        """One-click enrollment for price-zero programs.
+
+        Paid programs must go through Stripe Checkout. This is the single
+        direct path for free bundles — creates the ProgramEnrollment,
+        activates it (seeding member-course enrollments with provenance),
+        and writes an audit entry.
+        """
+        program = self.get_object()
+        if program.price_cents > 0:
+            return Response(
+                {'error': {'code': 'NOT_FREE', 'message': 'Paid programs require checkout.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if program.status != Program.Status.PUBLISHED:
+            return Response(
+                {'error': {'code': 'NOT_PUBLISHED', 'message': 'Program is not open for enrollment.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        enrollment, created = ProgramEnrollment.objects.get_or_create(
+            user=request.user, program=program
+        )
+        enrollment.activate()
+        program.update_counts()
+
+        if created:
+            try:
+                from accounts.audit import log_audit_event
+
+                log_audit_event(
+                    actor=request.user,
+                    action='program_enrollment.created',
+                    object_type='ProgramEnrollment',
+                    object_uuid=str(enrollment.uuid),
+                    metadata={'program_uuid': str(program.uuid), 'price_cents': 0},
+                    request=request,
+                )
+            except Exception:
+                logger.warning('audit log failed for free program enroll %s', enrollment.uuid, exc_info=True)
+
+        return Response(ProgramEnrollmentSerializer(enrollment).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='enrollments')
+    def enrollments(self, request, uuid=None):
+        """Staff roster: every learner enrolled in this program with payment status."""
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self.get_object()
+        if not program.can_manage(request.user):
+            raise PermissionDenied("You do not have access to this program's enrollments.")
+
+        qs = (
+            ProgramEnrollment.objects
+            .filter(program=program)
+            .select_related('user')
+            .order_by('-enrolled_at')
+        )
+        return Response(ProgramEnrollmentRosterSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['post'], url_path='refund-enrollment')
+    def refund_enrollment(self, request, uuid=None):
+        """Refund a learner's program purchase and cascade-drop seeded enrollments.
+
+        Body: ``{enrollment_uuid, reason, amount_cents?}``.
+
+        Resolves the CoursePurchase for (user, program), calls Stripe with
+        an optional partial amount, marks the purchase REFUNDED (full only),
+        drops the ProgramEnrollment, and cascade-drops every CourseEnrollment
+        whose ``from_program_enrollment`` points at this one. Direct
+        enrollments the learner made outside the program are not touched.
+        """
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+
+        from billing.models import CoursePurchase
+        from billing.services import refund_payment_intent
+
+        program = self.get_object()
+        if not program.can_manage(request.user):
+            raise PermissionDenied("You do not have permission to refund enrollments for this program.")
+
+        enrollment_uuid = request.data.get('enrollment_uuid')
+        reason = (request.data.get('reason') or '').strip()
+        amount_cents = request.data.get('amount_cents')
+
+        if not enrollment_uuid:
+            raise ValidationError({'enrollment_uuid': 'required'})
+        if not reason:
+            raise ValidationError({'reason': 'required'})
+        if amount_cents is not None:
+            try:
+                amount_cents = int(amount_cents)
+            except (TypeError, ValueError):
+                raise ValidationError({'amount_cents': 'must be an integer'}) from None
+            if amount_cents <= 0:
+                raise ValidationError({'amount_cents': 'must be positive'})
+
+        enrollment = (
+            ProgramEnrollment.objects
+            .filter(program=program, uuid=enrollment_uuid)
+            .select_related('user')
+            .first()
+        )
+        if enrollment is None:
+            return Response({'error': {'code': 'ENROLLMENT_NOT_FOUND'}}, status=status.HTTP_404_NOT_FOUND)
+
+        purchase = (
+            CoursePurchase.objects
+            .filter(user=enrollment.user, program=program)
+            .exclude(status=CoursePurchase.Status.REFUNDED)
+            .order_by('-created_at')
+            .first()
+        )
+        if purchase is None:
+            return Response(
+                {'error': {'code': 'NO_PURCHASE', 'message': 'No refundable purchase found for this enrollment.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not purchase.stripe_payment_intent_id:
+            return Response(
+                {'error': {'code': 'NO_PAYMENT_INTENT'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if amount_cents is not None and amount_cents > purchase.amount_cents:
+            return Response(
+                {'error': {'code': 'REFUND_EXCEEDS_AMOUNT'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            stripe_result = refund_payment_intent(
+                purchase.stripe_payment_intent_id,
+                amount_cents=amount_cents,
+                reason='requested_by_customer',
+            )
+        except Exception as exc:
+            return Response({'error': {'code': 'REFUND_FAILED', 'message': str(exc)}}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_partial = amount_cents is not None and amount_cents < purchase.amount_cents
+        cascade_count = 0
+        if not is_partial:
+            purchase.status = CoursePurchase.Status.REFUNDED
+            purchase.save(update_fields=['status', 'updated_at'])
+            enrollment.status = ProgramEnrollment.Status.DROPPED
+            enrollment.save(update_fields=['status', 'updated_at'])
+            cascade_count = CourseEnrollment.objects.filter(
+                from_program_enrollment=enrollment,
+            ).exclude(status=CourseEnrollment.Status.DROPPED).update(
+                status=CourseEnrollment.Status.DROPPED,
+                updated_at=timezone.now(),
+            )
+
+        try:
+            from accounts.audit import log_audit_event
+
+            log_audit_event(
+                actor=request.user,
+                action='program_purchase.refunded',
+                object_type='CoursePurchase',
+                object_uuid=str(purchase.uuid),
+                metadata={
+                    'program_uuid': str(program.uuid),
+                    'enrollment_uuid': str(enrollment.uuid),
+                    'amount_cents': stripe_result.get('amount_cents'),
+                    'partial': is_partial,
+                    'reason': reason,
+                    'stripe_refund_id': stripe_result.get('refund_id'),
+                    'cascade_drop_count': cascade_count,
+                },
+                request=request,
+            )
+        except Exception:
+            logger.warning('audit log failed for program refund %s', purchase.uuid, exc_info=True)
+
+        return Response(ProgramEnrollmentRosterSerializer(enrollment).data)
+
+    @action(detail=False, methods=['get'])
+    def reports(self, request):
+        """Summary, trends, and recent activity for the requester's programs."""
+        from datetime import datetime, timedelta
+
+        from django.db.models import Count
+        from django.db.models.functions import TruncDate
+        from django.utils import timezone
+        from rest_framework.exceptions import PermissionDenied
+
+        user = request.user
+        if not user.groups.filter(name__in=['instructor', 'admin']).exists():
+            raise PermissionDenied('Program reports are limited to instructors and admins.')
+
+        if user.groups.filter(name='admin').exists():
+            programs = Program.objects.all()
+        else:
+            programs = Program.objects.filter(created_by=user).distinct()
+
+        now = timezone.now()
+        period = request.query_params.get('period', 'last-30-days')
+        if period == 'last-7-days':
+            start = now - timedelta(days=7)
+        elif period == 'last-90-days':
+            start = now - timedelta(days=90)
+        elif period == 'this-year':
+            start = timezone.make_aware(datetime(now.year, 1, 1))
+        else:
+            start = now - timedelta(days=30)
+
+        enrollments = ProgramEnrollment.objects.filter(
+            program__in=programs,
+            enrolled_at__gte=start,
+            enrolled_at__lte=now,
+        )
+
+        total_enrollments = enrollments.count()
+        completions_in_period = ProgramEnrollment.objects.filter(
+            program__in=programs,
+            completed_at__gte=start,
+            completed_at__lte=now,
+        ).count()
+
+        completion_rate = None
+        if total_enrollments:
+            completion_rate = round((completions_in_period / total_enrollments) * 100, 1)
+
+        trends = []
+        for row in (
+            enrollments.annotate(day=TruncDate('enrolled_at'))
+            .values('day')
+            .annotate(count=Count('id'))
+            .order_by('day')
+        ):
+            trends.append(
+                {
+                    'date': row['day'].isoformat() if row['day'] else None,
+                    'count': row['count'],
+                }
+            )
+
+        status_breakdown = [
+            {'label': 'Active', 'count': enrollments.filter(status=ProgramEnrollment.Status.ACTIVE).count()},
+            {'label': 'Completed', 'count': enrollments.filter(status=ProgramEnrollment.Status.COMPLETED).count()},
+            {'label': 'Dropped', 'count': enrollments.filter(status=ProgramEnrollment.Status.DROPPED).count()},
+        ]
+
+        recent_enrollments = [
+            {
+                'enrollment_uuid': str(e.uuid),
+                'program_title': e.program.title if e.program else '',
+                'user_name': getattr(e.user, 'full_name', None) or getattr(e.user, 'email', ''),
+                'status': e.status,
+                'enrolled_at': e.enrolled_at.isoformat(),
+            }
+            for e in enrollments.select_related('program', 'user').order_by('-enrolled_at')[:5]
+        ]
+
+        top_programs = [
+            {
+                'uuid': str(p.uuid),
+                'title': p.title,
+                'enrollments': p.period_enrollments,
+            }
+            for p in programs.annotate(
+                period_enrollments=Count(
+                    'enrollments',
+                    filter=models.Q(
+                        enrollments__enrolled_at__gte=start,
+                        enrollments__enrolled_at__lte=now,
+                    ),
+                )
+            ).order_by('-period_enrollments')[:5]
+            if p.period_enrollments
+        ]
+
+        return Response(
+            {
+                'summary': {
+                    'total_enrollments': total_enrollments,
+                    'completions': completions_in_period,
+                    'completion_rate': completion_rate,
+                    'programs_published': programs.filter(status=Program.Status.PUBLISHED).count(),
+                },
+                'trends': trends,
+                'status_breakdown': status_breakdown,
+                'recent_enrollments': recent_enrollments,
+                'top_programs': top_programs,
+            }
+        )
+
+
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='program_courses')
+class ProgramCourseViewSet(viewsets.ModelViewSet):
+    """
+    Manage the courses in a program (add, remove, reorder).
+
+    GET /programs/{program_uuid}/courses/
+    POST /programs/{program_uuid}/courses/   body: {course_uuid, order, is_required}
+    PATCH /programs/{program_uuid}/courses/{uuid}/  body: {order, is_required}
+    DELETE /programs/{program_uuid}/courses/{uuid}/
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ProgramCourseEntrySerializer
+    lookup_field = 'uuid'
+
+    def _get_program(self):
+        return get_object_or_404(Program, uuid=self.kwargs['program_uuid'])
+
+    def get_queryset(self):
+        return ProgramCourse.objects.filter(
+            program__uuid=self.kwargs['program_uuid']
+        ).select_related('course')
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self._get_program()
+        if not program.can_manage(self.request.user):
+            raise PermissionDenied('You do not have permission to modify this program.')
+        serializer.save(program=program)
+        program.update_counts()
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self._get_program()
+        if not program.can_manage(self.request.user):
+            raise PermissionDenied('You do not have permission to modify this program.')
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+
+        program = self._get_program()
+        if not program.can_manage(self.request.user):
+            raise PermissionDenied('You do not have permission to modify this program.')
+        instance.delete()
+        program.update_counts()
+
+
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='program_enrollments')
+class ProgramEnrollmentViewSet(viewsets.ReadOnlyModelViewSet):
+    """A learner's own program enrollments."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ProgramEnrollmentSerializer
+    lookup_field = 'uuid'
+
+    def get_queryset(self):
+        return ProgramEnrollment.objects.filter(user=self.request.user).select_related('program')
+
+
+# =============================================================================
+# Discussion Board
+# =============================================================================
+
+
+def _course_is_staff(course, user):
+    if not user or not user.is_authenticated:
+        return False
+    return course.can_manage(user) or course.can_instruct(user)
+
+
+def _course_is_enrollee(course, user):
+    if not user or not user.is_authenticated:
+        return False
+    return CourseEnrollment.objects.filter(
+        user=user,
+        course=course,
+        status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
+    ).exists()
+
+
+def _require_course_access(course, user):
+    from rest_framework.exceptions import PermissionDenied
+
+    if _course_is_staff(course, user) or _course_is_enrollee(course, user):
+        return
+    raise PermissionDenied('You do not have access to this course.')
+
+
+def _require_course_staff(course, user):
+    from rest_framework.exceptions import PermissionDenied
+
+    if not _course_is_staff(course, user):
+        raise PermissionDenied('Staff access required.')
+
+
+def _apply_mentions(post, cleaned_html):
+    """Parse mention UUIDs from sanitized HTML, resolve to allowed users, set M2M."""
+    from accounts.models import User as UserModel
+    from .sanitize import extract_mentions
+
+    uuids = extract_mentions(cleaned_html)
+    if not uuids:
+        post.mentions.clear()
+        return []
+    course = post.thread.course if isinstance(post, DiscussionReply) else post.course
+    allowed_ids = set(
+        UserModel.objects.filter(uuid__in=uuids)
+        .values_list('uuid', flat=True)
+    )
+    # Restrict mentions to users that are enrolled or staff on the course.
+    enrolled_uuids = set(
+        CourseEnrollment.objects.filter(
+            course=course,
+            user__uuid__in=allowed_ids,
+            status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
+        ).values_list('user__uuid', flat=True)
+    )
+    staff_uuids = set(
+        CourseStaff.objects.filter(course=course, user__uuid__in=allowed_ids)
+        .values_list('user__uuid', flat=True)
+    )
+    valid = enrolled_uuids | staff_uuids
+    users = list(UserModel.objects.filter(uuid__in=valid))
+    post.mentions.set(users)
+    return users
+
+
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_discussions')
+class DiscussionThreadViewSet(viewsets.ModelViewSet):
+    """Threads on a course discussion board."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
+
+    def get_course(self):
+        return get_object_or_404(Course, uuid=self.kwargs.get('course_uuid'))
+
+    def get_queryset(self):
+        course = self.get_course()
+        _require_course_access(course, self.request.user)
+        manager = DiscussionThread.all_objects if _course_is_staff(course, self.request.user) else DiscussionThread.objects
+        qs = manager.filter(course=course).select_related('author').prefetch_related('mentions')
+        if not _course_is_staff(course, self.request.user):
+            qs = qs.filter(is_hidden=False)
+        return qs
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return DiscussionThreadCreateSerializer
+        if self.action in ('update', 'partial_update'):
+            return DiscussionThreadUpdateSerializer
+        if self.action == 'retrieve':
+            return DiscussionThreadDetailSerializer
+        return DiscussionThreadListSerializer
+
+    def perform_create(self, serializer):
+        course = self.get_course()
+        _require_course_access(course, self.request.user)
+        thread = serializer.save(course=course, author=self.request.user)
+        mentioned = _apply_mentions(thread, thread.body_html)
+        from .discussions_service import notify_mentions
+
+        notify_mentions(thread, mentioned)
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        thread = self.get_object()
+        course = self.get_course()
+        is_author = thread.author_id == self.request.user.id
+        is_staff = _course_is_staff(course, self.request.user)
+        if not (is_author or is_staff):
+            raise PermissionDenied('Only the author or staff can edit this thread.')
+        if thread.is_locked and not is_staff:
+            raise PermissionDenied('Thread is locked.')
+        thread = serializer.save()
+        _apply_mentions(thread, thread.body_html)
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+
+        course = self.get_course()
+        is_author = instance.author_id == self.request.user.id
+        is_staff = _course_is_staff(course, self.request.user)
+        if not (is_author or is_staff):
+            raise PermissionDenied('Only the author or staff can delete this thread.')
+        instance.soft_delete()
+
+    def _set_flag(self, field: str, value: bool):
+        thread = self.get_object()
+        _require_course_staff(self.get_course(), self.request.user)
+        setattr(thread, field, value)
+        thread.save(update_fields=[field, 'updated_at'])
+        return Response(DiscussionThreadDetailSerializer(thread, context={'request': self.request}).data)
+
+    @action(detail=True, methods=['post'])
+    def pin(self, request, *args, **kwargs):
+        return self._set_flag('is_pinned', True)
+
+    @action(detail=True, methods=['post'])
+    def unpin(self, request, *args, **kwargs):
+        return self._set_flag('is_pinned', False)
+
+    @action(detail=True, methods=['post'])
+    def lock(self, request, *args, **kwargs):
+        return self._set_flag('is_locked', True)
+
+    @action(detail=True, methods=['post'])
+    def unlock(self, request, *args, **kwargs):
+        return self._set_flag('is_locked', False)
+
+    @action(detail=True, methods=['post'])
+    def hide(self, request, *args, **kwargs):
+        return self._set_flag('is_hidden', True)
+
+    @action(detail=True, methods=['post'])
+    def unhide(self, request, *args, **kwargs):
+        return self._set_flag('is_hidden', False)
+
+    @action(detail=True, methods=['post'])
+    def flag(self, request, *args, **kwargs):
+        thread = self.get_object()
+        _require_course_access(self.get_course(), self.request.user)
+        serializer = DiscussionFlagCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        flag = serializer.save(thread=thread, reporter=self.request.user)
+        return Response(DiscussionFlagSerializer(flag).data, status=status.HTTP_201_CREATED)
+
+
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_discussions')
+class DiscussionReplyViewSet(viewsets.ModelViewSet):
+    """Replies under a discussion thread."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'uuid'
+    http_method_names = ['get', 'post', 'delete']
+
+    def get_course(self):
+        return get_object_or_404(Course, uuid=self.kwargs.get('course_uuid'))
+
+    def get_thread(self):
+        return get_object_or_404(
+            DiscussionThread.all_objects,
+            uuid=self.kwargs.get('thread_uuid'),
+            course__uuid=self.kwargs.get('course_uuid'),
+        )
+
+    def get_queryset(self):
+        course = self.get_course()
+        _require_course_access(course, self.request.user)
+        thread = self.get_thread()
+        manager = DiscussionReply.all_objects if _course_is_staff(course, self.request.user) else DiscussionReply.objects
+        qs = manager.filter(thread=thread).select_related('author').prefetch_related('mentions')
+        if not _course_is_staff(course, self.request.user):
+            qs = qs.filter(is_hidden=False)
+        return qs
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return DiscussionReplyCreateSerializer
+        return DiscussionReplySerializer
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        course = self.get_course()
+        _require_course_access(course, self.request.user)
+        thread = self.get_thread()
+        is_staff = _course_is_staff(course, self.request.user)
+        if thread.is_locked and not is_staff:
+            raise PermissionDenied('Thread is locked.')
+        reply = serializer.save(thread=thread, author=self.request.user)
+        mentioned = _apply_mentions(reply, reply.body_html)
+        DiscussionThread.objects.filter(pk=thread.pk).update(
+            reply_count=models.F('reply_count') + 1,
+            last_activity_at=timezone.now(),
+        )
+        from .discussions_service import notify_new_reply, notify_mentions
+
+        notify_new_reply(reply)
+        notify_mentions(reply, mentioned)
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+
+        course = self.get_course()
+        is_author = instance.author_id == self.request.user.id
+        is_staff = _course_is_staff(course, self.request.user)
+        if not (is_author or is_staff):
+            raise PermissionDenied('Only the author or staff can delete this reply.')
+        instance.soft_delete()
+
+    def _set_flag(self, field: str, value: bool):
+        reply = self.get_object()
+        _require_course_staff(self.get_course(), self.request.user)
+        setattr(reply, field, value)
+        reply.save(update_fields=[field, 'updated_at'])
+        return Response(DiscussionReplySerializer(reply, context={'request': self.request}).data)
+
+    @action(detail=True, methods=['post'])
+    def hide(self, request, *args, **kwargs):
+        return self._set_flag('is_hidden', True)
+
+    @action(detail=True, methods=['post'])
+    def unhide(self, request, *args, **kwargs):
+        return self._set_flag('is_hidden', False)
+
+    @action(detail=True, methods=['post'])
+    def flag(self, request, *args, **kwargs):
+        reply = self.get_object()
+        _require_course_access(self.get_course(), self.request.user)
+        serializer = DiscussionFlagCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        flag = serializer.save(reply=reply, reporter=self.request.user)
+        return Response(DiscussionFlagSerializer(flag).data, status=status.HTTP_201_CREATED)
+
+
+@roles('organizer', 'instructor', 'admin', route_name='course_discussion_flags')
+class DiscussionFlagViewSet(viewsets.GenericViewSet):
+    """Staff-only flag queue + resolve actions."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = DiscussionFlagSerializer
+    lookup_field = 'uuid'
+
+    def get_course(self):
+        return get_object_or_404(Course, uuid=self.kwargs.get('course_uuid'))
+
+    def get_queryset(self):
+        course = self.get_course()
+        _require_course_staff(course, self.request.user)
+        return DiscussionFlag.objects.filter(
+            models.Q(thread__course=course) | models.Q(reply__thread__course=course)
+        ).select_related('reporter', 'thread', 'reply', 'reply__thread').order_by('-created_at')
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset()
+        status_filter = request.query_params.get('status', DiscussionFlag.Status.OPEN)
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return Response(DiscussionFlagSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['post'])
+    def resolve(self, request, *args, **kwargs):
+        from django.utils import timezone as _tz
+        from rest_framework.exceptions import ValidationError
+
+        course = self.get_course()
+        _require_course_staff(course, self.request.user)
+        flag = get_object_or_404(self.get_queryset(), uuid=kwargs.get('uuid'))
+        action_kind = request.data.get('action')
+        if action_kind not in ('keep', 'hide'):
+            raise ValidationError({'action': 'Must be "keep" or "hide".'})
+        if action_kind == 'hide':
+            target = flag.thread if flag.thread_id else flag.reply
+            target.is_hidden = True
+            target.save(update_fields=['is_hidden', 'updated_at'])
+            flag.status = DiscussionFlag.Status.RESOLVED_HIDDEN
+        else:
+            flag.status = DiscussionFlag.Status.RESOLVED_KEPT
+        flag.resolved_by = request.user
+        flag.resolved_at = _tz.now()
+        flag.save(update_fields=['status', 'resolved_by', 'resolved_at', 'updated_at'])
+        from .discussions_service import notify_flag_resolved
+
+        notify_flag_resolved(flag)
+        return Response(DiscussionFlagSerializer(flag).data)
+
+
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='course_member_search')
+class CourseMemberSearchView(views.APIView):
+    """Search enrolled members + staff for @mention autocomplete."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, course_uuid):
+        course = get_object_or_404(Course, uuid=course_uuid)
+        _require_course_access(course, request.user)
+        q = (request.query_params.get('q') or '').strip()
+        from accounts.models import User as UserModel
+
+        enrolled = UserModel.objects.filter(
+            course_enrollments__course=course,
+            course_enrollments__status__in=[
+                CourseEnrollment.Status.ACTIVE,
+                CourseEnrollment.Status.COMPLETED,
+            ],
+        )
+        staff = UserModel.objects.filter(course_staff_assignments__course=course)
+        qs = (enrolled | staff).distinct()
+        if q:
+            qs = qs.filter(
+                models.Q(full_name__icontains=q) | models.Q(email__icontains=q)
+            )
+        qs = qs[:10]
+        staff_ids = set(CourseStaff.objects.filter(course=course).values_list('user_id', flat=True))
+        data = []
+        for u in qs:
+            data.append({
+                'uuid': u.uuid,
+                'full_name': u.full_name,
+                'email': u.email,
+                'role': 'staff' if u.id in staff_ids else 'learner',
+            })
+        return Response(CourseMemberMiniSerializer(data, many=True).data)

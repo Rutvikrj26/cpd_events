@@ -76,6 +76,14 @@ class VideoRoom(BaseModel):
         self.ended_at = timezone.now()
         self.save(update_fields=['status', 'ended_at', 'updated_at'])
 
+    def reopen(self):
+        self.status = self.Status.SCHEDULED
+        self.started_at = None
+        self.ended_at = None
+        self.error = ''
+        self.error_at = None
+        self.save(update_fields=['status', 'started_at', 'ended_at', 'error', 'error_at', 'updated_at'])
+
     def mark_error(self, message: str):
         self.status = self.Status.ERROR
         self.error = message[:2000]
@@ -217,6 +225,13 @@ class VideoRecording(BaseModel):
 
     video_room = models.ForeignKey(VideoRoom, on_delete=models.CASCADE, related_name='recordings')
     event = models.ForeignKey('events.Event', on_delete=models.CASCADE, null=True, blank=True, related_name='video_recordings')
+    course_session = models.ForeignKey(
+        'learning.CourseSession',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='recordings',
+    )
 
     # Provider reference
     egress_id = models.CharField(max_length=200, unique=True, db_index=True, help_text="Provider's recording/egress ID")

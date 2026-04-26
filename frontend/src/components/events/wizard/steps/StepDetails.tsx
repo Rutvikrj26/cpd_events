@@ -6,8 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete';
 import { MapPin, Upload, Image as ImageIcon, X } from 'lucide-react';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 
 export const StepDetails = () => {
     const { formData, updateFormData } = useEventWizard();

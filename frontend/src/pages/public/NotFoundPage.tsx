@@ -51,10 +51,6 @@ export function NotFoundPage() {
                             Features
                         </Link>
                         <span className="text-border">•</span>
-                        <Link to="/pricing" className="text-primary hover:underline">
-                            Pricing
-                        </Link>
-                        <span className="text-border">•</span>
                         <Link to="/faq" className="text-primary hover:underline">
                             FAQ
                         </Link>

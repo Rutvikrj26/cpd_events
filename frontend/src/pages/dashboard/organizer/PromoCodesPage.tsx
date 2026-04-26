@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
+import * as PopoverPrimitive from "@radix-ui/react-popover";
 import {
     Tag,
     Plus,
@@ -11,6 +12,10 @@ import {
     Eye,
     Percent,
     DollarSign,
+    ChevronDown,
+    Check,
+    Search,
+    X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,6 +56,8 @@ import {
     getPromoCodeUsages,
 } from "@/api/promo-codes";
 import type { PromoCode, PromoCodeUsage, CreatePromoCodeRequest } from "@/api/promo-codes/types";
+import { getEvents } from "@/api/events";
+import type { Event } from "@/api/events/types";
 
 export default function PromoCodesPage() {
     const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
@@ -77,6 +84,15 @@ export default function PromoCodesPage() {
     const [validFrom, setValidFrom] = useState("");
     const [validUntil, setValidUntil] = useState("");
     const [firstTimeOnly, setFirstTimeOnly] = useState(false);
+    // Scope: empty = applies to every event the organizer owns; non-empty = limited subset.
+    // TODO: extend to courses/programs once PromoCode model gains M2M to those.
+    const [eventUuids, setEventUuids] = useState<string[]>([]);
+
+    // Event picker
+    const [eventOptions, setEventOptions] = useState<Event[]>([]);
+    const [eventOptionsLoading, setEventOptionsLoading] = useState(false);
+    const [scopePickerOpen, setScopePickerOpen] = useState(false);
+    const [scopeSearch, setScopeSearch] = useState("");
 
     const fetchPromoCodes = useCallback(async () => {
         try {
@@ -94,6 +110,23 @@ export default function PromoCodesPage() {
         fetchPromoCodes();
     }, [fetchPromoCodes]);
 
+    // Lazy-load events when the dialog opens — avoids fetching on every page render.
+    useEffect(() => {
+        if (!formOpen || eventOptions.length > 0) return;
+        let cancelled = false;
+        setEventOptionsLoading(true);
+        getEvents()
+            .then((data) => {
+                if (cancelled) return;
+                setEventOptions(data.results ?? []);
+            })
+            .catch(() => toast.error("Failed to load your events"))
+            .finally(() => !cancelled && setEventOptionsLoading(false));
+        return () => {
+            cancelled = true;
+        };
+    }, [formOpen, eventOptions.length]);
+
     function resetForm() {
         setCode("");
         setDescription("");
@@ -103,6 +136,8 @@ export default function PromoCodesPage() {
         setValidFrom("");
         setValidUntil("");
         setFirstTimeOnly(false);
+        setEventUuids([]);
+        setScopeSearch("");
         setEditingCode(null);
     }
 
@@ -121,6 +156,7 @@ export default function PromoCodesPage() {
         setValidFrom(promo.valid_from ? promo.valid_from.slice(0, 16) : "");
         setValidUntil(promo.valid_until ? promo.valid_until.slice(0, 16) : "");
         setFirstTimeOnly(promo.first_time_only);
+        setEventUuids((promo.events_data ?? []).map((e) => e.uuid));
         setFormOpen(true);
     }
 
@@ -137,6 +173,8 @@ export default function PromoCodesPage() {
                 valid_from: validFrom || undefined,
                 valid_until: validUntil || undefined,
                 first_time_only: firstTimeOnly,
+                // Empty array → unscoped (applies to every event the organizer owns).
+                event_uuids: eventUuids,
             };
 
             if (editingCode) {
@@ -194,6 +232,25 @@ export default function PromoCodesPage() {
         }
     }
 
+    const filteredEventOptions = useMemo(() => {
+        const term = scopeSearch.trim().toLowerCase();
+        if (!term) return eventOptions;
+        return eventOptions.filter((ev) => ev.title.toLowerCase().includes(term));
+    }, [eventOptions, scopeSearch]);
+
+    const scopeSummary = useMemo(() => {
+        if (eventUuids.length === 0) return { label: "All my events", muted: true };
+        if (eventUuids.length === 1) {
+            const match = eventOptions.find((ev) => ev.uuid === eventUuids[0]);
+            return { label: match?.title ?? "1 event", muted: false };
+        }
+        const first = eventOptions.find((ev) => ev.uuid === eventUuids[0]);
+        if (first) {
+            return { label: `${first.title} +${eventUuids.length - 1} more`, muted: false };
+        }
+        return { label: `${eventUuids.length} events`, muted: false };
+    }, [eventUuids, eventOptions]);
+
     // Filter data
     const filtered = promoCodes.filter((p) => {
         const matchesSearch =
@@ -249,10 +306,10 @@ export default function PromoCodesPage() {
         },
         {
             key: "events",
-            header: "Events",
+            header: "Applies to",
             cell: (row) =>
                 row.events_data.length === 0 ? (
-                    <span className="text-muted-foreground">All events</span>
+                    <span className="text-muted-foreground">All my events</span>
                 ) : (
                     <div className="flex flex-wrap gap-1">
                         {row.events_data.slice(0, 2).map((e) => (
@@ -356,7 +413,7 @@ export default function PromoCodesPage() {
         <div className="p-4 md:p-6 lg:p-8 space-y-6">
             <PageHeader
                 title="Promo Codes"
-                description="Create and manage discount codes for your events."
+                description="Create and manage discount codes."
             />
 
             <DataTable
@@ -395,7 +452,7 @@ export default function PromoCodesPage() {
                     if (!open) resetForm();
                 }}
                 title={editingCode ? "Edit Promo Code" : "Create Promo Code"}
-                description={editingCode ? "Update discount code settings." : "Create a new discount code for your events."}
+                description={editingCode ? "Update discount code settings." : "Create a new discount code."}
                 onSubmit={handleSubmit}
                 submitLabel={editingCode ? "Save Changes" : "Create Code"}
                 isLoading={formLoading}
@@ -449,6 +506,130 @@ export default function PromoCodesPage() {
                             required
                         />
                     </div>
+                </div>
+                {/* Scope — events only for now (TODO: extend to courses/programs once
+                    PromoCode model gains M2M to those). Empty = applies to every event. */}
+                <div className="space-y-2">
+                    <Label>Applies to</Label>
+                    <PopoverPrimitive.Root open={scopePickerOpen} onOpenChange={setScopePickerOpen}>
+                        <PopoverPrimitive.Trigger asChild>
+                            <button
+                                type="button"
+                                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <span className={`truncate ${scopeSummary.muted ? "text-muted-foreground" : "text-foreground"}`}>
+                                    {scopeSummary.label}
+                                </span>
+                                <div className="flex items-center gap-1 shrink-0 ml-2">
+                                    {eventUuids.length > 0 && (
+                                        <span
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-label="Clear selection"
+                                            className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-muted text-muted-foreground"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setEventUuids([]);
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" || e.key === " ") {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setEventUuids([]);
+                                                }
+                                            }}
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </span>
+                                    )}
+                                    <ChevronDown className="h-4 w-4 opacity-50" />
+                                </div>
+                            </button>
+                        </PopoverPrimitive.Trigger>
+                        <PopoverPrimitive.Portal>
+                            <PopoverPrimitive.Content
+                                align="start"
+                                sideOffset={4}
+                                collisionPadding={8}
+                                className="z-50 w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in fade-in-0 zoom-in-95"
+                                style={{ maxHeight: "var(--radix-popover-content-available-height)" }}
+                            >
+                                <div className="flex flex-col" style={{ maxHeight: "inherit" }}>
+                                    <div className="relative border-b bg-popover p-2">
+                                        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                        <Input
+                                            autoFocus
+                                            value={scopeSearch}
+                                            onChange={(e) => setScopeSearch(e.target.value)}
+                                            placeholder="Search events…"
+                                            className="h-8 pl-8"
+                                        />
+                                    </div>
+                                    <div className="min-h-0 flex-1 overflow-y-auto p-1">
+                                        {eventOptionsLoading ? (
+                                            <p className="p-3 text-sm text-muted-foreground">Loading events…</p>
+                                        ) : eventOptions.length === 0 ? (
+                                            <p className="p-3 text-sm text-muted-foreground">
+                                                No events yet — create one first.
+                                            </p>
+                                        ) : filteredEventOptions.length === 0 ? (
+                                            <p className="p-3 text-sm text-muted-foreground">
+                                                No events match "{scopeSearch}".
+                                            </p>
+                                        ) : (
+                                            filteredEventOptions.map((ev) => {
+                                                const checked = eventUuids.includes(ev.uuid);
+                                                return (
+                                                    <button
+                                                        key={ev.uuid}
+                                                        type="button"
+                                                        role="option"
+                                                        aria-selected={checked}
+                                                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none"
+                                                        onClick={() => {
+                                                            setEventUuids((prev) =>
+                                                                checked
+                                                                    ? prev.filter((u) => u !== ev.uuid)
+                                                                    : [...prev, ev.uuid],
+                                                            );
+                                                        }}
+                                                    >
+                                                        <span
+                                                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                                                                checked
+                                                                    ? "border-primary bg-primary text-primary-foreground"
+                                                                    : "border-input bg-background"
+                                                            }`}
+                                                        >
+                                                            {checked && <Check className="h-3 w-3" />}
+                                                        </span>
+                                                        <span className="truncate">{ev.title}</span>
+                                                    </button>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                    {eventUuids.length > 0 && (
+                                        <div className="flex items-center justify-between border-t bg-popover px-2 py-1.5 text-xs">
+                                            <span className="text-muted-foreground">
+                                                {eventUuids.length} selected
+                                            </span>
+                                            <button
+                                                type="button"
+                                                className="text-muted-foreground hover:text-foreground"
+                                                onClick={() => setEventUuids([])}
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </PopoverPrimitive.Content>
+                        </PopoverPrimitive.Portal>
+                    </PopoverPrimitive.Root>
+                    <p className="text-xs text-muted-foreground">
+                        Leave empty to apply the code to every event you own.
+                    </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">

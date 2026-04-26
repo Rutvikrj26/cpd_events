@@ -14,7 +14,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from common.pagination import SmallPagination
-from common.permissions import IsEducatorOrAdmin
+from common.permissions import IsOrganizerOrAdmin
 from common.rbac import roles
 from common.utils import error_response
 from common.viewsets import ReadOnlyModelViewSet, SoftDeleteModelViewSet
@@ -49,7 +49,7 @@ class RegistrationFilter(filters.FilterSet):
 # =============================================================================
 
 
-@roles('educator', 'admin', route_name='event_registrations')
+@roles('organizer', 'admin', route_name='event_registrations')
 class EventRegistrationViewSet(SoftDeleteModelViewSet):
     """
     Manage registrations for an event (organizer view).
@@ -57,7 +57,7 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/registrations/
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
     pagination_class = SmallPagination  # M5: Nested resource pagination
     filterset_class = RegistrationFilter
     search_fields = ['email', 'full_name', 'user__email', 'user__full_name']
@@ -67,7 +67,7 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
     def get_queryset(self):
         event_uuid = self.kwargs.get('event_uuid')
         qs_filter = {'event__uuid': event_uuid, 'deleted_at__isnull': True}
-        if not self.request.user.is_staff:
+        if not self.request.user.groups.filter(name="admin").exists():
             qs_filter['event__owner'] = self.request.user
         return (
             Registration.objects.filter(**qs_filter)
@@ -283,8 +283,12 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
     )
     @action(detail=True, methods=['post'], url_path='refund')
     def refund_registration(self, request, event_uuid=None, uuid=None):
-        """Refund a registration (paid only)."""
-        from billing.services import stripe_payment_service
+        """Refund a registration (paid only).
+
+        ``automatic_tax`` handled the original charge, so Stripe reverses the
+        tax transaction automatically when we issue the refund.
+        """
+        from billing.services import refund_payment_intent
 
         registration = self.get_object()
         serializer = serializers.RegistrationRefundSerializer(data=request.data)
@@ -297,29 +301,60 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
         if not registration.payment_intent_id:
             return error_response('No payment intent found for this registration.', code='NO_PAYMENT_INTENT')
 
-        refund_result = stripe_payment_service.refund_payment_intent(
-            registration.payment_intent_id,
-            registration=registration,
-        )
-        if not refund_result['success']:
-            return error_response(refund_result['error'], code='REFUND_FAILED')
+        amount_cents = serializer.validated_data.get('amount_cents')
+        if amount_cents is not None and amount_cents > int(registration.amount_paid * 100):
+            return error_response(
+                'Refund amount exceeds amount paid.',
+                code='REFUND_EXCEEDS_AMOUNT',
+            )
 
-        reason = serializer.validated_data.get('reason', 'Organizer refunded registration')
-
-        if registration.status != Registration.Status.CANCELLED:
-            registration.cancel(reason=reason, cancelled_by=request.user)
-        elif reason and not registration.cancellation_reason:
-            registration.cancellation_reason = reason
-            registration.save(update_fields=['cancellation_reason', 'updated_at'])
-
-        registration.payment_status = Registration.PaymentStatus.REFUNDED
-        registration.save(update_fields=['payment_status', 'updated_at'])
+        reason = serializer.validated_data['reason']
         try:
-            from promo_codes.models import PromoCodeUsage
+            stripe_result = refund_payment_intent(
+                registration.payment_intent_id,
+                amount_cents=amount_cents,
+                reason='requested_by_customer',
+            )
+        except Exception as exc:
+            return error_response(str(exc), code='REFUND_FAILED')
 
-            PromoCodeUsage.release_for_registration(registration)
+        is_partial = amount_cents is not None and amount_cents < int(registration.amount_paid * 100)
+
+        if not is_partial:
+            if registration.status != Registration.Status.CANCELLED:
+                registration.cancel(reason=reason, cancelled_by=request.user)
+            elif reason and not registration.cancellation_reason:
+                registration.cancellation_reason = reason
+                registration.save(update_fields=['cancellation_reason', 'updated_at'])
+
+            registration.payment_status = Registration.PaymentStatus.REFUNDED
+            registration.save(update_fields=['payment_status', 'updated_at'])
+            try:
+                from promo_codes.models import PromoCodeUsage
+
+                PromoCodeUsage.release_for_registration(registration)
+            except Exception as e:
+                logger.warning("Failed to release promo code usage for %s: %s", registration.uuid, e)
+
+        try:
+            from accounts.audit import log_audit_event
+
+            log_audit_event(
+                actor=request.user,
+                action='registration.refunded',
+                object_type='Registration',
+                object_uuid=str(registration.uuid),
+                metadata={
+                    'event_uuid': str(registration.event.uuid),
+                    'amount_cents': stripe_result.get('amount_cents'),
+                    'partial': is_partial,
+                    'reason': reason,
+                    'stripe_refund_id': stripe_result.get('refund_id'),
+                },
+                request=request,
+            )
         except Exception as e:
-            logger.warning("Failed to release promo code usage for %s: %s", registration.uuid, e)
+            logger.warning("Failed to audit registration refund for %s: %s", registration.uuid, e)
 
         return Response(serializers.RegistrationDetailSerializer(registration).data)
 
@@ -346,12 +381,9 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
             except ContactList.DoesNotExist:
                 return error_response('Contact list not found.', code='LIST_NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
         else:
-            # Get or create default list
-            target_list = ContactList.objects.filter(owner=organizer, is_default=True).first()
+            target_list = ContactList.objects.filter(owner=organizer).order_by('created_at').first()
             if not target_list:
-                target_list = ContactList.objects.filter(owner=organizer).first()
-            if not target_list:
-                target_list = ContactList.objects.create(owner=organizer, name="Default", is_default=True)
+                target_list = ContactList.objects.create(owner=organizer, name="My Contacts")
 
         # Check if contact already exists
         existing = Contact.objects.filter(contact_list__owner=organizer, email__iexact=registration.email).first()
@@ -389,12 +421,12 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 
     @swagger_auto_schema(
         operation_summary="List unmatched attendance",
-        operation_description="Get Zoom attendance records not matched to any registration.",
+        operation_description="Get attendance records not matched to any registration.",
         responses={200: serializers.UnmatchedAttendanceRecordSerializer(many=True)},
     )
     @action(detail=False, methods=['get'], url_path='unmatched-attendance')
     def unmatched_attendance(self, request, event_uuid=None):
-        """Get unmatched Zoom attendance records for reconciliation."""
+        """Get unmatched attendance records for reconciliation."""
         from events.models import Event
 
         from .models import AttendanceRecord
@@ -420,7 +452,7 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 
     @swagger_auto_schema(
         operation_summary="Match attendance to registration",
-        operation_description="Manually match an unmatched Zoom attendance record to a registration.",
+        operation_description="Manually match an unmatched attendance record to a registration.",
         request_body=serializers.AttendanceMatchSerializer,
         responses={
             200: serializers.AttendanceRecordSerializer,
@@ -430,7 +462,7 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
     )
     @action(detail=False, methods=['post'], url_path='match-attendance/(?P<record_uuid>[^/.]+)')
     def match_attendance(self, request, event_uuid=None, record_uuid=None):
-        """Match unmatched Zoom attendance record to a registration."""
+        """Match unmatched attendance record to a registration."""
         from events.models import Event
 
         from .models import AttendanceRecord
@@ -506,10 +538,22 @@ class PublicRegistrationView(generics.CreateAPIView):
         logger = logging.getLogger(__name__)
 
         try:
-            event = Event.objects.get(uuid=event_uuid, status='published', registration_enabled=True, deleted_at__isnull=True)
+            event = Event.objects.get(
+                uuid=event_uuid,
+                status__in=['published', 'live'],
+                registration_enabled=True,
+                deleted_at__isnull=True,
+            )
         except Event.DoesNotExist:
             return error_response(
                 'Event not found or registration closed.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        if event.is_past:
+            return error_response(
+                'This event has ended and is no longer accepting registrations.',
+                code='EVENT_ENDED',
+                status_code=status.HTTP_409_CONFLICT,
             )
 
         serializer = self.get_serializer(data=request.data)
@@ -520,27 +564,19 @@ class PublicRegistrationView(generics.CreateAPIView):
         try:
             result = registration_service.register_participant(event=event, data=serializer.validated_data, user=user)
 
-            # Map service result to API response
             reg = result['registration']
-            stripe_account_id = None
-            if result.get('client_secret'):
-                stripe_account_id = None
-
             response_data = {
                 'registration_uuid': str(reg.uuid),
                 'uuid': str(reg.uuid),
                 'status': result['status'],
-                'client_secret': result.get('client_secret'),
-                'requires_payment': result.get('requires_payment', bool(result.get('client_secret'))),
+                'requires_payment': result.get('requires_payment', False),
+                'checkout_url': result.get('checkout_url'),
+                'checkout_session_id': result.get('checkout_session_id'),
                 'amount': float(reg.total_amount) if reg.total_amount else None,
                 'ticket_price': float(reg.amount_paid) if reg.amount_paid else None,
-                'platform_fee': float(reg.platform_fee_amount) if reg.platform_fee_amount else None,
-                'service_fee': float(reg.service_fee_amount) if reg.service_fee_amount else None,
-                'processing_fee': float(reg.processing_fee_amount) if reg.processing_fee_amount else None,
                 'tax_amount': float(reg.tax_amount) if reg.tax_amount else None,
                 'total_amount': float(reg.total_amount) if reg.total_amount else None,
-                'currency': event.currency,  # Use event's currency setting
-                'stripe_account_id': stripe_account_id,
+                'currency': event.currency,
                 'waitlist_position': getattr(reg, 'waitlist_position', None),
                 'message': result.get('message', 'Registration successful.'),
             }
@@ -564,219 +600,103 @@ class PublicRegistrationView(generics.CreateAPIView):
             )
 
 
-@roles('public', route_name='payment_intent')
-class RegistrationPaymentIntentView(generics.GenericAPIView):
-    """
-    POST /api/v1/public/registrations/{uuid}/payment-intent/
+@roles('public', route_name='registration_lobby')
+class RegistrationLobbyView(generics.GenericAPIView):
+    """GET /api/v1/public/registrations/{uuid}/lobby/
 
-    Returns a client_secret for completing payment on a pending registration.
-    Performs a capacity check before allowing payment.
+    Public endpoint that returns the minimum info a guest registrant needs to
+    render the pre-event lobby: event details + their registration metadata.
+    Authenticated paths (``/events/:uuid/lobby``) load the same data via the
+    standard event endpoints; this exists so a non-User registrant can still
+    land on the lobby URL embedded in their reminder email.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+
+    def get(self, request, uuid=None):
+        from events.serializers import PublicEventDetailSerializer
+
+        try:
+            registration = Registration.objects.select_related('event').get(
+                uuid=uuid, deleted_at__isnull=True
+            )
+        except Registration.DoesNotExist:
+            return error_response(
+                'Registration not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        event = registration.event
+        if event.deleted_at is not None:
+            return error_response(
+                'Event no longer available.', code='EVENT_UNAVAILABLE', status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        event_data = PublicEventDetailSerializer(event, context={'request': request}).data
+        return Response({
+            'event': event_data,
+            'registration': {
+                'uuid': str(registration.uuid),
+                'email': registration.email,
+                'full_name': registration.full_name,
+                'status': registration.status,
+                'payment_status': registration.payment_status,
+                'attended': registration.attended,
+            },
+        })
+
+
+@roles('public', route_name='start_checkout')
+class StartCheckoutView(generics.GenericAPIView):
+    """POST /api/v1/public/registrations/{uuid}/start-checkout/
+
+    Create (or return) a Stripe Checkout Session for a PENDING paid
+    registration. The frontend redirects to the returned ``url``. Fulfilment
+    happens via ``checkout.session.completed``.
     """
 
     permission_classes = [AllowAny]
 
     def post(self, request, uuid=None):
-        from billing.services import stripe_payment_service
+        from billing.checkout import checkout_service
 
         try:
-            registration = Registration.objects.select_related('event').get(uuid=uuid, deleted_at__isnull=True)
+            registration = Registration.objects.select_related('event').get(
+                uuid=uuid, deleted_at__isnull=True
+            )
         except Registration.DoesNotExist:
-            return error_response('Registration not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+            return error_response(
+                'Registration not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND
+            )
 
         if registration.status == Registration.Status.WAITLISTED:
             return error_response('Registration is waitlisted.', code='WAITLISTED')
-
         if registration.status == Registration.Status.CANCELLED:
             return error_response('Registration is cancelled.', code='CANCELLED')
-
         if registration.payment_status == Registration.PaymentStatus.PAID:
             return error_response('Payment already completed.', code='ALREADY_PAID')
-
-        if registration.status != Registration.Status.PENDING:
+        if registration.status != Registration.Status.PENDING or registration.amount_paid <= 0:
             return error_response('Registration does not require payment.', code='NO_PAYMENT_REQUIRED')
-
-        event = registration.event
-        if registration.amount_paid <= 0:
-            return error_response('Registration does not require payment.', code='NO_PAYMENT_REQUIRED')
-        confirmed_count = Registration.objects.filter(
-            event=event,
-            status=Registration.Status.CONFIRMED,
-            deleted_at__isnull=True,
-        ).count()
-        if event.max_attendees and confirmed_count >= event.max_attendees:
-            return error_response('Event is fully booked.', code='EVENT_FULL', status_code=status.HTTP_409_CONFLICT)
-
-        if not stripe_payment_service.is_configured:
-            return error_response('Payment system not configured.', code='PAYMENT_NOT_CONFIGURED')
-
-        payee_account_id = stripe_payment_service.get_payee_account_id(event)
-        if not payee_account_id:
-            return error_response('Organizer payment setup incomplete.', code='PAYMENT_NOT_CONFIGURED')
-
-        # Reuse existing payment intent if still valid
-        if registration.payment_intent_id:
-            intent = stripe_payment_service.retrieve_payment_intent(registration.payment_intent_id)
-            if intent and intent.status == 'succeeded':
-                return error_response('Payment already completed.', code='ALREADY_PAID')
-            if intent and intent.status in ['requires_payment_method', 'requires_confirmation', 'requires_action']:
-                return Response(
-                    {
-                        'registration_uuid': str(registration.uuid),
-                        'uuid': str(registration.uuid),
-                        'client_secret': intent.client_secret,
-                        'amount': float(registration.total_amount),
-                        'ticket_price': float(registration.amount_paid),
-                        'platform_fee': float(registration.platform_fee_amount),
-                        'service_fee': float(registration.service_fee_amount),
-                        'processing_fee': float(registration.processing_fee_amount),
-                        'tax_amount': float(registration.tax_amount),
-                        'total_amount': float(registration.total_amount),
-                        'currency': event.currency,
-                        'requires_payment': True,
-                        'status': registration.status,
-                        'stripe_account_id': None,
-                    },
-                    status=status.HTTP_200_OK,
-                )
-
-        billing_country = (request.data.get('billing_country') or request.data.get('billingCountry') or '').upper().strip()
-        billing_state = (request.data.get('billing_state') or request.data.get('billingState') or '').strip()
-        billing_postal_code = (request.data.get('billing_postal_code') or request.data.get('billingPostalCode') or '').strip()
-        billing_city = (request.data.get('billing_city') or request.data.get('billingCity') or '').strip()
-        updated_fields = []
-
-        if billing_country:
-            registration.billing_country = billing_country
-            updated_fields.append('billing_country')
-        if billing_state:
-            registration.billing_state = billing_state
-            updated_fields.append('billing_state')
-        if billing_postal_code:
-            registration.billing_postal_code = billing_postal_code
-            updated_fields.append('billing_postal_code')
-        if billing_city:
-            registration.billing_city = billing_city
-            updated_fields.append('billing_city')
-
-        if updated_fields:
-            registration.save(update_fields=[*updated_fields, 'updated_at'])
-
-        if not registration.billing_country or not registration.billing_postal_code:
+        if registration.event.is_past:
             return error_response(
-                'Billing country and postal code are required for tax calculation.',
-                code='BILLING_REQUIRED',
+                'This event has ended; payment can no longer be collected.',
+                code='EVENT_ENDED',
+                status_code=status.HTTP_409_CONFLICT,
             )
 
-        intent_data = stripe_payment_service.create_payment_intent(
-            registration,
-            ticket_amount_cents=int(registration.amount_paid * 100),
-        )
-        if not intent_data['success']:
-            return error_response(intent_data['error'], code='PAYMENT_ERROR')
-
-        registration.payment_intent_id = intent_data['payment_intent_id']
-        if intent_data.get('service_fee_cents') is not None:
-            registration.platform_fee_amount = Decimal(intent_data['service_fee_cents']) / Decimal('100')
-            registration.service_fee_amount = Decimal(intent_data['service_fee_cents']) / Decimal('100')
-            registration.processing_fee_amount = Decimal(intent_data.get('processing_fee_cents', 0)) / Decimal('100')
-            registration.tax_amount = Decimal(intent_data.get('tax_cents', 0)) / Decimal('100')
-            registration.total_amount = Decimal(intent_data.get('total_amount_cents', 0)) / Decimal('100')
-            registration.stripe_tax_calculation_id = intent_data.get('tax_calculation_id', '')
-        registration.payment_status = Registration.PaymentStatus.PENDING
-        registration.save(
-            update_fields=[
-                'payment_intent_id',
-                'platform_fee_amount',
-                'service_fee_amount',
-                'processing_fee_amount',
-                'tax_amount',
-                'total_amount',
-                'stripe_tax_calculation_id',
-                'payment_status',
-                'updated_at',
-            ]
-        )
-
-        return Response(
-            {
-                'registration_uuid': str(registration.uuid),
-                'uuid': str(registration.uuid),
-                'client_secret': intent_data['client_secret'],
-                'amount': float(registration.total_amount),
-                'ticket_price': float(registration.amount_paid),
-                'platform_fee': float(registration.platform_fee_amount),
-                'service_fee': float(registration.service_fee_amount),
-                'processing_fee': float(registration.processing_fee_amount),
-                'tax_amount': float(registration.tax_amount),
-                'total_amount': float(registration.total_amount),
-                'currency': event.currency,
-                'requires_payment': True,
-                'status': registration.status,
-                'stripe_account_id': None,
-            },
-            status=status.HTTP_200_OK,
-        )
-
-
-@roles('public', route_name='confirm_payment')
-class ConfirmPaymentView(generics.GenericAPIView):
-    """
-    POST /api/v1/public/registrations/{uuid}/confirm-payment/
-
-    Called by frontend after Stripe.js payment confirmation.
-    Synchronously verifies payment status with Stripe and updates registration.
-    """
-
-    permission_classes = [AllowAny]
-
-    @swagger_auto_schema(
-        operation_summary="Confirm registration payment",
-        operation_description="Synchronously confirms payment status with Stripe after frontend payment completion.",
-        responses={
-            200: '{"status": "paid", "registration_uuid": "...", "amount_paid": 99.00}',
-            400: '{"error": {"code": "...", "message": "..."}}',
-            404: '{"error": {"code": "NOT_FOUND", "message": "Registration not found"}}',
-        },
-    )
-    def post(self, request, uuid=None):
-        from .services import payment_confirmation_service
-
-        # Get registration
         try:
-            registration = Registration.objects.get(uuid=uuid, deleted_at__isnull=True)
-        except Registration.DoesNotExist:
-            return error_response('Registration not found.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND)
+            result = checkout_service.for_event_registration(registration)
+        except Exception as exc:
+            return error_response(str(exc), code='CHECKOUT_ERROR')
 
-        # Check if already paid (idempotent)
-        if registration.payment_status == Registration.PaymentStatus.PAID:
-            return Response(
-                {
-                    'status': 'paid',
-                    'registration_uuid': str(registration.uuid),
-                    'amount_paid': float(registration.amount_paid),
-                    'message': 'Payment already confirmed.',
-                }
-            )
-
-        # Check if payment is expected
-        if registration.payment_status == Registration.PaymentStatus.NA:
-            return error_response('This registration does not require payment.', code='NO_PAYMENT_REQUIRED')
-
-        # Confirm payment with Stripe
-        result = payment_confirmation_service.confirm_registration_payment(registration)
-
-        if result['status'] == 'paid':
-            return Response(result, status=status.HTTP_200_OK)
-        elif result['status'] == 'event_full':
-            return error_response(
-                result.get('message', 'Event is fully booked.'), code='EVENT_FULL', status_code=status.HTTP_409_CONFLICT
-            )
-        elif result['status'] == 'processing':
-            return Response(result, status=status.HTTP_202_ACCEPTED)
-        elif result['status'] == 'failed':
-            return Response(result, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            return error_response(result.get('message', 'Payment confirmation failed'), code='PAYMENT_ERROR')
+        return Response({
+            'registration_uuid': str(registration.uuid),
+            'session_id': result.session_id,
+            'url': result.url,
+            'status': registration.status,
+            'amount_paid': float(registration.amount_paid),
+            'currency': registration.event.currency,
+        })
 
 
 # =============================================================================
@@ -784,7 +704,7 @@ class ConfirmPaymentView(generics.GenericAPIView):
 # =============================================================================
 
 
-@roles('learner', 'educator', 'admin', route_name='registrations')
+@roles('learner', 'organizer', 'admin', route_name='registrations')
 class MyRegistrationViewSet(ReadOnlyModelViewSet):
     """
     Current user's registrations.
@@ -838,7 +758,7 @@ class MyRegistrationViewSet(ReadOnlyModelViewSet):
 # =============================================================================
 
 
-@roles('learner', 'educator', 'admin', route_name='link_registrations')
+@roles('learner', 'organizer', 'admin', route_name='link_registrations')
 class LinkRegistrationsView(generics.GenericAPIView):
     """
     POST /api/v1/users/me/link-registrations/

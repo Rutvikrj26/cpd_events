@@ -30,98 +30,18 @@ class TestSignupView:
 
     endpoint = '/api/v1/auth/signup/'
 
-    def test_signup_attendee_success(self, api_client):
-        """Successfully create an attendee account."""
+    def test_signup_disabled_requires_invitation(self, api_client):
+        """Self-service signup is disabled in favor of invitation-only access."""
         data = {
             'email': 'newuser@example.com',
             'password': 'SecurePass123!',
             'password_confirm': 'SecurePass123!',
             'full_name': 'New User',
-            'account_type': 'attendee',
         }
         response = api_client.post(self.endpoint, data)
-        assert response.status_code == status.HTTP_201_CREATED
-        assert 'message' in response.data
-        assert 'access' not in response.data
-        assert 'refresh' not in response.data
-        assert User.objects.filter(email='newuser@example.com').exists()
-
-    def test_signup_organizer_success(self, api_client):
-        """Successfully create an organizer account."""
-        data = {
-            'email': 'neworganizer@example.com',
-            'password': 'SecurePass123!',
-            'password_confirm': 'SecurePass123!',
-            'full_name': 'New Organizer',
-            'account_type': 'organizer',
-        }
-        response = api_client.post(self.endpoint, data)
-        assert response.status_code == status.HTTP_201_CREATED
-        user = User.objects.get(email='neworganizer@example.com')
-        assert user.account_type == 'organizer'
-
-    def test_signup_duplicate_email(self, api_client, user):
-        """Cannot create account with existing email."""
-        data = {
-            'email': user.email,  # Already exists
-            'password': 'SecurePass123!',
-            'password_confirm': 'SecurePass123!',
-            'full_name': 'Duplicate User',
-            'account_type': 'attendee',
-        }
-        response = api_client.post(self.endpoint, data)
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        # Handle nested error format
-        error_data = response.data.get('error', {}).get('details', response.data)
-        assert 'email' in error_data
-
-    def test_signup_password_mismatch(self, api_client):
-        """Password confirmation must match."""
-        data = {
-            'email': 'newuser@example.com',
-            'password': 'SecurePass123!',
-            'password_confirm': 'DifferentPass123!',
-            'full_name': 'New User',
-            'account_type': 'attendee',
-        }
-        response = api_client.post(self.endpoint, data)
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-
-    def test_signup_weak_password(self, api_client):
-        """Password must meet strength requirements."""
-        data = {
-            'email': 'newuser@example.com',
-            'password': '123',  # Too weak
-            'password_confirm': '123',
-            'full_name': 'New User',
-            'account_type': 'attendee',
-        }
-        response = api_client.post(self.endpoint, data)
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-
-    def test_signup_missing_required_fields(self, api_client):
-        """Required fields must be provided."""
-        data = {
-            'email': 'newuser@example.com',
-            # Missing password, full_name
-        }
-        response = api_client.post(self.endpoint, data)
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-
-    def test_signup_invalid_email(self, api_client):
-        """Email must be valid format."""
-        data = {
-            'email': 'not-an-email',
-            'password': 'SecurePass123!',
-            'password_confirm': 'SecurePass123!',
-            'full_name': 'New User',
-            'account_type': 'attendee',
-        }
-        response = api_client.post(self.endpoint, data)
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        # Handle nested error format
-        error_data = response.data.get('error', {}).get('details', response.data)
-        assert 'email' in error_data
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.data['error']['code'] == 'REGISTRATION_DISABLED'
+        assert not User.objects.filter(email='newuser@example.com').exists()
 
 
 # =============================================================================

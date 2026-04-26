@@ -36,11 +36,10 @@ describe("LoginPage", () => {
         expect(screen.getByRole("button", { name: /sign in$/i })).toBeInTheDocument();
     });
 
-    it("has link to signup page", () => {
+    it("shows invitation-only access copy", () => {
         renderLoginPage();
 
-        const signupLink = screen.getByRole("link", { name: /create a new account/i });
-        expect(signupLink).toHaveAttribute("href", "/signup");
+        expect(screen.getByText(/accounts on this platform are created by invitation only/i)).toBeInTheDocument();
     });
 
     it("has link to forgot password page", () => {

@@ -3,10 +3,27 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { deriveProgressDisplay } from '@/lib/progress';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, Search, UserCircle, Mail, Calendar, Filter } from 'lucide-react';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Loader2, Search, UserCircle, Mail, Calendar, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import client from '@/api/client';
+import {
+    PaymentBadge,
+    formatPaymentAmount,
+    type EnrollmentPayment,
+} from '@/components/billing/PaymentBadge';
 
 interface CourseEnrollment {
     uuid: string;
@@ -19,7 +36,15 @@ interface CourseEnrollment {
     completed_at?: string;
     progress_percent: number;
     certificate_issued?: boolean;
+    payment?: EnrollmentPayment;
+    via_program?: {
+        program_uuid: string;
+        program_title: string;
+        program_slug: string;
+        program_enrollment_uuid: string;
+    } | null;
 }
+
 
 interface EnrollmentsTabProps {
     courseUuid: string;
@@ -54,6 +79,12 @@ export function EnrollmentsTab({ courseUuid }: EnrollmentsTabProps) {
         fetchEnrollments();
     }, [courseUuid, toast]);
 
+    // Refund dialog state
+    const [refundTarget, setRefundTarget] = useState<CourseEnrollment | null>(null);
+    const [refundReason, setRefundReason] = useState('');
+    const [refundAmount, setRefundAmount] = useState('');
+    const [submittingRefund, setSubmittingRefund] = useState(false);
+
     // Filter enrollments
     const filteredEnrollments = enrollments.filter(enrollment => {
         const matchesSearch =
@@ -64,6 +95,47 @@ export function EnrollmentsTab({ courseUuid }: EnrollmentsTabProps) {
 
         return matchesSearch && matchesStatus;
     });
+
+    const openRefund = (enrollment: CourseEnrollment) => {
+        setRefundTarget(enrollment);
+        setRefundReason('');
+        // Default amount = full amount paid, shown in dollars; admin can edit down for partial
+        if (enrollment.payment?.amount_cents) {
+            setRefundAmount((enrollment.payment.amount_cents / 100).toFixed(2));
+        } else {
+            setRefundAmount('');
+        }
+    };
+
+    const submitRefund = async () => {
+        if (!refundTarget || !refundReason.trim()) return;
+        setSubmittingRefund(true);
+        try {
+            const body: Record<string, any> = {
+                enrollment_uuid: refundTarget.uuid,
+                reason: refundTarget.user_name
+                    ? `[${refundTarget.user_name}] ${refundTarget.user_email}: ${refundReason.trim()}`
+                    : `${refundTarget.user_email}: ${refundReason.trim()}`,
+            };
+            const fullCents = refundTarget.payment?.amount_cents ?? 0;
+            const requestedDollars = parseFloat(refundAmount);
+            if (!isNaN(requestedDollars) && Math.round(requestedDollars * 100) < fullCents) {
+                body.amount_cents = Math.round(requestedDollars * 100);
+            }
+            const resp = await client.post(`/courses/${courseUuid}/refund-enrollment/`, body);
+            setEnrollments((prev) =>
+                prev.map((e) => (e.uuid === refundTarget.uuid ? { ...e, ...resp.data } : e)),
+            );
+            toast({ title: 'Refund issued', description: 'Stripe refund created and enrollment updated.' });
+            setRefundTarget(null);
+        } catch (err: any) {
+            const code = err?.response?.data?.error?.code;
+            const msg = err?.response?.data?.error?.message || 'Refund failed.';
+            toast({ variant: 'destructive', title: code ?? 'Refund failed', description: msg });
+        } finally {
+            setSubmittingRefund(false);
+        }
+    };
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -170,44 +242,133 @@ export function EnrollmentsTab({ courseUuid }: EnrollmentsTabProps) {
                     </CardHeader>
                     <CardContent>
                         <div className="divide-y">
-                            {filteredEnrollments.map((enrollment) => (
-                                <div key={enrollment.uuid} className="flex items-center justify-between py-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                                            <UserCircle className="h-6 w-6 text-muted-foreground" />
+                            {filteredEnrollments.map((enrollment) => {
+                                // Program-seeded rows must be refunded at the program level; suppress
+                                // the course-level Refund button and point the admin to the program.
+                                const isViaProgram = Boolean(enrollment.via_program);
+                                const canRefund = !isViaProgram && enrollment.payment?.status === 'completed';
+                                return (
+                                    <div key={enrollment.uuid} className="flex items-center justify-between py-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                                                <UserCircle className="h-6 w-6 text-muted-foreground" />
+                                            </div>
+                                            <div>
+                                                <p className="font-medium">
+                                                    {enrollment.user_name || 'Unknown Learner'}
+                                                </p>
+                                                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                                    <Mail className="h-3 w-3" />
+                                                    {enrollment.user_email || 'No email'}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="font-medium">
-                                                {enrollment.user_name || 'Unknown Learner'}
-                                            </p>
-                                            <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                                <Mail className="h-3 w-3" />
-                                                {enrollment.user_email || 'No email'}
-                                            </p>
+                                        <div className="flex items-center gap-6">
+                                            <div className="text-right">
+                                                <PaymentBadge payment={enrollment.payment} />
+                                                {isViaProgram && enrollment.via_program && (
+                                                    <a
+                                                        href={`/programs/manage/${enrollment.via_program.program_slug}?tab=enrollments`}
+                                                        className="block text-xs text-primary hover:underline mt-1"
+                                                    >
+                                                        Refund on program →
+                                                    </a>
+                                                )}
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm font-medium">{deriveProgressDisplay(enrollment).percent}%</p>
+                                                <p className="text-xs text-muted-foreground">Progress</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm flex items-center gap-1">
+                                                    <Calendar className="h-3 w-3" />
+                                                    {enrollment.enrolled_at
+                                                        ? format(new Date(enrollment.enrolled_at), 'MMM d, yyyy')
+                                                        : 'N/A'}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">Enrolled</p>
+                                            </div>
+                                            {getStatusBadge(enrollment.status)}
+                                            {canRefund && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => openRefund(enrollment)}
+                                                >
+                                                    <RotateCcw className="h-3 w-3 mr-1" />
+                                                    Refund
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-6">
-                                        <div className="text-right">
-                                            <p className="text-sm font-medium">{enrollment.progress_percent}%</p>
-                                            <p className="text-xs text-muted-foreground">Progress</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-sm flex items-center gap-1">
-                                                <Calendar className="h-3 w-3" />
-                                                {enrollment.enrolled_at
-                                                    ? format(new Date(enrollment.enrolled_at), 'MMM d, yyyy')
-                                                    : 'N/A'}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">Enrolled</p>
-                                        </div>
-                                        {getStatusBadge(enrollment.status)}
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </CardContent>
                 </Card>
             )}
+
+            <AlertDialog
+                open={refundTarget !== null}
+                onOpenChange={(open) => {
+                    if (!open) setRefundTarget(null);
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Refund course purchase</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {refundTarget?.payment?.amount_cents ? (
+                                <>
+                                    Refunding{' '}
+                                    <span className="font-medium">{formatPaymentAmount(refundTarget.payment)}</span> to{' '}
+                                    <span className="font-medium">{refundTarget?.user_email}</span>. Stripe will reverse the
+                                    original charge; a full refund also drops the enrollment.
+                                </>
+                            ) : (
+                                'No payment found for this enrollment.'
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="space-y-3">
+                        <div className="space-y-1">
+                            <Label htmlFor="refund-amount">Amount (leave unchanged for full refund)</Label>
+                            <Input
+                                id="refund-amount"
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={refundAmount}
+                                onChange={(e) => setRefundAmount(e.target.value)}
+                                disabled={submittingRefund}
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <Label htmlFor="refund-reason">Reason (required, recorded in audit log)</Label>
+                            <Input
+                                id="refund-reason"
+                                placeholder="e.g. learner requested refund after module 1"
+                                value={refundReason}
+                                onChange={(e) => setRefundReason(e.target.value)}
+                                disabled={submittingRefund}
+                            />
+                        </div>
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={submittingRefund}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => {
+                                e.preventDefault();
+                                submitRefund();
+                            }}
+                            disabled={submittingRefund || !refundReason.trim()}
+                        >
+                            {submittingRefund && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Issue refund
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

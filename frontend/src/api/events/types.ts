@@ -65,6 +65,7 @@ export interface Event {
 
     // Misc
     is_public: boolean;
+    is_current_user_host?: boolean; // Server-computed: owner | listed speaker | platform admin
     owner_name?: string; // List view
     organizer_name?: string; // Public list view
     owner?: { uuid: string; display_name: string }; // Detail view
@@ -91,7 +92,7 @@ export interface EventCreateRequest {
     starts_at: string;
     duration_minutes: number;
     timezone: string;
-    event_type: 'webinar' | 'workshop' | 'training' | 'lecture' | 'other';
+    event_type: 'webinar' | 'workshop' | 'training' | 'lecture' | 'seminar' | 'other';
     format: 'online' | 'in-person' | 'hybrid';
 
     short_description?: string;
@@ -127,6 +128,15 @@ export interface EventCreateRequest {
 
     // Location (for in-person/hybrid events)
     location?: string;
+
+    // Video conferencing
+    video_settings?: {
+        enabled: boolean;
+        recording_enabled: boolean;
+        auto_publish_recording?: boolean;
+        screen_share: boolean;
+        waiting_room_enabled?: boolean;
+    };
 
     // Branding
 
@@ -194,10 +204,38 @@ export interface SessionFormData {
     is_published: boolean;
 }
 
+export type EventCustomFieldType =
+    | 'text'
+    | 'textarea'
+    | 'select'
+    | 'multiselect'
+    | 'checkbox'
+    | 'radio'
+    | 'date'
+    | 'number';
+
 export interface EventCustomField {
     uuid: string;
-    name: string;
-    field_type: 'text' | 'number' | 'date' | 'select' | 'checkbox';
-    is_required: boolean;
-    options?: any; // JSON
+    label: string;
+    field_type: EventCustomFieldType;
+    required: boolean;
+    placeholder?: string;
+    help_text?: string;
+    options?: string[];
+    min_value?: number | null;
+    max_value?: number | null;
+    order: number;
+    created_at?: string;
+}
+
+export interface EventCustomFieldInput {
+    label: string;
+    field_type: EventCustomFieldType;
+    required?: boolean;
+    placeholder?: string;
+    help_text?: string;
+    options?: string[];
+    min_value?: number | null;
+    max_value?: number | null;
+    order?: number;
 }

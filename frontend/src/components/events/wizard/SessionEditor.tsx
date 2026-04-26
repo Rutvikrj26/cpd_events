@@ -4,12 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { SessionFormData } from '@/api/events/types';
+
+function isEmptyRichText(html: string | null | undefined): boolean {
+    if (!html) return true;
+    const plain = html
+        .replace(/<br\s*\/?>/gi, '')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/g, '')
+        .trim();
+    return plain.length === 0;
+}
 
 interface SessionEditorProps {
     open: boolean;
@@ -63,7 +73,11 @@ export const SessionEditor = ({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSave(formData);
+        const cleaned = {
+            ...formData,
+            description: isEmptyRichText(formData.description) ? '' : formData.description,
+        };
+        onSave(cleaned);
         onOpenChange(false);
     };
 

@@ -73,6 +73,11 @@ GCS_EMULATOR_HOST = os.environ.get('GCS_EMULATOR_HOST', '')
 # Useful for initial deployments or debugging. Set to False to enable async Cloud Tasks.
 CLOUD_TASKS_SYNC = os.environ.get('CLOUD_TASKS_SYNC', 'true').lower() in ('true', '1', 'yes')
 
+# Cron tick endpoint shared secret. When set, the /api/common/cron/tick/
+# endpoint requires `Authorization: Bearer <secret>`. When unset, only
+# requests from localhost are accepted (dev fallback).
+CRON_SHARED_SECRET = os.environ.get('CRON_SHARED_SECRET', '')
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -138,6 +143,9 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'mediafiles'
 
+# Fixtures
+FIXTURE_DIRS = [BASE_DIR / 'fixtures']
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -147,6 +155,10 @@ ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', 'YWJjZGVmZ2hpamtsbW5vcHFyc3R1d
 # Site URL for generating absolute URLs
 SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+
+# User invitation expiry (days). Used by UserInvitation.create_invitation
+# and the resend-invitation endpoint.
+INVITATION_EXPIRY_DAYS = int(os.environ.get('INVITATION_EXPIRY_DAYS', '30'))
 
 # =============================================================================
 # Django REST Framework
@@ -222,6 +234,16 @@ LIVEKIT_API_KEY = os.environ.get('LIVEKIT_API_KEY', '')
 LIVEKIT_API_SECRET = os.environ.get('LIVEKIT_API_SECRET', '')
 LIVEKIT_HOST = os.environ.get('LIVEKIT_HOST', 'http://localhost:7880')
 LIVEKIT_WS_URL = os.environ.get('LIVEKIT_WS_URL', 'ws://localhost:7880')
+# Where the egress container writes recording files. In dev this is a Docker
+# volume; in cloud-run the same path is the mount-point of a GCS-fuse volume.
+# The Django streaming endpoint serves files relative to this directory.
+RECORDING_STORAGE_DIR = os.environ.get('RECORDING_STORAGE_DIR', '/recordings')
+LIVEKIT_RECORDING_OUTPUT_PATH_TEMPLATE = os.environ.get(
+    'LIVEKIT_RECORDING_OUTPUT_PATH_TEMPLATE',
+    # Must live under RECORDING_STORAGE_DIR so the streaming endpoint can
+    # read what egress wrote. Both paths point at the same mount point.
+    '/recordings/{room_name}-{time}.mp4',
+)
 
 # Google OAuth
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
@@ -246,6 +268,11 @@ ANYMAIL = {
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+
+# Firebase (used only for verifying Google ID tokens on social sign-in)
+FIREBASE_PROJECT_ID = os.environ.get('FIREBASE_PROJECT_ID', '')
+FIREBASE_CREDENTIALS_JSON = os.environ.get('FIREBASE_CREDENTIALS_JSON', '')
+FIREBASE_CREDENTIALS_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH', '')
 
 # Deployment configuration
 from common.config.deployment import (

@@ -87,9 +87,21 @@ export const StepSchedule = () => {
         const start = new Date(startsAt);
         if (isNaN(start.getTime())) return '';
         const end = new Date(start.getTime() + durationMins * 60000);
+        const dateFormat: Intl.DateTimeFormatOptions = {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+        };
         const timeFormat: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
-        return `${start.toLocaleTimeString(undefined, timeFormat)} - ${end.toLocaleTimeString(undefined, timeFormat)}`;
+        return `${start.toLocaleDateString(undefined, dateFormat)} · ${start.toLocaleTimeString(undefined, timeFormat)} – ${end.toLocaleTimeString(undefined, timeFormat)}`;
     };
+
+    const stripHtml = (html: string) =>
+        html
+            .replace(/<br\s*\/?>/gi, ' ')
+            .replace(/<[^>]*>/g, '')
+            .replace(/&nbsp;/g, ' ')
+            .trim();
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -240,11 +252,14 @@ export const StepSchedule = () => {
                                                         )}
                                                     </div>
 
-                                                    {session.description && (
-                                                        <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
-                                                            {session.description}
-                                                        </p>
-                                                    )}
+                                                    {(() => {
+                                                        const plain = session.description ? stripHtml(session.description) : '';
+                                                        return plain ? (
+                                                            <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
+                                                                {plain}
+                                                            </p>
+                                                        ) : null;
+                                                    })()}
                                                 </div>
 
                                                 <div className="flex items-center gap-1 shrink-0">

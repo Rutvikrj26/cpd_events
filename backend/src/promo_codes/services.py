@@ -1,248 +1,193 @@
-"""
-Promo Code validation and application service.
+"""Promo code → Stripe sync.
+
+Promo codes are redeemed at Stripe Checkout, not validated server-side: every
+``stripe.checkout.Session`` we create sets ``allow_promotion_codes=True``,
+and Stripe handles restriction checks (active, expiry, max uses, first-time).
+
+Our ``PromoCode`` rows mirror a Stripe ``Coupon`` + ``PromotionCode``. The
+``sync_to_stripe`` helper creates/updates those objects whenever a ``PromoCode``
+is saved. ``PromoCodeUsage`` rows are written by the fulfilment handler
+(``billing.handlers._fulfil_event_registration`` and friends) after Stripe
+confirms payment — never pre-applied.
 """
 
+from __future__ import annotations
+
+import logging
 from decimal import Decimal
 
-from django.utils import timezone
+from billing.client import get_stripe
 
-from .models import PromoCode, PromoCodeUsage
+from .models import PromoCode
 
-
-class PromoCodeError(Exception):
-    """Base exception for promo code errors."""
-
-    pass
+logger = logging.getLogger(__name__)
 
 
-class PromoCodeNotFoundError(PromoCodeError):
-    """Code doesn't exist."""
-
-    pass
+class PromoCodeSyncError(Exception):
+    """Raised when syncing a promo code to Stripe fails."""
 
 
-class PromoCodeInactiveError(PromoCodeError):
-    """Code is not active."""
+def sync_to_stripe(promo_code: PromoCode) -> PromoCode:
+    """Create or update the matching Stripe Coupon + PromotionCode.
 
-    pass
-
-
-class PromoCodeExpiredError(PromoCodeError):
-    """Code has expired."""
-
-    pass
-
-
-class PromoCodeNotYetValidError(PromoCodeError):
-    """Code is not yet valid."""
-
-    pass
-
-
-class PromoCodeExhaustedError(PromoCodeError):
-    """Code has reached max uses."""
-
-    pass
-
-
-class PromoCodeUserLimitError(PromoCodeError):
-    """User has reached their limit for this code."""
-
-    pass
-
-
-class PromoCodeNotApplicableError(PromoCodeError):
-    """Code doesn't apply to this event."""
-
-    pass
-
-
-class PromoCodeMinimumNotMetError(PromoCodeError):
-    """Order doesn't meet minimum amount."""
-
-    pass
-
-
-class PromoCodeFirstTimeOnlyError(PromoCodeError):
-    """Code is for first-time buyers only."""
-
-    pass
-
-
-class PromoCodeService:
+    Idempotent — uses business-intent idempotency keys so repeat calls with
+    the same promo data collapse to one Stripe-side object. Safe to call from
+    ``PromoCode.save()`` via a cloud task.
     """
-    Service for validating and applying promo codes.
-    """
+    stripe = get_stripe()
 
-    @staticmethod
-    def find_code(code: str, event) -> PromoCode | None:
-        """
-        Find a promo code that applies to the given event.
+    # 1. Coupon — carries the discount value + restrictions Stripe natively
+    #    supports (expiry, max redemptions).
+    coupon_kwargs: dict = {
+        "name": promo_code.code,
+        "metadata": {"promo_code_uuid": str(promo_code.uuid)},
+    }
+    if promo_code.discount_type == PromoCode.DiscountType.PERCENTAGE:
+        coupon_kwargs["percent_off"] = float(promo_code.discount_value)
+    else:
+        coupon_kwargs["amount_off"] = int(Decimal(promo_code.discount_value) * 100)
+        coupon_kwargs["currency"] = (promo_code.currency or "USD").lower()
+    if promo_code.valid_until:
+        coupon_kwargs["redeem_by"] = int(promo_code.valid_until.timestamp())
+    if promo_code.max_uses:
+        coupon_kwargs["max_redemptions"] = promo_code.max_uses
+    coupon_kwargs["duration"] = "once"
 
-        Args:
-            code: The promo code string
-            event: The Event instance
-
-        Returns:
-            PromoCode instance or None
-        """
-        code_upper = code.upper().strip()
-
-        # Find codes owned by the event owner
-        promo = PromoCode.objects.filter(owner=event.owner, code__iexact=code_upper).first()
-
-        return promo
-
-    @staticmethod
-    def validate_code(promo_code: PromoCode, event, email: str, user=None) -> None:
-        """
-        Validate a promo code for use.
-
-        Args:
-            promo_code: The PromoCode instance
-            event: The Event instance
-            email: Email of the registrant
-            user: User instance (if logged in)
-
-        Raises:
-            PromoCodeError subclass on validation failure
-        """
-        now = timezone.now()
-
-        # Check if active
-        if not promo_code.is_active:
-            raise PromoCodeInactiveError("This promo code is no longer active.")
-
-        # Check date validity
-        if promo_code.valid_from and now < promo_code.valid_from:
-            raise PromoCodeNotYetValidError(f"This code is not valid until {promo_code.valid_from.strftime('%B %d, %Y')}.")
-
-        if promo_code.valid_until and now > promo_code.valid_until:
-            raise PromoCodeExpiredError("This promo code has expired.")
-
-        # Check max uses
-        if promo_code.max_uses and promo_code.current_uses >= promo_code.max_uses:
-            raise PromoCodeExhaustedError("This promo code has reached its usage limit.")
-
-        # Check per-user limit
-        email_lower = email.lower()
-        user_usage_count = PromoCodeUsage.objects.filter(promo_code=promo_code, user_email__iexact=email_lower).count()
-
-        if user_usage_count >= promo_code.max_uses_per_user:
-            raise PromoCodeUserLimitError(f"You have already used this code {user_usage_count} time(s).")
-
-        # Check event applicability
-        if promo_code.events.exists():
-            if not promo_code.events.filter(pk=event.pk).exists():
-                raise PromoCodeNotApplicableError("This promo code cannot be used for this event.")
-
-        if promo_code.currency and event.currency and promo_code.currency.upper() != event.currency.upper():
-            raise PromoCodeNotApplicableError(f"This promo code is only valid for {promo_code.currency.upper()} events.")
-
-        # Check minimum order amount
-        if event.price < promo_code.minimum_order_amount:
-            raise PromoCodeMinimumNotMetError(f"This code requires a minimum order of ${promo_code.minimum_order_amount}.")
-
-        # Check first-time only
-        if promo_code.first_time_only:
-            from registrations.models import Registration
-
-            # Check if user has any past registrations
-            past_registrations = (
-                Registration.objects.filter(
-                    email__iexact=email_lower, status=Registration.Status.CONFIRMED, deleted_at__isnull=True
-                )
-                .exclude(event=event)
-                .exists()
+    try:
+        if promo_code.stripe_coupon_id:
+            coupon = stripe.Coupon.retrieve(promo_code.stripe_coupon_id)
+            # Stripe Coupons are mostly immutable — only name + metadata can change.
+            stripe.Coupon.modify(
+                coupon.id,
+                name=coupon_kwargs["name"],
+                metadata=coupon_kwargs["metadata"],
             )
+        else:
+            coupon = stripe.Coupon.create(
+                **coupon_kwargs,
+                idempotency_key=f"promo:coupon:{promo_code.uuid}:v1",
+            )
+            promo_code.stripe_coupon_id = coupon.id
+    except Exception as exc:
+        logger.exception("stripe.promo.coupon_sync_failed", extra={"promo_uuid": str(promo_code.uuid)})
+        raise PromoCodeSyncError(f"Coupon sync failed: {exc}") from exc
 
-            if past_registrations:
-                raise PromoCodeFirstTimeOnlyError("This code is only valid for first-time attendees.")
+    # 2. PromotionCode — the redeemable string buyers type at checkout.
+    restrictions = {
+        "first_time_transaction": bool(promo_code.first_time_only),
+    }
+    if promo_code.minimum_order_amount and promo_code.minimum_order_amount > 0:
+        restrictions["minimum_amount"] = int(Decimal(promo_code.minimum_order_amount) * 100)
+        restrictions["minimum_amount_currency"] = (promo_code.currency or "USD").lower()
 
-    @staticmethod
-    def apply_code(promo_code: PromoCode, registration, original_price: Decimal) -> PromoCodeUsage:
-        """
-        Apply a promo code to a registration.
+    promo_kwargs: dict = {
+        "coupon": promo_code.stripe_coupon_id,
+        "code": promo_code.code,
+        "active": bool(promo_code.is_active),
+        "metadata": {"promo_code_uuid": str(promo_code.uuid)},
+        "restrictions": restrictions,
+    }
+    if promo_code.valid_until:
+        promo_kwargs["expires_at"] = int(promo_code.valid_until.timestamp())
+    if promo_code.max_uses_per_user:
+        promo_kwargs["max_redemptions"] = promo_code.max_uses_per_user
 
-        Args:
-            promo_code: Validated PromoCode instance
-            registration: Registration instance
-            original_price: Original ticket price
+    try:
+        if promo_code.stripe_promotion_code_id:
+            stripe.PromotionCode.modify(
+                promo_code.stripe_promotion_code_id,
+                active=promo_kwargs["active"],
+                metadata=promo_kwargs["metadata"],
+            )
+        else:
+            promotion = stripe.PromotionCode.create(
+                **promo_kwargs,
+                idempotency_key=f"promo:code:{promo_code.uuid}:v1",
+            )
+            promo_code.stripe_promotion_code_id = promotion.id
+    except Exception as exc:
+        logger.exception("stripe.promo.code_sync_failed", extra={"promo_uuid": str(promo_code.uuid)})
+        raise PromoCodeSyncError(f"PromotionCode sync failed: {exc}") from exc
 
-        Returns:
-            PromoCodeUsage instance
-        """
-        from django.db import transaction
+    promo_code.save(update_fields=["stripe_coupon_id", "stripe_promotion_code_id", "updated_at"])
+    logger.info(
+        "stripe.promo.synced",
+        extra={
+            "promo_uuid": str(promo_code.uuid),
+            "stripe_coupon_id": promo_code.stripe_coupon_id,
+            "stripe_promotion_code_id": promo_code.stripe_promotion_code_id,
+        },
+    )
+    return promo_code
 
-        with transaction.atomic():
-            # Lock the row to prevent race conditions on max_uses
-            promo_code = PromoCode.objects.select_for_update().get(pk=promo_code.pk)
 
-            # Re-check max uses after acquiring lock
-            if promo_code.max_uses and promo_code.current_uses >= promo_code.max_uses:
-                raise PromoCodeExhaustedError("This promo code has reached its usage limit.")
+def record_usage_from_checkout_session(session_data: dict, registration=None, user=None):
+    """Write ``PromoCodeUsage`` rows for a completed Checkout Session.
 
-            discount_amount = promo_code.calculate_discount(original_price)
-            final_price = max(Decimal('0.00'), original_price - discount_amount)
+    Idempotent: safe to invoke multiple times for the same session. Uniqueness
+    comes from the ``(registration, promo_code)`` unique constraint on
+    ``PromoCodeUsage`` — repeated calls become no-ops instead of duplicating
+    rows or double-incrementing ``current_uses``.
 
-            # Create usage record
-            usage = PromoCodeUsage.objects.create(
-                promo_code=promo_code,
-                registration=registration,
-                user_email=registration.email,
-                user=registration.user,
+    Called by the fulfilment handler. ``session_data`` is the raw dict of a
+    ``stripe.checkout.Session``; we inspect ``total_details.breakdown.discounts``
+    for every applied promotion code and resolve it to a local ``PromoCode``
+    via ``stripe_promotion_code_id``.
+    """
+    from .models import PromoCodeUsage
+
+    total_details = session_data.get("total_details") or {}
+    breakdown = total_details.get("breakdown") or {}
+    discounts = breakdown.get("discounts") or []
+
+    if not discounts or registration is None:
+        return []
+
+    amount_subtotal = session_data.get("amount_subtotal") or 0
+    currency = session_data.get("currency", "usd")
+    usages = []
+
+    for entry in discounts:
+        discount = entry.get("discount") or {}
+        promo_code_id = discount.get("promotion_code")
+        if not promo_code_id:
+            continue
+
+        local = PromoCode.objects.filter(stripe_promotion_code_id=promo_code_id).first()
+        if not local:
+            logger.warning(
+                "stripe.promo.unknown_code",
+                extra={"stripe_promotion_code_id": promo_code_id, "session_id": session_data.get("id")},
+            )
+            continue
+
+        discount_cents = entry.get("amount") or 0
+        original_price = Decimal(amount_subtotal) / Decimal("100")
+        discount_amount = Decimal(discount_cents) / Decimal("100")
+        final_price = max(Decimal("0.00"), original_price - discount_amount)
+
+        usage, created = PromoCodeUsage.objects.get_or_create(
+            registration=registration,
+            promo_code=local,
+            defaults=dict(
+                user_email=(registration.email or (user.email if user else "")),
+                user=user or registration.user,
                 original_price=original_price,
                 discount_amount=discount_amount,
                 final_price=final_price,
+            ),
+        )
+        if created:
+            local.increment_usage()
+            logger.info(
+                "stripe.promo.usage_recorded",
+                extra={
+                    "promo_uuid": str(local.uuid),
+                    "registration_uuid": str(registration.uuid),
+                    "discount_amount": str(discount_amount),
+                    "currency": currency,
+                },
             )
+        usages.append(usage)
 
-            # Increment usage count
-            promo_code.increment_usage()
-
-            return usage
-
-    @classmethod
-    def validate_and_preview(cls, code: str, event, email: str, user=None) -> dict:
-        """
-        Validate a code and return discount preview.
-
-        Args:
-            code: The promo code string
-            event: The Event instance
-            email: Email of the registrant
-            user: User instance (if logged in)
-
-        Returns:
-            Dict with discount details
-
-        Raises:
-            PromoCodeError subclass on validation failure
-        """
-        promo_code = cls.find_code(code, event)
-
-        if not promo_code:
-            raise PromoCodeNotFoundError("Invalid promo code.")
-
-        # Validate
-        cls.validate_code(promo_code, event, email, user)
-
-        # Calculate discount
-        original_price = event.price
-        discount_amount = promo_code.calculate_discount(original_price)
-        final_price = max(Decimal('0.00'), original_price - discount_amount)
-
-        return {
-            'valid': True,
-            'code': promo_code.code,
-            'discount_type': promo_code.discount_type,
-            'discount_value': str(promo_code.discount_value),
-            'discount_display': promo_code.get_discount_display(),
-            'original_price': str(original_price),
-            'discount_amount': str(discount_amount),
-            'final_price': str(final_price),
-            'promo_code_uuid': str(promo_code.uuid),
-        }
-
-
-# Singleton instance
-promo_code_service = PromoCodeService()
+    return usages

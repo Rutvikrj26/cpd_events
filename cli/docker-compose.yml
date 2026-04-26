@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   db:
@@ -54,18 +52,26 @@ services:
       dockerfile: Dockerfile
       target: development
     container_name: cpd_backend
-    command: python src/manage.py runserver 0.0.0.0:8000
+    # Use uv run so the venv built into /app/.venv (during image build) is on PATH.
+    command: uv run python src/manage.py runserver 0.0.0.0:8000
     volumes:
       - ../backend:/app
       - backend_static:/app/staticfiles
       - backend_media:/app/mediafiles
+      # Shared with livekit-egress so the Django streaming endpoint can
+      # read whatever egress wrote. In cloud-run this is a GCS-fuse mount.
+      - recording_data:/recordings
     ports:
       - "8000:8000"
     env_file:
       - ../backend/.env.dev
     environment:
-      # Docker-specific overrides (DB host points to container)
+      # Docker-specific overrides (DB points to container)
       DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: cpd_events
+      DB_USER: cpd_user
+      DB_PASSWORD: cpd_password
       # GCP emulators for local development
       CLOUD_TASKS_EMULATOR_HOST: cloud-tasks-emulator:8123
       GCS_EMULATOR_HOST: http://gcs-emulator:4443
@@ -106,7 +112,28 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Redis — message bus required by livekit-egress.
+  redis:
+    image: redis:7-alpine
+    container_name: cpd_redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   # LiveKit Egress (Recording Service)
+  # Init container that fixes /recordings permissions before egress starts.
+  # The recording_data named volume is owned by root by default; egress runs
+  # as uid=1001 and would otherwise fail with "permission denied" on write.
+  recording-perms:
+    image: alpine
+    command: sh -c "chmod 0777 /recordings"
+    volumes:
+      - recording_data:/recordings
+    restart: 'no'
+
   livekit-egress:
     image: livekit/egress:latest
     container_name: cpd_livekit_egress
@@ -118,6 +145,10 @@ services:
     depends_on:
       livekit:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      recording-perms:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   # Frontend React Application (optional - if you want to dockerize frontend too)

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,11 +9,12 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { updateCourse, deleteCourse, publishCourse } from '@/api/courses';
-import { Course } from '@/api/courses/types';
+import { updateCourse, deleteCourse, publishCourse, getCourseStaff, addCourseStaff, removeCourseStaff } from '@/api/courses';
+import { Course, CourseStaffMember } from '@/api/courses/types';
 import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
 import { getBadgeTemplates, BadgeTemplate } from '@/api/badges';
-import { Loader2, Save, Trash2, Globe, Lock, AlertTriangle } from 'lucide-react';
+import { Loader2, Save, Trash2, Globe, Lock, AlertTriangle, UserPlus, X, Users } from 'lucide-react';
+import client from '@/api/client';
 import {
     Select,
     SelectContent,
@@ -59,9 +60,12 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
             ? parseFloat(course.estimated_hours) || 0
             : (course.estimated_hours ?? 0),
         price_cents: course.price_cents ?? 0,
+        currency: course.currency ?? 'USD',
         is_public: course.is_public ?? true,
         enrollment_open: course.enrollment_open ?? true,
         max_enrollments: course.max_enrollments ?? 0,
+        enrollment_opens_at: course.enrollment_opens_at ?? '',
+        enrollment_closes_at: course.enrollment_closes_at ?? '',
         certificates_enabled: course.certificates_enabled ?? false,
         certificate_template: course.certificate_template || null,
         auto_issue_certificates: course.auto_issue_certificates ?? true,
@@ -104,7 +108,12 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
     const handleSave = async () => {
         setSaving(true);
         try {
-            const updated = await updateCourse(course.uuid, formData);
+            const payload = {
+                ...formData,
+                enrollment_opens_at: formData.enrollment_opens_at || null,
+                enrollment_closes_at: formData.enrollment_closes_at || null,
+            };
+            const updated = await updateCourse(course.uuid, payload);
             onCourseUpdated(updated);
             toast({
                 title: 'Settings saved',
@@ -151,7 +160,7 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
                 title: 'Course deleted',
                 description: 'The course has been deleted.',
             });
-            navigate(organizationSlug ? `/org/${organizationSlug}/courses` : '/courses/manage');
+            navigate('/courses/manage');
         } catch (error: any) {
             console.error('Failed to delete:', error);
             toast({
@@ -264,29 +273,46 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
                     <Card>
                         <CardHeader>
                             <CardTitle>Pricing</CardTitle>
-                            <CardDescription>Set your course price</CardDescription>
+                            <CardDescription>Set your course price. Enter the amount in cents (e.g. 4900 = $49.00).</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="price">Price (in pence/cents)</Label>
-                                <div className="flex items-center gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="price">Price (cents)</Label>
                                     <Input
                                         id="price"
                                         type="number"
                                         min="0"
-                                        className="max-w-[200px]"
                                         value={formData.price_cents}
                                         onChange={(e) => setFormData({ ...formData, price_cents: parseInt(e.target.value) || 0 })}
                                     />
-                                    <p className="text-sm font-medium">
-                                        {formData.price_cents === 0 ? (
-                                            <Badge variant="secondary">Free Course</Badge>
-                                        ) : (
-                                            `£${(formData.price_cents / 100).toFixed(2)}`
-                                        )}
-                                    </p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="currency">Currency</Label>
+                                    <select
+                                        id="currency"
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                        value={formData.currency}
+                                        onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                                    >
+                                        <option value="USD">USD</option>
+                                        <option value="CAD">CAD</option>
+                                        <option value="GBP">GBP</option>
+                                        <option value="EUR">EUR</option>
+                                        <option value="AUD">AUD</option>
+                                    </select>
                                 </div>
                             </div>
+                            <p className="text-sm font-medium">
+                                {formData.price_cents === 0 ? (
+                                    <Badge variant="secondary">Free Course</Badge>
+                                ) : (
+                                    new Intl.NumberFormat('en-US', {
+                                        style: 'currency',
+                                        currency: formData.currency || 'USD',
+                                    }).format(formData.price_cents / 100)
+                                )}
+                            </p>
                         </CardContent>
                     </Card>
 
@@ -388,8 +414,9 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
                     </Card>
                 </div>
 
-                {/* Right Column: Visibility & Danger Zone */}
+                {/* Right Column: Staff, Visibility & Danger Zone */}
                 <div className="space-y-6">
+                    <CourseStaffCard courseUuid={course.uuid} />
                     <Card>
                         <CardHeader>
                             <CardTitle>Visibility</CardTitle>
@@ -431,6 +458,38 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
                                     onChange={(e) => setFormData({ ...formData, max_enrollments: parseInt(e.target.value) || 0 })}
                                 />
                                 <p className="text-xs text-muted-foreground">0 = Unlimited</p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 pt-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="enrollment_opens_at">Enrollment opens</Label>
+                                    <Input
+                                        id="enrollment_opens_at"
+                                        type="datetime-local"
+                                        value={formData.enrollment_opens_at ? formData.enrollment_opens_at.slice(0, 16) : ''}
+                                        onChange={(e) =>
+                                            setFormData({
+                                                ...formData,
+                                                enrollment_opens_at: e.target.value ? new Date(e.target.value).toISOString() : '',
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="enrollment_closes_at">Enrollment closes</Label>
+                                    <Input
+                                        id="enrollment_closes_at"
+                                        type="datetime-local"
+                                        value={formData.enrollment_closes_at ? formData.enrollment_closes_at.slice(0, 16) : ''}
+                                        onChange={(e) =>
+                                            setFormData({
+                                                ...formData,
+                                                enrollment_closes_at: e.target.value ? new Date(e.target.value).toISOString() : '',
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <p className="col-span-2 text-xs text-muted-foreground">Leave blank to accept enrollments anytime.</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -489,6 +548,131 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
                 </div>
             </div>
         </div>
+    );
+}
+
+function CourseStaffCard({ courseUuid }: { courseUuid: string }) {
+    const [staff, setStaff] = useState<CourseStaffMember[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searching, setSearching] = useState(false);
+    const [adding, setAdding] = useState(false);
+    const { toast } = useToast();
+
+    const loadStaff = useCallback(async () => {
+        try {
+            const data = await getCourseStaff(courseUuid);
+            setStaff(data);
+        } catch {
+            // ignore
+        } finally {
+            setLoading(false);
+        }
+    }, [courseUuid]);
+
+    useEffect(() => { loadStaff(); }, [loadStaff]);
+
+    const handleSearch = async (query: string) => {
+        setSearchQuery(query);
+        if (query.length < 2) { setSearchResults([]); return; }
+        setSearching(true);
+        try {
+            const response = await client.get('/admin/users/', { params: { search: query, role: 'instructor' } });
+            const users = Array.isArray(response.data) ? response.data : (response.data.results || []);
+            // Filter out already-assigned users
+            const assignedEmails = new Set(staff.map(s => s.user_email));
+            setSearchResults(users.filter((u: any) => !assignedEmails.has(u.email)));
+        } catch {
+            setSearchResults([]);
+        } finally {
+            setSearching(false);
+        }
+    };
+
+    const handleAdd = async (userUuid: string) => {
+        setAdding(true);
+        try {
+            await addCourseStaff(courseUuid, { user_uuid: userUuid });
+            toast({ title: 'Staff member added' });
+            setSearchQuery('');
+            setSearchResults([]);
+            await loadStaff();
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Failed to add', description: error?.response?.data?.detail || 'Try again' });
+        } finally {
+            setAdding(false);
+        }
+    };
+
+    const handleRemove = async (staffUuid: string) => {
+        try {
+            await removeCourseStaff(courseUuid, staffUuid);
+            setStaff(prev => prev.filter(s => s.uuid !== staffUuid));
+            toast({ title: 'Staff member removed' });
+        } catch {
+            toast({ variant: 'destructive', title: 'Failed to remove' });
+        }
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" /> Course Staff
+                </CardTitle>
+                <CardDescription>Assign course managers who can edit curriculum and grade submissions.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {/* Search to add */}
+                <div className="relative">
+                    <Input
+                        placeholder="Search users by name or email..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                    />
+                    {searchResults.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                            {searchResults.map((user: any) => (
+                                <button
+                                    key={user.uuid}
+                                    className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted text-left"
+                                    onClick={() => handleAdd(user.uuid)}
+                                    disabled={adding}
+                                >
+                                    <div>
+                                        <span className="font-medium">{user.full_name || user.email}</span>
+                                        <span className="text-muted-foreground ml-2">{user.email}</span>
+                                    </div>
+                                    <UserPlus className="h-4 w-4 text-muted-foreground" />
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Current staff list */}
+                {loading ? (
+                    <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                ) : staff.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No staff assigned yet.</p>
+                ) : (
+                    <div className="space-y-2">
+                        {staff.map((member) => (
+                            <div key={member.uuid} className="flex items-center justify-between gap-2 py-2 px-3 rounded-md bg-muted/30">
+                                <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-medium truncate">{member.user_name}</div>
+                                    <div className="text-xs text-muted-foreground truncate">{member.user_email}</div>
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => handleRemove(member.uuid)}>
+                                    <X className="h-3 w-3" />
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 }
 

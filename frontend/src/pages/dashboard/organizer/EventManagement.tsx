@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { getInitials } from "@/lib/initials";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
    Clock,
@@ -30,8 +31,10 @@ import { PageHeader } from "@/components/custom/PageHeader";
 import { StatusBadge } from "@/components/custom/StatusBadge";
 import { toast } from "sonner";
 import { getEvent, updateEvent, publishEvent, unpublishEvent, getEventRegistrations, checkInAttendee, deleteEvent, cancelEventRegistration, refundEventRegistration } from "@/api/events";
-import { issueCertificates, revokeCertificate } from "@/api/certificates";
+import { issueCertificates, revokeCertificate, reissueCertificate, CertificateIssueResult } from "@/api/certificates";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { JoinButton } from "@/components/video/JoinButton";
+import { EventRecordingPanel } from "@/components/dashboard/EventRecordingPanel";
 import {
    AlertDialog,
    AlertDialogAction,
@@ -49,6 +52,8 @@ import {
 import { EditAttendanceDialog } from "@/components/events/EditAttendanceDialog";
 import { AttendanceReconciliation } from "@/components/events/AttendanceReconciliation";
 import { CustomFieldResponsesDialog } from "@/components/events/CustomFieldResponsesDialog";
+import { RegistrationFormBuilder } from "@/components/events/RegistrationFormBuilder";
+import { FeedbackFormBuilder } from "@/components/events/FeedbackFormBuilder";
 import { FeedbackCard, FeedbackSummary } from "@/components/feedback";
 import { getEventFeedback, calculateFeedbackSummary } from "@/api/feedback";
 import { EventFeedback } from "@/api/feedback/types";
@@ -137,6 +142,10 @@ export function EventManagement() {
    }, [fetchFeedback]);
 
    const hasStarted = event ? new Date(event.starts_at) < new Date() : false;
+   const hasEnded = event ? (event.ends_at ? new Date(event.ends_at) < new Date() : false) : false;
+   const isTerminalStatus = event ? ['completed', 'cancelled', 'closed'].includes(event.status) : false;
+   const isLive = hasStarted && !hasEnded && !isTerminalStatus && event?.format !== 'in_person';
+   const isEventHost = !!event?.is_current_user_host;
 
    const getRegistrationBadge = (attendee: any) => {
       const paymentStatus = (attendee.payment_status || '').toLowerCase();
@@ -265,23 +274,60 @@ export function EventManagement() {
       }
    };
 
+   const summarizeIssueResult = (result: CertificateIssueResult) => {
+      if (result.issued_count > 0 && result.skipped_count === 0) {
+         toast.success(`Issued ${result.issued_count} certificate${result.issued_count === 1 ? '' : 's'}`);
+      } else if (result.issued_count > 0 && result.skipped_count > 0) {
+         toast.success(
+            `Issued ${result.issued_count}, skipped ${result.skipped_count}`,
+            {
+               description: result.skipped
+                  .slice(0, 3)
+                  .map(s => s.reason + (s.detail ? `: ${s.detail}` : ''))
+                  .join('\n'),
+            }
+         );
+      } else if (result.issued_count === 0 && result.skipped_count > 0) {
+         toast.error(
+            `No certificates issued — ${result.skipped_count} skipped`,
+            {
+               description: result.skipped
+                  .slice(0, 3)
+                  .map(s => s.reason + (s.detail ? `: ${s.detail}` : ''))
+                  .join('\n'),
+            }
+         );
+      }
+   };
+
    const handleIssueCertificate = async (registrationUuid: string) => {
       if (!uuid) return;
       try {
-         await issueCertificates(uuid, { registration_uuids: [registrationUuid] });
-         toast.success("Certificate issued successfully");
-         fetchRegistrations();
+         const result = await issueCertificates(uuid, { registration_uuids: [registrationUuid] });
+         summarizeIssueResult(result);
+         await fetchRegistrations();
       } catch (error: any) {
          toast.error(error?.response?.data?.detail || "Failed to issue certificate");
+      }
+   };
+
+   const handleReissueCertificate = async (registrationUuid: string) => {
+      if (!uuid) return;
+      try {
+         const result = await reissueCertificate(uuid, registrationUuid);
+         summarizeIssueResult(result);
+         await fetchRegistrations();
+      } catch (error: any) {
+         toast.error(error?.response?.data?.detail || "Failed to re-issue certificate");
       }
    };
 
    const handleIssueAllCertificates = async () => {
       if (!uuid) return;
       try {
-         const result = await issueCertificates(uuid, {});
-         toast.success(`Issued ${result.issued} certificates (${result.skipped} skipped)`);
-         fetchRegistrations();
+         const result = await issueCertificates(uuid, { issue_all_eligible: true });
+         summarizeIssueResult(result);
+         await fetchRegistrations();
       } catch (error: any) {
          toast.error(error?.response?.data?.detail || "Failed to issue certificates");
       }
@@ -385,6 +431,7 @@ export function EventManagement() {
    );
 
    const feedbackSummary = calculateFeedbackSummary(feedback);
+   const primaryRating = feedbackSummary.per_field.find((f) => f.field_type === 'rating');
 
    const stats = {
       registered: attendees.filter(a => a.status !== "cancelled").length,
@@ -392,14 +439,31 @@ export function EventManagement() {
       cancelled: attendees.filter(a => a.status === "cancelled").length,
       issued: attendees.filter(a => a.certificate_uuid).length,
       feedbackCount: feedback.length,
-      avgRating: feedbackSummary.average_rating,
+      avgRating: primaryRating?.average ?? 0,
    };
 
    return (
       <div className="space-y-8">
+         {isLive && isEventHost && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
+               <span className="flex items-center gap-2 text-sm font-medium text-destructive">
+                  <span className="relative flex h-2 w-2">
+                     <span className="absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75 animate-ping" />
+                     <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
+                  </span>
+                  Event is live now
+               </span>
+               <JoinButton
+                  eventUuid={event.uuid}
+                  role="host"
+                  state="live"
+                  size="sm"
+               />
+            </div>
+         )}
          <PageHeader
             title={event.title}
-            description={`Manage registrations and attendance for your ${event.format || 'event'}.`}
+            description={`Manage registrations and attendance for your ${event.format ? `${event.format} event` : 'event'}.`}
             actions={
                <div className="flex gap-2">
                   {event.status === 'draft' && !hasStarted && (
@@ -428,7 +492,7 @@ export function EventManagement() {
                         <Button variant="outline">Edit Event</Button>
                      </Link>
                   )}
-                  <Link to={`/events/${event.slug}`}>
+                  <Link to={`/events/${event.slug || event.uuid}/details`}>
                      <Button>View Public Page</Button>
                   </Link>
                   <AlertDialog>
@@ -441,8 +505,32 @@ export function EventManagement() {
                      <AlertDialogContent>
                         <AlertDialogHeader>
                            <AlertDialogTitle>Delete Event</AlertDialogTitle>
-                           <AlertDialogDescription>
-                              Are you sure you want to delete "{event.title}"? This action cannot be undone.
+                           <AlertDialogDescription asChild>
+                              <div className="space-y-2">
+                                 <p>Are you sure you want to delete <strong>{event.title}</strong>? This action cannot be undone.</p>
+                                 {(stats.registered > 0 || stats.issued > 0 || stats.feedbackCount > 0) && (
+                                    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                                       <div className="font-medium mb-1">Removing this event will also delete:</div>
+                                       <ul className="list-disc pl-5 space-y-0.5">
+                                          {stats.registered > 0 && (
+                                             <li>{stats.registered} registration{stats.registered === 1 ? '' : 's'}</li>
+                                          )}
+                                          {stats.issued > 0 && (
+                                             <li>{stats.issued} issued certificate{stats.issued === 1 ? '' : 's'}</li>
+                                          )}
+                                          {stats.checkedIn > 0 && (
+                                             <li>{stats.checkedIn} attendance record{stats.checkedIn === 1 ? '' : 's'}</li>
+                                          )}
+                                          {stats.feedbackCount > 0 && (
+                                             <li>{stats.feedbackCount} feedback response{stats.feedbackCount === 1 ? '' : 's'}</li>
+                                          )}
+                                       </ul>
+                                       {stats.issued > 0 && (
+                                          <p className="mt-2 text-xs">Certificates that have already been published may have been added to learners' transcripts.</p>
+                                       )}
+                                    </div>
+                                 )}
+                              </div>
                            </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -521,10 +609,15 @@ export function EventManagement() {
             </Card>
          </div>
 
+         {isEventHost && <EventRecordingPanel eventUuid={event.uuid} />}
+
          <Tabs defaultValue="registrations" className="w-full">
             <TabsList className="w-full justify-start border-b border-border bg-transparent p-0 h-auto rounded-none mb-6">
                <TabsTrigger value="registrations" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
                   Registrations
+               </TabsTrigger>
+               <TabsTrigger value="registration-form" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
+                  Registration form
                </TabsTrigger>
                <TabsTrigger value="attendance" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
                   Attendance
@@ -539,6 +632,9 @@ export function EventManagement() {
                      Badges
                   </TabsTrigger>
                )}
+               <TabsTrigger value="feedback-form" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
+                  Feedback form
+               </TabsTrigger>
                <TabsTrigger value="feedback" className="rounded-none border-b-2 border-transparent px-6 py-3 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent shadow-none">
                   <MessageSquare className="h-4 w-4 mr-2" />
                   Feedback
@@ -597,7 +693,7 @@ export function EventManagement() {
                                        <div className="flex items-center">
                                           <Avatar className="h-8 w-8 mr-3">
                                              <AvatarImage src={`https://ui-avatars.com/api/?name=${encodeURIComponent(attendee.full_name || '')}`} />
-                                             <AvatarFallback>{(attendee.full_name || 'U').charAt(0)}</AvatarFallback>
+                                             <AvatarFallback>{getInitials(attendee.full_name || 'U')}</AvatarFallback>
                                           </Avatar>
                                           <div>
                                              <div className="text-sm font-medium text-foreground">{attendee.full_name}</div>
@@ -664,6 +760,16 @@ export function EventManagement() {
                      </table>
                   </div>
                </Card>
+            </TabsContent>
+
+            {/* REGISTRATION FORM BUILDER TAB */}
+            <TabsContent value="registration-form" className="mt-0">
+               {uuid && <RegistrationFormBuilder eventUuid={uuid} />}
+            </TabsContent>
+
+            {/* FEEDBACK FORM BUILDER TAB */}
+            <TabsContent value="feedback-form" className="mt-0">
+               {uuid && <FeedbackFormBuilder eventUuid={uuid} />}
             </TabsContent>
 
             {/* Attendance Dialog */}
@@ -881,14 +987,23 @@ export function EventManagement() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                        {attendee.certificate_uuid ? (
-                                          <Button
-                                             size="sm"
-                                             variant="outline"
-                                             className="text-destructive border-destructive hover:bg-destructive/10"
-                                             onClick={() => setRevokeTarget(attendee)}
-                                          >
-                                             Revoke
-                                          </Button>
+                                          <>
+                                             <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handleReissueCertificate(attendee.uuid)}
+                                             >
+                                                Re-issue
+                                             </Button>
+                                             <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="text-destructive border-destructive hover:bg-destructive/10"
+                                                onClick={() => setRevokeTarget(attendee)}
+                                             >
+                                                Revoke
+                                             </Button>
+                                          </>
                                        ) : (
                                           <Button
                                              size="sm"

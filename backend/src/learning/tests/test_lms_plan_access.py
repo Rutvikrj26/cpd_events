@@ -3,33 +3,40 @@ from rest_framework import status
 
 from learning.models import Course
 
+pytest.skip(
+    "Subscription / per-seat plan model was removed in the single-tenant "
+    "transition. Course-creation gating is now role-based (see "
+    "@roles decorators) — no per-instructor monthly limits.",
+    allow_module_level=True,
+)
+
 
 @pytest.mark.django_db
 class TestLmsPlanAccess:
-    def test_course_manager_subscription_defaults_to_lms_plan(self, course_manager):
-        subscription = course_manager.subscription
+    def test_instructor_subscription_defaults_to_lms_plan(self, instructor):
+        subscription = instructor.subscription
         assert subscription.plan == 'lms'
 
-    def test_course_manager_can_create_personal_course(self, course_manager_client, course_manager):
+    def test_instructor_can_create_personal_course(self, instructor_client, instructor):
         data = {
             'title': 'Personal LMS Course',
             'slug': 'personal-lms-course',
             'description': 'Personal course description',
         }
-        response = course_manager_client.post('/api/v1/courses/', data)
+        response = instructor_client.post('/api/v1/courses/', data)
         assert response.status_code == status.HTTP_201_CREATED
 
         course = Course.objects.get(slug='personal-lms-course')
-        assert course.created_by_id == course_manager.id
+        assert course.created_by_id == instructor.id
 
-    def test_course_manager_owned_filter_lists_only_personal_courses(self, course_manager_client, course_manager):
+    def test_instructor_owned_filter_lists_only_personal_courses(self, instructor_client, instructor):
         from factories import CourseFactory, UserFactory
 
-        CourseFactory(created_by=course_manager, slug='owned-course')
+        CourseFactory(created_by=instructor, slug='owned-course')
         other_user = UserFactory()
         CourseFactory(created_by=other_user, slug='other-course')
 
-        response = course_manager_client.get('/api/v1/courses/?owned=true')
+        response = instructor_client.get('/api/v1/courses/?owned=true')
         assert response.status_code == status.HTTP_200_OK
 
         results = response.data.get('results', response.data)
@@ -45,11 +52,11 @@ class TestLmsPlanAccess:
         response = organizer_client.post('/api/v1/courses/', data)
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_course_manager_cannot_create_event(self, course_manager_client, event_create_data):
-        response = course_manager_client.post('/api/v1/events/', event_create_data)
+    def test_instructor_cannot_create_event(self, instructor_client, event_create_data):
+        response = instructor_client.post('/api/v1/events/', event_create_data)
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_course_manager_course_limit_enforced(self, course_manager_client, course_manager):
+    def test_instructor_course_limit_enforced(self, instructor_client, instructor):
         from billing.models import StripeProduct
 
         product, _ = StripeProduct.objects.update_or_create(
@@ -62,11 +69,11 @@ class TestLmsPlanAccess:
             },
         )
 
-        subscription = course_manager.subscription
+        subscription = instructor.subscription
         subscription.courses_created_this_period = product.courses_per_month
         subscription.save(update_fields=['courses_created_this_period', 'updated_at'])
 
-        response = course_manager_client.post(
+        response = instructor_client.post(
             '/api/v1/courses/',
             {
                 'title': 'Limited Course',

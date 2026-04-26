@@ -14,6 +14,31 @@ from common.utils import generate_unique_slug
 from .models import Event, EventCustomField, EventSession, EventStatusHistory, SessionAttendance, Speaker
 
 # =============================================================================
+# Video Settings
+# =============================================================================
+
+
+class VideoSettingsSerializer(serializers.Serializer):
+    """Typed wrapper for ``Event.video_settings`` JSON."""
+
+    enabled = serializers.BooleanField(default=False)
+    recording_enabled = serializers.BooleanField(default=False)
+    auto_publish_recording = serializers.BooleanField(default=True)
+    screen_share = serializers.BooleanField(default=True)
+
+    def to_representation(self, instance):
+        # `instance` here is a dict stored in the JSONField.
+        if not isinstance(instance, dict):
+            instance = {}
+        return {
+            'enabled': bool(instance.get('enabled', False)),
+            'recording_enabled': bool(instance.get('recording_enabled', False)),
+            'auto_publish_recording': bool(instance.get('auto_publish_recording', True)),
+            'screen_share': bool(instance.get('screen_share', True)),
+        }
+
+
+# =============================================================================
 # Custom Field Serializers
 # =============================================================================
 
@@ -295,8 +320,8 @@ class EventListSerializer(SoftDeleteModelSerializer):
     owner_name = serializers.SerializerMethodField()
     registration_count = serializers.IntegerField(read_only=True)
     attendee_count = serializers.IntegerField(read_only=True)
-    attendee_count = serializers.IntegerField(read_only=True)
     waitlist_count = serializers.IntegerField(read_only=True)
+    certificate_count = serializers.IntegerField(read_only=True)
     featured_image_url = serializers.SerializerMethodField()
 
     class Meta(SoftDeleteModelSerializer.Meta):
@@ -307,6 +332,7 @@ class EventListSerializer(SoftDeleteModelSerializer):
             'title',
             'status',
             'event_type',
+            'format',
             'starts_at',
             'ends_at',
             'timezone',
@@ -315,6 +341,7 @@ class EventListSerializer(SoftDeleteModelSerializer):
             'registration_count',
             'attendee_count',
             'waitlist_count',
+            'certificate_count',
             'owner_name',
             'is_public',
             'featured_image_url',
@@ -349,11 +376,38 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
     cpd_type = serializers.CharField(source='cpd_credit_type', read_only=True)
     featured_image_url = serializers.SerializerMethodField()
     attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
-    attendee_count = serializers.IntegerField(source='attendance_count', read_only=True)
     certificate_template = serializers.SlugRelatedField(read_only=True, slug_field='uuid')
     badge_template = serializers.SlugRelatedField(read_only=True, slug_field='uuid')
     speakers = SpeakerSerializer(many=True, read_only=True)
     sessions = EventSessionListSerializer(many=True, read_only=True)
+    video_settings = VideoSettingsSerializer(read_only=True)
+    latest_recording = serializers.SerializerMethodField()
+    is_current_user_host = serializers.SerializerMethodField()
+
+    def get_is_current_user_host(self, obj):
+        from conferencing.views import is_event_host
+        request = self.context.get('request')
+        return is_event_host(request.user, obj) if request else False
+
+    def get_latest_recording(self, obj):
+        from conferencing.models import VideoRecording
+        recording = (
+            VideoRecording.objects
+            .filter(event=obj, status=VideoRecording.Status.AVAILABLE)
+            .order_by('-recording_end', '-created_at')
+            .first()
+        )
+        if not recording:
+            return None
+        return {
+            'uuid': str(recording.uuid),
+            'status': recording.status,
+            'storage_path': recording.storage_path,
+            'duration_seconds': recording.duration_seconds,
+            'duration_display': recording.duration_display,
+            'recording_end': recording.recording_end.isoformat() if recording.recording_end else None,
+            'is_published': recording.is_published,
+        }
 
     class Meta(SoftDeleteModelSerializer.Meta):
         model = Event
@@ -371,6 +425,12 @@ class EventDetailSerializer(SoftDeleteModelSerializer):
             'ends_at',
             'timezone',
             'duration_minutes',
+            'actual_start_at',
+            'actual_end_at',
+            # Video conferencing
+            'video_settings',
+            'latest_recording',
+            'is_current_user_host',
             # Multi-session fields (H2)
             'is_multi_session',
             'minimum_attendance_percent',
@@ -476,6 +536,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
         slug_field='uuid', queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
     )
     speakers = serializers.SlugRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
+    video_settings = VideoSettingsSerializer(required=False)
 
     class Meta:
         model = Event
@@ -528,6 +589,8 @@ class EventCreateSerializer(serializers.ModelSerializer):
             # Education
             'learning_objectives',
             'speakers',
+            # Video conferencing
+            'video_settings',
         ]
         read_only_fields = ['uuid', 'slug']
 
@@ -697,6 +760,9 @@ class PublicEventListSerializer(serializers.ModelSerializer):
             'registration_deadline',
             'registration_count',
             'capacity',
+            'price',
+            'currency',
+            'is_free',
         ]
 
     def get_organizer_name(self, obj):
@@ -730,6 +796,7 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
 
     class Meta(PublicEventListSerializer.Meta):
         fields = PublicEventListSerializer.Meta.fields + [
+            'status',
             'description',
             'custom_fields',
             'organizer',
@@ -748,10 +815,11 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
     speakers = SpeakerSerializer(many=True, read_only=True)
 
     def get_organizer(self, obj):
+        from common.config.deployment import INSTITUTION_LOGO_URL
         return {
             'uuid': str(obj.owner.uuid),
             'display_name': obj.owner.display_name,
-            'logo_url': obj.owner.organizer_logo_url,
+            'logo_url': INSTITUTION_LOGO_URL or '',
         }
 
     def get_spots_remaining(self, obj):
@@ -784,7 +852,7 @@ class EventStatusHistorySerializer(BaseModelSerializer):
         ]
 
 class UnmatchedParticipantSerializer(serializers.Serializer):
-    """Zoom participant not matched to any registration."""
+    """Video participant not matched to any registration."""
 
     user_id = serializers.CharField(required=False, allow_null=True)
     user_name = serializers.CharField()
@@ -799,8 +867,8 @@ class MatchParticipantSerializer(serializers.Serializer):
 
     registration_uuid = serializers.UUIDField()
     # Alternatively accept just one
-    zoom_user_email = serializers.EmailField(required=False)
-    zoom_user_name = serializers.CharField(required=False)
-    zoom_join_time = serializers.DateTimeField(required=False)
-    zoom_leave_time = serializers.DateTimeField(required=False)
+    participant_email = serializers.EmailField(required=False)
+    participant_name = serializers.CharField(required=False)
+    join_time = serializers.DateTimeField(required=False)
+    leave_time = serializers.DateTimeField(required=False)
     attendance_minutes = serializers.IntegerField(required=False)

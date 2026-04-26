@@ -76,24 +76,30 @@ export const StepSettings = () => {
     }, [formData.badges_enabled]);
 
     // Fetch individual user payouts status
-    const { isEducator } = getRoleFlags(user);
+    const { isOrganizer } = getRoleFlags(user);
     useEffect(() => {
         const fetchUserPayouts = async () => {
-            if (!isEducator) {
+            if (!isOrganizer) {
                 setLoadingUserPayouts(false);
                 return;
             }
             try {
                 const status = await getPayoutsStatus();
                 setUserPayoutsEnabled(status.charges_enabled);
-            } catch (error) {
-                console.error('Failed to fetch user payouts status', error);
+            } catch (error: any) {
+                // 404 is expected on institutional deployments where the
+                // payouts endpoint doesn't exist. The toast is already
+                // suppressed via `silent: true` — don't add console noise
+                // for the known shape either. Other failures still log.
+                if (error?.response?.status !== 404) {
+                    console.error('Failed to fetch user payouts status', error);
+                }
             } finally {
                 setLoadingUserPayouts(false);
             }
         };
         fetchUserPayouts();
-    }, [isEducator]);
+    }, [isOrganizer]);
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -127,6 +133,40 @@ export const StepSettings = () => {
                                 onChange={(e) => updateFormData({ max_attendees: e.target.value ? parseInt(e.target.value) : undefined })}
                             />
                             <p className="text-xs text-muted-foreground">Leave blank for unlimited capacity.</p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="registration_opens_at">Registration opens</Label>
+                                <Input
+                                    id="registration_opens_at"
+                                    type="datetime-local"
+                                    value={formData.registration_opens_at ?? ''}
+                                    onChange={(e) =>
+                                        updateFormData({
+                                            registration_opens_at: e.target.value || undefined,
+                                        })
+                                    }
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Leave blank to open registration immediately.
+                                </p>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="registration_closes_at">Registration closes</Label>
+                                <Input
+                                    id="registration_closes_at"
+                                    type="datetime-local"
+                                    value={formData.registration_closes_at ?? ''}
+                                    onChange={(e) =>
+                                        updateFormData({
+                                            registration_closes_at: e.target.value || undefined,
+                                        })
+                                    }
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Leave blank to allow registration until the event starts.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -387,6 +427,122 @@ export const StepSettings = () => {
                             <Switch
                                 checked={formData.auto_issue_badges}
                                 onCheckedChange={(checked) => updateFormData({ auto_issue_badges: checked })}
+                            />
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <Separator />
+
+            {/* Video Conferencing */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                        <Label className="text-base">Video Conferencing</Label>
+                        <p className="text-sm text-muted-foreground">
+                            Provision a LiveKit room so attendees can join online. Required for online / hybrid events if you want the in-app join button.
+                        </p>
+                    </div>
+                    <Switch
+                        checked={!!formData.video_settings?.enabled}
+                        onCheckedChange={(checked) =>
+                            updateFormData({
+                                video_settings: {
+                                    enabled: checked,
+                                    recording_enabled: checked ? (formData.video_settings?.recording_enabled ?? false) : false,
+                                    screen_share: formData.video_settings?.screen_share ?? true,
+                                },
+                            })
+                        }
+                    />
+                </div>
+
+                {formData.video_settings?.enabled && (
+                    <div className="pl-6 border-l-2 border-slate-100 ml-2 space-y-4">
+                        <div className="flex items-center justify-between max-w-sm">
+                            <div className="space-y-0.5">
+                                <Label className="text-sm">Record this event</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Start a LiveKit room-composite egress when the event goes live. The MP4 appears on the event page after completion.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={!!formData.video_settings?.recording_enabled}
+                                onCheckedChange={(checked) =>
+                                    updateFormData({
+                                        video_settings: {
+                                            ...formData.video_settings,
+                                            enabled: true,
+                                            recording_enabled: checked,
+                                            screen_share: formData.video_settings?.screen_share ?? true,
+                                        },
+                                    })
+                                }
+                            />
+                        </div>
+
+                        {formData.video_settings?.recording_enabled && (
+                            <div className="flex items-center justify-between max-w-sm pl-4 border-l-2 border-slate-100 ml-2">
+                                <div className="space-y-0.5">
+                                    <Label className="text-sm">Auto-publish recording</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        When off, the recording stays unpublished after processing — visible only to you until you publish it from the event page.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={formData.video_settings?.auto_publish_recording !== false}
+                                    onCheckedChange={(checked) =>
+                                        updateFormData({
+                                            video_settings: {
+                                                ...formData.video_settings,
+                                                enabled: true,
+                                                recording_enabled: true,
+                                                auto_publish_recording: checked,
+                                            },
+                                        })
+                                    }
+                                />
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between max-w-sm">
+                            <div className="space-y-0.5">
+                                <Label className="text-sm">Allow screen share</Label>
+                                <p className="text-xs text-muted-foreground">Participants can share their screen during the session.</p>
+                            </div>
+                            <Switch
+                                checked={formData.video_settings?.screen_share !== false}
+                                onCheckedChange={(checked) =>
+                                    updateFormData({
+                                        video_settings: {
+                                            ...formData.video_settings,
+                                            enabled: true,
+                                            screen_share: checked,
+                                        },
+                                    })
+                                }
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between max-w-sm">
+                            <div className="space-y-0.5">
+                                <Label className="text-sm">Waiting room</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Hold attendees until the host admits them. The host can admit or deny from the room controls.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={!!formData.video_settings?.waiting_room_enabled}
+                                onCheckedChange={(checked) =>
+                                    updateFormData({
+                                        video_settings: {
+                                            ...formData.video_settings,
+                                            enabled: true,
+                                            waiting_room_enabled: checked,
+                                        },
+                                    })
+                                }
                             />
                         </div>
                     </div>

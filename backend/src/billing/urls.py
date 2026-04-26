@@ -1,9 +1,9 @@
-"""
-URL routes for billing API.
+"""URL routes for the billing admin API.
 
-Institutional billing endpoints:
-- Admin: configure billing, manage plans
-- Learner: view plans, subscribe, manage subscription
+Observability surfaces for admins: StripeEvent listing/retry, Dispute
+listing/detail, and on-demand reconciliation. Stripe checkouts themselves
+run through the webhook endpoint at ``/api/v1/webhooks/stripe/`` (mounted
+from ``config/urls.py``, not here).
 """
 
 from django.urls import path
@@ -11,12 +11,37 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    # Admin billing configuration
-    path('admin/billing/config/', views.BillingConfigView.as_view(), name='billing-config'),
-    path('admin/billing/plans/', views.InstitutionPlanListCreateView.as_view(), name='institution-plans'),
-    path('admin/billing/plans/<uuid:uuid>/', views.InstitutionPlanDetailView.as_view(), name='institution-plan-detail'),
-
-    # Learner-facing
-    path('billing/plans/', views.PublicPlanListView.as_view(), name='public-plans'),
-    path('billing/my-subscription/', views.MySubscriptionView.as_view(), name='my-subscription'),
+    # Stripe Events (webhook idempotency table + retry)
+    path(
+        "admin/billing/stripe-events/",
+        views.AdminStripeEventListView.as_view(),
+        name="admin-stripe-events",
+    ),
+    path(
+        "admin/billing/stripe-events/<str:event_id>/",
+        views.AdminStripeEventDetailView.as_view(),
+        name="admin-stripe-event-detail",
+    ),
+    path(
+        "admin/billing/stripe-events/<str:event_id>/retry/",
+        views.AdminStripeEventRetryView.as_view(),
+        name="admin-stripe-event-retry",
+    ),
+    # Disputes
+    path(
+        "admin/billing/disputes/",
+        views.AdminDisputeListView.as_view(),
+        name="admin-disputes",
+    ),
+    path(
+        "admin/billing/disputes/<uuid:uuid>/",
+        views.AdminDisputeDetailView.as_view(),
+        name="admin-dispute-detail",
+    ),
+    # Stripe reconciliation (admin-triggered sync drift check)
+    path(
+        "admin/billing/reconcile/",
+        views.AdminReconcileView.as_view(),
+        name="admin-reconcile",
+    ),
 ]

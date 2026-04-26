@@ -3,14 +3,26 @@ Management command to create Django Groups with their permissions.
 
 Usage: python manage.py setup_groups
 
-This creates the four institutional roles (learner, educator, course_manager, admin)
+This creates the four institutional roles (learner, organizer, instructor, admin)
 and assigns the appropriate Django permissions to each group.
+
+Role model:
+- organizer: manages live events (event CRUD, speakers, promo codes, event certificates/badges).
+- instructor: manages courses and programs; can schedule live sessions inside courses
+  (session-scheduling subset of event perms, but cannot create top-level events).
+- learner: consumes content.
+- admin: union of all perms.
 
 Run this after migrations to ensure groups and permissions are set up.
 """
 
 from django.contrib.auth.models import Group, Permission
 from django.core.management.base import BaseCommand
+
+
+# Legacy group names that have been retired and must be deleted on every run so
+# stale group rows don't carry obsolete permission assignments forward.
+RETIRED_GROUPS = ("educator", "course_manager")
 
 
 # Group -> permission codenames mapping
@@ -42,7 +54,7 @@ GROUP_PERMISSIONS = {
         # Badges
         "view_issuedbadge",
     ],
-    "educator": [
+    "organizer": [
         # Events (full CRUD)
         "add_event",
         "change_event",
@@ -72,7 +84,7 @@ GROUP_PERMISSIONS = {
         "add_registration",
         "change_registration",
         "view_registration",
-        # Certificates (issue)
+        # Certificates (issue from events)
         "add_certificate",
         "change_certificate",
         "view_certificate",
@@ -101,26 +113,15 @@ GROUP_PERMISSIONS = {
         "add_eventfeedback",
         "change_eventfeedback",
         "view_eventfeedback",
-        # Badges
+        # Badges (event-issued)
         "add_badgetemplate",
         "change_badgetemplate",
         "delete_badgetemplate",
         "view_badgetemplate",
         "add_issuedbadge",
         "view_issuedbadge",
-        # Learning (view for hybrid events)
-        "view_course",
-        "view_coursemodule",
-        "view_modulecontent",
-        "view_assignment",
-        "view_assignmentsubmission",
-        "view_contentprogress",
-        "add_contentprogress",
-        "change_contentprogress",
-        "add_courseenrollment",
-        "view_courseenrollment",
     ],
-    "course_manager": [
+    "instructor": [
         # Courses (full CRUD)
         "add_course",
         "change_course",
@@ -142,7 +143,7 @@ GROUP_PERMISSIONS = {
         "change_modulecontent",
         "delete_modulecontent",
         "view_modulecontent",
-        # Assignments
+        # Assignments + grading
         "add_assignment",
         "change_assignment",
         "delete_assignment",
@@ -174,17 +175,31 @@ GROUP_PERMISSIONS = {
         "view_certificatetemplate",
         "can_issue_certificate",
         "can_manage_templates",
-        # Events (view for hybrid courses)
+        # Course badges
+        "add_badgetemplate",
+        "change_badgetemplate",
+        "view_badgetemplate",
+        "add_issuedbadge",
+        "view_issuedbadge",
+        # Session scheduling inside courses — instructors need to host live
+        # sessions as part of a course, but not create top-level events.
+        "add_eventsession",
+        "change_eventsession",
+        "view_eventsession",
+        "add_sessionattendance",
+        "change_sessionattendance",
+        "view_sessionattendance",
+        # Related read access
         "view_event",
-        # Registrations (view)
         "view_registration",
-        # Feedback
+        # Feedback (on sessions they deliver)
         "add_eventfeedback",
         "view_eventfeedback",
-        # Badges
-        "view_issuedbadge",
     ],
-    "admin": [],  # Admins use is_staff=True which bypasses permission checks
+    # Admin group inherits the union of every other group's permissions.
+    # Resolved at runtime in handle() below — the sentinel "__all__" triggers
+    # the merge so new permissions added to any other group propagate.
+    "admin": "__all__",
 }
 
 
@@ -192,27 +207,42 @@ class Command(BaseCommand):
     help = "Create institutional role groups with permissions"
 
     def handle(self, *args, **options):
+        # Drop retired groups so their obsolete permission rows and any stale
+        # user memberships are cleared. Re-running this command is idempotent.
+        retired_qs = Group.objects.filter(name__in=RETIRED_GROUPS)
+        if retired_qs.exists():
+            names = ", ".join(retired_qs.values_list("name", flat=True))
+            retired_qs.delete()
+            self.stdout.write(self.style.WARNING(f"Deleted retired groups: {names}"))
+
+        # Materialise the union for the admin group before iterating, so we
+        # capture the final state of every other group.
+        admin_codenames: set[str] = set()
+        for group_name, perm_codenames in GROUP_PERMISSIONS.items():
+            if perm_codenames != "__all__":
+                admin_codenames.update(perm_codenames)
+
         for group_name, perm_codenames in GROUP_PERMISSIONS.items():
             group, created = Group.objects.get_or_create(name=group_name)
             action = "Created" if created else "Updated"
 
-            if perm_codenames:
-                perms = Permission.objects.filter(codename__in=perm_codenames)
-                found_codenames = set(perms.values_list("codename", flat=True))
-                missing = set(perm_codenames) - found_codenames
-
-                if missing:
-                    self.stdout.write(
-                        self.style.WARNING(f"  Missing permissions for {group_name}: {missing}")
-                    )
-
-                group.permissions.set(perms)
-                self.stdout.write(
-                    self.style.SUCCESS(f"{action} group '{group_name}' with {perms.count()} permissions")
-                )
+            if perm_codenames == "__all__":
+                resolved = sorted(admin_codenames)
             else:
+                resolved = perm_codenames
+
+            perms = Permission.objects.filter(codename__in=resolved)
+            found_codenames = set(perms.values_list("codename", flat=True))
+            missing = set(resolved) - found_codenames
+
+            if missing:
                 self.stdout.write(
-                    self.style.SUCCESS(f"{action} group '{group_name}' (admin uses is_staff)")
+                    self.style.WARNING(f"  Missing permissions for {group_name}: {missing}")
                 )
+
+            group.permissions.set(perms)
+            self.stdout.write(
+                self.style.SUCCESS(f"{action} group '{group_name}' with {perms.count()} permissions")
+            )
 
         self.stdout.write(self.style.SUCCESS("\nAll groups set up successfully."))

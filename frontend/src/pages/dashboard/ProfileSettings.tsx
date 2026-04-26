@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { getInitials } from "@/lib/initials";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -8,18 +9,18 @@ import {
    Lock,
    Bell,
    Camera,
-   CreditCard,
    Trash2,
    Loader2,
    CheckCircle,
    AlertCircle,
-   Plus,
    Banknote,
    ExternalLink,
    Monitor,
    Shield,
    Download,
    AlertTriangle,
+   Plug,
+   Video as VideoIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,15 +42,22 @@ import {
    CardHeader,
    CardTitle
 } from "@/components/ui/card";
+import {
+   Dialog,
+   DialogContent,
+   DialogDescription,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageHeader } from "@/components/custom/PageHeader";
-import { getPaymentMethods, deletePaymentMethod, getSubscription, getBillingPortal } from "@/api/billing";
-import { getCurrentUser, updateProfile, changePassword, getNotificationPreferences, updateNotificationPreferences, exportUserData, deleteAccount } from "@/api/accounts";
-import { PaymentMethod, Subscription } from "@/api/billing/types";
+import { getCurrentUser, updateProfile, changePassword, getNotificationPreferences, updateNotificationPreferences, exportUserData, deleteAccount, requestEmailChange } from "@/api/accounts";
 import { User as UserType, NotificationPreferences } from "@/api/accounts/types";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -77,17 +85,30 @@ const securitySchema = z.object({
    path: ["new_password_confirm"],
 });
 
+interface PrefRowProps {
+   label: string;
+   description: string;
+   checked: boolean;
+   onChange: (value: boolean) => void;
+   disabled?: boolean;
+}
+
+function PrefRow({ label, description, checked, onChange, disabled }: PrefRowProps) {
+   return (
+      <div className="flex items-center justify-between space-x-2">
+         <div className="space-y-0.5">
+            <label className="text-sm font-medium leading-none">{label}</label>
+            <p className="text-sm text-muted-foreground">{description}</p>
+         </div>
+         <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} />
+      </div>
+   );
+}
+
 export function ProfileSettings() {
    const [isSubmitting, setIsSubmitting] = useState(false);
    const [user, setUser] = useState<UserType | null>(null);
    const [loadingProfile, setLoadingProfile] = useState(true);
-
-   // Payment method state
-   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-   const [subscription, setSubscription] = useState<Subscription | null>(null);
-   const [loadingPayment, setLoadingPayment] = useState(true);
-   const [deletingId, setDeletingId] = useState<string | null>(null);
-   const [addingPayment, setAddingPayment] = useState(false);
 
    // Notification state
    const [notifications, setNotifications] = useState<NotificationPreferences | null>(null);
@@ -99,9 +120,62 @@ export function ProfileSettings() {
    const [deletingAccount, setDeletingAccount] = useState(false);
    const [exportingData, setExportingData] = useState(false);
 
+   // Email change
+   const [emailChangeOpen, setEmailChangeOpen] = useState(false);
+   const [emailChangeLoading, setEmailChangeLoading] = useState(false);
+   const [emailChangePassword, setEmailChangePassword] = useState("");
+   const [emailChangeNewEmail, setEmailChangeNewEmail] = useState("");
+   const [emailChangeError, setEmailChangeError] = useState<string | null>(null);
+
+   const handleRequestEmailChange = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setEmailChangeError(null);
+      setEmailChangeLoading(true);
+      try {
+         const res = await requestEmailChange({
+            current_password: emailChangePassword,
+            new_email: emailChangeNewEmail,
+         });
+         toast.success(`Confirmation link sent to ${res.pending_email}`);
+         setEmailChangeOpen(false);
+         setEmailChangePassword("");
+         setEmailChangeNewEmail("");
+         const fresh = await getCurrentUser();
+         setUser(fresh);
+      } catch (err: any) {
+         const detail =
+            err?.response?.data?.error?.details?.current_password?.[0] ||
+            err?.response?.data?.error?.details?.new_email?.[0] ||
+            err?.response?.data?.error?.message ||
+            "Failed to request email change";
+         setEmailChangeError(detail);
+      } finally {
+         setEmailChangeLoading(false);
+      }
+   };
+
    // Payouts state
-   const { user: authUser, logout } = useAuth();
-   const { isEducator, isCourseManager, isCreator } = getRoleFlags(authUser);
+   const { user: authUser, logout, manifest, hasFeature } = useAuth();
+
+   const [videoStatus, setVideoStatus] = useState<{ configured: boolean; provider: string } | null>(null);
+   const [loadingVideoStatus, setLoadingVideoStatus] = useState(false);
+
+   useEffect(() => {
+      if (!hasFeature('manage_video')) return;
+      let cancelled = false;
+      setLoadingVideoStatus(true);
+      import('@/api/video').then(({ getVideoStatus }) =>
+         getVideoStatus()
+            .then((s) => { if (!cancelled) setVideoStatus(s); })
+            .catch(() => { if (!cancelled) setVideoStatus({ configured: false, provider: '' }); })
+            .finally(() => { if (!cancelled) setLoadingVideoStatus(false); })
+      );
+      return () => { cancelled = true; };
+   }, [hasFeature]);
+   const isSingleTenant = manifest?.deployment?.mode === 'single_tenant';
+   const { isOrganizer, isInstructor } = getRoleFlags(authUser);
+   // Whether the current user can create content (either event or course side).
+   const isContentCreator = isOrganizer || isInstructor;
    const [payoutsStatus, setPayoutsStatus] = useState<PayoutsStatus | null>(null);
    const [loadingPayouts, setLoadingPayouts] = useState(true);
    const [initiatingConnect, setInitiatingConnect] = useState(false);
@@ -150,27 +224,6 @@ export function ProfileSettings() {
       loadProfile();
    }, []);
 
-   // Load payment methods
-   const loadPaymentData = async () => {
-      setLoadingPayment(true);
-      try {
-         const [methods, sub] = await Promise.all([
-            getPaymentMethods(),
-            getSubscription(),
-         ]);
-         setPaymentMethods(methods);
-         setSubscription(sub);
-      } catch (error) {
-         console.error("Failed to load payment data:", error);
-      } finally {
-         setLoadingPayment(false);
-      }
-   };
-
-   useEffect(() => {
-      loadPaymentData();
-   }, []);
-
    // Load notification preferences
    useEffect(() => {
       const loadNotifications = async () => {
@@ -186,9 +239,10 @@ export function ProfileSettings() {
       loadNotifications();
    }, []);
 
-   // Load payouts status (organizers only)
+   // Load payouts status (organizers only, not in single-tenant mode)
    useEffect(() => {
-      if (!isCreator) {
+      if (!manifest) return;
+      if (!isContentCreator || isSingleTenant) {
          setLoadingPayouts(false);
          return;
       }
@@ -203,31 +257,7 @@ export function ProfileSettings() {
          }
       };
       loadPayouts();
-   }, [isCreator]);
-
-   const handleDeletePaymentMethod = async (uuid: string) => {
-      setDeletingId(uuid);
-      try {
-         await deletePaymentMethod(uuid);
-         setPaymentMethods(prev => prev.filter(m => m.uuid !== uuid));
-         toast.success("Payment method removed");
-      } catch (error: any) {
-         toast.error(error.message || "Failed to remove payment method");
-      } finally {
-         setDeletingId(null);
-      }
-   };
-
-   const handleManagePayments = async () => {
-      setAddingPayment(true);
-      try {
-         const { url } = await getBillingPortal(`${window.location.origin}/settings?tab=billing`);
-         window.location.href = url;
-      } catch (error: any) {
-         toast.error(error.message || "Failed to open billing portal");
-         setAddingPayment(false);
-      }
-   };
+   }, [manifest, isContentCreator, isSingleTenant]);
 
    const onProfileSubmit = async (data: z.infer<typeof profileSchema>) => {
       setIsSubmitting(true);
@@ -336,14 +366,7 @@ export function ProfileSettings() {
       }
    };
 
-   const getInitials = (name: string) => {
-      return name
-         .split(" ")
-         .map(n => n[0])
-         .join("")
-         .toUpperCase()
-         .slice(0, 2);
-   };
+   // getInitials lives in @/lib/initials and strips honorifics ("Dr. M Torres" → "MT").
 
    if (loadingProfile) {
       return (
@@ -372,12 +395,6 @@ export function ProfileSettings() {
                         <User className="mr-2 h-4 w-4" /> General
                      </TabsTrigger>
                      <TabsTrigger
-                        value="billing"
-                        className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
-                     >
-                        <CreditCard className="mr-2 h-4 w-4" /> Billing
-                     </TabsTrigger>
-                     <TabsTrigger
                         value="security"
                         className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
                      >
@@ -401,12 +418,20 @@ export function ProfileSettings() {
                      >
                         <Shield className="mr-2 h-4 w-4" /> Privacy
                      </TabsTrigger>
-                     {isCreator && (
+                     {isContentCreator && !isSingleTenant && (
                         <TabsTrigger
                            value="payouts"
                            className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
                         >
                            <Banknote className="mr-2 h-4 w-4" /> Payouts
+                        </TabsTrigger>
+                     )}
+                     {hasFeature('manage_video') && (
+                        <TabsTrigger
+                           value="integrations"
+                           className="justify-start w-full px-4 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary font-medium"
+                        >
+                           <Plug className="mr-2 h-4 w-4" /> Integrations
                         </TabsTrigger>
                      )}
                   </TabsList>
@@ -473,7 +498,7 @@ export function ProfileSettings() {
                                        </FormItem>
                                     )}
                                  />
-                                 {isCreator && (
+                                 {isContentCreator && (
                                     <FormField
                                        control={profileForm.control}
                                        name="gst_hst_number"
@@ -496,152 +521,38 @@ export function ProfileSettings() {
                            </Form>
                         </CardContent>
                      </Card>
-                  </TabsContent>
 
-                  {/* BILLING TAB */}
-                  <TabsContent value="billing" className="mt-0 space-y-6">
+                     {/* Email Address */}
                      <Card>
                         <CardHeader>
-                           <CardTitle>Payment Methods</CardTitle>
-                           <CardDescription>Manage your saved payment methods for billing.</CardDescription>
+                           <CardTitle>Email Address</CardTitle>
+                           <CardDescription>
+                              Your login email. Changing it requires confirmation from the new address.
+                           </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                           {loadingPayment ? (
-                              <div className="flex items-center justify-center py-8">
-                                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                              </div>
-                           ) : paymentMethods.length === 0 ? (
-                              <div className="text-center py-8 space-y-4">
-                                 <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center">
-                                    <CreditCard className="h-6 w-6 text-muted-foreground" />
-                                 </div>
-                                 <div>
-                                    <p className="font-medium">No payment methods</p>
-                                    <p className="text-sm text-muted-foreground">
-                                       Add a payment method to continue after your trial ends.
-                                    </p>
-                                 </div>
-                                 <Button onClick={handleManagePayments} disabled={addingPayment}>
-                                    {addingPayment ? (
-                                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    ) : (
-                                       <Plus className="h-4 w-4 mr-2" />
-                                    )}
-                                    Add Payment Method
-                                 </Button>
-                              </div>
-                           ) : (
-                              <div className="space-y-3">
-                                 {paymentMethods.map((method) => (
-                                    <div
-                                       key={method.uuid}
-                                       className="flex items-center justify-between p-4 border rounded-lg bg-muted/30"
-                                    >
-                                       <div className="flex items-center gap-4">
-                                          <div className="w-10 h-10 bg-background rounded-md flex items-center justify-center border">
-                                             <CreditCard className="h-5 w-5 text-muted-foreground" />
-                                          </div>
-                                          <div>
-                                             <div className="flex items-center gap-2">
-                                                <span className="font-medium capitalize">{method.card_brand}</span>
-                                                <span className="text-muted-foreground">•••• {method.card_last4}</span>
-                                                {method.is_default && (
-                                                   <Badge variant="secondary" className="text-xs">Default</Badge>
-                                                )}
-                                                {method.is_expired && (
-                                                   <Badge variant="destructive" className="text-xs">Expired</Badge>
-                                                )}
-                                             </div>
-                                             <p className="text-sm text-muted-foreground">
-                                                Expires {method.card_exp_month}/{method.card_exp_year}
-                                             </p>
-                                          </div>
-                                       </div>
-                                       <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                          onClick={() => handleDeletePaymentMethod(method.uuid)}
-                                          disabled={deletingId === method.uuid}
-                                       >
-                                          {deletingId === method.uuid ? (
-                                             <Loader2 className="h-4 w-4 animate-spin" />
-                                          ) : (
-                                             <Trash2 className="h-4 w-4" />
-                                          )}
-                                       </Button>
-                                    </div>
-                                 ))}
-                                 <Button variant="outline" className="w-full" onClick={handleManagePayments} disabled={addingPayment}>
-                                    {addingPayment ? (
-                                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    ) : (
-                                       <Plus className="h-4 w-4 mr-2" />
-                                    )}
-                                    Add Another Payment Method
-                                 </Button>
-                              </div>
+                           {user?.pending_email && (
+                              <Alert>
+                                 <AlertCircle className="h-4 w-4" />
+                                 <AlertDescription>
+                                    A change to <strong>{user.pending_email}</strong> is pending.
+                                    Check that inbox for a confirmation link. Once confirmed, you'll need to log in again.
+                                 </AlertDescription>
+                              </Alert>
                            )}
+                           <div className="flex items-center justify-between gap-4">
+                              <div>
+                                 <div className="font-medium">{user?.email}</div>
+                                 <div className="text-sm text-muted-foreground">
+                                    {user?.email_verified ? "Verified" : "Not verified"}
+                                 </div>
+                              </div>
+                              <Button variant="outline" onClick={() => setEmailChangeOpen(true)}>
+                                 Change email
+                              </Button>
+                           </div>
                         </CardContent>
                      </Card>
-
-                     {/* Subscription Status Card - Organizers Only */}
-                     {isCreator && (
-                        <Card>
-                           <CardHeader>
-                              <CardTitle>Subscription</CardTitle>
-                              <CardDescription>Your current plan and billing status.</CardDescription>
-                           </CardHeader>
-                           <CardContent>
-                              {subscription ? (
-                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                       <span className="text-muted-foreground">Current Plan</span>
-                                       <span className="font-medium capitalize">{subscription.plan}</span>
-                                    </div>
-                                    <Separator />
-                                    <div className="flex items-center justify-between">
-                                       <span className="text-muted-foreground">Status</span>
-                                       <Badge variant={subscription.is_active ? "default" : "secondary"}>
-                                          {subscription.status_display}
-                                       </Badge>
-                                    </div>
-                                    {subscription.is_trialing && subscription.days_until_trial_ends !== null && (
-                                       <>
-                                          <Separator />
-                                          <div className="flex items-center justify-between">
-                                             <span className="text-muted-foreground">Trial Ends</span>
-                                             <span className="font-medium">
-                                                {subscription.days_until_trial_ends} days remaining
-                                             </span>
-                                          </div>
-                                       </>
-                                    )}
-                                    {subscription.has_payment_method && (
-                                       <Alert className="bg-success/10 border-success/30">
-                                          <CheckCircle className="h-4 w-4 text-success" />
-                                          <AlertDescription className="text-success">
-                                             Billing is set up. You'll be charged automatically when your trial ends.
-                                          </AlertDescription>
-                                       </Alert>
-                                    )}
-                                    {!subscription.has_payment_method && subscription.is_trialing && (
-                                       <Alert className="bg-warning/10 border-warning/30">
-                                          <AlertCircle className="h-4 w-4 text-warning" />
-                                          <AlertDescription>
-                                             Add a payment method to continue using paid features after your trial.
-                                          </AlertDescription>
-                                       </Alert>
-                                    )}
-                                 </div>
-                              ) : (
-                                 <div className="text-center py-4 text-muted-foreground">
-                                    No subscription information available.
-                                 </div>
-                              )}
-                           </CardContent>
-                        </Card>
-                     )}
                   </TabsContent>
 
                   {/* SECURITY TAB */}
@@ -715,33 +626,68 @@ export function ProfileSettings() {
                               </div>
                            ) : notifications ? (
                               <>
-                                 <div className="flex items-center justify-between space-x-2">
-                                    <div className="space-y-0.5">
-                                       <label className="text-sm font-medium leading-none">
-                                          Event Reminders
-                                       </label>
-                                       <p className="text-sm text-muted-foreground">Get notified before events start.</p>
+                                 <div>
+                                    <h4 className="text-sm font-semibold mb-3">Events</h4>
+                                    <div className="space-y-4">
+                                       <PrefRow
+                                          label="Event reminders"
+                                          description="Reminders before events you've registered for start (24h, 1h, now)."
+                                          checked={notifications.notify_event_reminders}
+                                          onChange={(v) => handleNotificationChange('notify_event_reminders', v)}
+                                          disabled={savingNotifications}
+                                       />
+                                       <PrefRow
+                                          label="Event updates"
+                                          description="Notifications when an event is rescheduled, cancelled, or you're promoted from the waitlist."
+                                          checked={notifications.notify_event_updates}
+                                          onChange={(v) => handleNotificationChange('notify_event_updates', v)}
+                                          disabled={savingNotifications}
+                                       />
+                                       <PrefRow
+                                          label="Recordings available"
+                                          description="Notifications when a recording is published for an event you attended."
+                                          checked={notifications.notify_recordings}
+                                          onChange={(v) => handleNotificationChange('notify_recordings', v)}
+                                          disabled={savingNotifications}
+                                       />
                                     </div>
-                                    <Switch
-                                       checked={notifications.notify_event_reminders}
-                                       onCheckedChange={(checked) => handleNotificationChange('notify_event_reminders', checked)}
-                                       disabled={savingNotifications}
-                                    />
                                  </div>
                                  <Separator />
-                                 <div className="flex items-center justify-between space-x-2">
-                                    <div className="space-y-0.5">
-                                       <label className="text-sm font-medium leading-none">
-                                          Certificate Notifications
-                                       </label>
-                                       <p className="text-sm text-muted-foreground">Get notified when certificates are issued.</p>
+                                 <div>
+                                    <h4 className="text-sm font-semibold mb-3">Achievements</h4>
+                                    <div className="space-y-4">
+                                       <PrefRow
+                                          label="Certificate issued"
+                                          description="Notifications when a certificate is issued to you."
+                                          checked={notifications.notify_certificate_issued}
+                                          onChange={(v) => handleNotificationChange('notify_certificate_issued', v)}
+                                          disabled={savingNotifications}
+                                       />
+                                       <PrefRow
+                                          label="Badge issued"
+                                          description="Notifications when you earn a digital badge."
+                                          checked={notifications.notify_badges}
+                                          onChange={(v) => handleNotificationChange('notify_badges', v)}
+                                          disabled={savingNotifications}
+                                       />
                                     </div>
-                                    <Switch
-                                       checked={notifications.notify_certificate_issued}
-                                       onCheckedChange={(checked) => handleNotificationChange('notify_certificate_issued', checked)}
-                                       disabled={savingNotifications}
-                                    />
                                  </div>
+                                 <Separator />
+                                 <div>
+                                    <h4 className="text-sm font-semibold mb-3">Courses</h4>
+                                    <div className="space-y-4">
+                                       <PrefRow
+                                          label="Course progress"
+                                          description="Enrollment confirmations, module unlocks, and completion summaries."
+                                          checked={notifications.notify_course_progress}
+                                          onChange={(v) => handleNotificationChange('notify_course_progress', v)}
+                                          disabled={savingNotifications}
+                                       />
+                                    </div>
+                                 </div>
+                                 <p className="text-xs text-muted-foreground pt-2">
+                                    Transactional emails (registration confirmations, password resets, payment receipts) ignore these settings and always send.
+                                 </p>
                               </>
                            ) : (
                               <p className="text-muted-foreground text-center py-4">
@@ -823,8 +769,55 @@ export function ProfileSettings() {
                      />
                   </TabsContent>
 
+                  {/* INTEGRATIONS TAB */}
+                  {hasFeature('manage_video') && (
+                     <TabsContent value="integrations" className="mt-0 space-y-6">
+                        <Card>
+                           <CardHeader>
+                              <CardTitle>Video conferencing</CardTitle>
+                              <CardDescription>
+                                 Provider used to host live event and course-session video rooms.
+                              </CardDescription>
+                           </CardHeader>
+                           <CardContent>
+                              {loadingVideoStatus ? (
+                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Checking…
+                                 </div>
+                              ) : (
+                                 <div className="flex items-center justify-between gap-4 p-4 border rounded-lg bg-muted/30">
+                                    <div className="flex items-center gap-3">
+                                       <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                          <VideoIcon className="h-4 w-4" />
+                                       </div>
+                                       <div>
+                                          <p className="font-medium capitalize">{videoStatus?.provider || 'LiveKit'}</p>
+                                          <p className="text-xs text-muted-foreground">
+                                             {videoStatus?.configured
+                                                ? 'Rooms are provisioned automatically when you enable video on an event or live course session.'
+                                                : 'Not configured yet — contact your admin to connect a provider.'}
+                                          </p>
+                                       </div>
+                                    </div>
+                                    {videoStatus?.configured ? (
+                                       <Badge variant="default" className="bg-success/15 text-success border-success/30">
+                                          <CheckCircle className="h-3 w-3 mr-1" /> Connected
+                                       </Badge>
+                                    ) : (
+                                       <Badge variant="outline" className="text-muted-foreground">
+                                          Not connected
+                                       </Badge>
+                                    )}
+                                 </div>
+                              )}
+                           </CardContent>
+                        </Card>
+                     </TabsContent>
+                  )}
+
                   {/* PAYOUTS TAB */}
-                  {isCreator && (
+                  {isContentCreator && !isSingleTenant && (
                      <TabsContent value="payouts" className="mt-0 space-y-6">
                         <Card>
                            <CardHeader>
@@ -909,7 +902,57 @@ export function ProfileSettings() {
             </div>
          </Tabs>
 
-
+         <Dialog open={emailChangeOpen} onOpenChange={(v) => {
+            setEmailChangeOpen(v);
+            if (!v) {
+               setEmailChangePassword("");
+               setEmailChangeNewEmail("");
+               setEmailChangeError(null);
+            }
+         }}>
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>Change email address</DialogTitle>
+                  <DialogDescription>
+                     We'll send a confirmation link to the new address. The change only takes effect after you click that link.
+                  </DialogDescription>
+               </DialogHeader>
+               <form onSubmit={handleRequestEmailChange} className="space-y-4">
+                  {emailChangeError && (
+                     <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
+                        {emailChangeError}
+                     </div>
+                  )}
+                  <div className="space-y-2">
+                     <Label htmlFor="ec-password">Current password</Label>
+                     <Input
+                        id="ec-password"
+                        type="password"
+                        value={emailChangePassword}
+                        onChange={(e) => setEmailChangePassword(e.target.value)}
+                        required
+                        autoComplete="current-password"
+                     />
+                  </div>
+                  <div className="space-y-2">
+                     <Label htmlFor="ec-email">New email</Label>
+                     <Input
+                        id="ec-email"
+                        type="email"
+                        value={emailChangeNewEmail}
+                        onChange={(e) => setEmailChangeNewEmail(e.target.value)}
+                        required
+                     />
+                  </div>
+                  <DialogFooter>
+                     <Button type="submit" disabled={emailChangeLoading}>
+                        {emailChangeLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Send confirmation link
+                     </Button>
+                  </DialogFooter>
+               </form>
+            </DialogContent>
+         </Dialog>
       </div>
    );
 }

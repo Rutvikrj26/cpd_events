@@ -69,6 +69,9 @@ infra/gcp/environments/*/terraform.tfvars
 # Track only templates (contain placeholders only)
 !.env.dev.template
 
+# ----- CLI runtime -----
+.cli/
+
 # ----- Editor -----
 .idea/
 .vscode/

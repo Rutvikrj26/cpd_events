@@ -40,10 +40,9 @@ export function SessionAttendanceReconciliation({ courseUuid, sessionUuid, onRec
     const handleMatch = async (record: any, enrollmentUuid: string) => {
         await matchParticipant(courseUuid, sessionUuid, {
             enrollment_uuid: enrollmentUuid,
-            // TODO: Rename these API fields when backend is updated to use generic participant fields
-            zoom_user_email: record.user_email,
-            zoom_user_name: record.user_name,
-            zoom_join_time: record.join_time,
+            participant_email: record.user_email,
+            participant_name: record.user_name,
+            join_time: record.join_time,
             attendance_minutes: record.duration_minutes
         });
         setUnmatchedRecords(prev => prev.filter(r => r.user_id !== record.user_id));

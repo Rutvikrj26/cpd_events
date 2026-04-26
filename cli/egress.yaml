@@ -2,7 +2,13 @@ api_key: devkey
 api_secret: secret_dev_key_change_in_production
 ws_url: ws://livekit:7880
 
-# Local file output for development
+# Required: psrpc message bus between livekit and egress.
+redis:
+  address: redis:6379
+
+# Local file output for development. In production this directory is the
+# mount-point of a GCS-fuse / S3 bucket; the backend's RECORDING_STORAGE_DIR
+# must point at the same path so the streaming endpoint can read the file.
 file_output:
   local: true
   output_directory: /recordings

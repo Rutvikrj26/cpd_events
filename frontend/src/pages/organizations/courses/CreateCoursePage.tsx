@@ -4,8 +4,10 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { ArrowLeft, Loader2, Save, Video } from 'lucide-react';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
+
+import { formatCompletionCriteria } from '@/lib/completion-criteria';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -54,8 +56,8 @@ const courseSchema = z.object({
     price_cents: z.coerce.number().min(0).default(0),
     enrollment_open: z.boolean().default(true),
     estimated_hours: z.coerce.number().min(0).optional(),
-    // Format (Online = self-paced, Hybrid = includes live sessions)
-    format: z.enum(['online', 'hybrid']).default('online'),
+    // Format: Online = self-paced; Live = lectures only; Hybrid = both
+    format: z.enum(['online', 'live', 'hybrid']).default('online'),
     // Hybrid completion
     hybrid_completion_criteria: z.enum(['modules_only', 'sessions_only', 'both', 'either', 'min_sessions']).optional(),
     min_sessions_required: z.coerce.number().min(1).default(1),
@@ -165,10 +167,22 @@ const CreateCoursePage = () => {
         setIsSubmitting(true);
         setSubmitError(null);
 
+        // Hard-block: live and hybrid courses must have at least one session
+        if ((values.format === 'live' || values.format === 'hybrid') && scheduledSessions.length === 0) {
+            setIsSubmitting(false);
+            setSubmitError('Add at least one live session before saving this course.');
+            return;
+        }
+
         // Sanitize date fields: remove empty strings to avoid backend validation error
         const cleanValues = { ...values };
         if (!cleanValues.live_session_start) delete (cleanValues as any).live_session_start;
         if (!cleanValues.live_session_end) delete (cleanValues as any).live_session_end;
+
+        // Default completion criteria for live-only courses to sessions_only
+        if (cleanValues.format === 'live' && !cleanValues.hybrid_completion_criteria) {
+            cleanValues.hybrid_completion_criteria = 'sessions_only';
+        }
 
         try {
             const course = await createCourse({
@@ -177,8 +191,8 @@ const CreateCoursePage = () => {
                 // Backend computes is_free from price_cents
             });
 
-            // For hybrid courses, create the scheduled sessions
-            if (values.format === 'hybrid' && scheduledSessions.length > 0) {
+            // For live and hybrid courses, create the scheduled sessions
+            if ((values.format === 'live' || values.format === 'hybrid') && scheduledSessions.length > 0) {
                 const { createCourseSession } = await import('@/api/courses');
 
                 for (let i = 0; i < scheduledSessions.length; i++) {
@@ -206,13 +220,13 @@ const CreateCoursePage = () => {
 
             toast({
                 title: "Course created",
-                description: values.format === 'hybrid' && scheduledSessions.length > 0
+                description: (values.format === 'live' || values.format === 'hybrid') && scheduledSessions.length > 0
                     ? `Your course and ${scheduledSessions.length} session(s) have been created.`
                     : "Your course has been created successfully.",
             });
 
             // Navigate to course management/builder
-            navigate(isPersonal ? `/courses/manage/${course.slug}` : `/org/${slug}/courses/${course.slug}`);
+            navigate(`/courses/manage/${course.slug}`);
 
         } catch (error: any) {
             console.error('Failed to create course:', error);
@@ -228,7 +242,7 @@ const CreateCoursePage = () => {
                 <Button
                     variant="ghost"
                     className="pl-0 mb-4"
-                    onClick={() => navigate(isPersonal ? `/courses/manage` : `/org/${slug}/courses`)}
+                    onClick={() => navigate(`/courses/manage`)}
                 >
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to Courses
@@ -451,28 +465,36 @@ const CreateCoursePage = () => {
                                     <FormItem>
                                         <FormLabel>Delivery Format</FormLabel>
                                         <FormControl>
-                                            <div className="flex gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                                 <Button
                                                     type="button"
                                                     variant={field.value === 'online' ? 'default' : 'outline'}
                                                     onClick={() => field.onChange('online')}
-                                                    className="flex-1"
                                                 >
                                                     Online (Self-Paced)
                                                 </Button>
                                                 <Button
                                                     type="button"
-                                                    variant={field.value === 'hybrid' ? 'default' : 'outline'}
-                                                    onClick={() => field.onChange('hybrid')}
-                                                    className="flex-1"
+                                                    variant={field.value === 'live' ? 'default' : 'outline'}
+                                                    onClick={() => field.onChange('live')}
                                                 >
                                                     <Video className="mr-2 h-4 w-4" />
-                                                    Hybrid (Live Sessions)
+                                                    Live (Lectures)
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant={field.value === 'hybrid' ? 'default' : 'outline'}
+                                                    onClick={() => field.onChange('hybrid')}
+                                                >
+                                                    <Video className="mr-2 h-4 w-4" />
+                                                    Hybrid
                                                 </Button>
                                             </div>
                                         </FormControl>
                                         <FormDescription>
-                                            Hybrid courses include scheduled live sessions.
+                                            {courseFormat === 'online' && 'Self-paced modules — learners progress on their own time.'}
+                                            {courseFormat === 'live' && 'Live lectures only — no self-paced modules.'}
+                                            {courseFormat === 'hybrid' && 'Self-paced modules plus scheduled live lectures.'}
                                         </FormDescription>
                                         <FormMessage />
                                     </FormItem>
@@ -480,15 +502,17 @@ const CreateCoursePage = () => {
                             />
 
 
-                            {/* Live Session Settings - only shown for Hybrid */}
-                            {courseFormat === 'hybrid' && (
+                            {/* Live Session Settings — shown for Live and Hybrid */}
+                            {(courseFormat === 'live' || courseFormat === 'hybrid') && (
                                 <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
                                     <div className="flex items-center gap-2 font-medium">
                                         <Video className="h-4 w-4" />
                                         Live Sessions
                                     </div>
                                     <p className="text-sm text-muted-foreground">
-                                        Schedule multiple live sessions for your hybrid course. Sessions will be created after saving the course.
+                                        {courseFormat === 'live'
+                                            ? 'Schedule the live lectures for this course. At least one is required.'
+                                            : 'Schedule live sessions to complement the self-paced modules.'}
                                     </p>
                                     <SessionScheduler
                                         sessions={scheduledSessions}
@@ -497,7 +521,7 @@ const CreateCoursePage = () => {
                                     />
                                     {scheduledSessions.length === 0 && (
                                         <p className="text-sm text-warning">
-                                            ⚠️ Add at least one live session for a hybrid course.
+                                            ⚠️ Add at least one live session before saving.
                                         </p>
                                     )}
 
@@ -511,6 +535,7 @@ const CreateCoursePage = () => {
                                                     <Select
                                                         onValueChange={field.onChange}
                                                         defaultValue={field.value}
+                                                        value={field.value}
                                                     >
                                                         <FormControl>
                                                             <SelectTrigger>
@@ -518,15 +543,24 @@ const CreateCoursePage = () => {
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
-                                                            <SelectItem value="both">Complete Modules AND Attend Sessions</SelectItem>
-                                                            <SelectItem value="modules_only">Complete Modules Only</SelectItem>
-                                                            <SelectItem value="sessions_only">Attend Sessions Only</SelectItem>
-                                                            <SelectItem value="either">Complete Modules OR Attend Sessions</SelectItem>
-                                                            <SelectItem value="min_sessions">Complete Modules + Min Sessions</SelectItem>
+                                                            {courseFormat === 'live' ? (
+                                                                <>
+                                                                    <SelectItem value="sessions_only">{formatCompletionCriteria('sessions_only')}</SelectItem>
+                                                                    <SelectItem value="min_sessions">{formatCompletionCriteria('min_sessions', form.watch('min_sessions_required') as number)}</SelectItem>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <SelectItem value="both">{formatCompletionCriteria('both')}</SelectItem>
+                                                                    <SelectItem value="modules_only">{formatCompletionCriteria('modules_only')}</SelectItem>
+                                                                    <SelectItem value="sessions_only">{formatCompletionCriteria('sessions_only')}</SelectItem>
+                                                                    <SelectItem value="either">{formatCompletionCriteria('either')}</SelectItem>
+                                                                    <SelectItem value="min_sessions">{formatCompletionCriteria('min_sessions', form.watch('min_sessions_required') as number)}</SelectItem>
+                                                                </>
+                                                            )}
                                                         </SelectContent>
                                                     </Select>
                                                     <FormDescription>
-                                                        Determine how learners complete this hybrid course.
+                                                        How learners complete this course.
                                                     </FormDescription>
                                                     <FormMessage />
                                                 </FormItem>
@@ -731,7 +765,7 @@ const CreateCoursePage = () => {
                     </Card>
 
                     <div className="flex justify-end gap-4">
-                        <Button type="button" variant="outline" onClick={() => navigate(`/org/${slug}/courses`)}>
+                        <Button type="button" variant="outline" onClick={() => navigate(`/courses/manage`)}>
                             Cancel
                         </Button>
                         <Button type="submit" disabled={isSubmitting}>

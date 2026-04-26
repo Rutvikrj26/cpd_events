@@ -9,22 +9,16 @@ import {
     ArrowRight,
     ArrowLeft,
     Check,
-    Crown,
     Loader2,
     Building2,
-    CreditCard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/AuthContext';
 import { updateProfile, completeOnboarding } from '@/api/accounts';
-import { createCheckoutSession } from '@/api/billing';
-import { getSubscription } from '@/api/billing';
-import { Subscription } from '@/api/billing/types';
 import { toast } from 'sonner';
 
 interface OnboardingWizardProps {
@@ -41,43 +35,27 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     });
     const [isLoading, setIsLoading] = useState(false);
 
-    // Profile state
     const [profileData, setProfileData] = useState({
         organization_name: user?.organization_name || '',
         full_name: user?.full_name || '',
     });
 
-    // Billing state
-    const [subscription, setSubscription] = useState<Subscription | null>(null);
-    const [billingChecked, setBillingChecked] = useState(false);
-    const [addingPayment, setAddingPayment] = useState(false);
-
-    const isLmsOnly = subscription?.plan === 'lms' || (!subscription && user?.primary_role === 'course_manager');
     const isLearner = user?.primary_role === 'learner';
-    const planLabel = subscription?.plan_display || (isLmsOnly ? 'LMS' : isLearner ? 'Free' : 'Educator');
+    const isLmsOnly = user?.primary_role === 'instructor';
 
     const steps = isLearner
         ? [
             { id: 'welcome', title: 'Welcome', icon: Rocket },
             { id: 'complete', title: 'Get Started', icon: Calendar },
         ]
-        : isLmsOnly
-            ? [
-                { id: 'welcome', title: 'Welcome', icon: Rocket },
-                { id: 'profile', title: 'Your Profile', icon: User },
-                { id: 'billing', title: 'Billing', icon: CreditCard },
-                { id: 'complete', title: 'Get Started', icon: BookOpen },
-            ]
-            : [
-                { id: 'welcome', title: 'Welcome', icon: Rocket },
-                { id: 'profile', title: 'Your Profile', icon: User },
-                { id: 'billing', title: 'Billing', icon: CreditCard },
-                { id: 'complete', title: 'Get Started', icon: Calendar },
-            ];
+        : [
+            { id: 'welcome', title: 'Welcome', icon: Rocket },
+            { id: 'profile', title: 'Your Profile', icon: User },
+            { id: 'complete', title: 'Get Started', icon: isLmsOnly ? BookOpen : Calendar },
+        ];
 
     const progress = ((currentStep + 1) / steps.length) * 100;
     const stepId = steps[currentStep]?.id;
-    const getStepIndex = (id: string) => steps.findIndex(step => step.id === id);
 
     const nextStep = () => {
         if (currentStep < steps.length - 1) {
@@ -107,36 +85,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         }
     };
 
-    const checkBillingStatus = async () => {
-        try {
-            const sub = await getSubscription();
-            setSubscription(sub);
-            setBillingChecked(true);
-        } catch {
-            setBillingChecked(true);
-        }
-    };
-
-    const handleAddPayment = async () => {
-        setAddingPayment(true);
-        try {
-            // Store current onboarding step so we can return after Stripe
-            const stepIndex = getStepIndex('billing');
-            if (stepIndex >= 0) {
-                sessionStorage.setItem('onboarding_redirect', `/onboarding?step=${stepIndex}`);
-            }
-            const result = await createCheckoutSession(
-                subscription?.plan || 'organizer',
-                `${window.location.origin}/onboarding?step=${getStepIndex('billing')}&checkout=success`,
-                `${window.location.origin}/onboarding?step=${getStepIndex('billing')}&checkout=canceled`
-            );
-            window.location.href = result.url;
-        } catch (error: any) {
-            toast.error(error?.response?.data?.error?.message || 'Failed to start checkout.');
-            setAddingPayment(false);
-        }
-    };
-
     const handleComplete = async () => {
         try {
             // Mark onboarding as complete on the backend
@@ -161,78 +109,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     React.useEffect(() => {
         setSearchParams({ step: currentStep.toString() }, { replace: true });
     }, [currentStep, setSearchParams]);
-
-    // Load billing status when reaching billing step
-    React.useEffect(() => {
-        // Fetch subscription data on mount for non-attendees (needed for trial days on welcome step)
-        if (!isLearner && !billingChecked) {
-            checkBillingStatus();
-        }
-    }, [isLearner, billingChecked]);
-
-    // Handle checkout success/canceled return from Stripe
-    React.useEffect(() => {
-        const checkoutStatus = searchParams.get('checkout');
-        const sessionId = searchParams.get('session_id');
-
-        if (checkoutStatus === 'success' && sessionId) {
-            // Call confirmCheckout to sync subscription from Stripe
-            (async () => {
-                try {
-                    // Import confirmCheckout from billing API
-                    const { confirmCheckout } = await import('@/api/billing');
-
-                    // Confirm checkout with Stripe session ID - this syncs the subscription
-                    const updatedSub = await confirmCheckout(sessionId);
-                    setSubscription(updatedSub);
-                    setBillingChecked(true);
-
-                    // Payment method is now confirmed, advance to next step
-                    toast.success('Payment method added successfully!');
-                    // Clear the checkout params and advance to the next step (integrations for organizers)
-                    const nextStepIndex = getStepIndex('billing') + 1;
-                    setSearchParams({ step: nextStepIndex.toString() }, { replace: true });
-                    setCurrentStep(nextStepIndex);
-                } catch (error: any) {
-                    console.error('Failed to confirm checkout:', error);
-                    toast.error(error?.response?.data?.error?.message || 'Failed to confirm payment. Please try again.');
-                    // Still try to refresh subscription status
-                    try {
-                        const sub = await getSubscription();
-                        setSubscription(sub);
-                        setBillingChecked(true);
-                    } catch {
-                        // ignore
-                    }
-                    // Clear checkout params but stay on billing step
-                    setSearchParams({ step: currentStep.toString() }, { replace: true });
-                }
-            })();
-        } else if (checkoutStatus === 'success' && !sessionId) {
-            // Fallback: checkout=success but no session_id (shouldn't happen but handle gracefully)
-            console.warn('Checkout success but no session_id in URL');
-            (async () => {
-                try {
-                    const sub = await getSubscription();
-                    setSubscription(sub);
-                    setBillingChecked(true);
-                    if (sub?.has_payment_method) {
-                        toast.success('Payment method added!');
-                        // Advance to the next step (integrations for organizers)
-                        const nextStepIndex = getStepIndex('billing') + 1;
-                        setSearchParams({ step: nextStepIndex.toString() }, { replace: true });
-                        setCurrentStep(nextStepIndex);
-                    }
-                } catch (error) {
-                    console.error('Failed to refresh subscription:', error);
-                }
-            })();
-        } else if (checkoutStatus === 'canceled') {
-            toast.info('Checkout was canceled. You can try again or skip for now.');
-            // Clear the checkout param
-            setSearchParams({ step: currentStep.toString() }, { replace: true });
-        }
-    }, [searchParams]);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 flex items-center justify-center p-4">
@@ -297,22 +173,22 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                         {isLearner ? (
                                             <>
                                                 <div className="grid grid-cols-3 gap-4 text-center">
-                                                    <div className="p-4 bg-muted/30 rounded-lg">
-                                                        <div className="h-8 w-8 mx-auto rounded-lg bg-primary/10 flex items-center justify-center mb-2">
+                                                    <div className="p-4 bg-card border border-border rounded-lg">
+                                                        <div className="h-8 w-8 mx-auto rounded-lg bg-primary/15 flex items-center justify-center mb-2">
                                                             <Calendar className="h-4 w-4 text-primary" />
                                                         </div>
                                                         <div className="text-sm font-medium text-foreground">Browse Events</div>
                                                         <div className="text-xs text-muted-foreground">Find CPD opportunities</div>
                                                     </div>
-                                                    <div className="p-4 bg-muted/30 rounded-lg">
-                                                        <div className="h-8 w-8 mx-auto rounded-lg bg-accent/10 flex items-center justify-center mb-2">
+                                                    <div className="p-4 bg-card border border-border rounded-lg">
+                                                        <div className="h-8 w-8 mx-auto rounded-lg bg-accent/15 flex items-center justify-center mb-2">
                                                             <BookOpen className="h-4 w-4 text-accent" />
                                                         </div>
                                                         <div className="text-sm font-medium text-foreground">Take Courses</div>
                                                         <div className="text-xs text-muted-foreground">Learn at your pace</div>
                                                     </div>
-                                                    <div className="p-4 bg-muted/30 rounded-lg">
-                                                        <div className="h-8 w-8 mx-auto rounded-lg bg-success/10 flex items-center justify-center mb-2">
+                                                    <div className="p-4 bg-card border border-border rounded-lg">
+                                                        <div className="h-8 w-8 mx-auto rounded-lg bg-success/15 flex items-center justify-center mb-2">
                                                             <Check className="h-4 w-4 text-success" />
                                                         </div>
                                                         <div className="text-sm font-medium text-foreground">Earn Certificates</div>
@@ -321,30 +197,20 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                 </div>
                                             </>
                                         ) : (
-                                            <>
-                                                <div className="bg-primary/5 rounded-lg p-4 border border-primary/20">
-                                                    <div className="flex items-center justify-center gap-2 text-primary font-medium mb-1">
-                                                        <Crown className="h-4 w-4" />
-                                                        <span>Professional Trial Active</span>
+                                            <div className="grid grid-cols-2 gap-4 text-center">
+                                                <div className="p-4 bg-muted/30 rounded-lg">
+                                                    <div className="text-2xl font-bold text-primary">
+                                                        {isLmsOnly ? 'Courses' : 'Events'}
                                                     </div>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        You have {subscription?.days_until_trial_ends ?? '...'} days of full access to all features
-                                                    </p>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 gap-4 text-center">
-                                                    <div className="p-4 bg-muted/30 rounded-lg">
-                                                        <div className="text-2xl font-bold text-primary">∞</div>
-                                                        <div className="text-sm text-muted-foreground">
-                                                            {isLmsOnly ? 'Courses' : 'Events'}
-                                                        </div>
-                                                    </div>
-                                                    <div className="p-4 bg-muted/30 rounded-lg">
-                                                        <div className="text-2xl font-bold text-primary">∞</div>
-                                                        <div className="text-sm text-muted-foreground">Certificates</div>
+                                                    <div className="text-sm text-muted-foreground">
+                                                        {isLmsOnly ? 'Launch self-paced learning' : 'Run live sessions'}
                                                     </div>
                                                 </div>
-                                            </>
+                                                <div className="p-4 bg-muted/30 rounded-lg">
+                                                    <div className="text-2xl font-bold text-primary">Certificates</div>
+                                                    <div className="text-sm text-muted-foreground">Track CPD & completions</div>
+                                                </div>
+                                            </div>
                                         )}
 
                                         <Button size="lg" onClick={nextStep} className="w-full">
@@ -419,77 +285,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                 </>
                             )}
 
-                            {/* Step 3: Billing (Optional) */}
-                            {stepId === 'billing' && (
-                                <>
-                                    <CardHeader className="text-center pb-2">
-                                        <div className="mx-auto bg-primary/10 rounded-full p-4 w-16 h-16 flex items-center justify-center mb-2">
-                                            <CreditCard className="h-8 w-8 text-primary" />
-                                        </div>
-                                        <CardTitle>Add Billing Details</CardTitle>
-                                        <CardDescription>
-                                            Optional - Add your payment method now or anytime later
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        {!billingChecked ? (
-                                            <div className="flex justify-center py-8">
-                                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                                            </div>
-                                        ) : subscription?.has_payment_method ? (
-                                            <div className="bg-success/10 border border-success/30 rounded-lg p-4 text-center">
-                                                <Check className="h-8 w-8 text-success mx-auto mb-2" />
-                                                <p className="font-medium text-success">Billing Details Added!</p>
-                                                <p className="text-sm text-muted-foreground mt-1">
-                                                    You're all set for automatic billing after your trial
-                                                </p>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-4">
-                                                <div className="bg-muted/30 rounded-lg p-4 space-y-3">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-sm text-muted-foreground">Plan</span>
-                                                        <span className="font-medium">{planLabel} Plan</span>
-                                                    </div>
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-sm text-muted-foreground">Trial ends</span>
-                                                        <Badge variant="secondary">{subscription?.days_until_trial_ends ?? '...'} days remaining</Badge>
-                                                    </div>
-                                                    <p className="text-xs text-muted-foreground pt-2 border-t">
-                                                        Your card won't be charged until your trial ends. Cancel anytime.
-                                                    </p>
-                                                </div>
-
-                                                <Button
-                                                    className="w-full"
-                                                    onClick={handleAddPayment}
-                                                    disabled={addingPayment}
-                                                >
-                                                    {addingPayment ? (
-                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    ) : (
-                                                        <CreditCard className="mr-2 h-4 w-4" />
-                                                    )}
-                                                    Add Payment Method
-                                                </Button>
-                                            </div>
-                                        )}
-
-                                        <div className="flex gap-3 pt-4">
-                                            <Button variant="outline" onClick={prevStep}>
-                                                <ArrowLeft className="mr-2 h-4 w-4" />
-                                                Back
-                                            </Button>
-                                            <Button className="flex-1" onClick={nextStep}>
-                                                {subscription?.has_payment_method ? 'Continue' : 'Skip for Now'}
-                                                <ArrowRight className="ml-2 h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </>
-                            )}
-
-                            {/* Step 4: Complete */}
+                            {/* Step: Complete */}
                             {stepId === 'complete' && (
                                 <>
                                     <CardHeader className="text-center pb-2">
@@ -510,7 +306,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                         className="w-full h-auto py-4"
                                                         onClick={() => {
                                                             handleComplete();
-                                                            navigate('/events/browse');
+                                                            navigate('/events');
                                                         }}
                                                     >
                                                         <Calendar className="mr-3 h-5 w-5" />

@@ -137,9 +137,9 @@ export function AboutPage() {
                             Join organizations worldwide using Accredit to streamline their professional development programs.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Link to="/signup">
+                            <Link to="/login">
                                 <Button size="lg" className="bg-white text-primary hover:bg-white/90 min-w-[180px] h-14 text-lg font-semibold">
-                                    Start for Free
+                                    Access Portal
                                     <ArrowRight className="ml-2 h-5 w-5" />
                                 </Button>
                             </Link>

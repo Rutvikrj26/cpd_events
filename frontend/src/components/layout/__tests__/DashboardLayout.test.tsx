@@ -1,16 +1,7 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import { DashboardLayout } from "../DashboardLayout";
-import * as billingApi from "@/api/billing";
-
-vi.mock("@/api/billing", () => ({
-    getSubscription: vi.fn().mockResolvedValue({
-        plan: "organizer",
-        status: "active",
-        is_trialing: false,
-    }),
-}));
 
 // Mock AuthContext
 vi.mock("@/contexts/AuthContext", () => ({
@@ -24,17 +15,13 @@ vi.mock("@/contexts/AuthContext", () => ({
 }));
 
 const renderDashboardLayout = async () => {
-    const view = render(
+    return render(
         <BrowserRouter>
             <DashboardLayout>
                 <div data-testid="dashboard-content">Dashboard Content</div>
             </DashboardLayout>
         </BrowserRouter>
     );
-    await waitFor(() => {
-        expect(billingApi.getSubscription).toHaveBeenCalled();
-    });
-    return view;
 };
 
 describe("DashboardLayout", () => {
@@ -65,7 +52,6 @@ describe("DashboardLayout", () => {
         await renderDashboardLayout();
 
         expect(screen.getByRole("link", { name: /certificates/i })).toBeInTheDocument();
-        expect(screen.getByRole("link", { name: /billing/i })).toBeInTheDocument();
     });
 
     it("shows theme toggle", async () => {

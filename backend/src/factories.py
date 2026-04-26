@@ -29,7 +29,6 @@ class UserFactory(DjangoModelFactory):
 
     email = factory.Sequence(lambda n: f'user{n}@example.com')
     full_name = factory.Faker('name')
-    account_type = 'attendee'
     email_verified = True
     is_active = True
 
@@ -40,26 +39,36 @@ class UserFactory(DjangoModelFactory):
         if create:
             self.save()
 
-    email_verified = True
-    is_active = True
+    @factory.post_generation
+    def groups(self, create, extracted, **kwargs):
+        """Attach the user to one or more role groups (e.g. groups=['organizer'])."""
+        if not create or not extracted:
+            return
+        from django.contrib.auth.models import Group
+
+        for name in extracted:
+            group, _ = Group.objects.get_or_create(name=name)
+            self.groups.add(group)
 
     class Params:
-        organizer = factory.Trait(
-            account_type='organizer',
-            organizer_slug=factory.Sequence(lambda n: f'organizer-{n}'),
-            is_organizer_profile_public=True,
-        )
         unverified = factory.Trait(
             email_verified=False,
         )
 
 
 class OrganizerFactory(UserFactory):
-    """Factory for creating Organizer users."""
+    """Factory for creating Organizer users (events)."""
 
-    account_type = 'organizer'
-    is_organizer_profile_public = True
-    organizer_slug = factory.Sequence(lambda n: f'organizer-{n}')
+    @factory.post_generation
+    def groups(self, create, extracted, **kwargs):
+        if not create:
+            return
+        from django.contrib.auth.models import Group
+
+        names = extracted or ['organizer']
+        for name in names:
+            group, _ = Group.objects.get_or_create(name=name)
+            self.groups.add(group)
 
 
 # =============================================================================
@@ -241,30 +250,6 @@ class TagFactory(DjangoModelFactory):
 # =============================================================================
 
 
-class SubscriptionFactory(DjangoModelFactory):
-    """Factory for creating Subscription instances."""
-
-    class Meta:
-        model = 'billing.Subscription'
-
-    user = factory.SubFactory(OrganizerFactory)
-    plan = 'free'
-    status = 'active'
-
-
-class InvoiceFactory(DjangoModelFactory):
-    """Factory for creating Invoice instances."""
-
-    class Meta:
-        model = 'billing.Invoice'
-
-    user = factory.SubFactory(OrganizerFactory)
-    stripe_invoice_id = factory.Sequence(lambda n: f'in_{n:024d}')
-    amount_cents = 0
-    currency = 'usd'
-    status = 'paid'
-
-
 class PaymentMethodFactory(DjangoModelFactory):
     """Factory for creating PaymentMethod instances."""
 
@@ -341,3 +326,33 @@ class CourseEnrollmentFactory(DjangoModelFactory):
     course = factory.SubFactory(CourseFactory)
     user = factory.SubFactory(UserFactory)
     status = 'active'
+
+
+class DiscussionThreadFactory(DjangoModelFactory):
+    class Meta:
+        model = 'learning.DiscussionThread'
+
+    course = factory.SubFactory(CourseFactory)
+    author = factory.SubFactory(UserFactory)
+    title = factory.Sequence(lambda n: f'Thread {n}')
+    body_html = factory.Sequence(lambda n: f'<p>Body {n}</p>')
+    body_plain = factory.Sequence(lambda n: f'Body {n}')
+
+
+class DiscussionReplyFactory(DjangoModelFactory):
+    class Meta:
+        model = 'learning.DiscussionReply'
+
+    thread = factory.SubFactory(DiscussionThreadFactory)
+    author = factory.SubFactory(UserFactory)
+    body_html = factory.Sequence(lambda n: f'<p>Reply {n}</p>')
+    body_plain = factory.Sequence(lambda n: f'Reply {n}')
+
+
+class DiscussionFlagFactory(DjangoModelFactory):
+    class Meta:
+        model = 'learning.DiscussionFlag'
+
+    thread = factory.SubFactory(DiscussionThreadFactory)
+    reporter = factory.SubFactory(UserFactory)
+    reason = 'off_topic'

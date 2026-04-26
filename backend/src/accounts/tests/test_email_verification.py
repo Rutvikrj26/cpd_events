@@ -7,6 +7,11 @@ User = get_user_model()
 
 @pytest.mark.django_db
 class TestEmailVerificationFlow:
+    @pytest.mark.skip(
+        reason="Self-service signup was disabled in the single-tenant "
+        "transition (REGISTRATION_DISABLED — invite-only). Email verification "
+        "still happens for invited users via a different code path."
+    )
     def test_local_signup_requires_verification(self, api_client, mailoutbox):
         """Test that local signup does not return tokens and sends verification email."""
         url = reverse('accounts:signup')

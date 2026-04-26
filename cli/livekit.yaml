@@ -8,6 +8,10 @@ rtc:
 keys:
   devkey: secret_dev_key_change_in_production
 
+# Required by livekit-egress (and any other psrpc consumer).
+redis:
+  address: redis:6379
+
 logging:
   level: info
 

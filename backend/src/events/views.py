@@ -15,10 +15,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from common.pagination import SmallPagination
-from common.permissions import IsContentCreator, IsEducatorOrAdmin
+from common.permissions import IsContentCreator, IsOrganizerOrAdmin
 from common.rbac import roles
 from common.utils import error_response
-from common.viewsets import SoftDeleteModelViewSet
+from common.viewsets import BaseModelViewSet, SoftDeleteModelViewSet
 
 logger = logging.getLogger(__name__)
 
@@ -33,16 +33,16 @@ from .models import Event, EventCustomField, Speaker
 def _event_access_q(user, prefix: str = '') -> Q:
     """Return Q filter for events accessible by this user.
 
-    Admin users (is_staff) get access to all events.
+    Institution admins see all events.
     """
-    if user.is_staff:
-        return Q()  # No filter — admin sees everything
+    if user.groups.filter(name="admin").exists():
+        return Q()
     owner_key = f'{prefix}owner'
     return Q(**{owner_key: user})
 
 
 def _user_can_manage_event(user, event) -> bool:
-    return user.is_staff or event.owner_id == user.id
+    return user.groups.filter(name="admin").exists() or event.owner_id == user.id
 
 
 # =============================================================================
@@ -68,17 +68,24 @@ class PublicEventFilter(filters.FilterSet):
     """Filter for public event discovery."""
 
     event_type = filters.MultipleChoiceFilter(choices=Event.EventType.choices)
+    format = filters.MultipleChoiceFilter(choices=Event.EventFormat.choices)
     cpd_type = filters.CharFilter()
+    is_free = filters.BooleanFilter(method='filter_is_free')
     starts_after = filters.DateTimeFilter(field_name='starts_at', lookup_expr='gte')
     starts_before = filters.DateTimeFilter(field_name='starts_at', lookup_expr='lte')
     search = filters.CharFilter(method='filter_search')
 
     class Meta:
         model = Event
-        fields = ['event_type', 'cpd_type']
+        fields = ['event_type', 'format', 'cpd_type', 'is_free']
 
     def filter_search(self, queryset, name, value):
         return queryset.filter(Q(title__icontains=value) | Q(description__icontains=value))
+
+    def filter_is_free(self, queryset, name, value):
+        if value:
+            return queryset.filter(price=0)
+        return queryset.exclude(price=0)
 
 
 # =============================================================================
@@ -86,7 +93,7 @@ class PublicEventFilter(filters.FilterSet):
 # =============================================================================
 
 
-@roles('educator', 'course_manager', 'admin', route_name='events')
+@roles('organizer', 'admin', route_name='events')
 class EventViewSet(SoftDeleteModelViewSet):
     """
     Organizer-level CRUD for events.
@@ -96,10 +103,13 @@ class EventViewSet(SoftDeleteModelViewSet):
     GET /api/v1/events/{uuid}/
     PATCH /api/v1/events/{uuid}/
     DELETE /api/v1/events/{uuid}/
+
+    Instructors do NOT have access to top-level events. They schedule
+    live sessions inside their courses via the course_sessions endpoint.
     """
 
     parser_classes = (MultiPartParser, FormParser, JSONParser)
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin | IsContentCreator]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
     filterset_class = EventFilter
     search_fields = ['title', 'description']
     ordering_fields = ['starts_at', 'created_at', 'title', 'registration_count']
@@ -135,6 +145,34 @@ class EventViewSet(SoftDeleteModelViewSet):
             raise e
         except Exception as e:
             raise e
+
+    def perform_update(self, serializer):
+        # Capture price/currency before save so we can audit any change.
+        old = serializer.instance
+        old_price = old.price
+        old_currency = old.currency
+
+        instance = serializer.save()
+
+        if instance.price != old_price or instance.currency != old_currency:
+            try:
+                from accounts.audit import log_audit_event
+
+                log_audit_event(
+                    actor=self.request.user,
+                    action='event.price_changed',
+                    object_type='Event',
+                    object_uuid=str(instance.uuid),
+                    metadata={
+                        'from_price': str(old_price),
+                        'to_price': str(instance.price),
+                        'from_currency': old_currency,
+                        'to_currency': instance.currency,
+                    },
+                    request=self.request,
+                )
+            except Exception:
+                logger.warning('audit log failed for event price change %s', instance.uuid, exc_info=True)
 
     @swagger_auto_schema(
         operation_summary="Publish event",
@@ -300,24 +338,20 @@ class EventViewSet(SoftDeleteModelViewSet):
 
     @action(detail=True, methods=['post'])
     def sync_attendance(self, request, uuid=None):
-        """Trigger background sync of attendance."""
-        from .tasks import sync_zoom_attendance
+        """No-op: attendance is populated live by the video webhook.
 
-        event = self.get_object()
-        task = sync_zoom_attendance.delay(event.id)
-        # task might be a dict if CLOUD_TASKS_SYNC=True or in emulator mode
-        task_id = getattr(task, 'id', None) or (task.get('id') if isinstance(task, dict) else None)
-        # fallback to name if it's a CloudTasks response from create_task
-        if not task_id and hasattr(task, 'name'):
-            task_id = task.name
-
-        return Response({'task_id': task_id, 'status': 'queued'})
+        Kept as a stable endpoint for the frontend 'refresh attendance'
+        button. Returns success immediately — the client can re-fetch
+        attendance after this call.
+        """
+        self.get_object()  # permission + 404 check via queryset
+        return Response({'status': 'ok', 'source': 'webhook'})
 
     @action(detail=True, methods=['get'])
     def unmatched_participants(self, request, uuid=None):
         """
-        Get Zoom participants that are not yet matched to any registration.
-        Uses local AttendanceRecord data populated via Zoom webhooks.
+        Get video participants that are not yet matched to any registration.
+        Uses local AttendanceRecord data populated via the video provider's webhook.
         """
         event = self.get_object()
 
@@ -332,8 +366,8 @@ class EventViewSet(SoftDeleteModelViewSet):
             unmatched_records = (
                 AttendanceRecord.objects
                 .filter(event=event, is_matched=False)
-                .exclude(zoom_user_email='')
-                .values('zoom_user_email', 'zoom_user_name')
+                .exclude(participant_email='')
+                .values('participant_email', 'participant_name')
                 .annotate(
                     first_join=Max('join_time'),
                     total_duration=Coalesce(Sum('duration_minutes'), 0)
@@ -343,8 +377,8 @@ class EventViewSet(SoftDeleteModelViewSet):
 
             unmatched = [
                 {
-                    'user_email': record['zoom_user_email'],
-                    'user_name': record['zoom_user_name'] or 'Unknown',
+                    'user_email': record['participant_email'],
+                    'user_name': record['participant_name'] or 'Unknown',
                     'join_time': record['first_join'].isoformat() if record['first_join'] else None,
                     'duration': record['total_duration'] or 0,
                 }
@@ -382,10 +416,10 @@ class EventViewSet(SoftDeleteModelViewSet):
         record, created = AttendanceRecord.objects.update_or_create(
             event=event,
             registration=registration,
-            zoom_user_email=data.get('zoom_user_email'),
+            participant_email=data.get('participant_email'),
             defaults={
-                'zoom_user_name': data.get('zoom_user_name'),
-                'join_time': data.get('zoom_join_time') or timezone.now(),
+                'participant_name': data.get('participant_name'),
+                'join_time': data.get('join_time') or timezone.now(),
                 'duration_minutes': data.get('attendance_minutes', 0),
                 'is_matched': True,
                 'matched_at': timezone.now(),
@@ -513,13 +547,21 @@ class EventViewSet(SoftDeleteModelViewSet):
             },
         ]
 
-        avg_rating = EventFeedback.objects.filter(
-            event__in=events,
-            created_at__gte=start,
-            created_at__lte=now,
-        ).aggregate(
-            avg=Avg('rating')
-        )['avg']
+        # Average rating is computed over every 'rating'-type FeedbackField response.
+        from django.db.models import FloatField
+        from django.db.models.functions import Cast
+
+        from feedback.models import FeedbackFieldResponse
+
+        avg_rating = FeedbackFieldResponse.objects.filter(
+            feedback__event__in=events,
+            feedback__created_at__gte=start,
+            feedback__created_at__lte=now,
+            field__field_type='rating',
+            value__isnull=False,
+        ).annotate(
+            value_float=Cast('value', output_field=FloatField()),
+        ).aggregate(avg=Avg('value_float'))['avg']
 
         recent_transactions = [
             {
@@ -622,20 +664,21 @@ class PublicEventDetailView(generics.RetrieveAPIView):
         raise Http404("Event not found")
 
     def get_queryset(self):
-        # Allow owners to see their events regardless of status
+        # Allow owners to see their events regardless of status. Completed
+        # events are also visible publicly so attendees can still see event
+        # metadata, their registration, and (eventually) the recording.
         user = self.request.user
         queryset = Event.objects.select_related('owner').prefetch_related('custom_fields')
+        public_statuses = ['published', 'live', 'completed']
 
         if user.is_authenticated:
-            # If user is authenticated, they can see published/live public events OR any event they own
             return queryset.filter(
-                Q(status__in=['published', 'live'], is_public=True, deleted_at__isnull=True)
+                Q(status__in=public_statuses, is_public=True, deleted_at__isnull=True)
                 | Q(owner=user, deleted_at__isnull=True)
             ).distinct()
 
-        # Public users only see published/live public events
         return queryset.filter(
-            status__in=['published', 'live'],
+            status__in=public_statuses,
             is_public=True,
             deleted_at__isnull=True,
         )
@@ -646,7 +689,7 @@ class PublicEventDetailView(generics.RetrieveAPIView):
 # =============================================================================
 
 
-@roles('educator', 'admin', route_name='event_custom_fields')
+@roles('organizer', 'admin', route_name='event_custom_fields')
 class EventCustomFieldViewSet(viewsets.ModelViewSet):
     """
     Manage custom fields for an event.
@@ -654,7 +697,7 @@ class EventCustomFieldViewSet(viewsets.ModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/custom-fields/
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
     lookup_field = 'uuid'
 
     def get_queryset(self):
@@ -698,7 +741,7 @@ class EventCustomFieldViewSet(viewsets.ModelViewSet):
 # =============================================================================
 
 
-@roles('educator', 'admin', route_name='event_sessions')
+@roles('organizer', 'admin', route_name='event_sessions')
 class EventSessionViewSet(viewsets.ModelViewSet):
     """
     Manage sessions for a multi-session event.
@@ -706,7 +749,7 @@ class EventSessionViewSet(viewsets.ModelViewSet):
     Nested under events: /api/v1/events/{event_uuid}/sessions/
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
     pagination_class = SmallPagination  # M5: Nested resource pagination
     lookup_field = 'uuid'
 
@@ -773,7 +816,7 @@ class EventSessionViewSet(viewsets.ModelViewSet):
         return Response({'message': 'Sessions reordered.'})
 
 
-@roles('learner', 'educator', 'admin', route_name='session_attendance')
+@roles('learner', 'organizer', 'admin', route_name='session_attendance')
 class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
     """
     View session attendance for a registration.
@@ -839,13 +882,13 @@ class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializers.SessionAttendanceSerializer(session_attendance).data)
 
 
-@roles('educator', 'admin', route_name='speakers')
-class SpeakerViewSet(SoftDeleteModelViewSet):
+@roles('organizer', 'admin', route_name='speakers')
+class SpeakerViewSet(BaseModelViewSet):
     """
     CRUD for speakers.
     """
 
-    permission_classes = [IsAuthenticated, IsEducatorOrAdmin]
+    permission_classes = [IsAuthenticated, IsOrganizerOrAdmin]
     queryset = Speaker.objects.all()
     serializer_class = serializers.SpeakerSerializer
     search_fields = ['name', 'bio']
@@ -854,17 +897,42 @@ class SpeakerViewSet(SoftDeleteModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff:
-            return Speaker.objects.filter(deleted_at__isnull=True)
-        return Speaker.objects.filter(
-            Q(owner=user)
-            | Q(
-                organization__memberships__user=user,
-                organization__memberships__role='admin',
-                organization__memberships__is_active=True,
-            ),
-            deleted_at__isnull=True,
-        ).distinct()
+        qs = Speaker.objects.filter(is_active=True)
+        if user.groups.filter(name="admin").exists():
+            return qs
+        return qs.filter(owner=user)
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+    def perform_destroy(self, instance):
+        instance.is_active = False
+        instance.save(update_fields=['is_active', 'updated_at'])
+
+
+@roles('learner', 'organizer', 'instructor', 'admin', route_name='my_speaking_events')
+class MySpeakingEventsView(generics.ListAPIView):
+    """
+    GET /api/v1/events/my-speaking/
+
+    Events where the authenticated user is listed as a speaker
+    (via Speaker.owner -> Event.speakers M2M). Returns upcoming and currently
+    live events; past events are excluded.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = serializers.EventListSerializer
+
+    def get_queryset(self):
+        from django.utils import timezone as _tz
+
+        now = _tz.now()
+        return (
+            Event.objects.filter(
+                speakers__owner=self.request.user,
+                deleted_at__isnull=True,
+            )
+            .filter(Q(ends_at__gte=now) | Q(ends_at__isnull=True, starts_at__gte=now))
+            .distinct()
+            .order_by('starts_at')
+        )

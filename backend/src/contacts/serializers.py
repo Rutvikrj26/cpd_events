@@ -154,6 +154,10 @@ class ContactListItemSerializer(BaseModelSerializer):
     """Lightweight contact for list views."""
 
     tags = TagSerializer(many=True, read_only=True)
+    # Annotated on ContactViewSet.get_queryset via Count(...) so these are
+    # safe to expose here — no per-row query.
+    courses_enrolled_count = serializers.IntegerField(read_only=True, default=0)
+    courses_completed_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Contact
@@ -165,6 +169,8 @@ class ContactListItemSerializer(BaseModelSerializer):
             'organization_name',
             'events_invited_count',
             'events_attended_count',
+            'courses_enrolled_count',
+            'courses_completed_count',
             'email_opted_out',
             'email_bounced',
             'tags',

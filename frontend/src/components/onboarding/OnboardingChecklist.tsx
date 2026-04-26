@@ -5,7 +5,6 @@ import {
     Circle,
     User,
     Calendar,
-    CreditCard,
     BookOpen,
     ChevronRight,
     X,
@@ -43,7 +42,7 @@ const getInitialDismissed = () => {
 };
 
 export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingChecklistProps) {
-    const { user } = useAuth();
+    const { user, hasFeature } = useAuth();
     const [items, setItems] = useState<ChecklistItem[]>([]);
     const [loading, setLoading] = useState(() => !getInitialDismissed());
     const [dismissed, setDismissed] = useState(getInitialDismissed);
@@ -58,21 +57,21 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
             }
 
             const checklistItems: ChecklistItem[] = [];
-            const { isEducator, isCourseManager } = getRoleFlags(user);
+            const { isOrganizer, isInstructor } = getRoleFlags(user);
 
-            if (!isEducator && !isCourseManager) {
+            if (!isOrganizer && !isInstructor) {
                 setLoading(false);
                 return;
             }
 
             // 1. Complete Profile
-            const hasProfile = isEducator
+            const hasProfile = isOrganizer
                 ? !!(user?.full_name && user?.organization_name)
                 : !!user?.full_name;
             checklistItems.push({
                 id: 'profile',
                 title: 'Complete your profile',
-                description: isEducator
+                description: isOrganizer
                     ? 'Add your organization name and details'
                     : 'Add your personal details and preferences',
                 icon: User,
@@ -82,7 +81,7 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
             });
 
             // 3. Create First Event
-            if (isEducator) {
+            if (isOrganizer) {
                 try {
                     const events = await getEvents();
                     checklistItems.push({
@@ -108,7 +107,7 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
             }
 
             // 4. Create First Course
-            if (isCourseManager) {
+            if (isInstructor) {
                 try {
                     const courses = await getOwnedCourses();
                     checklistItems.push({
@@ -131,31 +130,6 @@ export function OnboardingChecklist({ onDismiss, variant = 'card' }: OnboardingC
                         action: 'Create Course'
                     });
                 }
-            }
-
-            // 5. Set up Billing
-            try {
-                const hasBilling = subscription?.status === 'active' ||
-                    subscription?.status === 'trialing';
-                checklistItems.push({
-                    id: 'billing',
-                    title: 'Set up billing',
-                    description: 'Add a payment method for when your trial ends',
-                    icon: CreditCard,
-                    completed: hasBilling,
-                    href: '/billing',
-                    action: 'Set Up Billing'
-                });
-            } catch {
-                checklistItems.push({
-                    id: 'billing',
-                    title: 'Set up billing',
-                    description: 'Add a payment method for when your trial ends',
-                    icon: CreditCard,
-                    completed: false,
-                    href: '/billing',
-                    action: 'Set Up Billing'
-                });
             }
 
             setItems(checklistItems);

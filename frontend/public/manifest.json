@@ -23,16 +23,11 @@
   ],
   "screenshots": [
     {
-      "src": "/screenshot-mobile.png",
-      "sizes": "540x720",
+      "src": "/screenshot-resized.png",
+      "sizes": "1200x780",
       "type": "image/png",
-      "form_factor": "narrow"
-    },
-    {
-      "src": "/screenshot-desktop.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide"
+      "form_factor": "wide",
+      "label": "Accredit dashboard"
     }
   ],
   "shortcuts": [
@@ -40,25 +35,13 @@
       "name": "Browse Events",
       "short_name": "Events",
       "description": "Browse upcoming professional development events",
-      "url": "/events/browse",
-      "icons": [
-        {
-          "src": "/icon-events.png",
-          "sizes": "96x96"
-        }
-      ]
+      "url": "/discover/events"
     },
     {
       "name": "My Dashboard",
       "short_name": "Dashboard",
       "description": "View your dashboard",
-      "url": "/dashboard",
-      "icons": [
-        {
-          "src": "/icon-dashboard.png",
-          "sizes": "96x96"
-        }
-      ]
+      "url": "/dashboard"
     }
   ]
 }
