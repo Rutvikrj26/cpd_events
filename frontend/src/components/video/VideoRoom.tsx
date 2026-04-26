@@ -16,6 +16,7 @@ import { AlertCircle, Circle, Loader2, MessageSquare, UserCheck, UserX, X } from
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { BackgroundEffectsPicker } from '@/components/video/BackgroundEffectsPicker';
 import {
   admitParticipant,
   denyParticipant,
@@ -363,6 +364,7 @@ function TopBar({
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          <BackgroundEffectsPicker />
           <Button size="sm" variant="ghost" className="gap-2" onClick={onToggleChat}>
             <MessageSquare className="h-4 w-4" />
             {chatOpen ? 'Hide chat' : 'Chat'}

@@ -2382,8 +2382,14 @@ class Command(BaseCommand):
             ended_at=events["ondemand"].starts_at + timedelta(minutes=events["ondemand"].duration_minutes),
         )
 
-        # Published recording on the on-demand replay event so the recording
-        # playback page renders a real <video> tag.
+        # Published recording on the on-demand replay event. The MP4 itself
+        # is not seeded — the recording_storage_dir mount is empty in seed,
+        # so the playback page will render the "Recording isn't ready / file
+        # unavailable" empty state. To exercise real playback in dev, run a
+        # live session against the LiveKit egress (records to the mount) or
+        # drop a placeholder MP4 into RECORDING_STORAGE_DIR with a filename
+        # matching `storage_path`. The serializer generates the streaming
+        # URL on every response, so we leave the file row's storage_url blank.
         recording, _ = VideoRecording.objects.update_or_create(
             event=events["ondemand"], video_room=ondemand_room,
             defaults=dict(
@@ -2394,7 +2400,7 @@ class Command(BaseCommand):
                 duration_seconds=75 * 60,
                 total_size_bytes=42_000_000,
                 status=VideoRecording.Status.AVAILABLE,
-                storage_path=f"recordings/event-{events['ondemand'].uuid}.mp4",
+                storage_path=f"event-{events['ondemand'].uuid}.mp4",
                 access_level=VideoRecording.AccessLevel.REGISTRANTS,
                 title=f"{events['ondemand'].title} — Recording",
                 description='Auto-published replay of the live session.',
@@ -2404,15 +2410,13 @@ class Command(BaseCommand):
                 unique_viewers=12,
             ),
         )
-        # A small public-domain MP4 we can point the demo recording at.
-        # BigBuckBunny is the canonical sample video used everywhere for tests.
         VideoRecordingFile.objects.update_or_create(
             recording=recording, file_type=VideoRecordingFile.FileType.VIDEO,
             defaults=dict(
                 file_name=f"event-{events['ondemand'].uuid}.mp4",
                 file_extension='mp4',
                 file_size_bytes=42_000_000,
-                storage_url='https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+                storage_url='',  # Generated dynamically by VideoRecordingFileSerializer.
                 is_visible=True,
             ),
         )

@@ -152,7 +152,7 @@ export function EventRecordingPanel({ eventUuid }: EventRecordingPanelProps) {
                                     {isAvailable && rec.is_published && (
                                         <>
                                             <Button asChild variant="outline" size="sm">
-                                                <Link to={`/events/${eventUuid}/recording`}>Watch</Link>
+                                                <Link to={`/events/${eventUuid}/recording/${rec.uuid}`}>Watch</Link>
                                             </Button>
                                             <Button
                                                 variant="outline"

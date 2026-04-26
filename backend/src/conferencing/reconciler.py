@@ -51,19 +51,25 @@ def reconcile_stale_video_state():
 
 def _reconcile_rooms(now) -> int:
     """ACTIVE rooms older than the grace window get force-ended."""
+    from conferencing.state_machine import advance_room
+
     cutoff = now - ROOM_ACTIVE_GRACE
     qs = VideoRoom.objects.filter(
         status=VideoRoom.Status.ACTIVE,
         started_at__lt=cutoff,
-    )
+    ).only('id', 'room_name', 'started_at')
     count = 0
     for room in qs:
         logger.warning(
             "Reconciler force-ending stale ACTIVE room %s (started %s)",
             room.room_name, room.started_at,
         )
-        room.mark_ended()
-        count += 1
+        if advance_room(
+            room.id,
+            to_status=VideoRoom.Status.ENDED,
+            extra_fields={'ended_at': now},
+        ):
+            count += 1
     return count
 
 
@@ -73,35 +79,40 @@ def _reconcile_recordings(now) -> int:
     ERROR with a note, so the UI can surface "this recording failed" instead
     of an indefinite spinner.
     """
+    from conferencing.state_machine import advance_recording
+
     count = 0
 
     recording_cutoff = now - RECORDING_RECORDING_GRACE
     stuck_recording = VideoRecording.objects.filter(
         status=VideoRecording.Status.RECORDING,
         updated_at__lt=recording_cutoff,
-    )
+    ).only('id', 'uuid', 'updated_at', 'recording_end')
     for rec in stuck_recording:
         logger.warning(
             "Reconciler marking stale RECORDING %s as ERROR (last update %s)",
             rec.uuid, rec.updated_at,
         )
-        rec.status = VideoRecording.Status.ERROR
-        rec.recording_end = rec.recording_end or now
-        rec.save(update_fields=['status', 'recording_end', 'updated_at'])
-        count += 1
+        # Guarded transition: a concurrent webhook may finalize the row to
+        # AVAILABLE while we're iterating; in that case we no-op.
+        if advance_recording(
+            rec.id,
+            to_status=VideoRecording.Status.ERROR,
+            extra_fields={'recording_end': rec.recording_end or now},
+        ):
+            count += 1
 
     processing_cutoff = now - RECORDING_PROCESSING_GRACE
     stuck_processing = VideoRecording.objects.filter(
         status=VideoRecording.Status.PROCESSING,
         updated_at__lt=processing_cutoff,
-    )
+    ).only('id', 'uuid', 'updated_at')
     for rec in stuck_processing:
         logger.warning(
             "Reconciler marking stale PROCESSING %s as ERROR (last update %s)",
             rec.uuid, rec.updated_at,
         )
-        rec.status = VideoRecording.Status.ERROR
-        rec.save(update_fields=['status', 'updated_at'])
-        count += 1
+        if advance_recording(rec.id, to_status=VideoRecording.Status.ERROR):
+            count += 1
 
     return count

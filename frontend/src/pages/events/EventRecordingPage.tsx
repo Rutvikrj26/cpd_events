@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { getPublicEvent } from '@/api/events';
 import type { Event } from '@/api/events/types';
 
 export function EventRecordingPage() {
-  const { id: eventUuid } = useParams<{ id: string }>();
+  const { id: eventUuid, recordingUuid } = useParams<{ id: string; recordingUuid?: string }>();
 
   const [event, setEvent] = useState<Event | null>(null);
   const [recordings, setRecordings] = useState<VideoRecording[]>([]);
@@ -43,15 +43,19 @@ export function EventRecordingPage() {
     };
   }, [eventUuid]);
 
-  // Pick the most recently published recording for this event.
+  // If the URL specifies a recordingUuid, render exactly that one. Otherwise
+  // fall back to the most recently published recording.
   const recording = useMemo(() => {
     if (!recordings.length) return null;
+    if (recordingUuid) {
+      return recordings.find((r) => r.uuid === recordingUuid) ?? null;
+    }
     return [...recordings].sort((a, b) => {
       const ax = a.published_at || a.created_at;
       const bx = b.published_at || b.created_at;
       return new Date(bx).getTime() - new Date(ax).getTime();
     })[0];
-  }, [recordings]);
+  }, [recordings, recordingUuid]);
 
   // Pick the first available video file.
   const videoFile = useMemo(() => {
@@ -71,10 +75,8 @@ export function EventRecordingPage() {
   return (
     <div className="mx-auto max-w-4xl p-6 space-y-6">
       <div>
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/my-events">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to My Events
-          </Link>
+        <Button variant="ghost" size="sm" onClick={() => window.history.length > 1 ? window.history.back() : window.location.assign('/my-events')}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back
         </Button>
       </div>
 

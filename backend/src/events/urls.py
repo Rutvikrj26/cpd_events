@@ -36,6 +36,9 @@ feedback_field_router = DefaultRouter()
 feedback_field_router.register(r'feedback-fields', EventFeedbackFieldViewSet, basename='event-feedback-field')
 
 urlpatterns = [
+    # Speaker self-service: must come before the `events/` router include so
+    # `my-speaking` doesn't get matched as an event UUID detail route.
+    path('events/my-speaking/', views.MySpeakingEventsView.as_view(), name='my_speaking_events'),
     # Main events API
     path('', include(router.urls)),
     # Nested routes under events/{event_uuid}/
@@ -48,6 +51,4 @@ urlpatterns = [
     # Public events
     path('public/events/', views.PublicEventListView.as_view(), name='public_event_list'),
     path('public/events/<str:identifier>/', views.PublicEventDetailView.as_view(), name='public_event_detail'),
-    # Speaker self-service: events I'm speaking at
-    path('events/my-speaking/', views.MySpeakingEventsView.as_view(), name='my_speaking_events'),
 ]

@@ -198,6 +198,7 @@ export default function App() {
                   {/* Pre-event lobby (auth) and post-event recording playback. */}
                   <Route path="/events/:id/lobby" element={<EventLobbyPage />} />
                   <Route path="/events/:id/recording" element={<EventRecordingPage />} />
+                  <Route path="/events/:id/recording/:recordingUuid" element={<EventRecordingPage />} />
                   {/* Symmetric routes for course-session lobby / recording. */}
                   <Route path="/courses/:slug/sessions/:sessionUuid/lobby" element={<CourseSessionLobbyPage />} />
                   <Route path="/courses/:slug/sessions/:sessionUuid/recording" element={<CourseSessionRecordingPage />} />

@@ -96,16 +96,16 @@ def stop_event_recording(event_id: int):
         logger.warning("Video provider not configured; cannot stop recording")
         return
 
+    from conferencing.state_machine import advance_recording
+
     try:
         provider.stop_recording(recording.egress_id)
     except Exception:
         logger.exception("Failed to stop recording for event %s", event_id)
-        recording.status = VideoRecording.Status.ERROR
-        recording.save(update_fields=['status', 'updated_at'])
+        advance_recording(recording.id, to_status=VideoRecording.Status.ERROR)
         return
 
-    recording.status = VideoRecording.Status.PROCESSING
-    recording.save(update_fields=['status', 'updated_at'])
+    advance_recording(recording.id, to_status=VideoRecording.Status.PROCESSING)
 
 
 @CloudTask
@@ -181,9 +181,21 @@ def process_video_webhook(webhook_log_id: int):
     Process a video webhook event.
 
     Handles: room_started, room_finished, participant_joined,
-    participant_left, recording_ended.
+    participant_left, recording_ended, recording_started.
+
+    Concurrency model: all webhooks for a given room are serialized via a
+    Postgres advisory transaction lock keyed on `video_room.id`. This
+    eliminates races between handlers that mutate VideoRoom and
+    VideoRecording state. Different rooms remain concurrent.
+
+    Defense-in-depth: handlers also use guarded SQL UPDATEs so a row in a
+    terminal state can never be regressed, even if the lock is bypassed
+    (e.g. by the reconciler running a manual transition).
     """
+    from django.db import transaction
+
     from conferencing.models import VideoRecording, VideoRoom, VideoWebhookLog
+    from conferencing.state_machine import acquire_room_lock
 
     try:
         log = VideoWebhookLog.objects.select_related('video_room').get(id=webhook_log_id)
@@ -199,45 +211,85 @@ def process_video_webhook(webhook_log_id: int):
         return
 
     try:
-        event_type = log.event_type
-        payload = log.payload
-        records_created = 0
+        # Serialize per-room. Lock auto-releases on commit/rollback.
+        with transaction.atomic():
+            acquire_room_lock(video_room.id)
+            # Refresh inside the lock so we see writes from any handler that
+            # finished while we were waiting.
+            video_room.refresh_from_db()
 
-        if event_type == 'room_started':
-            video_room.mark_active()
+            event_type = log.event_type
+            payload = log.payload
+            records_created = 0
 
-            # Mark the linked event/course as live if applicable
-            _mark_content_live(video_room)
+            if event_type == 'room_started':
+                _on_room_started(video_room)
 
-            # Auto-start recording when the parent event/session opted in.
-            _maybe_auto_start_recording(video_room)
+            elif event_type == 'room_finished':
+                _on_room_finished(video_room)
 
-        elif event_type == 'room_finished':
-            # Stop any in-flight recording before marking the room ended;
-            # LiveKit fires room_finished when the room empties for its
-            # configured timeout (or on admin force-end), so this is the
-            # correct moment to flush egress.
-            _stop_active_recordings(video_room)
+            elif event_type == 'participant_joined':
+                records_created = _handle_participant_joined(video_room, payload)
 
-            video_room.mark_ended()
+            elif event_type == 'participant_left':
+                records_created = _handle_participant_left(video_room, payload)
 
-            # Mark the linked event/course as completed if applicable
-            _mark_content_ended(video_room)
+            elif event_type == 'recording_ended':
+                _handle_recording_ended(video_room, payload)
 
-        elif event_type == 'participant_joined':
-            records_created = _handle_participant_joined(video_room, payload)
-
-        elif event_type == 'participant_left':
-            records_created = _handle_participant_left(video_room, payload)
-
-        elif event_type == 'recording_ended':
-            _handle_recording_ended(video_room, payload)
-
+        # Mark log outside the lock so its update doesn't extend the lock
+        # window unnecessarily.
         log.mark_completed(records_created=records_created)
 
     except Exception as e:
         logger.exception("Error processing video webhook %s", webhook_log_id)
         log.mark_failed(str(e), traceback.format_exc())
+
+
+def _on_room_started(video_room):
+    """
+    Apply room_started: transition VideoRoom → ACTIVE, mark linked content
+    live, and trigger auto-recording if the parent opted in.
+    """
+    from conferencing.state_machine import advance_room
+    from conferencing.models import VideoRoom
+
+    advanced = advance_room(
+        video_room.id,
+        to_status=VideoRoom.Status.ACTIVE,
+        extra_fields={
+            'started_at': timezone.now(),
+            'error': '',
+        },
+    )
+    if advanced:
+        # Reload after the SQL UPDATE so downstream helpers see fresh state.
+        video_room.refresh_from_db()
+
+    _mark_content_live(video_room)
+    _maybe_auto_start_recording(video_room)
+
+
+def _on_room_finished(video_room):
+    """
+    Apply room_finished: stop in-flight recordings, transition VideoRoom →
+    ENDED, mark linked content completed.
+    """
+    from conferencing.state_machine import advance_room
+    from conferencing.models import VideoRoom
+
+    # Stop any in-flight recording before marking the room ended; LiveKit
+    # fires room_finished when the room empties for its configured timeout
+    # (or on admin force-end), so this is the correct moment to flush egress.
+    _stop_active_recordings(video_room)
+
+    advance_room(
+        video_room.id,
+        to_status=VideoRoom.Status.ENDED,
+        extra_fields={'ended_at': timezone.now()},
+    )
+    video_room.refresh_from_db()
+    _mark_content_ended(video_room)
 
 
 def _mark_content_live(video_room):
@@ -472,18 +524,22 @@ def _maybe_auto_start_recording(video_room):
 def _stop_active_recordings(video_room):
     """
     Issue stop_recording for any VideoRecording row still in RECORDING for
-    this room. Idempotent — if the egress is already gone the provider call
-    fails harmlessly and we still flip status to PROCESSING so that
-    `egress_ended` (or the reconciler) can finalize.
+    this room and guard-transition them to PROCESSING. The egress_ended
+    webhook (or the reconciler) finalizes them to AVAILABLE/ERROR.
+
+    Idempotent: re-delivery of room_finished or rows that already moved past
+    RECORDING are no-ops.
     """
     from conferencing.models import VideoRecording
     from conferencing.service import get_video_provider
+    from conferencing.state_machine import advance_recording
 
-    actives = VideoRecording.objects.filter(
-        video_room=video_room,
-        status=VideoRecording.Status.RECORDING,
+    actives = list(
+        VideoRecording.objects
+        .filter(video_room=video_room, status=VideoRecording.Status.RECORDING)
+        .only('id', 'egress_id')
     )
-    if not actives.exists():
+    if not actives:
         return
 
     provider = get_video_provider()
@@ -494,16 +550,28 @@ def _stop_active_recordings(video_room):
             logger.exception(
                 "Failed to stop egress %s during room_finished", rec.egress_id,
             )
-        rec.status = VideoRecording.Status.PROCESSING
-        rec.recording_end = timezone.now()
-        rec.save(update_fields=['status', 'recording_end', 'updated_at'])
+        # Guarded: only flip if the row is still RECORDING. If
+        # recording_ended already moved it to AVAILABLE/ERROR, no-op.
+        advance_recording(
+            rec.id,
+            to_status=VideoRecording.Status.PROCESSING,
+            extra_fields={'recording_end': timezone.now()},
+        )
 
 
 def _handle_recording_ended(video_room, payload):
-    """Handle recording completion — update VideoRecording + create file rows."""
+    """
+    Handle recording completion. Atomically transitions the row to its
+    terminal state (AVAILABLE or ERROR) using the state machine, populates
+    file rows, and (if eligible) auto-publishes.
+
+    Idempotent: re-delivery of egress_ended for an already-finalized row is
+    a no-op for the status transition; file rows use update_or_create.
+    """
     import os
 
     from conferencing.models import VideoRecording, VideoRecordingFile
+    from conferencing.state_machine import advance_recording
 
     egress_info = payload.get('egressInfo', {})
     egress_id = egress_info.get('egressId', '')
@@ -511,33 +579,48 @@ def _handle_recording_ended(video_room, payload):
     if not egress_id:
         return
 
+    from events.models import Event
+    from learning.models import CourseSession
+
+    owner = video_room.content_object
+    parent_event = owner if isinstance(owner, Event) else None
+    parent_session = owner if isinstance(owner, CourseSession) else None
+
     try:
         recording = VideoRecording.objects.get(egress_id=egress_id)
     except VideoRecording.DoesNotExist:
-        # Create a new recording record if it wasn't pre-created.
+        # Late-arriving egress_ended for a row that was never pre-created.
         defaults = {'video_room': video_room, 'egress_id': egress_id, 'provider': 'livekit'}
-        owner = video_room.content_object
-        if owner is not None:
-            from events.models import Event
-            from learning.models import CourseSession
-
-            if isinstance(owner, Event):
-                defaults['event'] = owner
-            elif isinstance(owner, CourseSession):
-                defaults['course_session'] = owner
-
+        if parent_event:
+            defaults['event'] = parent_event
+        elif parent_session:
+            defaults['course_session'] = parent_session
         recording = VideoRecording.objects.create(**defaults)
-
-    # LiveKit reports the terminal egress state in egressInfo.status. Anything
-    # other than EGRESS_COMPLETE means the recording is unusable.
-    egress_status = str(egress_info.get('status', '') or '').upper()
-    if egress_status and egress_status != 'EGRESS_COMPLETE':
-        recording.status = VideoRecording.Status.ERROR
     else:
-        recording.status = VideoRecording.Status.AVAILABLE
-    recording.recording_end = timezone.now()
+        # Existing row may have been created by ensure_recording_started before
+        # the orphan-fix landed. Backfill the parent link if missing so the
+        # listing endpoint surfaces it.
+        backfill = {}
+        if parent_event and recording.event_id is None:
+            backfill['event'] = parent_event
+        if parent_session and recording.course_session_id is None:
+            backfill['course_session'] = parent_session
+        if backfill:
+            for k, v in backfill.items():
+                setattr(recording, k, v)
+            recording.save(update_fields=list(backfill.keys()) + ['updated_at'])
 
-    # Aggregate file results — LiveKit may emit one or more output files.
+    # LiveKit reports the terminal egress state. EGRESS_COMPLETE → AVAILABLE,
+    # anything else (ABORTED / FAILED / LIMIT_REACHED) → ERROR.
+    egress_status = str(egress_info.get('status', '') or '').upper()
+    target_status = (
+        VideoRecording.Status.AVAILABLE
+        if (not egress_status or egress_status == 'EGRESS_COMPLETE')
+        else VideoRecording.Status.ERROR
+    )
+
+    # Aggregate file results before the state transition so the metadata
+    # lands together. file_rows are created independently — append-only.
     file_results = egress_info.get('fileResults', [])
     total_size = 0
     total_duration_ns = 0
@@ -552,9 +635,6 @@ def _handle_recording_ended(video_room, payload):
         if not primary_filename and filename:
             primary_filename = filename
 
-        # Create a VideoRecordingFile row so the frontend can render <video src=…>.
-        # storage_url points at the Django streaming endpoint; the recording_uuid
-        # in the path is filled in below once the parent recording is persisted.
         base_name = os.path.basename(filename) if filename else ''
         ext = os.path.splitext(base_name)[1] if base_name else ''
         VideoRecordingFile.objects.update_or_create(
@@ -568,40 +648,54 @@ def _handle_recording_ended(video_room, payload):
             },
         )
 
-    recording.storage_path = primary_filename
-    recording.total_size_bytes = total_size
-    recording.duration_seconds = total_duration_ns // 1_000_000_000 if total_duration_ns else 0
-
-    # Inherit auto_publish from the parent event/session — overrides the row's
-    # field which may have been left at default False.
+    # Inherit auto_publish from parent event/session — overrides the row's
+    # default which may have been left False at create time.
     parent = video_room.content_object
+    auto_publish = False
     if parent is not None:
         from events.models import Event
         from learning.models import CourseSession
 
         if isinstance(parent, Event):
             settings_dict = parent.video_settings if isinstance(parent.video_settings, dict) else {}
-            recording.auto_publish = bool(settings_dict.get('auto_publish_recording', True))
+            auto_publish = bool(settings_dict.get('auto_publish_recording', True))
         elif isinstance(parent, CourseSession):
-            recording.auto_publish = bool(getattr(parent, 'recording_auto_publish', True))
+            auto_publish = bool(getattr(parent, 'recording_auto_publish', True))
 
-    recording.save(update_fields=[
-        'status', 'recording_end', 'storage_path',
-        'total_size_bytes', 'duration_seconds', 'auto_publish', 'updated_at',
-    ])
+    # Single guarded transition: only fires if status is still RECORDING or
+    # PROCESSING. If a concurrent handler already wrote a terminal state,
+    # this is a no-op and we leave well alone.
+    advanced = advance_recording(
+        recording.id,
+        to_status=target_status,
+        extra_fields={
+            'recording_end': timezone.now(),
+            'storage_path': primary_filename,
+            'total_size_bytes': total_size,
+            'duration_seconds': total_duration_ns // 1_000_000_000 if total_duration_ns else 0,
+            'auto_publish': auto_publish,
+        },
+    )
 
-    # Now that recording.uuid is stable, populate streaming URLs on the file rows.
+    if advanced:
+        # Reload after the SQL UPDATE so we serialize the right data downstream.
+        recording.refresh_from_db()
+
+    # Populate streaming URLs on the file rows (independent of status).
     for f in recording.files.all():
         if not f.storage_url:
             f.storage_url = f'/api/v1/video/recordings/{recording.uuid}/files/{f.uuid}/stream/'
             f.save(update_fields=['storage_url', 'updated_at'])
 
-    if recording.auto_publish and recording.status == VideoRecording.Status.AVAILABLE:
+    # Auto-publish only if (a) eligible and (b) we won the race — i.e. our
+    # advance moved the row to AVAILABLE. If a concurrent handler already
+    # finalized the row, that handler decides publish state, not us.
+    if advanced and recording.auto_publish and recording.status == VideoRecording.Status.AVAILABLE:
         recording.publish()
 
     logger.info(
-        "Recording completed for room %s, egress_id=%s, final_status=%s",
-        video_room.room_name, egress_id, recording.status,
+        "Recording finalized: room=%s egress=%s status=%s advanced=%s",
+        video_room.room_name, egress_id, recording.status, advanced,
     )
 
 
@@ -681,13 +775,13 @@ def stop_course_session_recording(session_id: int):
         logger.warning("Video provider not configured; cannot stop recording")
         return
 
+    from conferencing.state_machine import advance_recording
+
     try:
         provider.stop_recording(recording.egress_id)
     except Exception:
         logger.exception("Failed to stop recording for session %s", session_id)
-        recording.status = VideoRecording.Status.ERROR
-        recording.save(update_fields=['status', 'updated_at'])
+        advance_recording(recording.id, to_status=VideoRecording.Status.ERROR)
         return
 
-    recording.status = VideoRecording.Status.PROCESSING
-    recording.save(update_fields=['status', 'updated_at'])
+    advance_recording(recording.id, to_status=VideoRecording.Status.PROCESSING)

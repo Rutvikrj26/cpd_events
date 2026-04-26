@@ -240,7 +240,9 @@ LIVEKIT_WS_URL = os.environ.get('LIVEKIT_WS_URL', 'ws://localhost:7880')
 RECORDING_STORAGE_DIR = os.environ.get('RECORDING_STORAGE_DIR', '/recordings')
 LIVEKIT_RECORDING_OUTPUT_PATH_TEMPLATE = os.environ.get(
     'LIVEKIT_RECORDING_OUTPUT_PATH_TEMPLATE',
-    '/out/{room_name}-{time}.mp4',
+    # Must live under RECORDING_STORAGE_DIR so the streaming endpoint can
+    # read what egress wrote. Both paths point at the same mount point.
+    '/recordings/{room_name}-{time}.mp4',
 )
 
 # Google OAuth

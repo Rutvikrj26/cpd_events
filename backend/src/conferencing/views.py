@@ -82,12 +82,27 @@ def ensure_recording_started(video_room) -> tuple['VideoRecording', bool]:
 
     provider = get_video_provider()
     egress_id = provider.start_recording(video_room.room_name, output_path=output_path)
-    recording = VideoRecording.objects.create(
-        video_room=video_room,
-        egress_id=egress_id,
-        recording_start=timezone.now(),
-        status=VideoRecording.Status.RECORDING,
-    )
+
+    # Link the recording to the parent event/course_session so listing
+    # endpoints (which filter by event__uuid / course_session__uuid) can
+    # surface it. Without this the row is orphaned and never reaches the UI.
+    create_kwargs = {
+        'video_room': video_room,
+        'egress_id': egress_id,
+        'recording_start': timezone.now(),
+        'status': VideoRecording.Status.RECORDING,
+    }
+    parent = video_room.content_object
+    if parent is not None:
+        from events.models import Event
+        from learning.models import CourseSession
+
+        if isinstance(parent, Event):
+            create_kwargs['event'] = parent
+        elif isinstance(parent, CourseSession):
+            create_kwargs['course_session'] = parent
+
+    recording = VideoRecording.objects.create(**create_kwargs)
     return recording, True
 
 
