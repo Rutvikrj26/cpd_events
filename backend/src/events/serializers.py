@@ -23,6 +23,7 @@ class VideoSettingsSerializer(serializers.Serializer):
 
     enabled = serializers.BooleanField(default=False)
     recording_enabled = serializers.BooleanField(default=False)
+    auto_publish_recording = serializers.BooleanField(default=True)
     screen_share = serializers.BooleanField(default=True)
 
     def to_representation(self, instance):
@@ -32,6 +33,7 @@ class VideoSettingsSerializer(serializers.Serializer):
         return {
             'enabled': bool(instance.get('enabled', False)),
             'recording_enabled': bool(instance.get('recording_enabled', False)),
+            'auto_publish_recording': bool(instance.get('auto_publish_recording', True)),
             'screen_share': bool(instance.get('screen_share', True)),
         }
 

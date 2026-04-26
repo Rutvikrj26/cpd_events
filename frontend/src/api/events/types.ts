@@ -133,6 +133,7 @@ export interface EventCreateRequest {
     video_settings?: {
         enabled: boolean;
         recording_enabled: boolean;
+        auto_publish_recording?: boolean;
         screen_share: boolean;
         waiting_room_enabled?: boolean;
     };

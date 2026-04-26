@@ -472,6 +472,7 @@ export const StepSettings = () => {
                                 onCheckedChange={(checked) =>
                                     updateFormData({
                                         video_settings: {
+                                            ...formData.video_settings,
                                             enabled: true,
                                             recording_enabled: checked,
                                             screen_share: formData.video_settings?.screen_share ?? true,
@@ -480,6 +481,30 @@ export const StepSettings = () => {
                                 }
                             />
                         </div>
+
+                        {formData.video_settings?.recording_enabled && (
+                            <div className="flex items-center justify-between max-w-sm pl-4 border-l-2 border-slate-100 ml-2">
+                                <div className="space-y-0.5">
+                                    <Label className="text-sm">Auto-publish recording</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        When off, the recording stays unpublished after processing — visible only to you until you publish it from the event page.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={formData.video_settings?.auto_publish_recording !== false}
+                                    onCheckedChange={(checked) =>
+                                        updateFormData({
+                                            video_settings: {
+                                                ...formData.video_settings,
+                                                enabled: true,
+                                                recording_enabled: true,
+                                                auto_publish_recording: checked,
+                                            },
+                                        })
+                                    }
+                                />
+                            </div>
+                        )}
 
                         <div className="flex items-center justify-between max-w-sm">
                             <div className="space-y-0.5">

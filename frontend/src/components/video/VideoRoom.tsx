@@ -32,6 +32,7 @@ interface VideoRoomProps {
   waiting?: boolean;
   waitingRoomEnabled?: boolean;
   recordingActive?: boolean;
+  recordingAutoManaged?: boolean;
   onDisconnected?: () => void;
 }
 
@@ -44,6 +45,7 @@ export function VideoRoom({
   waiting: initialWaiting = false,
   waitingRoomEnabled = false,
   recordingActive: initialRecordingActive = false,
+  recordingAutoManaged = false,
   onDisconnected,
 }: VideoRoomProps) {
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +84,7 @@ export function VideoRoom({
           waitingRoomEnabled={waitingRoomEnabled}
           roomUuid={roomUuid}
           initialRecordingActive={initialRecordingActive}
+          recordingAutoManaged={recordingAutoManaged}
         />
       </LiveKitRoom>
     </div>
@@ -94,6 +97,7 @@ interface RoomContentProps {
   waitingRoomEnabled: boolean;
   roomUuid?: string;
   initialRecordingActive: boolean;
+  recordingAutoManaged: boolean;
 }
 
 function RoomContent({
@@ -102,6 +106,7 @@ function RoomContent({
   waitingRoomEnabled,
   roomUuid,
   initialRecordingActive,
+  recordingAutoManaged,
 }: RoomContentProps) {
   const { localParticipant } = useLocalParticipant();
   const [chatOpen, setChatOpen] = useState(false);
@@ -138,6 +143,7 @@ function RoomContent({
         isHost={isHost}
         roomUuid={roomUuid}
         initialRecordingActive={initialRecordingActive}
+        recordingAutoManaged={recordingAutoManaged}
         waitingRoomEnabled={waitingRoomEnabled}
         onToggleChat={() => setChatOpen((v) => !v)}
         chatOpen={chatOpen}
@@ -226,6 +232,7 @@ interface TopBarProps {
   isHost: boolean;
   roomUuid?: string;
   initialRecordingActive: boolean;
+  recordingAutoManaged: boolean;
   waitingRoomEnabled: boolean;
   onToggleChat: () => void;
   chatOpen: boolean;
@@ -235,6 +242,7 @@ function TopBar({
   isHost,
   roomUuid,
   initialRecordingActive,
+  recordingAutoManaged,
   waitingRoomEnabled,
   onToggleChat,
   chatOpen,
@@ -313,22 +321,33 @@ function TopBar({
               Host
             </Badge>
 
-            <Button
-              size="sm"
-              variant={recording ? 'destructive' : 'default'}
-              disabled={recordingBusy}
-              onClick={handleToggleRecording}
-              className="gap-2"
-            >
-              {recordingBusy ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : recording ? (
-                <Circle className="h-4 w-4 fill-current" />
-              ) : (
-                <Circle className="h-4 w-4" />
-              )}
-              {recording ? 'Stop recording' : 'Start recording'}
-            </Button>
+            {/* When auto-managed, hide the manual Start button — the backend
+                kicks off egress on room_started. The Stop button stays visible
+                whenever recording is live, as a host override. */}
+            {(!recordingAutoManaged || recording) && (
+              <Button
+                size="sm"
+                variant={recording ? 'destructive' : 'default'}
+                disabled={recordingBusy}
+                onClick={handleToggleRecording}
+                className="gap-2"
+              >
+                {recordingBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : recording ? (
+                  <Circle className="h-4 w-4 fill-current" />
+                ) : (
+                  <Circle className="h-4 w-4" />
+                )}
+                {recording ? 'Stop recording' : 'Start recording'}
+              </Button>
+            )}
+
+            {recordingAutoManaged && !recording && (
+              <span className="text-xs text-muted-foreground italic">
+                Recording will start automatically.
+              </span>
+            )}
 
             {recording && (
               <Badge variant="destructive" className="gap-1">

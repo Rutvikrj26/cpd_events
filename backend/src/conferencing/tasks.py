@@ -209,7 +209,16 @@ def process_video_webhook(webhook_log_id: int):
             # Mark the linked event/course as live if applicable
             _mark_content_live(video_room)
 
+            # Auto-start recording when the parent event/session opted in.
+            _maybe_auto_start_recording(video_room)
+
         elif event_type == 'room_finished':
+            # Stop any in-flight recording before marking the room ended;
+            # LiveKit fires room_finished when the room empties for its
+            # configured timeout (or on admin force-end), so this is the
+            # correct moment to flush egress.
+            _stop_active_recordings(video_room)
+
             video_room.mark_ended()
 
             # Mark the linked event/course as completed if applicable
@@ -261,11 +270,21 @@ def _mark_content_ended(video_room):
 
 def _handle_participant_joined(video_room, payload):
     """Create attendance record when a participant joins."""
+    import uuid as _uuid
+
     participant = payload.get('participant', {})
     identity = participant.get('identity', '')
     name = participant.get('name', '')
 
     if not identity:
+        return 0
+
+    # Egress / ingress participants are bots, not learners. We assign user
+    # identities as UUIDs at join-token generation time, so anything that
+    # doesn't parse as a UUID is a service participant — skip it.
+    try:
+        _uuid.UUID(str(identity))
+    except (ValueError, AttributeError):
         return 0
 
     model_name = video_room.content_type.model
@@ -414,9 +433,77 @@ def _update_session_attendance(video_room, participant_identity):
         attendance.enrollment.update_progress()
 
 
-def _handle_recording_ended(video_room, payload):
-    """Handle recording completion — update the VideoRecording record."""
+def _maybe_auto_start_recording(video_room):
+    """
+    If the parent event/session has recording_enabled=True, kick off egress.
+    Idempotent via ensure_recording_started.
+    """
+    parent = video_room.content_object
+    if parent is None:
+        return
+
+    from events.models import Event
+    from learning.models import CourseSession
+
+    if isinstance(parent, Event):
+        recording_enabled = bool(
+            (parent.video_settings or {}).get('recording_enabled', False)
+        )
+    elif isinstance(parent, CourseSession):
+        recording_enabled = bool(
+            getattr(parent, 'recording_enabled', False)
+            or getattr(parent, 'auto_record', False)
+        )
+    else:
+        return
+
+    if not recording_enabled:
+        return
+
+    try:
+        from conferencing.views import ensure_recording_started
+        ensure_recording_started(video_room)
+    except Exception:
+        logger.exception(
+            "Auto-start recording failed in room_started handler for %s", video_room.room_name,
+        )
+
+
+def _stop_active_recordings(video_room):
+    """
+    Issue stop_recording for any VideoRecording row still in RECORDING for
+    this room. Idempotent — if the egress is already gone the provider call
+    fails harmlessly and we still flip status to PROCESSING so that
+    `egress_ended` (or the reconciler) can finalize.
+    """
     from conferencing.models import VideoRecording
+    from conferencing.service import get_video_provider
+
+    actives = VideoRecording.objects.filter(
+        video_room=video_room,
+        status=VideoRecording.Status.RECORDING,
+    )
+    if not actives.exists():
+        return
+
+    provider = get_video_provider()
+    for rec in actives:
+        try:
+            provider.stop_recording(rec.egress_id)
+        except Exception:
+            logger.exception(
+                "Failed to stop egress %s during room_finished", rec.egress_id,
+            )
+        rec.status = VideoRecording.Status.PROCESSING
+        rec.recording_end = timezone.now()
+        rec.save(update_fields=['status', 'recording_end', 'updated_at'])
+
+
+def _handle_recording_ended(video_room, payload):
+    """Handle recording completion — update VideoRecording + create file rows."""
+    import os
+
+    from conferencing.models import VideoRecording, VideoRecordingFile
 
     egress_info = payload.get('egressInfo', {})
     egress_id = egress_info.get('egressId', '')
@@ -441,26 +528,81 @@ def _handle_recording_ended(video_room, payload):
 
         recording = VideoRecording.objects.create(**defaults)
 
-    recording.status = VideoRecording.Status.AVAILABLE
+    # LiveKit reports the terminal egress state in egressInfo.status. Anything
+    # other than EGRESS_COMPLETE means the recording is unusable.
+    egress_status = str(egress_info.get('status', '') or '').upper()
+    if egress_status and egress_status != 'EGRESS_COMPLETE':
+        recording.status = VideoRecording.Status.ERROR
+    else:
+        recording.status = VideoRecording.Status.AVAILABLE
     recording.recording_end = timezone.now()
 
-    # Extract file info from egress results
+    # Aggregate file results — LiveKit may emit one or more output files.
     file_results = egress_info.get('fileResults', [])
-    if file_results:
-        result = file_results[0]
-        recording.storage_path = result.get('filename', '')
-        recording.total_size_bytes = result.get('size', 0)
-        recording.duration_seconds = result.get('duration', 0) // 1_000_000_000  # nanoseconds to seconds
+    total_size = 0
+    total_duration_ns = 0
+    primary_filename = ''
+
+    for result in file_results:
+        filename = result.get('filename', '')
+        size = int(result.get('size', 0) or 0)
+        duration_ns = int(result.get('duration', 0) or 0)
+        total_size += size
+        total_duration_ns += duration_ns
+        if not primary_filename and filename:
+            primary_filename = filename
+
+        # Create a VideoRecordingFile row so the frontend can render <video src=…>.
+        # storage_url points at the Django streaming endpoint; the recording_uuid
+        # in the path is filled in below once the parent recording is persisted.
+        base_name = os.path.basename(filename) if filename else ''
+        ext = os.path.splitext(base_name)[1] if base_name else ''
+        VideoRecordingFile.objects.update_or_create(
+            recording=recording,
+            file_name=base_name,
+            defaults={
+                'file_type': VideoRecordingFile.FileType.VIDEO,
+                'file_extension': ext,
+                'file_size_bytes': size,
+                'storage_url': '',  # Filled after recording.uuid is final.
+            },
+        )
+
+    recording.storage_path = primary_filename
+    recording.total_size_bytes = total_size
+    recording.duration_seconds = total_duration_ns // 1_000_000_000 if total_duration_ns else 0
+
+    # Inherit auto_publish from the parent event/session — overrides the row's
+    # field which may have been left at default False.
+    parent = video_room.content_object
+    if parent is not None:
+        from events.models import Event
+        from learning.models import CourseSession
+
+        if isinstance(parent, Event):
+            settings_dict = parent.video_settings if isinstance(parent.video_settings, dict) else {}
+            recording.auto_publish = bool(settings_dict.get('auto_publish_recording', True))
+        elif isinstance(parent, CourseSession):
+            recording.auto_publish = bool(getattr(parent, 'recording_auto_publish', True))
 
     recording.save(update_fields=[
         'status', 'recording_end', 'storage_path',
-        'total_size_bytes', 'duration_seconds', 'updated_at',
+        'total_size_bytes', 'duration_seconds', 'auto_publish', 'updated_at',
     ])
 
-    if recording.auto_publish:
+    # Now that recording.uuid is stable, populate streaming URLs on the file rows.
+    for f in recording.files.all():
+        if not f.storage_url:
+            f.storage_url = f'/api/v1/video/recordings/{recording.uuid}/files/{f.uuid}/stream/'
+            f.save(update_fields=['storage_url', 'updated_at'])
+
+    if recording.auto_publish and recording.status == VideoRecording.Status.AVAILABLE:
         recording.publish()
 
-    logger.info("Recording completed for room %s, egress_id=%s", video_room.room_name, egress_id)
+    logger.info(
+        "Recording completed for room %s, egress_id=%s, final_status=%s",
+        video_room.room_name, egress_id, recording.status,
+    )
 
 
 @CloudTask

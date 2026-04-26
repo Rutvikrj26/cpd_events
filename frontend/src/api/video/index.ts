@@ -27,10 +27,26 @@ export async function joinCourseSessionVideo(
 }
 
 export async function getVideoRecordings(
-  params?: { event_uuid?: string; course_session_uuid?: string },
+  params?: { event_uuid?: string; course_session_uuid?: string; manage?: boolean },
 ): Promise<VideoRecording[]> {
-  const response = await api.get('/video/recordings/', { params });
+  // `manage=true` opts host users into seeing unpublished + non-AVAILABLE rows
+  // (used by the EventManagement recording panel).
+  const query: Record<string, string> = {};
+  if (params?.event_uuid) query.event_uuid = params.event_uuid;
+  if (params?.course_session_uuid) query.course_session_uuid = params.course_session_uuid;
+  if (params?.manage) query.manage = 'true';
+  const response = await api.get('/video/recordings/', { params: query });
   return response.data.results || response.data;
+}
+
+export async function publishRecording(uuid: string): Promise<VideoRecording> {
+  const response = await api.post(`/video/recordings/${uuid}/publish/`);
+  return response.data;
+}
+
+export async function unpublishRecording(uuid: string): Promise<VideoRecording> {
+  const response = await api.post(`/video/recordings/${uuid}/unpublish/`);
+  return response.data;
 }
 
 export async function startRoomRecording(roomUuid: string): Promise<{ egress_id: string; status: string }> {

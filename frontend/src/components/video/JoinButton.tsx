@@ -74,6 +74,7 @@ export function JoinButton({
     waiting?: boolean;
     waiting_room_enabled?: boolean;
     recording_active?: boolean;
+    recording_enabled_default?: boolean;
   } | null>(null);
 
   const { label, enabled, disabledReason } = resolve(role, state);
@@ -144,6 +145,7 @@ export function JoinButton({
               waiting={videoSession.waiting}
               waitingRoomEnabled={videoSession.waiting_room_enabled}
               recordingActive={videoSession.recording_active}
+              recordingAutoManaged={!!videoSession.recording_enabled_default}
               onDisconnected={() => setVideoSession(null)}
             />
           )}

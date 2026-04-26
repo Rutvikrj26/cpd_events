@@ -33,6 +33,7 @@ import { getEvent, updateEvent, publishEvent, unpublishEvent, getEventRegistrati
 import { issueCertificates, revokeCertificate, reissueCertificate, CertificateIssueResult } from "@/api/certificates";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { JoinButton } from "@/components/video/JoinButton";
+import { EventRecordingPanel } from "@/components/dashboard/EventRecordingPanel";
 import {
    AlertDialog,
    AlertDialogAction,
@@ -581,6 +582,8 @@ export function EventManagement() {
                </CardContent>
             </Card>
          </div>
+
+         {isEventHost && <EventRecordingPanel eventUuid={event.uuid} />}
 
          <Tabs defaultValue="registrations" className="w-full">
             <TabsList className="w-full justify-start border-b border-border bg-transparent p-0 h-auto rounded-none mb-6">

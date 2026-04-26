@@ -234,6 +234,14 @@ LIVEKIT_API_KEY = os.environ.get('LIVEKIT_API_KEY', '')
 LIVEKIT_API_SECRET = os.environ.get('LIVEKIT_API_SECRET', '')
 LIVEKIT_HOST = os.environ.get('LIVEKIT_HOST', 'http://localhost:7880')
 LIVEKIT_WS_URL = os.environ.get('LIVEKIT_WS_URL', 'ws://localhost:7880')
+# Where the egress container writes recording files. In dev this is a Docker
+# volume; in cloud-run the same path is the mount-point of a GCS-fuse volume.
+# The Django streaming endpoint serves files relative to this directory.
+RECORDING_STORAGE_DIR = os.environ.get('RECORDING_STORAGE_DIR', '/recordings')
+LIVEKIT_RECORDING_OUTPUT_PATH_TEMPLATE = os.environ.get(
+    'LIVEKIT_RECORDING_OUTPUT_PATH_TEMPLATE',
+    '/out/{room_name}-{time}.mp4',
+)
 
 # Google OAuth
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')

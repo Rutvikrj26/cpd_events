@@ -98,7 +98,37 @@ export function EventRecordingPage() {
             <AlertCircle className="mx-auto h-10 w-10 text-amber-500" />
             <h2 className="text-lg font-semibold">No recording available yet</h2>
             <p className="text-sm text-muted-foreground">
-              {error ?? 'If a recording was captured, it may still be processing or has not been published yet.'}
+              {error ?? "If the session was recorded, it'll appear here once processing finishes and the organizer publishes it."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : recording.status === 'recording' ? (
+        <Card>
+          <CardContent className="p-8 text-center space-y-3">
+            <AlertCircle className="mx-auto h-10 w-10 text-red-500" />
+            <h2 className="text-lg font-semibold">Live recording in progress</h2>
+            <p className="text-sm text-muted-foreground">
+              The session is still being recorded. Check back when the event ends.
+            </p>
+          </CardContent>
+        </Card>
+      ) : recording.status === 'processing' ? (
+        <Card>
+          <CardContent className="p-8 text-center space-y-3">
+            <AlertCircle className="mx-auto h-10 w-10 text-amber-500" />
+            <h2 className="text-lg font-semibold">Processing recording</h2>
+            <p className="text-sm text-muted-foreground">
+              The recording is being finalized. This usually takes a few minutes; refresh shortly.
+            </p>
+          </CardContent>
+        </Card>
+      ) : recording.status === 'error' ? (
+        <Card>
+          <CardContent className="p-8 text-center space-y-3">
+            <AlertCircle className="mx-auto h-10 w-10 text-destructive" />
+            <h2 className="text-lg font-semibold">Recording failed</h2>
+            <p className="text-sm text-muted-foreground">
+              We couldn't capture this session's recording. Please contact the organizer.
             </p>
           </CardContent>
         </Card>

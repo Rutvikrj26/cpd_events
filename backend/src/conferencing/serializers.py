@@ -69,10 +69,14 @@ class VideoRecordingSerializer(serializers.ModelSerializer):
 
     def get_files(self, obj):
         visible_files = obj.files.filter(is_visible=True)
-        return VideoRecordingFileSerializer(visible_files, many=True).data
+        return VideoRecordingFileSerializer(
+            visible_files, many=True, context=self.context,
+        ).data
 
 
 class VideoRecordingFileSerializer(serializers.ModelSerializer):
+    storage_url = serializers.SerializerMethodField()
+
     class Meta:
         model = VideoRecordingFile
         fields = [
@@ -80,6 +84,29 @@ class VideoRecordingFileSerializer(serializers.ModelSerializer):
             'file_size_bytes', 'storage_url',
         ]
         read_only_fields = fields
+
+    def get_storage_url(self, obj):
+        """
+        Build a signed streaming URL fresh on every serialize. Returns an
+        absolute URL because the <video> element resolves it against the
+        page's origin, which in dev points at vite (5173) — not the backend.
+
+        The browser's <video> element can't attach our SPA JWT, so the URL
+        itself carries a short-lived TimestampSigner token scoped to this
+        file's uuid.
+        """
+        from django.core.signing import TimestampSigner
+
+        signer = TimestampSigner(salt='video-recording-stream')
+        token = signer.sign(str(obj.uuid))
+        path = (
+            f'/api/v1/video/recordings/{obj.recording.uuid}'
+            f'/files/{obj.uuid}/stream/?t={token}'
+        )
+        request = self.context.get('request')
+        if request is not None:
+            return request.build_absolute_uri(path)
+        return path
 
 
 class JoinVideoResponseSerializer(serializers.Serializer):
