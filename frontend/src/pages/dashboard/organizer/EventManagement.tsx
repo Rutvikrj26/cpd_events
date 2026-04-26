@@ -505,8 +505,32 @@ export function EventManagement() {
                      <AlertDialogContent>
                         <AlertDialogHeader>
                            <AlertDialogTitle>Delete Event</AlertDialogTitle>
-                           <AlertDialogDescription>
-                              Are you sure you want to delete "{event.title}"? This action cannot be undone.
+                           <AlertDialogDescription asChild>
+                              <div className="space-y-2">
+                                 <p>Are you sure you want to delete <strong>{event.title}</strong>? This action cannot be undone.</p>
+                                 {(stats.registered > 0 || stats.issued > 0 || stats.feedbackCount > 0) && (
+                                    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                                       <div className="font-medium mb-1">Removing this event will also delete:</div>
+                                       <ul className="list-disc pl-5 space-y-0.5">
+                                          {stats.registered > 0 && (
+                                             <li>{stats.registered} registration{stats.registered === 1 ? '' : 's'}</li>
+                                          )}
+                                          {stats.issued > 0 && (
+                                             <li>{stats.issued} issued certificate{stats.issued === 1 ? '' : 's'}</li>
+                                          )}
+                                          {stats.checkedIn > 0 && (
+                                             <li>{stats.checkedIn} attendance record{stats.checkedIn === 1 ? '' : 's'}</li>
+                                          )}
+                                          {stats.feedbackCount > 0 && (
+                                             <li>{stats.feedbackCount} feedback response{stats.feedbackCount === 1 ? '' : 's'}</li>
+                                          )}
+                                       </ul>
+                                       {stats.issued > 0 && (
+                                          <p className="mt-2 text-xs">Certificates that have already been published may have been added to learners' transcripts.</p>
+                                       )}
+                                    </div>
+                                 )}
+                              </div>
                            </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

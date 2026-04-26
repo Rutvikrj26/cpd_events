@@ -305,6 +305,42 @@ class Certificate(SoftDeleteModel):
             return self.registration.event
         return None
 
+    def clean(self):
+        """Reject certificates whose issuance timestamp predates the
+        completion timestamp it should follow. Caught the seed-data case
+        F-28 (Issue Apr 25 / Completion Apr 26 on the same cert), and
+        protects production from any future issuer that backdates
+        ``created_at`` carelessly.
+
+        Cross-model validation, so we do it in Python clean() rather than
+        a CheckConstraint.
+        """
+        super().clean()
+        from django.core.exceptions import ValidationError
+
+        if self.created_at is None:
+            return  # not yet saved; auto_now_add will set this on first save
+
+        if self.registration_id and self.registration:
+            event_end = self.registration.event.ends_at if self.registration.event else None
+            if event_end and self.created_at < event_end:
+                raise ValidationError({
+                    'created_at': (
+                        f"Certificate issued at {self.created_at.isoformat()} cannot "
+                        f"predate the event end ({event_end.isoformat()})."
+                    )
+                })
+
+        if self.course_enrollment_id and self.course_enrollment:
+            completed = self.course_enrollment.completed_at
+            if completed and self.created_at < completed:
+                raise ValidationError({
+                    'created_at': (
+                        f"Certificate issued at {self.created_at.isoformat()} cannot "
+                        f"predate course completion ({completed.isoformat()})."
+                    )
+                })
+
     @property
     def course(self):
         """Shortcut to the course this certificate was issued for, if any."""

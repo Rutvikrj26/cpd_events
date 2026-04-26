@@ -15,6 +15,7 @@ import { RegistrationCreateRequest } from "@/api/registrations/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { CustomFieldsForm } from "@/components/registration/CustomFieldInput";
+import { splitFullName } from "@/lib/initials";
 
 type Step = "form" | "success";
 
@@ -49,12 +50,12 @@ export function EventRegistration() {
                 const data = await getPublicEvent(id);
                 setEvent(data);
                 if (user) {
-                    const parts = (user.full_name || "").split(" ");
+                    const { first, last } = splitFullName(user.full_name);
                     setFormData((prev) => ({
                         ...prev,
                         email: user.email,
-                        firstName: parts[0] || "",
-                        lastName: parts.slice(1).join(" ") || "",
+                        firstName: first,
+                        lastName: last,
                     }));
                 }
             } catch (e) {

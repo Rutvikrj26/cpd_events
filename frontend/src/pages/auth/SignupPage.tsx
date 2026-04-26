@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ const schema = z
 type FormValues = z.infer<typeof schema>;
 
 export function SignupPage() {
+    useDocumentTitle('Create account');
     const navigate = useNavigate();
     const { deployment, completeLogin } = useAuth();
     const [isSubmitting, setIsSubmitting] = React.useState(false);

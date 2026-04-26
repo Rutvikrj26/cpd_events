@@ -1,5 +1,7 @@
 // Build avatar initials from a person's name, stripping common honorifics so
 // "Dr. Michael Torres" produces "MT" rather than "DT" (QA finding F-19).
+// Also exports `splitFullName` which uses the same honorific-stripping logic
+// to feed first_name / last_name form prefills correctly (F-33).
 
 const HONORIFICS = new Set([
     'dr', 'dr.',
@@ -41,4 +43,17 @@ export function getInitials(...parts: Array<string | undefined | null>): string 
         return tokens[0].slice(0, 2).toUpperCase();
     }
     return (tokens[0][0] + tokens[tokens.length - 1][0]).toUpperCase();
+}
+
+/**
+ * Split a full name into { first, last } parts, stripping honorifics.
+ * "Dr. Michael Torres" → { first: "Michael", last: "Torres" }
+ * "Cher" → { first: "Cher", last: "" }
+ */
+export function splitFullName(fullName: string | undefined | null): { first: string; last: string } {
+    if (!fullName) return { first: '', last: '' };
+    const tokens = stripHonorifics(fullName).split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return { first: '', last: '' };
+    if (tokens.length === 1) return { first: tokens[0], last: '' };
+    return { first: tokens[0], last: tokens.slice(1).join(' ') };
 }

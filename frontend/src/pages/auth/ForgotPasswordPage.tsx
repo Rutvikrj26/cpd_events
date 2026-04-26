@@ -15,6 +15,7 @@ import {
     FormMessage,
 } from "@/components/ui/form";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { resetPassword } from "@/api/accounts";
 
@@ -23,6 +24,7 @@ const forgotPasswordSchema = z.object({
 });
 
 export function ForgotPasswordPage() {
+    useDocumentTitle('Forgot password');
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [isSent, setIsSent] = React.useState(false);
 

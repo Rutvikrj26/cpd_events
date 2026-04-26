@@ -287,7 +287,11 @@ export const CertificateVerify = () => {
                                 <div>
                                     <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Certificate ID</h4>
                                     <p className="font-mono text-muted-foreground bg-muted/50 inline-block px-2 py-0.5 rounded text-sm">
-                                        {certificate.verification_code || code}
+                                        {/* Show the short, human-readable code (matches the
+                                            learner's My Certificates page). The longer
+                                            verification_code is still embedded in the QR /
+                                            verify URL on the right column for traceability. */}
+                                        {code || certificate.verification_code}
                                     </p>
                                 </div>
 

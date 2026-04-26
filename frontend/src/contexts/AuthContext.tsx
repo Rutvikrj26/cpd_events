@@ -183,7 +183,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const { access, refresh } = await apiLogin(data);
             await completeLogin(access, refresh);
         } catch (error) {
-            console.error("Login failed", error);
+            // Wrong-password / unknown-user is a normal user mistake; don't
+            // pollute the console / Sentry with a stack trace for it. The
+            // LoginPage's catch surfaces a toast already. (QA F-2)
             throw error;
         }
     };

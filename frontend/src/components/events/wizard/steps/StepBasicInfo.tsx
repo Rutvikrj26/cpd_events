@@ -25,7 +25,7 @@ export const StepBasicInfo = () => {
                     <Label htmlFor="title">Event Title</Label>
                     <Input
                         id="title"
-                        placeholder="e.g. Annual Leadership Summit 2024"
+                        placeholder="e.g. Annual Leadership Summit"
                         value={formData.title || ''}
                         onChange={(e) => updateFormData({ title: e.target.value })}
                         className="text-lg py-6"

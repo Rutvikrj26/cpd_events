@@ -103,9 +103,14 @@ class Command(BaseCommand):
             user, created = User.objects.update_or_create(email=email, defaults=defaults)
             return user
 
+        # Names are stored without the "Dr." honorific (which lives in
+        # professional_title). The frontend prepends "Dr." for display when
+        # appropriate; storing it in full_name caused first_name to come out
+        # as "Dr." in registration prefills and avatars to read "DT" instead
+        # of "MT". (QA F-19 / F-33)
         admin = upsert(
             "admin@utoronto.ca",
-            full_name="Dr. Sarah Chen",
+            full_name="Sarah Chen",
             professional_title="MD, PhD",
             organization_name="University of Toronto",
             timezone="America/Toronto",
@@ -116,7 +121,7 @@ class Command(BaseCommand):
         )
         organizer = upsert(
             "organizer@utoronto.ca",
-            full_name="Dr. James Wilson",
+            full_name="James Wilson",
             professional_title="MD, FRCPC",
             organization_name="University of Toronto",
             timezone="America/Toronto",
@@ -125,7 +130,7 @@ class Command(BaseCommand):
         )
         instructor = upsert(
             "priya.shah@utoronto.ca",
-            full_name="Dr. Priya Shah",
+            full_name="Priya Shah",
             professional_title="PhD, Clinical Education",
             organization_name="University of Toronto",
             timezone="America/Toronto",
@@ -134,7 +139,7 @@ class Command(BaseCommand):
         )
         emily = upsert(
             "emily.park@hospital.com",
-            full_name="Dr. Emily Park",
+            full_name="Emily Park",
             professional_title="MD",
             organization_name="Toronto General Hospital",
             timezone="America/Toronto",
@@ -143,7 +148,7 @@ class Command(BaseCommand):
         )
         michael = upsert(
             "m.torres@clinic.com",
-            full_name="Dr. Michael Torres",
+            full_name="Michael Torres",
             professional_title="DO",
             organization_name="Lakeside Family Clinic",
             timezone="America/Los_Angeles",
@@ -154,7 +159,7 @@ class Command(BaseCommand):
         )
         aisha = upsert(
             "aisha.khan@university.edu",
-            full_name="Dr. Aisha Khan",
+            full_name="Aisha Khan",
             professional_title="PhD",
             organization_name="University of Ottawa",
             timezone="Europe/London",

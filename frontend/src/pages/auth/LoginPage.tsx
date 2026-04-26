@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { signInWithFirebase } from "@/api/accounts";
 import { getGoogleIdToken, isFirebaseConfigured } from "@/lib/firebase";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 const formSchema = z.object({
   email: z.string().email({
@@ -31,6 +32,7 @@ const formSchema = z.object({
 });
 
 export function LoginPage() {
+  useDocumentTitle('Sign in');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { login, completeLogin, deployment, isAuthenticated } = useAuth();

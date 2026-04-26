@@ -125,7 +125,7 @@ export function OrganizerDashboard() {
           title="Total Events"
           value={stats.totalEvents}
           icon={Calendar}
-          description="All time"
+          description="Your events, lifetime"
         />
         <DashboardStat
           title="Active Events"
@@ -137,7 +137,7 @@ export function OrganizerDashboard() {
           title="Total Registrations"
           value={stats.totalRegistrations}
           icon={Users}
-          description="Across all events"
+          description="Across your events"
         />
         <DashboardStat
           title="Certificates Issued"
@@ -154,7 +154,7 @@ export function OrganizerDashboard() {
             title="Total Courses"
             value={stats.totalCourses}
             icon={BookOpen}
-            description="All time"
+            description="Your courses, lifetime"
           />
           <DashboardStat
             title="Published Courses"

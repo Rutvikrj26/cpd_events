@@ -105,23 +105,25 @@ export default function App() {
               {/* Root: redirect to dashboard if authenticated, login if not */}
               <Route path="/" element={<AuthenticatedRoot />} />
 
-              {/* Legal pages */}
+              {/* Legal pages — wrapped in PublicLayout (not AuthLayout) so
+                  the prose column gets a real reading width instead of the
+                  ~448px sign-in card box. (QA F-35) */}
               <Route path="/terms" element={
-                <AuthLayout>
+                <PublicLayout>
                   <TermsPage />
-                </AuthLayout>
+                </PublicLayout>
               } />
 
               <Route path="/privacy" element={
-                <AuthLayout>
+                <PublicLayout>
                   <PrivacyPage />
-                </AuthLayout>
+                </PublicLayout>
               } />
 
               <Route path="/cookies" element={
-                <AuthLayout>
+                <PublicLayout>
                   <CookiePolicyPage />
-                </AuthLayout>
+                </PublicLayout>
               } />
 
               {/* Public verification pages */}
