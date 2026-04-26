@@ -143,6 +143,41 @@ export function EventRegistration() {
         );
     }
 
+    const eventEnded = (() => {
+        if (!event?.starts_at) return false;
+        const end = new Date(event.starts_at).getTime() + (event.duration_minutes ?? 0) * 60_000;
+        return end < Date.now();
+    })();
+
+    if (event && eventEnded) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <Card className="max-w-md w-full mx-4">
+                    <CardContent className="pt-6 text-center space-y-4">
+                        <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto">
+                            <Calendar className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-foreground">This event has ended</h2>
+                        <p className="text-muted-foreground">
+                            Registration for <strong>{event.title}</strong> is closed.
+                            If a recording is published, it will appear on the event page.
+                        </p>
+                        <div className="space-y-2 pt-2">
+                            <Link to={`/events/${event.slug || id}/details`}>
+                                <Button className="w-full">View Event Details</Button>
+                            </Link>
+                            <Link to="/discover/events">
+                                <Button variant="outline" className="w-full">
+                                    Browse More Events
+                                </Button>
+                            </Link>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
     if (step === "success") {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background">

@@ -466,6 +466,29 @@ class VideoRoomViewSet(viewsets.ReadOnlyModelViewSet):
         status_param = self.request.query_params.get('status')
         if status_param:
             qs = qs.filter(status=status_param)
+
+        # When the caller asks for "active" rooms, exclude rooms whose underlying
+        # Event or CourseSession has already ended chronologically. The
+        # LiveKit-side `status` field can lag (or stay ACTIVE indefinitely if
+        # egress crashes), so we cross-check against the schedule.
+        # Filtered in Python: SQLite cannot multiply int * timedelta in SQL,
+        # and the active-room set is small (typically < 100 rows).
+        if status_param == VideoRoom.Status.ACTIVE:
+            ended_event_ids = [
+                e.id for e in Event.objects.filter(deleted_at__isnull=True)
+                                            .only('id', 'starts_at', 'duration_minutes')
+                if e.is_past
+            ]
+            ended_session_ids = [
+                s.id for s in CourseSession.objects
+                                            .only('id', 'starts_at', 'duration_minutes')
+                if s.is_past
+            ]
+            if ended_event_ids:
+                qs = qs.exclude(content_type=event_ct, object_id__in=ended_event_ids)
+            if ended_session_ids:
+                qs = qs.exclude(content_type=session_ct, object_id__in=ended_session_ids)
+
         return qs.order_by('-started_at', '-created_at')
 
     @action(detail=True, methods=['post'])

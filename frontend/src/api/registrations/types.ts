@@ -10,6 +10,8 @@ export interface MinimalEvent {
     price?: number;
     currency?: string;
     is_free?: boolean;
+    duration_minutes?: number;
+    actual_end_at?: string | null;
 }
 
 export interface Registration {

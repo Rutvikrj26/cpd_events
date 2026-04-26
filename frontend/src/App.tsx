@@ -1,6 +1,5 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/features/auth";
@@ -283,7 +282,7 @@ export default function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="/admin/billing" element={
-                    <ProtectedRoute>
+                    <ProtectedRoute requiredFeature="configure_billing">
                       <BillingAdminPage />
                     </ProtectedRoute>
                   } />
@@ -307,8 +306,7 @@ export default function App() {
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </AuthProvider>
-          <Toaster />
-          <SonnerToaster position="top-right" richColors closeButton />
+          <SonnerToaster position="top-right" richColors closeButton duration={5000} />
           <InstallPrompt />
         </BrowserRouter>
       </ThemeProvider>

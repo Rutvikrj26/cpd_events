@@ -117,6 +117,16 @@ export const MyLearningPage = () => {
         setExistingFeedback(null);
     };
 
+    const isEventEnded = (reg: Registration) => {
+        const now = Date.now();
+        const startMs = new Date(reg.event.starts_at).getTime();
+        const durationMs = (reg.event.duration_minutes ?? 0) * 60_000;
+        const explicitEnd = reg.event.actual_end_at
+            ? new Date(reg.event.actual_end_at).getTime()
+            : null;
+        return (explicitEnd ?? startMs + durationMs) < now;
+    };
+
     const canLeaveFeedback = (reg: Registration) => {
         // Event ended = either an explicit actual_end_at, or
         // starts_at + duration_minutes is in the past. Live events whose
@@ -246,7 +256,7 @@ export const MyLearningPage = () => {
                                                     <Link to={`/events/${reg.event.slug || reg.event.uuid}/details`} className="text-primary hover:text-primary/80 font-medium text-xs">
                                                         View Event
                                                     </Link>
-                                                    {reg.status === 'pending' && (reg.payment_status === 'pending' || reg.payment_status === 'refunded') && (
+                                                    {reg.status === 'pending' && (reg.payment_status === 'pending' || reg.payment_status === 'refunded') && !isEventEnded(reg) && (
                                                         <Button
                                                             size="sm"
                                                             variant="outline"
@@ -257,7 +267,7 @@ export const MyLearningPage = () => {
                                                             Pay Now
                                                         </Button>
                                                     )}
-                                                    {reg.status === 'pending' && reg.payment_status === 'failed' && (
+                                                    {reg.status === 'pending' && reg.payment_status === 'failed' && !isEventEnded(reg) && (
                                                         <Button
                                                             size="sm"
                                                             variant="destructive"
@@ -267,6 +277,11 @@ export const MyLearningPage = () => {
                                                             <AlertCircle size={12} className="mr-1" />
                                                             Retry Payment
                                                         </Button>
+                                                    )}
+                                                    {reg.status === 'pending' && (reg.payment_status === 'pending' || reg.payment_status === 'failed') && isEventEnded(reg) && (
+                                                        <span className="text-xs text-muted-foreground italic">
+                                                            Event ended — payment closed
+                                                        </span>
                                                     )}
                                                     {canLeaveFeedback(reg) && (
                                                         <Button

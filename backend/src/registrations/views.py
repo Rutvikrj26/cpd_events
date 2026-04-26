@@ -549,6 +549,13 @@ class PublicRegistrationView(generics.CreateAPIView):
                 'Event not found or registration closed.', code='NOT_FOUND', status_code=status.HTTP_404_NOT_FOUND
             )
 
+        if event.is_past:
+            return error_response(
+                'This event has ended and is no longer accepting registrations.',
+                code='EVENT_ENDED',
+                status_code=status.HTTP_409_CONFLICT,
+            )
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -670,6 +677,12 @@ class StartCheckoutView(generics.GenericAPIView):
             return error_response('Payment already completed.', code='ALREADY_PAID')
         if registration.status != Registration.Status.PENDING or registration.amount_paid <= 0:
             return error_response('Registration does not require payment.', code='NO_PAYMENT_REQUIRED')
+        if registration.event.is_past:
+            return error_response(
+                'This event has ended; payment can no longer be collected.',
+                code='EVENT_ENDED',
+                status_code=status.HTTP_409_CONFLICT,
+            )
 
         try:
             result = checkout_service.for_event_registration(registration)

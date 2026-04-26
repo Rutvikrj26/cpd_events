@@ -225,7 +225,7 @@ export const CertificateVerify = () => {
                         </div>
 
                         {/* Certificate Details Card */}
-                        <div className="bg-card rounded-b-xl shadow-sm border border-border border-t-0 p-8 -mt-6">
+                        <div className={`bg-card rounded-b-xl shadow-sm border border-border border-t-0 p-8 -mt-6 ${!isValid ? 'opacity-60 grayscale' : ''}`}>
 
                             <div className="flex flex-col md:flex-row gap-8 items-start mb-10">
                                 {/* Digital Badge Icon (Placeholder) */}
@@ -236,10 +236,20 @@ export const CertificateVerify = () => {
                                 </div>
 
                                 <div className="flex-1 text-center md:text-left">
-                                    <p className="text-muted-foreground mb-2">This certifies that</p>
-                                    <h2 className="text-3xl font-bold text-foreground mb-2">{certificate.registrant.full_name}</h2>
-                                    <p className="text-muted-foreground mb-2">has successfully completed the requirements for the {isCourse ? 'course' : 'program'}</p>
-                                    <h3 className="text-xl font-semibold text-primary">{certificate.event.title}</h3>
+                                    <p className="text-muted-foreground mb-2">
+                                        {isValid ? 'This certifies that' : 'Originally issued to'}
+                                    </p>
+                                    <h2 className={`text-3xl font-bold mb-2 ${isValid ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                        {certificate.registrant.full_name}
+                                    </h2>
+                                    <p className="text-muted-foreground mb-2">
+                                        {isValid
+                                            ? `has successfully completed the requirements for the ${isCourse ? 'course' : 'program'}`
+                                            : `for the ${isCourse ? 'course' : 'program'}`}
+                                    </p>
+                                    <h3 className={`text-xl font-semibold ${isValid ? 'text-primary' : 'line-through text-muted-foreground'}`}>
+                                        {certificate.event.title}
+                                    </h3>
                                 </div>
                             </div>
 
@@ -309,51 +319,65 @@ export const CertificateVerify = () => {
                             </p>
                         </div>
 
-                        {/* Actions Card */}
-                        <div className="bg-card rounded-xl shadow-sm border border-border p-6">
-                            <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                                <ExternalLink className="h-4 w-4" />
-                                Certificate Actions
-                            </h3>
+                        {/* Actions Card — only when the credential is valid. */}
+                        {isValid ? (
+                            <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+                                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                                    <ExternalLink className="h-4 w-4" />
+                                    Certificate Actions
+                                </h3>
 
-                            <div className="space-y-3">
-                                <Button
-                                    className="w-full justify-start"
-                                    onClick={handleDownload}
-                                    variant="outline"
-                                >
-                                    <Download className="h-4 w-4 mr-2" />
-                                    Download PDF
-                                </Button>
+                                <div className="space-y-3">
+                                    <Button
+                                        className="w-full justify-start"
+                                        onClick={handleDownload}
+                                        variant="outline"
+                                    >
+                                        <Download className="h-4 w-4 mr-2" />
+                                        Download PDF
+                                    </Button>
 
-                                <Button
-                                    className="w-full justify-start"
-                                    onClick={copyToClipboard}
-                                    variant="outline"
-                                >
-                                    <Copy className="h-4 w-4 mr-2" />
-                                    Copy Link
-                                </Button>
+                                    <Button
+                                        className="w-full justify-start"
+                                        onClick={copyToClipboard}
+                                        variant="outline"
+                                    >
+                                        <Copy className="h-4 w-4 mr-2" />
+                                        Copy Link
+                                    </Button>
 
-                                <Button
-                                    className="w-full justify-start"
-                                    onClick={handlePrint}
-                                    variant="outline"
-                                >
-                                    <Printer className="h-4 w-4 mr-2" />
-                                    Print Certificate
-                                </Button>
+                                    <Button
+                                        className="w-full justify-start"
+                                        onClick={handlePrint}
+                                        variant="outline"
+                                    >
+                                        <Printer className="h-4 w-4 mr-2" />
+                                        Print Certificate
+                                    </Button>
 
-                                <Button
-                                    className="w-full justify-start"
-                                    variant="outline"
-                                    onClick={() => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`, '_blank')}
-                                >
-                                    <Share2 className="h-4 w-4 mr-2" />
-                                    Share on LinkedIn
-                                </Button>
+                                    <Button
+                                        className="w-full justify-start"
+                                        variant="outline"
+                                        onClick={() => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`, '_blank')}
+                                    >
+                                        <Share2 className="h-4 w-4 mr-2" />
+                                        Share on LinkedIn
+                                    </Button>
+                                </div>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+                                <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                                    <ShieldX className="h-4 w-4 text-red-600" />
+                                    Actions Disabled
+                                </h3>
+                                <p className="text-sm text-muted-foreground">
+                                    This credential has been revoked. Download, copy, print, and share
+                                    actions are disabled. The verification URL is still useful as proof
+                                    that the credential is no longer recognised.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Verification Info Card */}
                         <div className="bg-muted/30 rounded-xl border border-border p-6 text-sm">
