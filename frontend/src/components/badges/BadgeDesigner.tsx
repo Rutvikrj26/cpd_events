@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Move, ZoomIn, ZoomOut, Download, RefreshCw, Eye, EyeOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
+import { Switch } from "@/shared/ui/switch";
 import {
     Dialog,
     DialogContent,
@@ -11,7 +11,7 @@ import {
     DialogTitle,
     DialogFooter,
     DialogDescription,
-} from "@/components/ui/dialog";
+} from "@/shared/ui/dialog";
 import { updateBadgeTemplate } from "@/api/badges";
 import { toast } from "sonner";
 import { BadgeTemplate } from "@/api/badges/types";

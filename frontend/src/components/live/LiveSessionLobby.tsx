@@ -8,8 +8,8 @@ import { Link } from 'react-router-dom';
 import { Calendar, MapPin, Users, AlertCircle, ArrowLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/shared/ui/button';
+import { Card, CardContent } from '@/shared/ui/card';
 import { AddToCalendar } from '@/components/events/AddToCalendar';
 import { EventCountdown } from '@/components/events/EventCountdown';
 

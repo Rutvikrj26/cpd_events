@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShieldCheck, ShieldX, Calendar, Award, Building, User, Loader2, Search, Download, Share2, Copy, Printer, ExternalLink, CheckCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
-// import { Badge } from '@/components/ui/badge'; // Assuming Badge component exists or we can use standard tailwind classes
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
+import { Separator } from '@/shared/ui/separator';
+// import { Badge } from '@/shared/ui/badge'; // Assuming Badge component exists or we can use standard tailwind classes
 import { verifyCertificate } from '@/api/certificates';
 import { toast } from 'sonner';
 

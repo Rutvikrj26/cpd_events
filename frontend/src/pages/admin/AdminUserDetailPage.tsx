@@ -15,9 +15,9 @@ import {
     UserCheck,
 } from "lucide-react";
 import { formatRoleLabel } from "@/lib/role-utils";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/shared/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
+import { Badge } from "@/shared/ui/badge";
 import {
     Dialog,
     DialogContent,
@@ -25,8 +25,8 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+} from "@/shared/ui/dialog";
+import { Label } from "@/shared/ui/label";
 import { toast } from "sonner";
 import {
     AdminUserDetail,

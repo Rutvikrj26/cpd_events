@@ -1,21 +1,21 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Search, Filter, Calendar as CalendarIcon, SlidersHorizontal, Award, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
-import { Pagination } from "@/components/ui/pagination";
+} from "@/shared/ui/select";
+import { Separator } from "@/shared/ui/separator";
+import { Checkbox } from "@/shared/ui/checkbox";
+import { Badge } from "@/shared/ui/badge";
+import { Card, CardContent } from "@/shared/ui/card";
+import { PageHeader } from "@/shared/ui/page-header";
+import { Pagination } from "@/shared/ui/pagination";
 import { getPublicEvents, PublicEventListParams } from "@/api/events";
 import { Event } from "@/api/events/types";
 import { PaginatedResponse } from "@/api/types";

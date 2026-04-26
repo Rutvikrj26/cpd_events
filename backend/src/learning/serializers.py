@@ -1332,6 +1332,7 @@ class ProgramSerializer(serializers.ModelSerializer):
     sum_individual_price_cents = serializers.SerializerMethodField()
     bundle_savings_cents = serializers.SerializerMethodField()
     already_paid_for_courses = serializers.SerializerMethodField()
+    viewer_enrollment = serializers.SerializerMethodField()
 
     class Meta:
         model = Program
@@ -1351,6 +1352,7 @@ class ProgramSerializer(serializers.ModelSerializer):
             'sum_individual_price_cents',
             'bundle_savings_cents',
             'already_paid_for_courses',
+            'viewer_enrollment',
             'stripe_price_id',
             'course_count',
             'enrollment_count',
@@ -1365,6 +1367,7 @@ class ProgramSerializer(serializers.ModelSerializer):
             'sum_individual_price_cents',
             'bundle_savings_cents',
             'already_paid_for_courses',
+            'viewer_enrollment',
             'course_count',
             'enrollment_count',
             'program_courses',
@@ -1412,6 +1415,26 @@ class ProgramSerializer(serializers.ModelSerializer):
             }
             for p in paid
         ]
+
+    def get_viewer_enrollment(self, obj):
+        """Return the requesting user's ProgramEnrollment summary, or None.
+
+        Used by the public program detail page to swap the purchase CTA for
+        a "Continue learning" / "Completed" view once the learner is enrolled,
+        preventing accidental re-purchase of an owned bundle.
+        """
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if not user or not getattr(user, 'is_authenticated', False):
+            return None
+        enrollment = obj.enrollments.filter(user=user).first()
+        if enrollment is None:
+            return None
+        return {
+            'status': enrollment.status,
+            'enrolled_at': enrollment.enrolled_at.isoformat() if enrollment.enrolled_at else None,
+            'completed_at': enrollment.completed_at.isoformat() if enrollment.completed_at else None,
+        }
 
 
 class ProgramCreateSerializer(serializers.ModelSerializer):

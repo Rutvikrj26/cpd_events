@@ -2,26 +2,26 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, BookOpen, Layers, Loader2, Plus, Trash2, Users, Eye, ChevronUp, ChevronDown } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
+import { Label } from '@/shared/ui/label';
+import { Switch } from '@/shared/ui/switch';
+import { Badge } from '@/shared/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { EnrollmentsTab } from './manage/EnrollmentsTab';
 import { AnalyticsTab } from './manage/AnalyticsTab';
 import { AnnouncementsTab } from './manage/AnnouncementsTab';
 import { DiscussionTab } from './manage/DiscussionTab';
-import { useToast } from '@/components/ui/use-toast';
-import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/shared/ui/use-toast';
+import { Textarea } from '@/shared/ui/textarea';
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select';
+} from '@/shared/ui/select';
 
 import {
     addProgramCourse,

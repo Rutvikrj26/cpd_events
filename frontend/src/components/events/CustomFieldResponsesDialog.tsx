@@ -6,7 +6,7 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
-} from "@/components/ui/dialog";
+} from "@/shared/ui/dialog";
 import { getRegistrationDetail } from "@/api/events";
 
 interface CustomFieldResponse {

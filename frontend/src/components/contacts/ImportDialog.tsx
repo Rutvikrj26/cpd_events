@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -6,15 +6,17 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+} from '@/shared/ui/dialog';
+import { Button } from '@/shared/ui/button';
 import { AlertCircle, CheckCircle, Download, FileText, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import {
     downloadContactsImportTemplate,
     importContactsCsv,
     ImportCsvResult,
 } from '@/api/contacts';
+import { contactKeys } from '@/features/contacts';
 
 interface ImportDialogProps {
     open: boolean;
@@ -23,6 +25,7 @@ interface ImportDialogProps {
 }
 
 export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProps) {
+    const queryClient = useQueryClient();
     const [loading, setLoading] = useState(false);
     const [file, setFile] = useState<File | null>(null);
     const [result, setResult] = useState<ImportCsvResult | null>(null);
@@ -36,7 +39,7 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
         }
     }, [open]);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         const selected = e.target.files?.[0] ?? null;
         setFile(selected);
         setResult(null);
@@ -67,6 +70,9 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
                             res.skipped > 0 ? `${res.skipped} duplicate(s) skipped` : undefined,
                     },
                 );
+            }
+            if (res.created > 0) {
+                queryClient.invalidateQueries({ queryKey: contactKeys.all });
             }
             if (res.errors.length === 0 && res.created > 0) {
                 onSuccess?.();

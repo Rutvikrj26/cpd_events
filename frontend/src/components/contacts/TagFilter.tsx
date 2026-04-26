@@ -6,11 +6,11 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
+} from '@/shared/ui/dropdown-menu';
+import { Button } from '@/shared/ui/button';
 import { Filter, Tag as TagIcon } from 'lucide-react';
 import { Tag } from '@/api/contacts';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/shared/ui/badge';
 
 interface TagFilterProps {
     tags: Tag[];

@@ -1,7 +1,15 @@
-import { jwtDecode } from 'jwt-decode';
-
-const TOKEN_KEY = 'cpd_auth_token';
-const REFRESH_key = 'cpd_refresh_token';
+/**
+ * Legacy token-storage shim.
+ *
+ * Tokens now live in `features/auth/store/authStore.ts` (Zustand,
+ * persisted). These functions delegate so existing imperative callers
+ * (e.g. `api/client.ts` interceptors) keep working unchanged. New code
+ * should use the store / hooks directly.
+ *
+ * Slated for deletion once api/client.ts is refactored to import the
+ * store directly (P3a follow-up).
+ */
+import { useAuthStore } from '@/features/auth/store/authStore';
 
 export interface DecodedToken {
     user_uuid: string;
@@ -11,44 +19,23 @@ export interface DecodedToken {
 }
 
 export const setToken = (access: string, refresh?: string) => {
-    localStorage.setItem(TOKEN_KEY, access);
-    if (refresh) {
-        localStorage.setItem(REFRESH_key, refresh);
-    }
+    useAuthStore.getState().setTokens(access, refresh);
 };
 
-export const getToken = () => {
-    return localStorage.getItem(TOKEN_KEY);
-};
+export const getToken = () => useAuthStore.getState().accessToken;
 
-export const getRefreshToken = () => {
-    return localStorage.getItem(REFRESH_key);
-};
+export const getRefreshToken = () => useAuthStore.getState().refreshToken;
 
-export const removeToken = () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_key);
-};
+export const removeToken = () => useAuthStore.getState().clearTokens();
 
-export const isTokenValid = (token: string): boolean => {
-    try {
-        const decoded: DecodedToken = jwtDecode(token);
-        return decoded.exp * 1000 > Date.now();
-    } catch (error) {
-        return false;
-    }
+export const isTokenValid = (_token: string): boolean => {
+    // Accept the parameter for backwards compatibility but always trust
+    // the store's check, which decodes the JWT itself.
+    return useAuthStore.getState().hasValidAccessToken();
 };
 
 export const getUserFromToken = () => {
-    const token = getToken();
-    if (!token) return null;
-
-    try {
-        const decoded: DecodedToken = jwtDecode(token);
-        return {
-            uuid: decoded.user_uuid,
-        };
-    } catch (error) {
-        return null;
-    }
+    const uuid = useAuthStore.getState().getUserUuid();
+    if (!uuid) return null;
+    return { uuid };
 };

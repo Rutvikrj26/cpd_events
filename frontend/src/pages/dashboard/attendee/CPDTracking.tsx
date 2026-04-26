@@ -8,16 +8,16 @@ import {
    Loader2,
    Trash2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/shared/ui/button";
+import { Progress } from "@/shared/ui/progress";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/shared/ui/card";
 import { PageHeader } from "@/components/custom/PageHeader";
 import {
    DropdownMenu,
    DropdownMenuContent,
    DropdownMenuItem,
    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/shared/ui/dropdown-menu";
 import {
    Dialog,
    DialogContent,
@@ -26,16 +26,16 @@ import {
    DialogHeader,
    DialogTitle,
    DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@/shared/ui/dialog";
+import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
 import {
    Select,
    SelectContent,
    SelectItem,
    SelectTrigger,
    SelectValue,
-} from "@/components/ui/select";
+} from "@/shared/ui/select";
 import { getCPDProgress, downloadCPDReport, createCPDRequirement, deleteCPDRequirement } from "@/api/cpd";
 import { CPDProgress, CPDRequirement, CPDRequirementCreate } from "@/api/cpd/types";
 import { toast } from "sonner";

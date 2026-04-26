@@ -18,19 +18,19 @@ import {
   ArrowRight,
   ShieldCheck,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/shared/ui/button";
+import { Badge } from "@/shared/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/shared/ui/card";
+import { Separator } from "@/shared/ui/separator";
+import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { StatusBadge } from "@/components/custom/StatusBadge";
 import { JoinButton } from "@/components/video/JoinButton";
 import { getPublicEvent, getPublicEvents } from "@/api/events";
 import { getMyRegistrations } from "@/api/registrations";
 import { Event } from "@/api/events/types";
 import { Registration } from "@/api/registrations/types";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/features/auth";
 import { sanitizeHtml, hasVisibleContent } from "@/lib/sanitize";
 
 export function EventDetail() {

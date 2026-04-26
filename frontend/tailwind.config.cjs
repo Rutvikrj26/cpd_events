@@ -53,6 +53,20 @@ module.exports = {
 					DEFAULT: 'hsl(var(--warning))',
 					foreground: 'hsl(var(--warning-foreground))'
 				},
+				/* Status colors (D4) — narrative meaning, not just generic palette.
+				   Use over raw amber/slate/red so meaning stays consistent across themes. */
+				'status-progress': {
+					DEFAULT: 'hsl(var(--status-progress))',
+					foreground: 'hsl(var(--status-progress-foreground))'
+				},
+				'status-locked': {
+					DEFAULT: 'hsl(var(--status-locked))',
+					foreground: 'hsl(var(--status-locked-foreground))'
+				},
+				'status-overdue': {
+					DEFAULT: 'hsl(var(--status-overdue))',
+					foreground: 'hsl(var(--status-overdue-foreground))'
+				},
 				chart: {
 					'1': 'hsl(var(--chart-1))',
 					'2': 'hsl(var(--chart-2))',
@@ -81,16 +95,32 @@ module.exports = {
 				]
 			},
 			fontSize: {
-				'2xs': [
-					'0.625rem',
-					{
-						lineHeight: '0.875rem'
-					}
-				]
+				'2xs': ['0.625rem', { lineHeight: '0.875rem' }],
+				/* Semantic type scale (D1 — visual design plan).
+				   Use these in preference to ad-hoc text-sm / text-3xl. */
+				'caption': ['0.75rem', { lineHeight: '1.125rem', letterSpacing: '0.01em' }],
+				'body': ['0.875rem', { lineHeight: '1.375rem' }],
+				'body-lg': ['1rem', { lineHeight: '1.5rem' }],
+				'h3': ['1.125rem', { lineHeight: '1.625rem', fontWeight: '600', letterSpacing: '-0.005em' }],
+				'h2': ['1.375rem', { lineHeight: '1.875rem', fontWeight: '600', letterSpacing: '-0.01em' }],
+				'h1': ['1.75rem', { lineHeight: '2.25rem', fontWeight: '600', letterSpacing: '-0.015em' }],
+				'display-lg': ['2rem', { lineHeight: '2.5rem', fontWeight: '600', letterSpacing: '-0.02em' }],
+				'display-xl': ['2.5rem', { lineHeight: '3rem', fontWeight: '700', letterSpacing: '-0.025em' }],
+			},
+			spacing: {
+				/* Semantic spacing (D2). Use over raw 4/6/8/12 for layout-level gaps. */
+				'tight': '0.75rem',   /* 12px — between tightly-grouped elements */
+				'card': '1.5rem',     /* 24px — internal card padding / inter-card gaps */
+				'block': '2rem',      /* 32px — between content blocks within a section */
+				'section': '3rem',    /* 48px — between top-level page sections */
 			},
 			boxShadow: {
 				soft: '0 2px 8px -2px hsl(var(--shadow-color) / 0.08), 0 4px 16px -4px hsl(var(--shadow-color) / 0.06)',
-				elevated: '0 4px 12px -2px hsl(var(--shadow-color) / 0.1), 0 8px 24px -4px hsl(var(--shadow-color) / 0.08), 0 12px 48px -8px hsl(var(--shadow-color) / 0.06)'
+				elevated: '0 4px 12px -2px hsl(var(--shadow-color) / 0.1), 0 8px 24px -4px hsl(var(--shadow-color) / 0.08), 0 12px 48px -8px hsl(var(--shadow-color) / 0.06)',
+				/* Card elevation tiers (D3). Apply via Card `elevation` prop or directly. */
+				'rest': '0 1px 2px 0 hsl(var(--shadow-color) / 0.04), 0 1px 3px -1px hsl(var(--shadow-color) / 0.04)',
+				'hover': '0 4px 8px -2px hsl(var(--shadow-color) / 0.06), 0 8px 16px -4px hsl(var(--shadow-color) / 0.05)',
+				'lifted': '0 8px 16px -4px hsl(var(--shadow-color) / 0.08), 0 16px 32px -8px hsl(var(--shadow-color) / 0.06), 0 24px 48px -12px hsl(var(--shadow-color) / 0.04)',
 			},
 			keyframes: {
 				'accordion-down': {

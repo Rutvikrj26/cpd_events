@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/shared/ui/card';
+import { Button } from '@/shared/ui/button';
+import { Badge } from '@/shared/ui/badge';
+import { Input } from '@/shared/ui/input';
 import { deriveProgressDisplay } from '@/lib/progress';
-import { Label } from '@/components/ui/label';
-import { useToast } from '@/components/ui/use-toast';
+import { Label } from '@/shared/ui/label';
+import { useToast } from '@/shared/ui/use-toast';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -15,7 +15,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from '@/shared/ui/alert-dialog';
 import { Loader2, Search, UserCircle, Mail, Calendar, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import client from '@/api/client';

@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Button } from "../ui/button";
+import { Button } from "@/shared/ui/button";
 import {
   Menu,
   X,
@@ -10,7 +10,7 @@ import {
   ChevronDown,
   ArrowRight
 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/features/auth";
 import { getInitials } from "@/lib/initials";
 import {
   DropdownMenu,
@@ -19,7 +19,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/shared/ui/dropdown-menu";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -27,7 +27,7 @@ import {
   NavigationMenuContent,
   NavigationMenuTrigger,
   NavigationMenuLink,
-} from "@/components/ui/navigation-menu";
+} from "@/shared/ui/navigation-menu";
 import { cn } from "@/lib/utils";
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {

@@ -3,10 +3,21 @@ import { describe, it, expect, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import { DashboardLayout } from "../DashboardLayout";
 
-// Mock AuthContext
-vi.mock("@/contexts/AuthContext", () => ({
+// Mock the auth feature. Sidebar derives nav visibility from
+// `getRoleFlags(user)`, which reads `user.roles` + `user.primary_role`
+// rather than the legacy `account_type`. Provide both so the role-gated
+// links render.
+vi.mock("@/features/auth", () => ({
     useAuth: () => ({
-        user: { uuid: "test-uuid", account_type: "organizer", display_name: "Test User" },
+        user: {
+            uuid: "test-uuid",
+            account_type: "organizer",
+            display_name: "Test User",
+            full_name: "Test User",
+            roles: ["organizer"],
+            primary_role: "organizer",
+            onboarding_completed: true,
+        },
         logout: vi.fn(),
         hasRoute: () => true,
         hasFeature: () => true,
@@ -28,9 +39,7 @@ describe("DashboardLayout", () => {
     it("renders sidebar and main content area", async () => {
         await renderDashboardLayout();
 
-        // Sidebar should be present
         expect(screen.getByText("Accredit")).toBeInTheDocument();
-        // Main content should be rendered
         expect(screen.getByTestId("dashboard-content")).toBeInTheDocument();
     });
 
@@ -38,7 +47,8 @@ describe("DashboardLayout", () => {
         await renderDashboardLayout();
 
         expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
-        expect(screen.getByRole("link", { name: /events/i })).toBeInTheDocument();
+        // "Manage Events" — organizer-only nav item
+        expect(screen.getByRole("link", { name: /manage events/i })).toBeInTheDocument();
         expect(screen.getByRole("link", { name: /profile/i })).toBeInTheDocument();
     });
 
@@ -51,7 +61,9 @@ describe("DashboardLayout", () => {
     it("shows organizer-specific navigation items", async () => {
         await renderDashboardLayout();
 
-        expect(screen.getByRole("link", { name: /certificates/i })).toBeInTheDocument();
+        // Organizer-specific entries
+        expect(screen.getByRole("link", { name: /contacts/i })).toBeInTheDocument();
+        expect(screen.getByRole("link", { name: /promo codes/i })).toBeInTheDocument();
     });
 
     it("shows theme toggle", async () => {

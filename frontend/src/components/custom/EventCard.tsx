@@ -1,10 +1,10 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Calendar, Clock, MapPin, Users, Video } from "lucide-react";
-import { Card, CardContent, CardFooter, CardHeader } from "../ui/card";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { AspectRatio } from "../ui/aspect-ratio";
+import { Card, CardContent, CardFooter, CardHeader } from "@/shared/ui/card";
+import { Badge } from "@/shared/ui/badge";
+import { Button } from "@/shared/ui/button";
+import { AspectRatio } from "@/shared/ui/aspect-ratio";
 import { Event } from "@/lib/mock-data";
 import { StatusBadge } from "./StatusBadge";
 

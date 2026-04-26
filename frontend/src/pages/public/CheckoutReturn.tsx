@@ -1,7 +1,7 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { CheckCircle, XCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/shared/ui/button";
+import { Card, CardContent } from "@/shared/ui/card";
 
 /**
  * Cosmetic landing pages after Stripe-hosted Checkout.

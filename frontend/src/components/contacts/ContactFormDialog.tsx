@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -6,243 +6,276 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+} from '@/shared/ui/dialog';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
+import { Textarea } from '@/shared/ui/textarea';
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
+} from '@/shared/ui/form';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import type { Contact } from '@/api/contacts';
 import {
-    Contact,
-    CreateContactParams,
-    UpdateContactParams,
-    // Tag, // TAGGING-DISABLED: restore when tagging UI is re-enabled
-    createContact,
-    // getTags, // TAGGING-DISABLED
-    updateContact,
-} from '@/api/contacts';
+    contactSchema,
+    useCreateContact,
+    useUpdateContact,
+    type ContactFormValues,
+} from '@/features/contacts';
+import { useZodForm } from '@/shared/lib/forms';
 // TAGGING-DISABLED: UI hidden while feature is deferred — backend still supports it.
 // import { TagPicker } from './TagPicker';
 
 interface ContactFormDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    contact?: Contact | null;  // If provided, edit mode
+    /** If provided, dialog renders in edit mode. */
+    contact?: Contact | null;
+    /** Optional success callback. Mutations already invalidate the cache. */
     onSuccess?: (contact: Contact) => void;
 }
+
+const emptyValues: ContactFormValues = {
+    email: '',
+    full_name: '',
+    professional_title: '',
+    organization_name: '',
+    phone: '',
+    notes: '',
+};
 
 export function ContactFormDialog({
     open,
     onOpenChange,
     contact,
-    onSuccess
+    onSuccess,
 }: ContactFormDialogProps) {
     const isEdit = !!contact;
-    const [loading, setLoading] = useState(false);
+    const createContact = useCreateContact();
+    const updateContact = useUpdateContact();
 
-    // Form state
-    const [email, setEmail] = useState('');
-    const [fullName, setFullName] = useState('');
-    const [professionalTitle, setProfessionalTitle] = useState('');
-    const [organizationName, setOrganizationName] = useState('');
-    const [phone, setPhone] = useState('');
-    const [notes, setNotes] = useState('');
-    // TAGGING-DISABLED: restore tag state + tag fetch when re-enabling.
-    // const [tagUuids, setTagUuids] = useState<string[]>([]);
-    // const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+    const form = useZodForm(contactSchema, {
+        defaultValues: emptyValues,
+    });
 
-    // Reset form when contact changes or dialog opens
+    // Reset form when the dialog opens or the active contact changes.
     useEffect(() => {
-        if (open) {
-            if (contact) {
-                setEmail(contact.email);
-                setFullName(contact.full_name);
-                setProfessionalTitle(contact.professional_title || '');
-                setOrganizationName(contact.organization_name || '');
-                setPhone(contact.phone || '');
-                setNotes(contact.notes || '');
-                // setTagUuids((contact.tags ?? []).map((t) => t.uuid));
-            } else {
-                // Reset for new contact
-                setEmail('');
-                setFullName('');
-                setProfessionalTitle('');
-                setOrganizationName('');
-                setPhone('');
-                setNotes('');
-                // setTagUuids([]);
-            }
-            // TAGGING-DISABLED: fetch removed.
-            // getTags().then((resp) => setAvailableTags(resp.results)).catch(() => {});
+        if (!open) return;
+        if (contact) {
+            form.reset({
+                email: contact.email ?? '',
+                full_name: contact.full_name ?? '',
+                professional_title: contact.professional_title ?? '',
+                organization_name: contact.organization_name ?? '',
+                phone: contact.phone ?? '',
+                notes: contact.notes ?? '',
+            });
+        } else {
+            form.reset(emptyValues);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, contact]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const onSubmit = async (values: ContactFormValues) => {
+        // Empty optional strings are normalized to undefined so the backend
+        // treats them as unset rather than empty.
+        const payload = {
+            email: values.email,
+            full_name: values.full_name.trim(),
+            professional_title: values.professional_title?.trim() || undefined,
+            organization_name: values.organization_name?.trim() || undefined,
+            phone: values.phone?.trim() || undefined,
+            notes: values.notes?.trim() || undefined,
+        };
 
-        if (!email.trim() || !fullName.trim()) {
-            toast.error('Email and name are required');
-            return;
-        }
-
-        setLoading(true);
         try {
             let result: Contact;
-
             if (isEdit && contact) {
-                const data: UpdateContactParams = {
-                    email: email.trim(),
-                    full_name: fullName.trim(),
-                    professional_title: professionalTitle.trim() || undefined,
-                    organization_name: organizationName.trim() || undefined,
-                    phone: phone.trim() || undefined,
-                    notes: notes.trim() || undefined,
-                    // tag_uuids: tagUuids, // TAGGING-DISABLED
-                };
-                result = await updateContact(contact.uuid, data);
+                result = await updateContact.mutateAsync({ uuid: contact.uuid, data: payload });
                 toast.success('Contact updated successfully');
             } else {
-                const data: CreateContactParams = {
-                    email: email.trim(),
-                    full_name: fullName.trim(),
-                    professional_title: professionalTitle.trim() || undefined,
-                    organization_name: organizationName.trim() || undefined,
-                    phone: phone.trim() || undefined,
-                    notes: notes.trim() || undefined,
-                    // tag_uuids: tagUuids, // TAGGING-DISABLED
-                };
-                result = await createContact(data);
+                result = await createContact.mutateAsync(payload);
                 toast.success('Contact added successfully');
             }
-
             onSuccess?.(result);
             onOpenChange(false);
         } catch (error) {
             console.error('Failed to save contact:', error);
-        } finally {
-            setLoading(false);
         }
     };
+
+    const loading =
+        createContact.isPending ||
+        updateContact.isPending ||
+        form.formState.isSubmitting;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-md">
-                <form onSubmit={handleSubmit}>
-                    <DialogHeader>
-                        <DialogTitle>
-                            {isEdit ? 'Edit Contact' : 'Add New Contact'}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {isEdit
-                                ? 'Update the contact information below.'
-                                : 'Enter the contact details to add them to your contacts.'
-                            }
-                        </DialogDescription>
-                    </DialogHeader>
+                <Form {...form}>
+                    {/* `noValidate` disables browser HTML5 validation so RHF +
+                        Zod can own the error UX. Without this, `type="email"`
+                        blocks the submit event before our resolver runs. */}
+                    <form noValidate onSubmit={form.handleSubmit(onSubmit as any)}>
+                        <DialogHeader>
+                            <DialogTitle>
+                                {isEdit ? 'Edit Contact' : 'Add New Contact'}
+                            </DialogTitle>
+                            <DialogDescription>
+                                {isEdit
+                                    ? 'Update the contact information below.'
+                                    : 'Enter the contact details to add them to your contacts.'}
+                            </DialogDescription>
+                        </DialogHeader>
 
-                    <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="email">Email *</Label>
-                            <Input
-                                id="email"
-                                type="email"
-                                placeholder="contact@example.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                                disabled={loading}
+                        <div className="grid gap-4 py-4">
+                            <FormField
+                                control={form.control as any}
+                                name="email"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Email *</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                type="email"
+                                                placeholder="contact@example.com"
+                                                disabled={loading}
+                                                {...field}
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
                             />
-                        </div>
 
-                        <div className="grid gap-2">
-                            <Label htmlFor="fullName">Full Name *</Label>
-                            <Input
-                                id="fullName"
-                                placeholder="John Doe"
-                                value={fullName}
-                                onChange={(e) => setFullName(e.target.value)}
-                                required
-                                disabled={loading}
+                            <FormField
+                                control={form.control as any}
+                                name="full_name"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Full Name *</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                placeholder="John Doe"
+                                                disabled={loading}
+                                                {...field}
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
                             />
-                        </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control as any}
+                                    name="professional_title"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Title</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    placeholder="Dr., MD, PhD..."
+                                                    disabled={loading}
+                                                    {...field}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control as any}
+                                    name="phone"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Phone</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    type="tel"
+                                                    placeholder="+1 555-0123"
+                                                    disabled={loading}
+                                                    {...field}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+
+                            <FormField
+                                control={form.control as any}
+                                name="organization_name"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Organization</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                placeholder="Company or institution"
+                                                disabled={loading}
+                                                {...field}
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            {/* TAGGING-DISABLED: restore TagPicker block when re-enabling tag UI.
                             <div className="grid gap-2">
-                                <Label htmlFor="title">Title</Label>
-                                <Input
-                                    id="title"
-                                    placeholder="Dr., MD, PhD..."
-                                    value={professionalTitle}
-                                    onChange={(e) => setProfessionalTitle(e.target.value)}
+                                <Label>Tags</Label>
+                                <TagPicker
+                                    tags={availableTags}
+                                    selectedUuids={tagUuids}
+                                    onChange={setTagUuids}
+                                    onTagsChange={setAvailableTags}
                                     disabled={loading}
                                 />
                             </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="phone">Phone</Label>
-                                <Input
-                                    id="phone"
-                                    type="tel"
-                                    placeholder="+1 555-0123"
-                                    value={phone}
-                                    onChange={(e) => setPhone(e.target.value)}
-                                    disabled={loading}
-                                />
-                            </div>
-                        </div>
+                            */}
 
-                        <div className="grid gap-2">
-                            <Label htmlFor="org">Organization</Label>
-                            <Input
-                                id="org"
-                                placeholder="Company or institution"
-                                value={organizationName}
-                                onChange={(e) => setOrganizationName(e.target.value)}
-                                disabled={loading}
+                            <FormField
+                                control={form.control as any}
+                                name="notes"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Notes</FormLabel>
+                                        <FormControl>
+                                            <Textarea
+                                                placeholder="Private notes about this contact..."
+                                                rows={3}
+                                                disabled={loading}
+                                                {...field}
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
                             />
                         </div>
 
-                        {/* TAGGING-DISABLED: restore TagPicker block when re-enabling tag UI.
-                        <div className="grid gap-2">
-                            <Label>Tags</Label>
-                            <TagPicker
-                                tags={availableTags}
-                                selectedUuids={tagUuids}
-                                onChange={setTagUuids}
-                                onTagsChange={setAvailableTags}
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => onOpenChange(false)}
                                 disabled={loading}
-                            />
-                        </div>
-                        */}
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="notes">Notes</Label>
-                            <Textarea
-                                id="notes"
-                                placeholder="Private notes about this contact..."
-                                value={notes}
-                                onChange={(e) => setNotes(e.target.value)}
-                                disabled={loading}
-                                rows={3}
-                            />
-                        </div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => onOpenChange(false)}
-                            disabled={loading}
-                        >
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={loading}>
-                            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {isEdit ? 'Save Changes' : 'Add Contact'}
-                        </Button>
-                    </DialogFooter>
-                </form>
+                            >
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={loading}>
+                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {isEdit ? 'Save Changes' : 'Add Contact'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </Form>
             </DialogContent>
         </Dialog>
     );

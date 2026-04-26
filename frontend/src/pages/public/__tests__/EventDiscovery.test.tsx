@@ -3,9 +3,13 @@ import { describe, it, expect, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import { EventDiscovery } from "../EventDiscovery";
 
-// Mock the API call
+// Mock the API call. The page expects the paginated `{results: []}`
+// shape — returning a bare array crashes the `[...events]` spread on
+// undefined inside `useMemo`.
 vi.mock("@/api/events", () => ({
-    getPublicEvents: vi.fn().mockResolvedValue([]),
+    getPublicEvents: vi
+        .fn()
+        .mockResolvedValue({ results: [], count: 0, next: null, previous: null }),
 }));
 
 const renderEventDiscovery = async () => {
@@ -45,10 +49,10 @@ describe("EventDiscovery", () => {
     it("has event type filter checkboxes", async () => {
         await renderEventDiscovery();
 
+        // The current event-type filter ships only Webinar + Workshop.
+        // Add new entries here when the EventDiscovery filter list grows.
         expect(screen.getByLabelText("Webinar")).toBeInTheDocument();
         expect(screen.getByLabelText("Workshop")).toBeInTheDocument();
-        expect(screen.getByLabelText("Course")).toBeInTheDocument();
-        expect(screen.getByLabelText("Conference")).toBeInTheDocument();
     });
 
     it("has format filter checkboxes", async () => {

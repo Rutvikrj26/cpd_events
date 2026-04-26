@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Move, MousePointer, Download, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
 import {
     Dialog,
     DialogContent,
@@ -10,7 +10,7 @@ import {
     DialogTitle,
     DialogFooter,
     DialogDescription,
-} from "@/components/ui/dialog";
+} from "@/shared/ui/dialog";
 import { generateTemplatePreview, saveFieldPositions, FieldPositions, FieldPosition } from "@/api/certificates";
 import { toast } from "sonner";
 import { Document, Page, pdfjs } from 'react-pdf';

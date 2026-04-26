@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Search, Download, ExternalLink, ShieldCheck, Filter } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardFooter, CardTitle } from "@/components/ui/card";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Card, CardContent, CardFooter, CardTitle } from "@/shared/ui/card";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { getMyCertificates } from "@/api/certificates";
 import { Certificate } from "@/api/certificates/types";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/shared/ui/badge";
 
 export function CertificatesList() {
   const [searchTerm, setSearchTerm] = useState("");

@@ -10,11 +10,11 @@ import {
     X,
     Sparkles
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Button } from '@/shared/ui/button';
+import { Progress } from '@/shared/ui/progress';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/features/auth';
 import { getEvents } from '@/api/events';
 import { getOwnedCourses } from '@/api/courses';
 import { getRoleFlags } from '@/lib/role-utils';

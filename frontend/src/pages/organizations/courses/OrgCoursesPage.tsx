@@ -1,19 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/features/auth';
 import { getRoleFlags } from '@/lib/role-utils';
 import { Plus, Search, BookOpen, Clock, Users, MoreVertical, FileText, CheckCircle, Archive } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/shared/ui/card';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+} from '@/shared/ui/dropdown-menu';
+import { Badge } from '@/shared/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import {
     Table,
     TableBody,
@@ -21,8 +21,8 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
-import { Skeleton } from '@/components/ui/skeleton';
+} from "@/shared/ui/table";
+import { Skeleton } from '@/shared/ui/skeleton';
 import { getOwnedCourses, deleteCourse, Course } from '@/api/courses';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -35,7 +35,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@/shared/ui/alert-dialog";
 
 const OrgCoursesPage = () => {
     const { slug } = useParams<{ slug: string }>();

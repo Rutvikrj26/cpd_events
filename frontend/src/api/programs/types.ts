@@ -36,6 +36,15 @@ export interface Program {
         currency: string;
         purchased_at: string | null;
     }>;
+    /** The requesting user's ProgramEnrollment for this program, if any.
+     *  Null for anonymous viewers or learners who haven't enrolled. Used to
+     *  swap the purchase CTA for a "Continue / Completed" state on the
+     *  public detail page. */
+    viewer_enrollment?: {
+        status: 'pending' | 'active' | 'completed' | 'dropped';
+        enrolled_at: string | null;
+        completed_at: string | null;
+    } | null;
     stripe_price_id?: string;
     course_count: number;
     enrollment_count: number;

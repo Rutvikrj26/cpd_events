@@ -4,8 +4,8 @@ import { Plus, Calendar, MapPin, Users, MoreVertical, Copy, Edit, Eye, Trash2, L
 import { getEvents, getPublicEvents, deleteEvent } from '@/api/events';
 import { duplicateEvent } from '@/api/events/actions';
 import { Event } from '@/api/events/types';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
+import { useAuth } from '@/features/auth';
+import { Button } from '@/shared/ui/button';
 import { EventDiscovery } from '../public/EventDiscovery';
 import {
     DropdownMenu,
@@ -13,7 +13,7 @@ import {
     DropdownMenuItem,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@/shared/ui/dropdown-menu';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -23,8 +23,8 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
+} from '@/shared/ui/alert-dialog';
+import { Badge } from '@/shared/ui/badge';
 import { toast } from 'sonner';
 import { getRoleFlags } from '@/lib/role-utils';
 import { getEventStatusStyle } from '@/lib/eventStatus';

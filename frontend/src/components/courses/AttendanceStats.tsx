@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { getAttendanceStats, AttendanceStats as AttendanceStatsType } from '@/api/courses';
 import { Loader2, Users } from 'lucide-react';
 

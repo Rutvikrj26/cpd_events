@@ -6,11 +6,11 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+} from '@/shared/ui/dialog';
+import { Button } from '@/shared/ui/button';
+import { Label } from '@/shared/ui/label';
+import { Textarea } from '@/shared/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group';
 import { toast } from 'sonner';
 import { FlagReason } from '@/api/courses';
 

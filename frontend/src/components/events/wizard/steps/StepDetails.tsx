@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { useEventWizard } from '../EventWizardContext';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete';
+import { Label } from '@/shared/ui/label';
+import { Textarea } from '@/shared/ui/textarea';
+import { Input } from '@/shared/ui/input';
+import { Button } from '@/shared/ui/button';
+import { LocationAutocomplete } from '@/shared/ui/LocationAutocomplete';
 import { MapPin, Upload, Image as ImageIcon, X } from 'lucide-react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';

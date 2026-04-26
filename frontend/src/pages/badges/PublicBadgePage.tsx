@@ -3,8 +3,8 @@ import { useParams } from "react-router-dom";
 import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { getBadgeByCode } from "@/api/badges";
 import { IssuedBadge } from "@/api/badges/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import { Button } from "@/shared/ui/button";
 
 export function PublicBadgePage() {
     const { code } = useParams<{ code: string }>();

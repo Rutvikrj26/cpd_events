@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getEvent, getEventSessions } from '@/api/events';
 import { Event, EventSession } from '@/api/events/types';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/ui/button';
 import { Calendar, MapPin, Clock, ArrowLeft } from 'lucide-react';
 
 export const EventDetailPage = () => {

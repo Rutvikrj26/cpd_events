@@ -3,10 +3,23 @@ import path from "path"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 import { VitePWA } from "vite-plugin-pwa"
+import { visualizer } from "rollup-plugin-visualizer"
+
+const ANALYZE = process.env.ANALYZE === "true"
 
 export default defineConfig({
     plugins: [
         react(),
+        // Bundle analyzer — only injected when ANALYZE=true (e.g. `pnpm bundle:analyze`).
+        // Drops a `dist/stats.html` next to the build for inspection.
+        ANALYZE &&
+            visualizer({
+                filename: "dist/stats.html",
+                template: "treemap",
+                gzipSize: true,
+                brotliSize: true,
+                open: true,
+            }),
         VitePWA({
             registerType: "autoUpdate",
             includeAssets: ["favicon.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png"],
@@ -64,7 +77,7 @@ export default defineConfig({
                 ]
             }
         })
-    ],
+    ].filter(Boolean),
     resolve: {
         alias: {
             "@": path.resolve(__dirname, "./src"),

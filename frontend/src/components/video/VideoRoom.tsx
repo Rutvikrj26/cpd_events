@@ -13,9 +13,9 @@ import '@livekit/components-styles';
 import { Track } from 'livekit-client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Circle, Loader2, MessageSquare, UserCheck, UserX, X } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/shared/ui/card';
+import { Button } from '@/shared/ui/button';
+import { Badge } from '@/shared/ui/badge';
 import { BackgroundEffectsPicker } from '@/components/video/BackgroundEffectsPicker';
 import {
   admitParticipant,

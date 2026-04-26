@@ -3,8 +3,8 @@ import { FlipHorizontal2, Loader2, RotateCw, Sparkles } from "lucide-react";
 import { useLocalParticipant } from "@livekit/components-react";
 import { LocalVideoTrack, Track } from "livekit-client";
 
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/shared/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
 import { cn } from "@/lib/utils";
 
 interface ImageTransform {

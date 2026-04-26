@@ -1,7 +1,7 @@
 import { formatDistanceToNow } from 'date-fns';
 import { MessageSquare, User } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
 import { RatingDisplay } from './StarRating';
 import { EventFeedback, FeedbackFieldResponse } from '@/api/feedback/types';
 
