@@ -63,3 +63,37 @@ billing_default_plan  = "attendee"
 # Frontend build-time variables (used by CLI deploy)
 frontend_google_maps_api_key     = ""
 frontend_stripe_publishable_key  = "pk_live_xxx"
+
+# =============================================================================
+# Domains — set these once, then reference api/livekit subdomains everywhere
+# =============================================================================
+domain_name       = "accredit.store"
+api_url           = "https://api.accredit.store"
+livekit_subdomain = "livekit"
+
+# =============================================================================
+# Recordings
+# =============================================================================
+recordings_retention_days = 365
+
+# =============================================================================
+# Memorystore (LiveKit psrpc bus)
+# =============================================================================
+redis_tier           = "BASIC"
+redis_memory_size_gb = 1
+
+# =============================================================================
+# LiveKit VM
+# =============================================================================
+livekit_zone         = "us-central1-a"
+livekit_machine_type = "e2-standard-2"
+livekit_disk_size    = 30
+livekit_image        = "debian-cloud/debian-12"
+
+# =============================================================================
+# LiveKit Egress (Cloud Run worker pool)
+# =============================================================================
+egress_image          = "livekit/egress:latest"
+egress_instance_count = 1
+egress_cpu            = "2"
+egress_memory         = "4Gi"

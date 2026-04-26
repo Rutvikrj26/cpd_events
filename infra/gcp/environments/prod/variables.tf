@@ -279,3 +279,107 @@ variable "frontend_stripe_publishable_key" {
 
 # Note: Frontend deployment is managed by CLI (accredit cloud frontend deploy)
 # Frontend variables have been removed - use Firebase Hosting or GCS via CLI
+
+# =============================================================================
+# Domains
+# =============================================================================
+
+variable "domain_name" {
+  description = "Apex domain (e.g. accredit.store). Used to build api/livekit subdomains."
+  type        = string
+  default     = "accredit.store"
+}
+
+variable "api_url" {
+  description = "Public API URL (e.g. https://api.accredit.store). Used to wire the LiveKit webhook target. Leave as-is until the api subdomain is mapped to Cloud Run; then update."
+  type        = string
+  default     = "https://api.accredit.store"
+}
+
+variable "livekit_subdomain" {
+  description = "Subdomain for the LiveKit signaling endpoint (joined with domain_name)"
+  type        = string
+  default     = "livekit"
+}
+
+# =============================================================================
+# Recordings
+# =============================================================================
+
+variable "recordings_retention_days" {
+  description = "Days to retain recording MP4s before lifecycle deletion"
+  type        = number
+  default     = 365
+}
+
+# =============================================================================
+# Memorystore (Redis) — LiveKit psrpc bus
+# =============================================================================
+
+variable "redis_tier" {
+  description = "Memorystore tier. BASIC is single-node (fine for psrpc). STANDARD_HA adds failover."
+  type        = string
+  default     = "BASIC"
+}
+
+variable "redis_memory_size_gb" {
+  description = "Memorystore Redis memory size in GB"
+  type        = number
+  default     = 1
+}
+
+# =============================================================================
+# LiveKit Server (GCE VM)
+# =============================================================================
+
+variable "livekit_zone" {
+  description = "GCE zone for the LiveKit VM (must be in var.region)"
+  type        = string
+  default     = "us-central1-a"
+}
+
+variable "livekit_machine_type" {
+  description = "GCE machine type for LiveKit. e2-standard-2 is the floor; bump to e2-standard-4+ for 50+ concurrent participants."
+  type        = string
+  default     = "e2-standard-2"
+}
+
+variable "livekit_disk_size" {
+  description = "LiveKit VM boot disk size in GB"
+  type        = number
+  default     = 30
+}
+
+variable "livekit_image" {
+  description = "GCE boot image for the LiveKit VM"
+  type        = string
+  default     = "debian-cloud/debian-12"
+}
+
+# =============================================================================
+# LiveKit Egress (Cloud Run worker pool)
+# =============================================================================
+
+variable "egress_image" {
+  description = "Container image for livekit-egress"
+  type        = string
+  default     = "livekit/egress:latest"
+}
+
+variable "egress_instance_count" {
+  description = "Number of egress worker instances. Each instance handles ~1 active recording. Worker pools are manual-scale only."
+  type        = number
+  default     = 1
+}
+
+variable "egress_cpu" {
+  description = "CPU for each egress instance. Headless Chromium needs ≥2 vCPU for smooth compositing."
+  type        = string
+  default     = "2"
+}
+
+variable "egress_memory" {
+  description = "Memory for each egress instance. 4Gi minimum for Chromium."
+  type        = string
+  default     = "4Gi"
+}
