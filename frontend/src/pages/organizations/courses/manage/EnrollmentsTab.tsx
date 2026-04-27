@@ -19,6 +19,7 @@ import {
 import { Loader2, Search, UserCircle, Mail, Calendar, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import client from '@/api/client';
+import { refundPurchase } from '@/api/billing';
 import {
     PaymentBadge,
     formatPaymentAmount,
@@ -109,22 +110,40 @@ export function EnrollmentsTab({ courseUuid }: EnrollmentsTabProps) {
 
     const submitRefund = async () => {
         if (!refundTarget || !refundReason.trim()) return;
+        const purchaseUuid = refundTarget.payment?.purchase_uuid;
+        if (!purchaseUuid) {
+            toast({
+                variant: 'destructive',
+                title: 'No purchase record',
+                description: 'This enrollment is missing a purchase row — refund must be issued from the Stripe dashboard.',
+            });
+            return;
+        }
         setSubmittingRefund(true);
         try {
-            const body: Record<string, any> = {
-                enrollment_uuid: refundTarget.uuid,
-                reason: refundTarget.user_name
-                    ? `[${refundTarget.user_name}] ${refundTarget.user_email}: ${refundReason.trim()}`
-                    : `${refundTarget.user_email}: ${refundReason.trim()}`,
-            };
+            const reasonText = refundTarget.user_name
+                ? `[${refundTarget.user_name}] ${refundTarget.user_email}: ${refundReason.trim()}`
+                : `${refundTarget.user_email}: ${refundReason.trim()}`;
             const fullCents = refundTarget.payment?.amount_cents ?? 0;
             const requestedDollars = parseFloat(refundAmount);
-            if (!isNaN(requestedDollars) && Math.round(requestedDollars * 100) < fullCents) {
-                body.amount_cents = Math.round(requestedDollars * 100);
-            }
-            const resp = await client.post(`/courses/${courseUuid}/refund-enrollment/`, body);
+            const partialCents =
+                !isNaN(requestedDollars) && Math.round(requestedDollars * 100) < fullCents
+                    ? Math.round(requestedDollars * 100)
+                    : undefined;
+            await refundPurchase(purchaseUuid, { reason: reasonText, amount_cents: partialCents });
+            // Reflect dropped status locally — the canonical refund cascade
+            // already flipped the row server-side; refetch for full payment
+            // metadata.
             setEnrollments((prev) =>
-                prev.map((e) => (e.uuid === refundTarget.uuid ? { ...e, ...resp.data } : e)),
+                prev.map((e) =>
+                    e.uuid === refundTarget.uuid
+                        ? {
+                              ...e,
+                              status: partialCents ? e.status : 'dropped',
+                              payment: e.payment ? { ...e.payment, status: partialCents ? e.payment.status : 'refunded' } : e.payment,
+                          }
+                        : e,
+                ),
             );
             toast({ title: 'Refund issued', description: 'Stripe refund created and enrollment updated.' });
             setRefundTarget(null);

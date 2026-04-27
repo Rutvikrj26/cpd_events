@@ -8,7 +8,6 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from django_filters import rest_framework as filters
-from drf_yasg.utils import swagger_auto_schema
 from django.http import HttpResponse
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
@@ -105,11 +104,6 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
     def partial_update(self, request, *args, **kwargs):
         return super().partial_update(request, *args, **kwargs)
 
-    @swagger_auto_schema(
-        operation_summary="Duplicate template",
-        operation_description="Create an independent copy of this template.",
-        responses={201: serializers.CertificateTemplateDetailSerializer},
-    )
     @action(detail=True, methods=['post'], url_path='duplicate')
     def duplicate(self, request, uuid=None):
         """Duplicate this template."""
@@ -121,11 +115,6 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    @swagger_auto_schema(
-        operation_summary="Set default template",
-        operation_description="Set this template as the default for new events.",
-        responses={200: serializers.CertificateTemplateDetailSerializer},
-    )
     @action(detail=True, methods=['post'], url_path='set-default')
     def set_default(self, request, uuid=None):
         """Set as default template."""
@@ -133,11 +122,6 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
         template.set_as_default()
         return Response(serializers.CertificateTemplateDetailSerializer(template).data)
 
-    @swagger_auto_schema(
-        operation_summary="List available templates",
-        operation_description="Get all templates available to the user.",
-        responses={200: serializers.CertificateTemplateListSerializer(many=True)},
-    )
     @action(detail=False, methods=['get'], url_path='available')
     def available_templates(self, request):
         """
@@ -151,10 +135,6 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
         serializer = serializers.CertificateTemplateListSerializer(templates, many=True)
         return Response({'own_count': templates.count(), 'templates': serializer.data})
 
-    @swagger_auto_schema(
-        operation_summary="Upload template PDF",
-        operation_description="Upload a PDF file to use as the certificate background.",
-    )
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser])
     def upload(self, request, uuid=None):
         """Upload PDF template file."""
@@ -216,10 +196,6 @@ class CertificateTemplateViewSet(SoftDeleteModelViewSet):
             logger.error(f"Template upload failed: {e}")
             return error_response('Upload failed.', code='UPLOAD_FAILED', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @swagger_auto_schema(
-        operation_summary="Preview certificate",
-        operation_description="Generate a preview of the certificate with sample data.",
-    )
     @action(detail=True, methods=['post'])
     def preview(self, request, uuid=None):
         """Generate preview with sample data."""
@@ -518,11 +494,6 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
             return serializers.CertificateListSerializer
         return serializers.CertificateDetailSerializer
 
-    @swagger_auto_schema(
-        operation_summary="Issue certificates",
-        operation_description="Issue certificates to one or more registrations.",
-        request_body=serializers.CertificateIssueSerializer,
-    )
     @action(detail=False, methods=['post'])
     def issue(self, request, event_uuid=None):
         """Issue certificates to registrations."""
@@ -597,12 +568,6 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
             }
         )
 
-    @swagger_auto_schema(
-        operation_summary="Revoke certificate",
-        operation_description="Revoke a previously issued certificate.",
-        request_body=serializers.CertificateRevokeSerializer,
-        responses={200: serializers.CertificateDetailSerializer, 400: '{"error": {"code": "ALREADY_REVOKED"}}'},
-    )
     @action(detail=True, methods=['post'])
     def revoke(self, request, event_uuid=None, uuid=None):
         """Revoke a certificate."""
@@ -617,10 +582,6 @@ class EventCertificateViewSet(viewsets.ModelViewSet):
 
         return Response(serializers.CertificateDetailSerializer(certificate).data)
 
-    @swagger_auto_schema(
-        operation_summary="Certificate summary",
-        operation_description="Get aggregate statistics for event certificates.",
-    )
     @action(detail=False, methods=['get'])
     def summary(self, request, event_uuid=None):
         """Get certificate summary for event."""
@@ -777,11 +738,6 @@ class MyCertificateViewSet(ReadOnlyModelViewSet):
             Q(registration__user=self.request.user) | Q(course_enrollment__user=self.request.user), deleted_at__isnull=True
         ).select_related('registration__event', 'registration', 'course_enrollment__course', 'course_enrollment')
 
-    @swagger_auto_schema(
-        operation_summary="Download certificate",
-        operation_description="Get a signed download URL for the certificate PDF.",
-        responses={200: '{"download_url": "..."}', 400: '{"error": {}}', 403: '{"error": {"code": "FEEDBACK_REQUIRED"}}'},
-    )
     @action(detail=True, methods=['post'])
     def download(self, request, uuid=None):
         """Track and return download URL."""

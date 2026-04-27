@@ -37,6 +37,17 @@ class RegistrationService:
         if not event.is_open_for_registration:
             raise ValidationError("Event registration is closed.")
 
+        # Paid events require an authenticated user. The unified CoursePurchase
+        # row carries a non-null user FK; allowing guest payment here would
+        # either force a placeholder user or skip the canonical receipt
+        # surface — both worse than asking the guest to log in. Free events
+        # remain open to guests.
+        if event.price and event.price > 0 and user is None:
+            raise ValidationError({
+                "code": "LOGIN_REQUIRED",
+                "message": "Login required to register for paid events.",
+            })
+
         email = (data.get("email") or "").lower()
         full_name = data.get("full_name", "")
 

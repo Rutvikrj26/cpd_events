@@ -7,7 +7,20 @@ import logging
 from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from drf_yasg.utils import swagger_auto_schema
+from drf_spectacular.utils import (
+    OpenApiResponse,
+    PolymorphicProxySerializer,
+    extend_schema,
+    inline_serializer,
+)
+
+# Bootstrap response shapes — explicit class refs so drf-spectacular's
+# PolymorphicProxySerializer resolves them at schema-generation time.
+from learning.bootstrap_serializers import (
+    CoursePlayerGrantedSerializer,
+    CoursePlayerPendingApprovalSerializer,
+    CoursePlayerRedirectSerializer,
+)
 from rest_framework import generics, parsers, permissions, serializers, status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -118,11 +131,6 @@ class EventModuleViewSet(viewsets.ModelViewSet):
         event = self._get_event()
         serializer.save(event=event)
 
-    @swagger_auto_schema(
-        operation_summary="Publish module",
-        operation_description="Make this module visible to attendees.",
-        responses={200: EventModuleSerializer},
-    )
     @action(detail=True, methods=['post'])
     def publish(self, request, event_uuid=None, uuid=None):
         """Publish a module."""
@@ -131,11 +139,6 @@ class EventModuleViewSet(viewsets.ModelViewSet):
         module.save()
         return Response(EventModuleSerializer(module).data)
 
-    @swagger_auto_schema(
-        operation_summary="Unpublish module",
-        operation_description="Hide this module from attendees.",
-        responses={200: EventModuleSerializer},
-    )
     @action(detail=True, methods=['post'])
     def unpublish(self, request, event_uuid=None, uuid=None):
         """Unpublish a module."""
@@ -304,11 +307,6 @@ class AttendeeSubmissionViewSet(viewsets.ModelViewSet):
 
         return Response(AssignmentSubmissionSerializer(submission).data, status=status.HTTP_201_CREATED)
 
-    @swagger_auto_schema(
-        operation_summary="Submit assignment",
-        operation_description="Submit a draft assignment for grading.",
-        responses={200: AssignmentSubmissionSerializer, 400: '{"error": "..."}'},
-    )
     @action(detail=True, methods=['post'])
     def submit(self, request, uuid=None):
         """Submit the assignment."""
@@ -337,12 +335,6 @@ class OrganizerSubmissionsViewSet(viewsets.ReadOnlyModelViewSet):
             return qs
         return qs.filter(assignment__module__event__owner=self.request.user)
 
-    @swagger_auto_schema(
-        operation_summary="Grade submission",
-        operation_description="Grade or return an assignment submission.",
-        request_body=SubmissionGradeSerializer,
-        responses={200: AssignmentSubmissionSerializer},
-    )
     @action(detail=True, methods=['post'])
     def grade(self, request, uuid=None):
         """Grade a submission."""
@@ -430,10 +422,6 @@ class MyLearningViewSet(viewsets.GenericViewSet):
 
         return Response(dashboard_data)
 
-    @swagger_auto_schema(
-        operation_summary="Event learning progress",
-        operation_description="Get detailed learning progress for a specific event.",
-    )
     @action(detail=False, methods=['get'], url_path='(?P<event_uuid>[^/.]+)')
     def event_progress(self, request, event_uuid=None):
         """Get detailed progress for a specific event."""
@@ -577,11 +565,14 @@ class CourseViewSet(viewsets.ModelViewSet):
                 models.Q(created_by=user) | models.Q(staff_assignments__user=user)
             ).distinct()
 
-        if self.action in ['list', 'retrieve', 'progress']:
-            # Learners must keep access to courses they have an enrollment
-            # in, even after the course is archived — otherwise the Review
-            # button on completed cards 404s, and the cert/badge they earned
-            # has no backing artifact to review.
+        if self.action in ['list', 'retrieve', 'progress', 'player_bootstrap']:
+            # Learner-facing read actions: visible if the course is public
+            # AND published, OR if the learner has any relationship with it
+            # (enrollment in any state — including pending/dropped — or
+            # staffs/owns it). The relationship visibility matters for the
+            # bootstrap so that pending/dropped enrollments still get a
+            # response (we want the discriminated `pending_approval` /
+            # `redirect_to_detail` shells to render, not a 404).
             return queryset.filter(
                 models.Q(is_public=True, status=Course.Status.PUBLISHED)
                 | models.Q(created_by=user)
@@ -612,16 +603,6 @@ class CourseViewSet(viewsets.ModelViewSet):
 
         if not self.request.user.has_perm("learning.can_create_course"):
             raise PermissionDenied("You do not have permission to create courses.")
-
-        # Subscription gate — best-effort in institutional mode. If the user's
-        # subscription exposes limits, respect them; otherwise let staff proceed.
-        subscription = getattr(self.request.user, 'subscription', None)
-        if subscription is not None and hasattr(subscription, 'can_create_courses'):
-            if not subscription.can_create_courses:
-                raise PermissionDenied("Your subscription does not allow course creation.")
-            if hasattr(subscription, 'increment_courses'):
-                subscription.increment_courses()
-
         serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
@@ -833,188 +814,150 @@ class CourseViewSet(viewsets.ModelViewSet):
         enrollments = CourseEnrollment.objects.filter(course=course).select_related('user').order_by('-enrolled_at')
         return Response(CourseEnrollmentRosterSerializer(enrollments, many=True).data)
 
-    @action(detail=True, methods=['post'], url_path='refund-enrollment')
-    def refund_enrollment(self, request, uuid=None):
-        """Refund a learner's course purchase and revoke their enrollment.
+    # Refund moved to the unified billing endpoint:
+    # ``POST /api/v1/billing/purchases/{purchase_uuid}/refund/``.
+    # See ``billing.views.RefundPurchaseView``.
 
-        Body: ``{enrollment_uuid: UUID, reason: str, amount_cents?: int}``.
+    # The legacy /progress/ endpoint was replaced by the player_bootstrap
+    # action below. The bootstrap returns one composite payload — course +
+    # modules + module progress + sessions + announcements + the
+    # discriminated access decision — eliminating the 6-fetch composition
+    # the frontend used to do (and the racing 403s that came with it).
 
-        Matches the CoursePurchase for the same (user, course) pair, calls
-        Stripe with an optional partial amount, marks the purchase REFUNDED
-        (full only), drops the enrollment, and writes an audit entry.
+    @extend_schema(
+        responses={
+            200: PolymorphicProxySerializer(
+                component_name='CoursePlayerBootstrap',
+                serializers=[
+                    CoursePlayerGrantedSerializer,
+                    CoursePlayerPendingApprovalSerializer,
+                    CoursePlayerRedirectSerializer,
+                ],
+                # The discriminator key lives at `access.kind` (nested), which
+                # OpenAPI 3.0 cannot model with a single top-level field.
+                # Spectacular emits a `oneOf` and the TS consumer
+                # exhaustively narrows on `access.kind` at runtime.
+                resource_type_field_name=None,
+            ),
+        },
+        description=(
+            'One fetch returns everything the course player needs to render '
+            'its initial paint, plus a discriminated `access` field telling '
+            'the client which shell to render: full player (granted), '
+            'pending-approval banner (pending_approval), or a navigation '
+            'hint to the catalog page (redirect_to_detail).'
+        ),
+    )
+    @action(detail=True, methods=['get'], url_path='player-bootstrap')
+    def player_bootstrap(self, request, uuid=None):
+        """GET /api/v1/courses/{uuid}/player-bootstrap/
+
+        The single fetch behind the course player. Returns one of three
+        shapes (all HTTP 200), discriminated by ``access.kind``:
+
+        - ``granted`` — full curriculum + progress + sessions + announcements.
+        - ``pending_approval`` — slim shell payload (course title/image only).
+        - ``redirect_to_detail`` — slug + reason; client navigates to the
+          public catalog page where the right CTA already lives.
+
+        See ``learning.view_states.derive_course_access`` for the access
+        decision logic and ``learning.bootstrap_serializers`` for the wire
+        shapes. This action replaces the legacy 6-fetch player-load
+        sequence (course + enrollments + progress + modules + announcements
+        + sessions) — none of those endpoints are called by the player
+        anymore.
         """
-        from rest_framework.exceptions import PermissionDenied, ValidationError
-
-        from billing.models import CoursePurchase
-        from billing.services import refund_payment_intent
+        # Bootstrap serializers are imported only for the schema/codegen
+        # path (referenced by `@extend_schema(responses=...)` above).
+        # Composition at request time happens via dict-of-already-serialized
+        # nested payloads — the outer serializer would otherwise try to
+        # re-walk pre-serialized dicts as model instances and fail.
+        from learning.serializers import (
+            CourseAnnouncementSerializer,
+            CourseModuleSerializer,
+            CourseSerializer,
+            LiveSessionSerializer,
+        )
+        from learning.view_states import (
+            derive_course_access,
+            derive_course_enrollment_view_state,
+        )
 
         course = self.get_object()
-        if not (course.can_manage(request.user) or course.can_instruct(request.user)):
-            raise PermissionDenied("You do not have permission to refund enrollments for this course.")
 
-        enrollment_uuid = request.data.get('enrollment_uuid')
-        reason = (request.data.get('reason') or '').strip()
-        amount_cents = request.data.get('amount_cents')
-
-        if not enrollment_uuid:
-            raise ValidationError({'enrollment_uuid': 'required'})
-        if not reason:
-            raise ValidationError({'reason': 'required'})
-        if amount_cents is not None:
-            try:
-                amount_cents = int(amount_cents)
-            except (TypeError, ValueError):
-                raise ValidationError({'amount_cents': 'must be an integer'}) from None
-            if amount_cents <= 0:
-                raise ValidationError({'amount_cents': 'must be positive'})
-
+        # The access decision is decoupled from "is the user enrolled in
+        # any state?" — staff get granted access without an enrollment row,
+        # and pending/dropped/expired enrollments are handled distinctly.
         enrollment = (
-            CourseEnrollment.objects
-            .filter(course=course, uuid=enrollment_uuid)
-            .select_related('user', 'from_program_enrollment__program')
+            CourseEnrollment.objects.filter(course=course, user=request.user)
+            .order_by('-enrolled_at')
             .first()
         )
-        if enrollment is None:
-            return Response({'error': {'code': 'ENROLLMENT_NOT_FOUND'}}, status=status.HTTP_404_NOT_FOUND)
+        access = derive_course_access(course, user=request.user, enrollment=enrollment)
 
-        # Refunds for program-seeded enrollments must be issued at the program
-        # level so the cascade revokes access to every member course. Surfacing
-        # that here keeps the data invariant explicit.
-        if enrollment.from_program_enrollment_id:
-            parent = enrollment.from_program_enrollment
-            return Response(
-                {
-                    'error': {
-                        'code': 'PROGRAM_SEEDED',
-                        'message': 'This enrollment was created by a program purchase. Refund the program instead.',
-                        'program_uuid': str(parent.program.uuid),
-                        'program_enrollment_uuid': str(parent.uuid),
-                        'program_title': parent.program.title,
-                    }
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        if access['kind'] == 'pending_approval':
+            return Response({'access': access})
 
-        purchase = (
-            CoursePurchase.objects
-            .filter(user=enrollment.user, course=course)
-            .exclude(status=CoursePurchase.Status.REFUNDED)
-            .order_by('-created_at')
-            .first()
+        if access['kind'] == 'redirect_to_detail':
+            return Response({'access': access})
+
+        # access.kind == 'granted' — compose the full player payload.
+        # For staff_preview the enrollment may be null; handle below.
+        granted_enrollment = enrollment if access['audience'] == 'learner' else None
+
+        if granted_enrollment is not None:
+            granted_enrollment.update_progress()
+            granted_enrollment.refresh_from_db()
+
+        modules_qs = (
+            CourseModule.objects.filter(course=course)
+            .select_related('module')
+            .prefetch_related('module__contents')
+            .order_by('order')
         )
-        if purchase is None:
-            return Response(
-                {'error': {'code': 'NO_PURCHASE', 'message': 'No refundable purchase found for this enrollment.'}},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not purchase.stripe_payment_intent_id:
-            return Response(
-                {'error': {'code': 'NO_PAYMENT_INTENT'}},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if amount_cents is not None and amount_cents > purchase.amount_cents:
-            return Response(
-                {'error': {'code': 'REFUND_EXCEEDS_AMOUNT'}},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
-        try:
-            stripe_result = refund_payment_intent(
-                purchase.stripe_payment_intent_id,
-                amount_cents=amount_cents,
-                reason='requested_by_customer',
-            )
-        except Exception as exc:
-            return Response({'error': {'code': 'REFUND_FAILED', 'message': str(exc)}}, status=status.HTTP_400_BAD_REQUEST)
-
-        is_partial = amount_cents is not None and amount_cents < purchase.amount_cents
-        if not is_partial:
-            purchase.status = CoursePurchase.Status.REFUNDED
-            purchase.save(update_fields=['status', 'updated_at'])
-            enrollment.status = CourseEnrollment.Status.DROPPED
-            enrollment.save(update_fields=['status', 'updated_at'])
-
-        try:
-            from accounts.audit import log_audit_event
-
-            log_audit_event(
-                actor=request.user,
-                action='course_purchase.refunded',
-                object_type='CoursePurchase',
-                object_uuid=str(purchase.uuid),
-                metadata={
-                    'course_uuid': str(course.uuid),
-                    'enrollment_uuid': str(enrollment.uuid),
-                    'amount_cents': stripe_result.get('amount_cents'),
-                    'partial': is_partial,
-                    'reason': reason,
-                    'stripe_refund_id': stripe_result.get('refund_id'),
-                },
-                request=request,
-            )
-        except Exception:
-            logger.warning('audit log failed for course refund %s', purchase.uuid, exc_info=True)
-
-        return Response(CourseEnrollmentRosterSerializer(enrollment).data)
-
-    @action(detail=True, methods=['get'], url_path='progress')
-    def progress(self, request, uuid=None):
-        """Get detailed progress for a specific course enrollment."""
-        from rest_framework.exceptions import PermissionDenied
-
-        course = self.get_object()
-        enrollment = CourseEnrollment.objects.filter(
-            course=course,
-            user=request.user,
-            status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
-        ).first()
-
-        if not enrollment:
-            raise PermissionDenied("You are not enrolled in this course.")
-
-        enrollment.update_progress()
-        enrollment.refresh_from_db()
-
-        modules = CourseModule.objects.filter(course=course).select_related('module').prefetch_related('module__contents')
-
-        module_data = []
-        for course_module in modules:
+        module_progress_payload = []
+        for course_module in modules_qs:
             module = course_module.module
-            module_prog, _ = ModuleProgress.objects.get_or_create(
-                course_enrollment=enrollment,
+            if granted_enrollment is None:
+                # Staff preview — synthesise a "fully available, zero
+                # progress" snapshot so the client renders the same shell
+                # without conditional branches.
+                module_progress_payload.append({
+                    'module_uuid': str(module.uuid),
+                    'is_available': True,
+                    'progress_status': 'not_started',
+                    'progress_percent': 0,
+                    'contents_completed': 0,
+                    'contents_total': module.contents.filter(is_required=True).count(),
+                    'completed_content_uuids': [],
+                })
+                continue
+            mp, _ = ModuleProgress.objects.get_or_create(
+                course_enrollment=granted_enrollment,
                 module=module,
                 defaults={'contents_total': module.contents.filter(is_required=True).count()},
             )
-            content_prog = ContentProgress.objects.filter(course_enrollment=enrollment, content__module=module)
-
-            module_data.append(
-                {
-                    'module': EventModuleListSerializer(module).data,
-                    'progress': ModuleProgressSerializer(module_prog).data,
-                    'is_available': module.is_available_for(request.user, course_enrollment=enrollment),
-                    'content_progress': ContentProgressSerializer(content_prog, many=True).data,
-                }
+            completed_uuids = list(
+                ContentProgress.objects
+                .filter(course_enrollment=granted_enrollment, content__module=module, status='completed')
+                .values_list('content__uuid', flat=True)
             )
+            module_progress_payload.append({
+                'module_uuid': str(module.uuid),
+                'is_available': module.is_available_for(
+                    request.user, course_enrollment=granted_enrollment,
+                ),
+                'progress_status': mp.status,
+                'progress_percent': int(mp.progress_percent or 0),
+                'contents_completed': mp.contents_completed,
+                'contents_total': mp.contents_total,
+                'completed_content_uuids': [str(u) for u in completed_uuids],
+            })
 
-        # Hydrate module/session breakdown from the snapshot the learner-side
-        # progress was just computed from. Pure-online courses get no
-        # session_progress key (absent, not zero) so the client can branch
-        # without re-checking course.format. See
-        # docs/design/hybrid-course-experience.md §B.
-        snapshot = enrollment._progress_snapshot()
-        enrollment_data = CourseEnrollmentSerializer(enrollment).data
-        from learning.models import CourseSession
-        modules_total = CourseModule.objects.filter(course=course).count()
-        enrollment_data['module_progress'] = {
-            'units_completed': snapshot['module_units_completed'],
-            'units_total': snapshot['module_units_total'],
-            'modules_completed': snapshot['modules_completed'],
-            'modules_total': modules_total,
-        }
-
-        sessions_payload = None
+        sessions_payload: list = []
         if course.format in (Course.CourseFormat.LIVE, Course.CourseFormat.HYBRID):
-            from .serializers import LiveSessionSerializer
+            from learning.models import CourseSession
             sessions_qs = (
                 CourseSession.objects.filter(course=course, is_published=True)
                 .exclude(status=CourseSession.Status.CANCELLED)
@@ -1023,29 +966,28 @@ class CourseViewSet(viewsets.ModelViewSet):
             sessions_payload = LiveSessionSerializer(
                 sessions_qs, many=True, context={'request': request},
             ).data
-            mandatory_sessions = sessions_qs.filter(is_mandatory=True).count()
-            attended_sessions = sessions_qs.filter(
-                attendance_records__enrollment=enrollment,
-                attendance_records__is_eligible=True,
-                is_mandatory=True,
-            ).count()
-            enrollment_data['session_progress'] = {
-                'units_completed': snapshot['session_units_completed'],
-                'units_total': snapshot['session_units_total'],
-                'sessions_attended': attended_sessions,
-                'sessions_total': mandatory_sessions,
-                'criteria': course.hybrid_completion_criteria,
-            }
 
-        response_data = {
-            'course_uuid': course.uuid,
-            'course_title': course.title,
-            'enrollment': enrollment_data,
-            'modules': module_data,
+        announcements_qs = (
+            CourseAnnouncement.objects.filter(course=course, is_published=True)
+            .order_by('-created_at')
+        )
+
+        view_state = (
+            derive_course_enrollment_view_state(granted_enrollment)
+            if granted_enrollment is not None
+            else None
+        )
+
+        payload = {
+            'access': access,
+            'course': CourseSerializer(course, context={'request': request}).data,
+            'modules': CourseModuleSerializer(modules_qs, many=True).data,
+            'module_progress': module_progress_payload,
+            'sessions': sessions_payload,
+            'announcements': CourseAnnouncementSerializer(announcements_qs, many=True).data,
+            'view_state': view_state,
         }
-        if sessions_payload is not None:
-            response_data['sessions'] = sessions_payload
-        return Response(response_data)
+        return Response(payload)
 
 
     @action(detail=True, methods=['get'])
@@ -1179,11 +1121,6 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
 
         serializer.save(user=self.request.user, course=course)
 
-    @swagger_auto_schema(
-        operation_summary="Mark enrollment complete manually",
-        operation_description="Mark a course enrollment as complete (instructor/manager override).",
-        responses={200: CourseEnrollmentSerializer},
-    )
     @action(detail=True, methods=['post'], url_path='mark-complete')
     def mark_complete(self, request, uuid=None):
         """
@@ -1212,87 +1149,9 @@ class CourseEnrollmentViewSet(viewsets.ModelViewSet):
 
         return Response(CourseEnrollmentSerializer(enrollment).data)
 
-    @swagger_auto_schema(
-        operation_summary="Checkout for paid course",
-        operation_description="Create a Stripe checkout session for enrolling in a paid course.",
-        responses={
-            200: '{"session_id": "cs_xxx", "url": "https://checkout.stripe.com/..."}',
-            400: '{"error": "..."}',
-        },
-    )
-    @action(detail=False, methods=['post'], url_path='checkout')
-    def checkout(self, request):
-        """
-        Create Stripe checkout session for paid course enrollment.
-
-        Request body:
-            course_uuid: UUID of the course to enroll in
-            success_url: URL to redirect to on successful payment
-            cancel_url: URL to redirect to if payment is cancelled
-        """
-
-        course_uuid = request.data.get('course_uuid')
-
-        if not course_uuid:
-            return Response(
-                {'error': 'course_uuid is required'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        course = get_object_or_404(Course, uuid=course_uuid)
-
-        # Check if course is published
-        if course.status != Course.Status.PUBLISHED:
-            return Response(
-                {'error': 'Course is not available for enrollment'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Check if already enrolled
-        existing = CourseEnrollment.objects.filter(
-            course=course,
-            user=request.user,
-            status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
-        ).exists()
-
-        if existing:
-            return Response(
-                {'error': 'You are already enrolled in this course'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        ok, code, message = course.check_enrollable()
-        if not ok:
-            return Response({'error': message, 'code': code}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Free courses don't need checkout
-        if course.is_free:
-            # Just enroll directly
-            enrollment = CourseEnrollment.objects.create(
-                course=course,
-                user=request.user,
-                status=CourseEnrollment.Status.ACTIVE,
-            )
-            course.update_counts()
-            return Response(
-                {
-                    'enrollment': CourseEnrollmentSerializer(enrollment).data,
-                    'message': 'Enrolled in free course',
-                },
-                status=status.HTTP_201_CREATED,
-            )
-
-        # Create Stripe Checkout Session for a paid course.
-        from billing.checkout import checkout_service
-
-        try:
-            result = checkout_service.for_course_enrollment(request.user, course)
-        except Exception as exc:
-            return Response(
-                {'error': f'Failed to create checkout session: {exc}'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return Response({'session_id': result.session_id, 'url': result.url})
+    # Orphan checkout action removed — the canonical course-checkout
+    # endpoint is ``POST /api/v1/courses/{uuid}/checkout/`` (see
+    # ``learning.payment_views.CourseCheckoutView``).
 
 
 @roles('learner', 'organizer', 'instructor', 'admin', route_name='course_modules')
@@ -2056,10 +1915,6 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You do not have permission to delete this session.")
         instance.delete()
 
-    @swagger_auto_schema(
-        operation_summary="Publish session",
-        operation_description="Make this session visible to enrolled learners.",
-    )
     @action(detail=True, methods=['post'])
     def publish(self, request, course_uuid=None, uuid=None):
         """Publish a session."""
@@ -2077,10 +1932,6 @@ class CourseSessionViewSet(viewsets.ModelViewSet):
         session.save()
         return Response(CourseSessionSerializer(session).data)
 
-    @swagger_auto_schema(
-        operation_summary="Unpublish session",
-        operation_description="Hide this session from enrolled learners.",
-    )
     @action(detail=True, methods=['post'])
     def unpublish(self, request, course_uuid=None, uuid=None):
         """Unpublish a session."""
@@ -2518,121 +2369,9 @@ class ProgramViewSet(viewsets.ModelViewSet):
         )
         return Response(ProgramEnrollmentRosterSerializer(qs, many=True).data)
 
-    @action(detail=True, methods=['post'], url_path='refund-enrollment')
-    def refund_enrollment(self, request, uuid=None):
-        """Refund a learner's program purchase and cascade-drop seeded enrollments.
-
-        Body: ``{enrollment_uuid, reason, amount_cents?}``.
-
-        Resolves the CoursePurchase for (user, program), calls Stripe with
-        an optional partial amount, marks the purchase REFUNDED (full only),
-        drops the ProgramEnrollment, and cascade-drops every CourseEnrollment
-        whose ``from_program_enrollment`` points at this one. Direct
-        enrollments the learner made outside the program are not touched.
-        """
-        from rest_framework.exceptions import PermissionDenied, ValidationError
-
-        from billing.models import CoursePurchase
-        from billing.services import refund_payment_intent
-
-        program = self.get_object()
-        if not program.can_manage(request.user):
-            raise PermissionDenied("You do not have permission to refund enrollments for this program.")
-
-        enrollment_uuid = request.data.get('enrollment_uuid')
-        reason = (request.data.get('reason') or '').strip()
-        amount_cents = request.data.get('amount_cents')
-
-        if not enrollment_uuid:
-            raise ValidationError({'enrollment_uuid': 'required'})
-        if not reason:
-            raise ValidationError({'reason': 'required'})
-        if amount_cents is not None:
-            try:
-                amount_cents = int(amount_cents)
-            except (TypeError, ValueError):
-                raise ValidationError({'amount_cents': 'must be an integer'}) from None
-            if amount_cents <= 0:
-                raise ValidationError({'amount_cents': 'must be positive'})
-
-        enrollment = (
-            ProgramEnrollment.objects
-            .filter(program=program, uuid=enrollment_uuid)
-            .select_related('user')
-            .first()
-        )
-        if enrollment is None:
-            return Response({'error': {'code': 'ENROLLMENT_NOT_FOUND'}}, status=status.HTTP_404_NOT_FOUND)
-
-        purchase = (
-            CoursePurchase.objects
-            .filter(user=enrollment.user, program=program)
-            .exclude(status=CoursePurchase.Status.REFUNDED)
-            .order_by('-created_at')
-            .first()
-        )
-        if purchase is None:
-            return Response(
-                {'error': {'code': 'NO_PURCHASE', 'message': 'No refundable purchase found for this enrollment.'}},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not purchase.stripe_payment_intent_id:
-            return Response(
-                {'error': {'code': 'NO_PAYMENT_INTENT'}},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if amount_cents is not None and amount_cents > purchase.amount_cents:
-            return Response(
-                {'error': {'code': 'REFUND_EXCEEDS_AMOUNT'}},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            stripe_result = refund_payment_intent(
-                purchase.stripe_payment_intent_id,
-                amount_cents=amount_cents,
-                reason='requested_by_customer',
-            )
-        except Exception as exc:
-            return Response({'error': {'code': 'REFUND_FAILED', 'message': str(exc)}}, status=status.HTTP_400_BAD_REQUEST)
-
-        is_partial = amount_cents is not None and amount_cents < purchase.amount_cents
-        cascade_count = 0
-        if not is_partial:
-            purchase.status = CoursePurchase.Status.REFUNDED
-            purchase.save(update_fields=['status', 'updated_at'])
-            enrollment.status = ProgramEnrollment.Status.DROPPED
-            enrollment.save(update_fields=['status', 'updated_at'])
-            cascade_count = CourseEnrollment.objects.filter(
-                from_program_enrollment=enrollment,
-            ).exclude(status=CourseEnrollment.Status.DROPPED).update(
-                status=CourseEnrollment.Status.DROPPED,
-                updated_at=timezone.now(),
-            )
-
-        try:
-            from accounts.audit import log_audit_event
-
-            log_audit_event(
-                actor=request.user,
-                action='program_purchase.refunded',
-                object_type='CoursePurchase',
-                object_uuid=str(purchase.uuid),
-                metadata={
-                    'program_uuid': str(program.uuid),
-                    'enrollment_uuid': str(enrollment.uuid),
-                    'amount_cents': stripe_result.get('amount_cents'),
-                    'partial': is_partial,
-                    'reason': reason,
-                    'stripe_refund_id': stripe_result.get('refund_id'),
-                    'cascade_drop_count': cascade_count,
-                },
-                request=request,
-            )
-        except Exception:
-            logger.warning('audit log failed for program refund %s', purchase.uuid, exc_info=True)
-
-        return Response(ProgramEnrollmentRosterSerializer(enrollment).data)
+    # Refund moved to the unified billing endpoint:
+    # ``POST /api/v1/billing/purchases/{purchase_uuid}/refund/``.
+    # See ``billing.views.RefundPurchaseView`` for cascade behaviour.
 
     @action(detail=False, methods=['get'])
     def reports(self, request):

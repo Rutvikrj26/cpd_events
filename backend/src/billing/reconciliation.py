@@ -1,9 +1,11 @@
 """Stripe ↔ local drift detection.
 
 Daily cron pulls recent Stripe objects and compares them to local rows.
-Covers PaymentIntents (via Checkout fulfilment), Subscriptions, Refunds,
-Invoices, Disputes, and Checkout Sessions. Safe drifts are auto-repaired;
-ambiguous drifts are logged as ``DriftReport`` entries for review.
+Covers Checkout Sessions (the primary fulfilment path for events,
+courses, and programs), PaymentIntents (secondary), Refunds, and
+Disputes. Safe drifts are auto-repaired by re-delivering the synthetic
+event through the same handler chain a webhook would; ambiguous drifts
+are returned as findings for review.
 """
 
 from __future__ import annotations
@@ -72,54 +74,79 @@ def _as_dict(f: DriftFinding) -> dict[str, Any]:
 
 
 def _reconcile_checkout_sessions(since_ts: int) -> Iterable[DriftFinding]:
-    from billing.models import StripeEvent
+    """Walk every recent Checkout Session, regardless of kind.
+
+    The handler dispatch (``billing.handlers.handle_checkout_session_completed``)
+    routes by ``metadata.kind`` to the right ``_fulfil_*`` for events,
+    courses, and programs. Drift is now detected against ``CoursePurchase``
+    (the unified receipt) for non-event kinds, and against the legacy
+    ``Registration.payment_status`` for events (so we keep the existing
+    PENDING/expired signal in addition to the purchase-row check).
+    """
+    from billing.models import CoursePurchase
     from registrations.models import Registration
 
     stripe = get_stripe()
     sessions = stripe.checkout.Session.list(created={"gte": since_ts}, limit=100)
+
     for session in sessions.auto_paging_iter():
         metadata = session.metadata or {}
         kind = metadata.get("kind") or metadata.get("type")
-        if kind != "event_registration":
+        if kind not in ("event_registration", "course_enrollment", "program_enrollment"):
             continue
-        reg_uuid = metadata.get("registration_uuid") or session.client_reference_id
-        if not reg_uuid:
-            continue
-        reg = Registration.objects.filter(uuid=reg_uuid).first()
-        if not reg:
+
+        # CoursePurchase is now the canonical row for every kind. Missing
+        # purchase + Stripe-paid = missed webhook → re-trigger.
+        local_purchase = CoursePurchase.objects.filter(
+            stripe_checkout_session_id=session.id,
+        ).first()
+
+        if session.payment_status == "paid" and local_purchase is None:
             yield DriftFinding(
                 kind="missing_local",
                 entity="CheckoutSession",
                 stripe_id=session.id,
-                detail={"registration_uuid": reg_uuid},
-            )
-            continue
-
-        if session.payment_status == "paid" and reg.payment_status != Registration.PaymentStatus.PAID:
-            # Stripe says paid, we say pending — most likely a missed webhook.
-            # Attempt safe auto-apply: re-deliver the event through the worker.
-            yield DriftFinding(
-                kind="state_mismatch",
-                entity="CheckoutSession",
-                stripe_id=session.id,
-                detail={
-                    "registration_uuid": reg_uuid,
-                    "stripe_payment_status": session.payment_status,
-                    "local_payment_status": reg.payment_status,
-                },
+                detail={"kind": kind, "metadata": dict(metadata)},
             )
             _retrigger_checkout_session_completed(session.id)
+            continue
 
         if (
-            session.status == "expired"
-            and reg.status == Registration.Status.PENDING
+            session.payment_status == "paid"
+            and local_purchase is not None
+            and local_purchase.status != CoursePurchase.Status.COMPLETED
         ):
             yield DriftFinding(
                 kind="state_mismatch",
                 entity="CheckoutSession",
                 stripe_id=session.id,
-                detail={"registration_uuid": reg_uuid, "session_status": "expired"},
+                detail={
+                    "kind": kind,
+                    "stripe_payment_status": session.payment_status,
+                    "local_purchase_status": local_purchase.status,
+                },
             )
+            _retrigger_checkout_session_completed(session.id)
+
+        # Event-only: surface PENDING registrations whose session expired
+        # so an organizer can clean them up. Course/program enrollments are
+        # only created on fulfilment, so there's no equivalent half-state.
+        if kind == "event_registration":
+            reg_uuid = metadata.get("registration_uuid") or session.client_reference_id
+            if not reg_uuid:
+                continue
+            reg = Registration.objects.filter(uuid=reg_uuid).first()
+            if (
+                reg
+                and session.status == "expired"
+                and reg.status == Registration.Status.PENDING
+            ):
+                yield DriftFinding(
+                    kind="state_mismatch",
+                    entity="CheckoutSession",
+                    stripe_id=session.id,
+                    detail={"registration_uuid": reg_uuid, "session_status": "expired"},
+                )
 
 
 def _retrigger_checkout_session_completed(session_id: str) -> None:

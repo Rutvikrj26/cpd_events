@@ -1,6 +1,6 @@
 """Unified checkout service — one path for every purchase kind.
 
-Every purchase (event ticket, course, program, subscription) produces a
+Every purchase (event ticket, course, program) produces a
 ``stripe.checkout.Session`` and returns its URL. The frontend always does
 "POST → redirect". Fulfilment happens in ``billing.handlers`` on
 ``checkout.session.completed``.
@@ -26,6 +26,14 @@ from django.conf import settings
 from billing.client import get_stripe
 
 logger = logging.getLogger(__name__)
+
+
+# We always re-fetch line items + tax breakdown so the webhook payload (and
+# any reconciliation re-fetch) carries enough data for ``CoursePurchase`` to
+# populate ``subtotal_cents`` and ``tax_cents`` without a second round-trip.
+# Per the Stripe Checkout Session API, ``total_details`` is only populated
+# on retrieval when the session was created with ``expand`` set.
+SESSION_EXPAND = ["total_details", "total_details.breakdown", "line_items"]
 
 
 @dataclass
@@ -83,13 +91,55 @@ def _success_and_cancel(kind: str) -> tuple[str, str]:
     return success, cancel
 
 
+def _validated_url(candidate: str | None, fallback: str) -> str:
+    """Same-origin guard for client-supplied success/cancel URLs.
+
+    Prevents a malicious caller from redirecting Stripe-issued tokens to
+    a third-party origin. We anchor on ``settings.FRONTEND_URL``; if the
+    candidate doesn't start with that base (or the env isn't configured),
+    we fall back to the canonical kind-routed URL.
+    """
+    if not candidate:
+        return fallback
+    base = (getattr(settings, "FRONTEND_URL", "") or "").rstrip("/")
+    if not base or not candidate.startswith(base):
+        logger.warning("stripe.checkout.url_rejected", extra={"candidate": candidate})
+        return fallback
+    return candidate
+
+
+def _resolve_redirect_urls(kind: str, success_url: str | None, cancel_url: str | None) -> tuple[str, str]:
+    """Apply the same-origin guard and append the session-id placeholder.
+
+    The placeholder is appended unconditionally so the ``verify-session``
+    polling on the frontend (CheckoutReturn) always has the session id to
+    look up, regardless of which client URL was supplied.
+    """
+    default_success, default_cancel = _success_and_cancel(kind)
+    success = _validated_url(success_url, default_success)
+    cancel = _validated_url(cancel_url, default_cancel)
+    if success_url and "{CHECKOUT_SESSION_ID}" not in success:
+        sep = "&" if "?" in success else "?"
+        success = f"{success}{sep}session_id={{CHECKOUT_SESSION_ID}}&kind={kind}"
+    if cancel_url and "kind=" not in cancel:
+        sep = "&" if "?" in cancel else "?"
+        cancel = f"{cancel}{sep}kind={kind}"
+    return success, cancel
+
+
 class CheckoutService:
     """One method per purchase kind. All return a ``CheckoutResult``."""
 
     # ------------------------------------------------------------------
     # Event ticket
     # ------------------------------------------------------------------
-    def for_event_registration(self, registration) -> CheckoutResult:
+    def for_event_registration(
+        self,
+        registration,
+        *,
+        success_url: str | None = None,
+        cancel_url: str | None = None,
+    ) -> CheckoutResult:
         from events.models import Event
 
         event: Event = registration.event
@@ -98,9 +148,11 @@ class CheckoutService:
 
         stripe = get_stripe()
         user = registration.user
+        # Paid events require login — see registrations.services. The customer
+        # FK is therefore always set; we keep the email fallback only as a
+        # defensive belt for any historical guest path that survived.
         customer_id = get_or_create_stripe_customer(user) if user else None
-
-        success_url, cancel_url = _success_and_cancel("event")
+        success_url, cancel_url = _resolve_redirect_urls("event", success_url, cancel_url)
 
         session = stripe.checkout.Session.create(
             mode="payment",
@@ -134,6 +186,7 @@ class CheckoutService:
             success_url=success_url,
             cancel_url=cancel_url,
             expires_at=None,  # default 24h
+            expand=SESSION_EXPAND,
             idempotency_key=f"checkout:event_reg:{registration.uuid}:v1",
         )
 
@@ -148,13 +201,20 @@ class CheckoutService:
     # ------------------------------------------------------------------
     # Course purchase
     # ------------------------------------------------------------------
-    def for_course_enrollment(self, user, course) -> CheckoutResult:
+    def for_course_enrollment(
+        self,
+        user,
+        course,
+        *,
+        success_url: str | None = None,
+        cancel_url: str | None = None,
+    ) -> CheckoutResult:
         if course.price_cents <= 0:
             raise ValueError("Free courses should enroll directly, not via Checkout.")
 
         stripe = get_stripe()
         customer_id = get_or_create_stripe_customer(user)
-        success_url, cancel_url = _success_and_cancel("course")
+        success_url, cancel_url = _resolve_redirect_urls("course", success_url, cancel_url)
 
         line_items = self._course_line_items(course)
 
@@ -175,6 +235,7 @@ class CheckoutService:
             billing_address_collection="required",
             success_url=success_url,
             cancel_url=cancel_url,
+            expand=SESSION_EXPAND,
             idempotency_key=f"checkout:course:{course.uuid}:user:{user.uuid}:v1",
         )
         logger.info(
@@ -203,13 +264,20 @@ class CheckoutService:
     # ------------------------------------------------------------------
     # Program purchase (bundle)
     # ------------------------------------------------------------------
-    def for_program_enrollment(self, user, program) -> CheckoutResult:
+    def for_program_enrollment(
+        self,
+        user,
+        program,
+        *,
+        success_url: str | None = None,
+        cancel_url: str | None = None,
+    ) -> CheckoutResult:
         if program.price_cents <= 0:
             raise ValueError("Free programs should enroll directly, not via Checkout.")
 
         stripe = get_stripe()
         customer_id = get_or_create_stripe_customer(user)
-        success_url, cancel_url = _success_and_cancel("program")
+        success_url, cancel_url = _resolve_redirect_urls("program", success_url, cancel_url)
 
         if program.stripe_price_id:
             line_items = [{"price": program.stripe_price_id, "quantity": 1}]
@@ -245,6 +313,7 @@ class CheckoutService:
             billing_address_collection="required",
             success_url=success_url,
             cancel_url=cancel_url,
+            expand=SESSION_EXPAND,
             idempotency_key=f"checkout:program:{program.uuid}:user:{user.uuid}:v1",
         )
         logger.info(

@@ -2,6 +2,7 @@
 
 from django.contrib import admin
 from django.urls import include, path
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from billing.webhooks import StripeWebhookView
 from registrations import views as registration_views
@@ -9,6 +10,14 @@ from registrations import views as registration_views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/webhooks/stripe/', StripeWebhookView.as_view(), name='stripe-webhook'),
+    # OpenAPI 3.0 schema — consumed by frontend's openapi-typescript codegen.
+    # Walks the full urlconf; every endpoint in the public API appears here.
+    path('api/v1/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path(
+        'api/v1/schema/ui/',
+        SpectacularSwaggerView.as_view(url_name='schema'),
+        name='schema-ui',
+    ),
     # API v1
     path('api/v1/', include('accounts.urls')),
     path('api/v1/', include('events.urls')),

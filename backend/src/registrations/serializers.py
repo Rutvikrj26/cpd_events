@@ -164,6 +164,7 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
     user = MinimalUserSerializer(read_only=True)
     event_title = serializers.CharField(source='event.title', read_only=True)
     attendance_percent = serializers.IntegerField(read_only=True)
+    purchase_uuid = serializers.SerializerMethodField()
 
     certificate_uuid = serializers.SerializerMethodField()
 
@@ -172,6 +173,10 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
             status='active', deleted_at__isnull=True
         ).order_by('-created_at').first()
         return str(cert.uuid) if cert else None
+
+    def get_purchase_uuid(self, obj):
+        """Surface the unified-receipt UUID for refund flows in the attendees roster."""
+        return str(obj.purchase.uuid) if obj.purchase_id else None
 
     class Meta:
         model = Registration
@@ -187,6 +192,7 @@ class RegistrationListSerializer(SoftDeleteModelSerializer):
             'tax_amount',
             'total_amount',
             'stripe_checkout_session_id',
+            'purchase_uuid',
             'attended',
             'check_in_time',
             'total_attendance_minutes',
@@ -210,6 +216,11 @@ class RegistrationDetailSerializer(SoftDeleteModelSerializer):
     attendance_records = AttendanceRecordSerializer(many=True, read_only=True)
     attendance_percent = serializers.IntegerField(read_only=True)
     can_receive_certificate = serializers.BooleanField(read_only=True)
+    purchase_uuid = serializers.SerializerMethodField()
+
+    def get_purchase_uuid(self, obj):
+        """Surface the unified-receipt UUID for refund flows."""
+        return str(obj.purchase.uuid) if obj.purchase_id else None
 
     class Meta:
         model = Registration
@@ -247,6 +258,7 @@ class RegistrationDetailSerializer(SoftDeleteModelSerializer):
             'total_amount',
             'payment_intent_id',
             'stripe_checkout_session_id',
+            'purchase_uuid',
             # Privacy
             'allow_public_verification',
             # Custom fields
@@ -313,13 +325,21 @@ class RegistrationBulkCreateSerializer(serializers.Serializer):
 
 
 class MyRegistrationSerializer(SoftDeleteModelSerializer):
-    """Registration from attendee's perspective."""
+    """Registration from attendee's perspective.
+
+    ``view_state`` is the discriminated UI projection — six kinds the
+    My Registrations cards exhaustively switch on. See
+    ``learning.view_states.derive_registration_view_state`` for the
+    derivation. Consumers should bind to ``view_state.kind`` rather than
+    composing ``status × payment_status × event.is_past`` themselves.
+    """
 
     event = MinimalEventSerializer(read_only=True)
     meeting_join_url = serializers.SerializerMethodField()
     can_join = serializers.SerializerMethodField()
     certificate_url = serializers.SerializerMethodField()
     attendance_percent = serializers.IntegerField(read_only=True)
+    view_state = serializers.SerializerMethodField()
 
     class Meta:
         model = Registration
@@ -345,9 +365,15 @@ class MyRegistrationSerializer(SoftDeleteModelSerializer):
             'meeting_join_url',
             'can_join',
             'certificate_url',
+            'view_state',
             'created_at',
         ]
         read_only_fields = fields
+
+    def get_view_state(self, obj):
+        from learning.view_states import derive_registration_view_state
+
+        return derive_registration_view_state(obj)
 
     def get_meeting_join_url(self, obj):
         """Return video join URL if available. Clients should use the in-app /join-video endpoint instead."""

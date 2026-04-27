@@ -227,16 +227,7 @@ export const getProgramEnrollmentsRoster = async (programUuid: string): Promise<
     return response.data;
 };
 
-export interface ProgramRefundPayload {
-    enrollment_uuid: string;
-    reason: string;
-    amount_cents?: number;
-}
-
-export const programRefundEnrollment = async (
-    programUuid: string,
-    payload: ProgramRefundPayload,
-): Promise<any> => {
-    const response = await client.post<any>(`/programs/${programUuid}/refund-enrollment/`, payload);
-    return response.data;
-};
+// Program refunds moved to the unified billing endpoint:
+//   import { refundPurchase } from '@/api/billing';
+//   await refundPurchase(purchase_uuid, { reason, amount_cents? });
+// The roster endpoint exposes purchase_uuid per row.

@@ -48,8 +48,9 @@ FROM dependencies AS development
 # Copy dependency files again for dev install
 COPY pyproject.toml uv.lock ./
 
-# Install all dependencies including dev
-RUN uv sync --frozen --no-install-project
+# Install all dependencies including the `dev` optional-extras (pytest, etc.)
+# so `docker exec cpd_backend uv run python -m pytest` works in dev.
+RUN uv sync --frozen --no-install-project --extra dev
 
 # Copy application code
 COPY . .

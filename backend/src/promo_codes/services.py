@@ -121,18 +121,26 @@ def sync_to_stripe(promo_code: PromoCode) -> PromoCode:
     return promo_code
 
 
-def record_usage_from_checkout_session(session_data: dict, registration=None, user=None):
+def record_usage_from_checkout_session(
+    session_data: dict,
+    *,
+    purchase=None,
+    registration=None,
+    user=None,
+):
     """Write ``PromoCodeUsage`` rows for a completed Checkout Session.
 
-    Idempotent: safe to invoke multiple times for the same session. Uniqueness
-    comes from the ``(registration, promo_code)`` unique constraint on
-    ``PromoCodeUsage`` — repeated calls become no-ops instead of duplicating
-    rows or double-incrementing ``current_uses``.
+    Idempotent across all three paid surfaces. Pass ``purchase`` for every
+    new fulfilment (it's the canonical anchor); ``registration`` is still
+    accepted so the event handler can keep populating the legacy FK for
+    queries like ``registration.promo_code_usages``.
 
-    Called by the fulfilment handler. ``session_data`` is the raw dict of a
-    ``stripe.checkout.Session``; we inspect ``total_details.breakdown.discounts``
-    for every applied promotion code and resolve it to a local ``PromoCode``
-    via ``stripe_promotion_code_id``.
+    Uniqueness:
+    - per-purchase via the partial unique on ``(purchase, promo_code)``
+    - per-registration via the partial unique on ``(registration, promo_code)``
+
+    Both fire when an event row writes both anchors, so a re-run is a no-op
+    even though we go through ``get_or_create`` keyed on the union.
     """
     from .models import PromoCodeUsage
 
@@ -140,12 +148,28 @@ def record_usage_from_checkout_session(session_data: dict, registration=None, us
     breakdown = total_details.get("breakdown") or {}
     discounts = breakdown.get("discounts") or []
 
-    if not discounts or registration is None:
+    if not discounts:
+        return []
+    if purchase is None and registration is None:
+        # No anchor → nothing to record. (CheckConstraint would reject anyway.)
         return []
 
     amount_subtotal = session_data.get("amount_subtotal") or 0
     currency = session_data.get("currency", "usd")
     usages = []
+
+    # Resolve email/user from whichever anchor has it.
+    anchor_email = ""
+    anchor_user = user
+    if registration is not None:
+        anchor_email = registration.email or anchor_email
+        anchor_user = anchor_user or registration.user
+    if purchase is not None:
+        anchor_user = anchor_user or purchase.user
+        if purchase.user and not anchor_email:
+            anchor_email = purchase.user.email
+    if anchor_user and not anchor_email:
+        anchor_email = anchor_user.email
 
     for entry in discounts:
         discount = entry.get("discount") or {}
@@ -166,24 +190,49 @@ def record_usage_from_checkout_session(session_data: dict, registration=None, us
         discount_amount = Decimal(discount_cents) / Decimal("100")
         final_price = max(Decimal("0.00"), original_price - discount_amount)
 
+        # Lookup keys: prefer ``purchase`` (the unified anchor); fall back to
+        # ``registration`` if no purchase. Setting both on event rows is fine
+        # — the partial uniques fire independently and ``get_or_create`` matches
+        # the supplied keys.
+        lookup = {"promo_code": local}
+        if purchase is not None:
+            lookup["purchase"] = purchase
+        else:
+            lookup["registration"] = registration
+
         usage, created = PromoCodeUsage.objects.get_or_create(
-            registration=registration,
-            promo_code=local,
+            **lookup,
             defaults=dict(
-                user_email=(registration.email or (user.email if user else "")),
-                user=user or registration.user,
+                registration=registration,
+                purchase=purchase,
+                user_email=anchor_email,
+                user=anchor_user,
                 original_price=original_price,
                 discount_amount=discount_amount,
                 final_price=final_price,
             ),
         )
+        # Backfill the secondary anchor on event rows that pre-date this
+        # change (registration came in via legacy path; purchase landed on
+        # a re-run after Phase 1 backfill).
+        backfill_dirty = []
+        if purchase is not None and registration is not None and usage.registration_id is None:
+            usage.registration = registration
+            backfill_dirty.append("registration")
+        if registration is not None and purchase is not None and usage.purchase_id is None:
+            usage.purchase = purchase
+            backfill_dirty.append("purchase")
+        if backfill_dirty:
+            usage.save(update_fields=backfill_dirty + ["updated_at"])
+
         if created:
             local.increment_usage()
             logger.info(
                 "stripe.promo.usage_recorded",
                 extra={
                     "promo_uuid": str(local.uuid),
-                    "registration_uuid": str(registration.uuid),
+                    "purchase_uuid": str(purchase.uuid) if purchase else None,
+                    "registration_uuid": str(registration.uuid) if registration else None,
                     "discount_amount": str(discount_amount),
                     "currency": currency,
                 },

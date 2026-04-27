@@ -7,25 +7,42 @@ import { toast } from 'sonner';
  * Error-handling conventions for this client
  * ------------------------------------------
  *
- * The response interceptor below is the SINGLE SOURCE OF TRUTH for error
- * toasts. For every non-401 error response it shows a toast whose
- * description comes from `getApiErrorMessage(error)` — which knows how to
- * format DRF's `{ error: { details: { field: ["msg", ...] } } }` shape into
- * "Field name: message" lines.
+ * The response interceptor below auto-toasts only the kinds of errors that
+ * are genuinely unexpected:
  *
- * Callers should NOT add their own `toast.error('Failed to save')` in catch
- * blocks — that just stacks a less-useful generic message on top of the
- * field-level one the interceptor already showed. If a caller needs full
- * control over error UX (e.g. inline form errors), it should pass
- * `silent: true` on the axios config and then format the error itself with
- * `getApiErrorMessage()` or `formErrorsFromApi()` (see lib/form-errors.ts).
+ *   - **5xx**          — server bugs, never user-actionable. Always toast.
+ *   - **Network**      — request never reached the server. Always toast.
+ *   - **401**          — handled separately (token refresh + login redirect).
+ *   - **4xx (others)** — domain conditions the calling component is
+ *                        expected to handle inline (e.g. "already enrolled",
+ *                        "pending approval", validation field errors).
+ *                        Silent by default; opt-in via `toastOnError: true`.
+ *
+ * This was reversed during the typed-contract migration. Previously every
+ * non-401 produced a toast, which meant pages with multiple legitimate 4xx
+ * states (course player landing on a not-enrolled course, etc.) toast-spammed
+ * users with redundant info already shown inline. The new default is "the
+ * caller owns 4xx UX"; toast spam shows up only when the caller forgets, in
+ * which case nothing flashes by accident.
+ *
+ * If a caller needs the legacy auto-toast for a specific 4xx — e.g. a fire-
+ * and-forget mutation where there's no UI to surface the error inline —
+ * pass `toastOnError: true` on the axios config.
+ *
+ * The legacy `silent: true` option still works for symmetry and for the
+ * 5xx case (e.g. a polling endpoint that doesn't want to flash a server-
+ * error toast on every retry).
  */
 declare module 'axios' {
     export interface AxiosRequestConfig {
-        // When true, suppress the global error toast for this request.
-        // Use when the caller wants to surface errors inline (e.g. form
-        // field errors via formErrorsFromApi) instead of as a toast.
+        // Force-suppress the global toast even for 5xx / network errors.
+        // Use sparingly — meant for polling endpoints and similar where
+        // transient failures are expected.
         silent?: boolean;
+        // Opt INTO the global toast for 4xx domain errors. Use when the
+        // caller has no UI to render the error inline (e.g. background
+        // mutations triggered by keyboard shortcuts).
+        toastOnError?: boolean;
     }
 }
 
@@ -140,25 +157,48 @@ client.interceptors.response.use(
             }
         }
 
-        // --- Toast notifications for non-401 errors ---
-        // Callers can opt out by setting `silent: true` on the axios config.
+        // --- Toast policy ---
+        //
+        // Default behaviour, by status class:
+        //   5xx, network → always toast (real bugs)
+        //   401         → no toast (refresh interceptor handled it above)
+        //   4xx (other) → silent unless the caller opts in via
+        //                 `toastOnError: true`
+        //
+        // Both opt-out (`silent: true`) and opt-in (`toastOnError: true`)
+        // are honoured. See the JSDoc preamble at the top of this file.
         const silent = originalRequest?.silent === true;
-        if (error.response && !isPublicEndpoint(originalRequest?.url) && !silent) {
-            const errorMessage = truncate(getApiErrorMessage(error), TOAST_DESCRIPTION_MAX);
+        const toastOnError = originalRequest?.toastOnError === true;
 
-            if (error.response.status >= 500) {
-                toast.error('Server Error', {
-                    description: 'Something went wrong on our end. Please try again later.',
-                });
-            } else if (error.response.status === 403) {
-                toast.error('Access Denied', { description: errorMessage });
-            } else if (error.response.status === 404) {
-                toast.error('Not Found', { description: errorMessage });
-            } else if (error.response.status !== 401) {
-                // 400, 422, etc. (skip 401 — already handled above)
-                toast.error('Error', { description: errorMessage });
-            }
+        if (silent) {
+            return Promise.reject(error);
         }
+
+        if (!error.response) {
+            // Network error — request never reached the server.
+            toast.error('Network error', {
+                description: 'Could not reach the server. Check your connection and try again.',
+            });
+            return Promise.reject(error);
+        }
+
+        const status = error.response.status;
+        if (status >= 500) {
+            toast.error('Server Error', {
+                description: 'Something went wrong on our end. Please try again later.',
+            });
+        } else if (status === 401) {
+            // Handled by the refresh chain above. No toast.
+        } else if (toastOnError && !isPublicEndpoint(originalRequest?.url)) {
+            // 4xx with explicit opt-in.
+            const errorMessage = truncate(getApiErrorMessage(error), TOAST_DESCRIPTION_MAX);
+            const title =
+                status === 403 ? 'Access Denied'
+                : status === 404 ? 'Not Found'
+                : 'Error';
+            toast.error(title, { description: errorMessage });
+        }
+        // else: 4xx without opt-in. The calling component owns the UX.
 
         return Promise.reject(error);
     }

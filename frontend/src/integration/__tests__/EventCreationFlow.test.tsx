@@ -6,7 +6,6 @@ import App from "@/App";
 import * as accountsApi from "@/api/accounts";
 import * as eventsApi from "@/api/events";
 import * as manifestApi from "@/api/auth/manifest";
-import * as payoutsApi from "@/api/payouts";
 
 /**
  * Wraps App in a fresh QueryClient — the production entry mounts the
@@ -27,7 +26,6 @@ function renderApp() {
 vi.mock("@/api/accounts");
 vi.mock("@/api/events");
 vi.mock("@/api/auth/manifest");
-vi.mock("@/api/payouts");
 vi.mock("@/lib/auth");
 
 // Mock ScrollToTop
@@ -142,11 +140,9 @@ describe.skip("Integration: Event Creation Flow", () => {
             features: {},
         });
 
-        (payoutsApi.getPayoutsStatus as any).mockResolvedValue({
-            connected: true,
-            status: "active",
-            charges_enabled: true,
-        });
+        // Stripe Connect / payouts mocking removed — single-tenant deployment
+        // routes all event payments to the institution's single Stripe account
+        // (no per-organizer onboarding).
     });
 
     it("completes event creation wizard", async () => {

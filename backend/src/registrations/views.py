@@ -7,7 +7,6 @@ from decimal import Decimal
 
 from django.utils import timezone
 from django_filters import rest_framework as filters
-from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -159,11 +158,6 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 
         return Response(serializers.RegistrationDetailSerializer(instance).data)
 
-    @swagger_auto_schema(
-        operation_summary="Get waitlist",
-        operation_description="Get all waitlisted registrations for this event.",
-        responses={200: serializers.RegistrationListSerializer(many=True)},
-    )
     @action(detail=False, methods=['get'])
     def waitlist(self, request, event_uuid=None):
         """Get waitlist registrations."""
@@ -172,11 +166,6 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
         serializer = serializers.RegistrationListSerializer(waitlisted, many=True)
         return Response(serializer.data)
 
-    @swagger_auto_schema(
-        operation_summary="Promote registration",
-        operation_description="Promote a waitlisted registration to confirmed status.",
-        responses={200: serializers.RegistrationDetailSerializer, 400: '{"error": {"code": "NOT_WAITLISTED"}}'},
-    )
     @action(detail=True, methods=['post'])
     def promote(self, request, event_uuid=None, uuid=None):
         """Promote a waitlisted registration to confirmed."""
@@ -188,11 +177,6 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
         registration.promote_from_waitlist()
         return Response(serializers.RegistrationDetailSerializer(registration).data)
 
-    @swagger_auto_schema(
-        operation_summary="Promote next waitlisted",
-        operation_description="Promote the next person in the waitlist to confirmed status.",
-        responses={200: serializers.RegistrationDetailSerializer, 400: '{"error": {"code": "EMPTY_WAITLIST"}}'},
-    )
     @action(detail=False, methods=['post'], url_path='promote-next')
     def promote_next(self, request, event_uuid=None):
         """Promote next person in waitlist."""
@@ -204,12 +188,6 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
         next_in_line.promote_from_waitlist()
         return Response(serializers.RegistrationDetailSerializer(next_in_line).data)
 
-    @swagger_auto_schema(
-        operation_summary="Override attendance",
-        operation_description="Override attendance eligibility for a registration.",
-        request_body=serializers.AttendanceOverrideSerializer,
-        responses={200: serializers.RegistrationDetailSerializer},
-    )
     @action(detail=True, methods=['post'], url_path='override-attendance')
     def override_attendance(self, request, event_uuid=None, uuid=None):
         """Override attendance eligibility for a registration."""
@@ -223,10 +201,6 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 
         return Response(serializers.RegistrationDetailSerializer(registration).data)
 
-    @swagger_auto_schema(
-        operation_summary="Registration summary",
-        operation_description="Get aggregate statistics for event registrations.",
-    )
     @action(detail=False, methods=['get'])
     def summary(self, request, event_uuid=None):
         """Get registration summary stats."""
@@ -244,12 +218,6 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
             }
         )
 
-    @swagger_auto_schema(
-        operation_summary="Cancel registration",
-        operation_description="Cancel an unpaid registration for this event.",
-        request_body=serializers.RegistrationCancelSerializer,
-        responses={200: serializers.RegistrationDetailSerializer, 400: '{"error": {"code": "CANNOT_CANCEL"}}'},
-    )
     @action(detail=True, methods=['post'], url_path='cancel')
     def cancel_registration(self, request, event_uuid=None, uuid=None):
         """Cancel a registration without refund (unpaid only)."""
@@ -275,94 +243,10 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 
         return Response(serializers.RegistrationDetailSerializer(registration).data)
 
-    @swagger_auto_schema(
-        operation_summary="Refund registration",
-        operation_description="Refund a paid registration and cancel the attendee.",
-        request_body=serializers.RegistrationRefundSerializer,
-        responses={200: serializers.RegistrationDetailSerializer, 400: '{"error": {"code": "NOT_PAID"}}'},
-    )
-    @action(detail=True, methods=['post'], url_path='refund')
-    def refund_registration(self, request, event_uuid=None, uuid=None):
-        """Refund a registration (paid only).
+    # Refund moved to the unified billing endpoint:
+    # ``POST /api/v1/billing/purchases/{purchase_uuid}/refund/``.
+    # See ``billing.views.RefundPurchaseView``.
 
-        ``automatic_tax`` handled the original charge, so Stripe reverses the
-        tax transaction automatically when we issue the refund.
-        """
-        from billing.services import refund_payment_intent
-
-        registration = self.get_object()
-        serializer = serializers.RegistrationRefundSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        if registration.payment_status == Registration.PaymentStatus.REFUNDED:
-            return error_response('Registration already refunded.', code='ALREADY_REFUNDED')
-        if registration.payment_status != Registration.PaymentStatus.PAID or registration.amount_paid <= 0:
-            return error_response('Registration is not paid.', code='NOT_PAID')
-        if not registration.payment_intent_id:
-            return error_response('No payment intent found for this registration.', code='NO_PAYMENT_INTENT')
-
-        amount_cents = serializer.validated_data.get('amount_cents')
-        if amount_cents is not None and amount_cents > int(registration.amount_paid * 100):
-            return error_response(
-                'Refund amount exceeds amount paid.',
-                code='REFUND_EXCEEDS_AMOUNT',
-            )
-
-        reason = serializer.validated_data['reason']
-        try:
-            stripe_result = refund_payment_intent(
-                registration.payment_intent_id,
-                amount_cents=amount_cents,
-                reason='requested_by_customer',
-            )
-        except Exception as exc:
-            return error_response(str(exc), code='REFUND_FAILED')
-
-        is_partial = amount_cents is not None and amount_cents < int(registration.amount_paid * 100)
-
-        if not is_partial:
-            if registration.status != Registration.Status.CANCELLED:
-                registration.cancel(reason=reason, cancelled_by=request.user)
-            elif reason and not registration.cancellation_reason:
-                registration.cancellation_reason = reason
-                registration.save(update_fields=['cancellation_reason', 'updated_at'])
-
-            registration.payment_status = Registration.PaymentStatus.REFUNDED
-            registration.save(update_fields=['payment_status', 'updated_at'])
-            try:
-                from promo_codes.models import PromoCodeUsage
-
-                PromoCodeUsage.release_for_registration(registration)
-            except Exception as e:
-                logger.warning("Failed to release promo code usage for %s: %s", registration.uuid, e)
-
-        try:
-            from accounts.audit import log_audit_event
-
-            log_audit_event(
-                actor=request.user,
-                action='registration.refunded',
-                object_type='Registration',
-                object_uuid=str(registration.uuid),
-                metadata={
-                    'event_uuid': str(registration.event.uuid),
-                    'amount_cents': stripe_result.get('amount_cents'),
-                    'partial': is_partial,
-                    'reason': reason,
-                    'stripe_refund_id': stripe_result.get('refund_id'),
-                },
-                request=request,
-            )
-        except Exception as e:
-            logger.warning("Failed to audit registration refund for %s: %s", registration.uuid, e)
-
-        return Response(serializers.RegistrationDetailSerializer(registration).data)
-
-    @swagger_auto_schema(
-        operation_summary="Add to contacts",
-        operation_description="Add this registrant to the organizer's contact list.",
-        responses={200: '{"message": "Contact added.", "contact_uuid": "..."}', 400: '{"error": {}}'},
-    )
     @action(detail=True, methods=['post'], url_path='add-to-contacts')
     def add_to_contacts(self, request, event_uuid=None, uuid=None):
         """Add registrant to organizer's contacts."""
@@ -419,11 +303,6 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    @swagger_auto_schema(
-        operation_summary="List unmatched attendance",
-        operation_description="Get attendance records not matched to any registration.",
-        responses={200: serializers.UnmatchedAttendanceRecordSerializer(many=True)},
-    )
     @action(detail=False, methods=['get'], url_path='unmatched-attendance')
     def unmatched_attendance(self, request, event_uuid=None):
         """Get unmatched attendance records for reconciliation."""
@@ -450,16 +329,6 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
         serializer = serializers.UnmatchedAttendanceRecordSerializer(unmatched, many=True)
         return Response(serializer.data)
 
-    @swagger_auto_schema(
-        operation_summary="Match attendance to registration",
-        operation_description="Manually match an unmatched attendance record to a registration.",
-        request_body=serializers.AttendanceMatchSerializer,
-        responses={
-            200: serializers.AttendanceRecordSerializer,
-            400: '{"error": {}}',
-            404: '{"error": {"code": "NOT_FOUND"}}',
-        },
-    )
     @action(detail=False, methods=['post'], url_path='match-attendance/(?P<record_uuid>[^/.]+)')
     def match_attendance(self, request, event_uuid=None, record_uuid=None):
         """Match unmatched attendance record to a registration."""
@@ -583,9 +452,21 @@ class PublicRegistrationView(generics.CreateAPIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         except ValidationError as e:
-            # Map validation errors to error codes
-            msg = str(e.detail[0]) if isinstance(e.detail, list) else str(e)
+            # Structured payloads (`{"code": ..., "message": ...}`) round-trip
+            # the explicit code so the frontend can branch (e.g. redirect to
+            # /login on LOGIN_REQUIRED). Legacy string-only errors fall back
+            # to keyword inference for backward compatibility.
+            detail = e.detail
+            if isinstance(detail, dict) and 'code' in detail:
+                code = str(detail['code'])
+                msg = str(detail.get('message') or detail.get('code'))
+                http_status = (
+                    status.HTTP_401_UNAUTHORIZED if code == 'LOGIN_REQUIRED'
+                    else status.HTTP_400_BAD_REQUEST
+                )
+                return error_response(msg, code=code, status_code=http_status)
 
+            msg = str(detail[0]) if isinstance(detail, list) else str(detail)
             error_code = 'VALIDATION_ERROR'
             if 'capacity' in msg.lower():
                 error_code = 'EVENT_FULL'
@@ -722,12 +603,6 @@ class MyRegistrationViewSet(ReadOnlyModelViewSet):
             'event', 'event__owner'
         )
 
-    @swagger_auto_schema(
-        operation_summary="Cancel registration",
-        operation_description="Cancel your registration for an event.",
-        request_body=serializers.RegistrationCancelSerializer,
-        responses={200: '{"message": "Registration cancelled."}', 400: '{"error": {}}'},
-    )
     @action(detail=True, methods=['post'])
     def cancel(self, request, uuid=None):
         """Cancel a registration."""

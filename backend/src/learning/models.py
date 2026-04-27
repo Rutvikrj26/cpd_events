@@ -22,59 +22,27 @@ from common.models import BaseModel, SoftDeleteModel
 
 
 def validate_module_content_data(content_type: str, content_data):
+    """Per-content_type schema validation for ``ModuleContent.content_data``.
+
+    Delegates to the Pydantic schemas in ``learning.content_schemas``. Any
+    schema mismatch is rewrapped as Django's ``ValidationError`` so
+    ``Model.clean()`` / ``full_clean()`` callers see the framework-native
+    type. The DRF serializer path (``validate_content_data``) catches
+    pydantic directly and emits its own DRF error.
+
+    Empty payloads are still accepted; document content commonly persists
+    with no JSON.
     """
-    Shape-check ``ModuleContent.content_data`` for a given content_type.
+    from learning.content_schemas import (
+        ContentSchemaError,
+        format_schema_error,
+        validate_content_data,
+    )
 
-    Canonical shapes:
-      text:     {"body": "<html>"}
-      lesson:   {"video"?: {"url": str}, "text"?: {"body": "<html>"}}
-      video:    {"url": str, "provider"?: str, "thumbnail"?: str}
-      document: {}                  # binary lives on the `file` field
-      quiz:     {"questions": [...], "passing_score": int}
-      external: {"url": str, "open_in_new_tab"?: bool}
-    """
-    if content_data is None or content_data == {}:
-        return
-    if not isinstance(content_data, dict):
-        raise ValidationError({'content_data': 'content_data must be a JSON object.'})
-
-    def _text_block(value, field):
-        if not isinstance(value, dict) or not isinstance(value.get('body'), str):
-            raise ValidationError(
-                {'content_data': f'{field} must be an object with a "body" string.'}
-            )
-
-    if content_type == 'text':
-        if not isinstance(content_data.get('body'), str):
-            raise ValidationError(
-                {'content_data': 'text content requires {"body": "<html>"}.'}
-            )
-    elif content_type == 'lesson':
-        if 'video' in content_data and content_data['video'] is not None:
-            video = content_data['video']
-            if not isinstance(video, dict) or not isinstance(video.get('url'), str):
-                raise ValidationError(
-                    {'content_data': 'lesson.video must be {"url": "..."}.'}
-                )
-        if 'text' in content_data and content_data['text'] is not None:
-            _text_block(content_data['text'], 'lesson.text')
-    elif content_type == 'video':
-        if not isinstance(content_data.get('url'), str):
-            raise ValidationError(
-                {'content_data': 'video content requires {"url": "..."}.'}
-            )
-    elif content_type == 'quiz':
-        if not isinstance(content_data.get('questions'), list):
-            raise ValidationError(
-                {'content_data': 'quiz content requires a "questions" list.'}
-            )
-    elif content_type == 'external':
-        if not isinstance(content_data.get('url'), str):
-            raise ValidationError(
-                {'content_data': 'external content requires {"url": "..."}.'}
-            )
-    elif content_type == 'document':
-        pass
+    try:
+        validate_content_data(content_type, content_data)
+    except ContentSchemaError as exc:
+        raise ValidationError({'content_data': format_schema_error(exc)}) from None
 
 
 class EventModule(BaseModel):
@@ -1128,7 +1096,6 @@ class CourseEnrollment(BaseModel):
     class AccessType(models.TextChoices):
         LIFETIME = "lifetime", "Lifetime Access"
         LIMITED = "limited", "Limited Access"
-        SUBSCRIPTION = "subscription", "Subscription Access"
 
     # Relationships
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="enrollments")

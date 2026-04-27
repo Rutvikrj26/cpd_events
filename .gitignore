@@ -75,3 +75,6 @@ infra/gcp/environments/*/terraform.tfvars
 # ----- Editor -----
 .idea/
 .vscode/
+
+# Generated OpenAPI types (run `npm run generate-types` in frontend/)
+frontend/src/api/generated/

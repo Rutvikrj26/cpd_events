@@ -214,14 +214,36 @@ class PromoCode(BaseModel):
 
 
 class PromoCodeUsage(BaseModel):
-    """
-    Record of promo code usage.
+    """Polymorphic record of promo-code usage.
 
-    Tracks which registration used which code for audit and limit enforcement.
+    A usage row anchors to either a ``Registration`` (event ticket) OR a
+    ``CoursePurchase`` (course/program — and going forward, events too,
+    since CoursePurchase is the unified receipt). The check constraint
+    ``promo_usage_has_target`` enforces "at least one anchor"; the two
+    partial uniques prevent double-counting per anchor.
+
+    The legacy ``registration`` FK stays for backward compatibility with
+    queries like ``registration.promo_code_usages.first()``. New writes
+    set both anchors when the purchase belongs to an event.
     """
 
     promo_code = models.ForeignKey(PromoCode, on_delete=models.CASCADE, related_name='usages')
-    registration = models.ForeignKey('registrations.Registration', on_delete=models.CASCADE, related_name='promo_code_usages')
+
+    # Polymorphic anchors — at least one must be set.
+    registration = models.ForeignKey(
+        'registrations.Registration',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='promo_code_usages',
+    )
+    purchase = models.ForeignKey(
+        'billing.CoursePurchase',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='promo_code_usages',
+    )
 
     # Denormalized for easy querying
     user_email = models.EmailField(db_index=True, help_text="Email used for registration")
@@ -245,11 +267,22 @@ class PromoCodeUsage(BaseModel):
         indexes = [
             models.Index(fields=['promo_code', 'user_email']),
             models.Index(fields=['registration']),
+            models.Index(fields=['purchase']),
         ]
         constraints = [
             models.UniqueConstraint(
                 fields=['registration', 'promo_code'],
+                condition=models.Q(registration__isnull=False),
                 name='uniq_promo_usage_per_registration_code',
+            ),
+            models.UniqueConstraint(
+                fields=['purchase', 'promo_code'],
+                condition=models.Q(purchase__isnull=False),
+                name='uniq_promo_usage_per_purchase_code',
+            ),
+            models.CheckConstraint(
+                name='promo_usage_has_target',
+                condition=models.Q(registration__isnull=False) | models.Q(purchase__isnull=False),
             ),
         ]
         verbose_name = 'Promo Code Usage'
@@ -257,13 +290,28 @@ class PromoCodeUsage(BaseModel):
 
     @classmethod
     def release_for_registration(cls, registration) -> int:
-        """
-        Release promo code usage for a registration when payment fails or is refunded.
+        """Release promo code usage when payment fails or is refunded.
 
-        Returns:
-            Number of usages released
+        Releases by both anchors so events that wrote (registration, purchase)
+        still get the counter decrement and the row deleted exactly once.
         """
-        usages = cls.objects.filter(registration=registration).select_related('promo_code')
+        usages = (
+            cls.objects
+            .filter(models.Q(registration=registration) | models.Q(purchase=registration.purchase_id))
+            .select_related('promo_code')
+            .distinct()
+        )
+        count = 0
+        for usage in usages:
+            usage.promo_code.decrement_usage()
+            count += 1
+        usages.delete()
+        return count
+
+    @classmethod
+    def release_for_purchase(cls, purchase) -> int:
+        """Release promo code usage when a non-event purchase is refunded."""
+        usages = cls.objects.filter(purchase=purchase).select_related('promo_code')
         count = 0
         for usage in usages:
             usage.promo_code.decrement_usage()

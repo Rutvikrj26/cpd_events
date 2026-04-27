@@ -9,11 +9,11 @@ import {
     getEventRegistrations,
     checkInAttendee,
     cancelEventRegistration,
-    refundEventRegistration,
     publishEvent,
     unpublishEvent,
     deleteEvent,
 } from '@/api/events';
+import { refundPurchase } from '@/api/billing';
 import { getEventFeedback } from '@/api/feedback';
 import {
     issueCertificates,
@@ -96,12 +96,16 @@ export function useRefundRegistration(eventUuid: string | undefined) {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: ({
-            registrationUuid,
+            purchaseUuid,
             reason,
         }: {
-            registrationUuid: string;
-            reason?: string;
-        }) => refundEventRegistration(eventUuid!, registrationUuid, reason),
+            // Use the purchase uuid from the registration row — see
+            // serializers.RegistrationDetailSerializer for the field. The
+            // unified refund endpoint cascades to Registration cancel +
+            // payment_status=REFUNDED on a full refund.
+            purchaseUuid: string;
+            reason: string;
+        }) => refundPurchase(purchaseUuid, { reason }),
         onSuccess: () => {
             if (eventUuid) {
                 qc.invalidateQueries({ queryKey: eventKeys.attendees(eventUuid) });

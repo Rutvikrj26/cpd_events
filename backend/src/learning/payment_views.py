@@ -39,7 +39,12 @@ class CourseCheckoutView(generics.GenericAPIView):
             return error_response('Course is free. Use standard enrollment.', code='COURSE_IS_FREE')
 
         try:
-            result = checkout_service.for_course_enrollment(request.user, course)
+            result = checkout_service.for_course_enrollment(
+                request.user,
+                course,
+                success_url=request.data.get('success_url'),
+                cancel_url=request.data.get('cancel_url'),
+            )
         except Exception as exc:
             return error_response(str(exc), code='STRIPE_ERROR')
 
@@ -71,7 +76,12 @@ class ProgramCheckoutView(generics.GenericAPIView):
             return error_response('Program is free. Use standard enrollment.', code='PROGRAM_IS_FREE')
 
         try:
-            result = checkout_service.for_program_enrollment(request.user, program)
+            result = checkout_service.for_program_enrollment(
+                request.user,
+                program,
+                success_url=request.data.get('success_url'),
+                cancel_url=request.data.get('cancel_url'),
+            )
         except Exception as exc:
             return error_response(str(exc), code='STRIPE_ERROR')
 

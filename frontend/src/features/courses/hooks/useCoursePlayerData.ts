@@ -57,20 +57,40 @@ export interface CoursePlayerData {
 
 /**
  * useCoursePlayerData — composite hook that bundles every fetch the
- * `<CoursePlayer>` shell needs into a single hook call. Replaces the
- * 180-line imperative useEffect that the page used to run.
+ * `<CoursePlayer>` shell needs into a single hook call.
  *
- * Fetch order (parallel where possible):
- *   1. Course detail (silent — 404 surfaces inline, not a toast).
- *   2. Enrollments — used to gate access (redirect non-enrolled).
- *   3. Course progress — modules availability + content_progress.
- *   4. Course modules.
- *   5. Module contents — one query per available module via `useQueries`,
- *      so RQ caches each `moduleContents(uuid)` independently. Locked
- *      modules skip the fetch (would 403 anyway).
- *   6. Announcements + sessions + submissions in parallel.
+ * Access model:
+ *   The course player has two "has access" paths:
+ *     1. Learner with an enrollment in (`active`, `completed`).
+ *     2. Staff (`course.user_role` is non-null — manager or instructor).
+ *   `pending` / `dropped` / `expired` enrollments do NOT grant access. The
+ *   backend rejects content fetches with 403 in those cases.
+ *
+ * Fetch ordering (data dependencies, not parallel-everything):
+ *   1. Foundation (parallel): course detail (silent — 404/403 surface
+ *      inline) + enrollments. Both are needed to compute access.
+ *   2. Once we know access:
+ *      - No access → bail. Don't fire any per-course secondary requests.
+ *        Inline UI shows the "not enrolled" / "pending approval" state.
+ *      - Access → fire progress, modules, announcements, sessions
+ *        (live/hybrid only), submissions in parallel.
+ *   3. Per-module content fetches WAIT for progress to settle, then run
+ *      one query per *available* module. Locked modules are skipped — the
+ *      backend rejects them with 403 and the global toast would fire on
+ *      every one.
+ *
+ * If progress errors after we decided to fetch (rare staff-preview races),
+ * we fall back to fetching every module — the backend's
+ * ``can_manage``/``can_instruct`` paths in
+ * ``learning.views.ModuleContentViewSet.get_queryset`` return the full
+ * curriculum for those callers without running the prereq gate.
  */
 export function useCoursePlayerData(courseUuid: string | undefined): CoursePlayerData {
+    /* -------- Foundation: course detail + enrollments -------- */
+    // These two are the only fetches that fire unconditionally (besides the
+    // user-scoped submissions list). Together they answer "does the user
+    // have access to this course?" — every other request is gated on that.
+
     const courseQuery = useQuery<Course>({
         queryKey: courseUuid ? courseKeys.detail(courseUuid) : ['courses', 'detail', 'noop'],
         queryFn: () => getCourse(courseUuid!, { silent: true }),
@@ -86,17 +106,38 @@ export function useCoursePlayerData(courseUuid: string | undefined): CoursePlaye
         retry: false,
     });
 
+    /* -------- Access derivation -------- */
+    // Two valid access paths:
+    //   1. Staff: course.user_role is non-null (manager / instructor).
+    //   2. Learner: enrollment for this course in {active, completed}.
+    // pending / dropped / expired enrollments do NOT grant access — the
+    // backend's ModuleContentViewSet.get_queryset returns 403 for those.
+    const isStaff = Boolean((courseQuery.data as any)?.user_role);
+    const enrollment = useMemo(() => {
+        if (!enrollmentsQuery.data || !courseUuid) return undefined;
+        return (enrollmentsQuery.data as any[]).find(
+            (e: any) => e.course?.uuid === courseUuid,
+        );
+    }, [enrollmentsQuery.data, courseUuid]);
+    const enrollmentGrantsAccess =
+        enrollment != null && ['active', 'completed'].includes(enrollment.status);
+
+    const foundationSettled =
+        courseQuery.isFetched && enrollmentsQuery.isFetched;
+    const hasAccess = foundationSettled && (isStaff || enrollmentGrantsAccess);
+
+    /* -------- Secondary fetches — gated on hasAccess -------- */
     const progressQuery = useQuery({
         queryKey: courseUuid ? courseKeys.progress(courseUuid) : ['courses', 'progress', 'noop'],
         queryFn: () => getCourseProgress(courseUuid!),
-        enabled: Boolean(courseUuid),
+        enabled: Boolean(courseUuid) && hasAccess,
         retry: false,
     });
 
     const modulesQuery = useQuery({
         queryKey: courseUuid ? courseKeys.modules(courseUuid) : ['courses', 'modules', 'noop'],
         queryFn: () => getCourseModules(courseUuid!),
-        enabled: Boolean(courseUuid),
+        enabled: Boolean(courseUuid) && hasAccess,
         staleTime: 1000 * 30,
     });
 
@@ -105,7 +146,7 @@ export function useCoursePlayerData(courseUuid: string | undefined): CoursePlaye
             ? courseKeys.announcements(courseUuid)
             : ['courses', 'announcements', 'noop'],
         queryFn: () => getCourseAnnouncements(courseUuid!),
-        enabled: Boolean(courseUuid),
+        enabled: Boolean(courseUuid) && hasAccess,
         staleTime: 1000 * 60,
     });
 
@@ -115,6 +156,7 @@ export function useCoursePlayerData(courseUuid: string | undefined): CoursePlaye
         queryFn: () => getCourseSessions(courseUuid!),
         enabled:
             Boolean(courseUuid) &&
+            hasAccess &&
             (courseQuery.data?.format === 'live' || courseQuery.data?.format === 'hybrid') &&
             // The progress endpoint already returns sessions hydrated with
             // attendance/recording info for the current user. Prefer those —
@@ -123,36 +165,55 @@ export function useCoursePlayerData(courseUuid: string | undefined): CoursePlaye
         staleTime: 1000 * 30,
     });
 
+    // Submissions are user-scoped (not course-scoped) and never 403, so we
+    // can fetch them regardless of access. The course tab will filter to
+    // the relevant course's assignments anyway.
     const submissionsQuery = useQuery<AssignmentSubmission[]>({
         queryKey: courseKeys.mySubmissions(),
         queryFn: getMySubmissions,
         staleTime: 1000 * 60,
     });
 
-    /* -------- Module-content fetches via useQueries -------- */
-    // Compute availability from progress (or default-true if progress failed).
+    /* -------- Module-content fetches via useQueries --------
+     *
+     * Strict ordering: progress must settle before we decide what to fetch.
+     * - If progress returned data, the availability of each module is the
+     *   value the backend reported (`is_available` per module).
+     * - If progress errored, we treat every module as fetchable and let the
+     *   backend permission check decide; this is the staff-preview path
+     *   where the user has `can_manage` / `can_instruct` and the prereq
+     *   gate is skipped server-side.
+     * - While progress is still loading, we fetch nothing. This is the
+     *   only correct default — the alternative ("default available") fired
+     *   guaranteed 403s on every locked module.
+     */
+    const progressSettled = progressQuery.isFetched;
+
     const availabilityFromProgress = useMemo<Record<string, boolean>>(() => {
         const map: Record<string, boolean> = {};
         if (progressQuery.data?.modules) {
             progressQuery.data.modules.forEach((m: any) => {
                 const mUuid = m.module?.uuid || m.module?.id;
-                if (mUuid) map[mUuid] = m.is_available;
+                if (mUuid) map[mUuid] = Boolean(m.is_available);
             });
-        } else if (modulesQuery.data) {
+        } else if (progressQuery.isError && modulesQuery.data) {
+            // Progress endpoint failed (e.g. staff preview without enrollment).
+            // Mark every module as fetchable; the backend will gate via roles.
             modulesQuery.data.forEach((m: any) => {
                 const mUuid = m.module?.uuid || m.uuid;
                 if (mUuid) map[mUuid] = true;
             });
         }
         return map;
-    }, [progressQuery.data, modulesQuery.data]);
+    }, [progressQuery.data, progressQuery.isError, modulesQuery.data]);
 
     const moduleUuidsToFetch = useMemo(() => {
-        if (!modulesQuery.data) return [] as string[];
+        // Hard guard: never fire content fetches before progress has spoken.
+        if (!progressSettled || !modulesQuery.data) return [] as string[];
         return modulesQuery.data
             .map((m: any) => m.module?.uuid || m.uuid)
-            .filter((uuid: string) => uuid && availabilityFromProgress[uuid] !== false);
-    }, [modulesQuery.data, availabilityFromProgress]);
+            .filter((uuid: string) => uuid && availabilityFromProgress[uuid] === true);
+    }, [progressSettled, modulesQuery.data, availabilityFromProgress]);
 
     const contentQueries = useQueries({
         queries: moduleUuidsToFetch.map((moduleUuid) => ({
@@ -237,19 +298,11 @@ export function useCoursePlayerData(courseUuid: string | undefined): CoursePlaye
         progress_percent: enrollmentProgress,
     });
 
-    const isNotEnrolled = useMemo(() => {
-        // Only assert "not enrolled" once both course + enrollments have
-        // resolved successfully. If enrollments errored (e.g. staff preview),
-        // allow access.
-        if (!courseQuery.data || !enrollmentsQuery.data) return false;
-        if (enrollmentsQuery.isError) return false;
-        const enrolled = (enrollmentsQuery.data as any[]).some(
-            (e: any) =>
-                e.course?.uuid === courseUuid &&
-                ['active', 'completed'].includes(e.status)
-        );
-        return !enrolled;
-    }, [courseUuid, courseQuery.data, enrollmentsQuery.data, enrollmentsQuery.isError]);
+    // "Not enrolled" = foundation has settled AND we don't have access via
+    // either path. Drives the inline "You are not enrolled / Pending
+    // approval" banner. A pending/dropped/expired enrollment counts as
+    // "not enrolled" for the purposes of accessing course content.
+    const isNotEnrolled = foundationSettled && !hasAccess && !enrollmentsQuery.isError;
 
     /* -------- 403 / 404 sentinels -------- */
     const courseStatus = (courseQuery.error as any)?.response?.status;
@@ -273,10 +326,12 @@ export function useCoursePlayerData(courseUuid: string | undefined): CoursePlaye
         progressPercent: progressDisplay.percent,
         isNotEnrolled,
         isLoading:
-            courseQuery.isLoading ||
-            modulesQuery.isLoading ||
-            (Boolean(courseUuid) && progressQuery.isLoading) ||
-            // Wait for the per-module content queries to settle on first hydrate
+            // Foundation phase — must settle before we know if there's access.
+            (Boolean(courseUuid) && !foundationSettled) ||
+            // Once we know access, the secondary queries kick in.
+            (hasAccess && modulesQuery.isLoading) ||
+            (hasAccess && Boolean(courseUuid) && !progressSettled) ||
+            // Wait for the per-module content queries to settle on first hydrate.
             (moduleUuidsToFetch.length > 0 &&
                 contentQueries.some((q) => q.isLoading && q.fetchStatus !== 'idle')),
         isError: courseQuery.isError && courseStatus !== 403 && courseStatus !== 404,

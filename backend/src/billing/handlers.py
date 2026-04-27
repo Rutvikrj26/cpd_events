@@ -59,6 +59,60 @@ def _cents_to_decimal(cents) -> Decimal:
         return Decimal("0")
 
 
+def _upsert_purchase_from_session(session_data, *, user, course=None, event=None, program=None):
+    """Idempotent CoursePurchase upsert keyed on stripe_checkout_session_id.
+
+    Single source of truth for every paid surface (event/course/program).
+    Caller passes exactly one of course/event/program — the model-level
+    ``purchase_one_target`` CheckConstraint will raise loudly if that
+    invariant is broken.
+
+    Re-fetches the session with ``expand=total_details`` if the webhook
+    payload doesn't carry tax breakdown. Stripe only includes
+    ``total_details`` in webhook payloads when the session was created with
+    ``expand`` set; we set it on create (see ``billing.checkout``) but we
+    also defend against legacy / replayed sessions here.
+    """
+    from billing.models import CoursePurchase
+
+    if not session_data.get("total_details"):
+        from billing.client import get_stripe
+
+        try:
+            stripe = get_stripe()
+            refreshed = stripe.checkout.Session.retrieve(
+                session_data.get("id"),
+                expand=["total_details", "total_details.breakdown"],
+            )
+            session_data = refreshed.to_dict() if hasattr(refreshed, "to_dict") else dict(refreshed)
+        except Exception as exc:
+            logger.warning(
+                "stripe.checkout.expand_total_details_failed",
+                extra={"session_id": session_data.get("id"), "error": str(exc)},
+            )
+
+    amount_total = int(session_data.get("amount_total") or 0)
+    tax_amount = int((session_data.get("total_details") or {}).get("amount_tax") or 0)
+    subtotal = int(session_data.get("amount_subtotal") or max(amount_total - tax_amount, 0))
+
+    purchase, _created = CoursePurchase.objects.update_or_create(
+        stripe_checkout_session_id=session_data.get("id") or "",
+        defaults={
+            "user": user,
+            "course": course,
+            "event": event,
+            "program": program,
+            "amount_cents": amount_total,
+            "subtotal_cents": subtotal,
+            "tax_cents": tax_amount,
+            "currency": (session_data.get("currency") or "usd").upper(),
+            "stripe_payment_intent_id": session_data.get("payment_intent") or "",
+            "status": CoursePurchase.Status.COMPLETED,
+        },
+    )
+    return purchase, session_data
+
+
 # ---------------------------------------------------------------------------
 # Checkout fulfilment — the primary path for every purchase kind
 # ---------------------------------------------------------------------------
@@ -155,25 +209,37 @@ def _fulfil_event_registration(session_data):
         )
         return
 
+    reg = (
+        Registration.objects
+        .select_related("event", "user")
+        .filter(uuid=reg_uuid)
+        .first()
+    )
+    if not reg:
+        logger.error(
+            "stripe.checkout.event_registration.not_found",
+            extra={"registration_uuid": reg_uuid},
+        )
+        return
+
+    # Canonical receipt — written before we touch the Registration so that
+    # the unique ``stripe_checkout_session_id`` on CoursePurchase is the
+    # serialisation point for concurrent webhook deliveries.
+    purchase, session_data = _upsert_purchase_from_session(
+        session_data, user=reg.user, event=reg.event,
+    )
+
     # The handler is idempotent: every step below is safe to re-run. No global
     # short-circuit on ``payment_status == PAID`` — that would skip downstream
     # side effects (promo recording, confirmation email) when reconciliation
     # or a webhook retry arrives after a prior run already set the row to PAID.
     with transaction.atomic():
-        reg = Registration.objects.select_for_update().filter(uuid=reg_uuid).first()
-        if not reg:
-            logger.error(
-                "stripe.checkout.event_registration.not_found",
-                extra={"registration_uuid": reg_uuid},
-            )
-            return
-
-        amount_total = session_data.get("amount_total", 0) or 0
-        tax_amount = (session_data.get("total_details") or {}).get("amount_tax", 0) or 0
-        new_total = _cents_to_decimal(amount_total)
-        new_tax = _cents_to_decimal(tax_amount)
-        new_pi = session_data.get("payment_intent") or reg.payment_intent_id or ""
-        new_session_id = session_data.get("id") or reg.stripe_checkout_session_id
+        reg = Registration.objects.select_for_update().get(pk=reg.pk)
+        new_total = _cents_to_decimal(purchase.amount_cents)
+        new_tax = _cents_to_decimal(purchase.tax_cents)
+        new_subtotal = _cents_to_decimal(purchase.subtotal_cents)
+        new_pi = purchase.stripe_payment_intent_id or reg.payment_intent_id or ""
+        new_session_id = purchase.stripe_checkout_session_id or reg.stripe_checkout_session_id
         new_status = (
             Registration.Status.CONFIRMED
             if reg.status == Registration.Status.PENDING
@@ -184,8 +250,8 @@ def _fulfil_event_registration(session_data):
         if reg.total_amount != new_total:
             reg.total_amount = new_total
             dirty.append("total_amount")
-        if reg.amount_paid != new_total:
-            reg.amount_paid = new_total
+        if reg.amount_paid != new_subtotal:
+            reg.amount_paid = new_subtotal
             dirty.append("amount_paid")
         if reg.tax_amount != new_tax:
             reg.tax_amount = new_tax
@@ -202,17 +268,22 @@ def _fulfil_event_registration(session_data):
         if reg.status != new_status:
             reg.status = new_status
             dirty.append("status")
+        if reg.purchase_id != purchase.pk:
+            reg.purchase = purchase
+            dirty.append("purchase")
 
         if dirty:
             dirty.append("updated_at")
             reg.save(update_fields=dirty)
 
     # Record any applied promotion codes from the session payload. Idempotent
-    # via the (registration, promo_code) unique constraint on PromoCodeUsage.
+    # via the partial uniques on (purchase, promo_code) and (registration, promo_code).
     try:
         from promo_codes.services import record_usage_from_checkout_session
 
-        record_usage_from_checkout_session(session_data, registration=reg, user=reg.user)
+        record_usage_from_checkout_session(
+            session_data, purchase=purchase, registration=reg, user=reg.user,
+        )
     except Exception as exc:
         logger.warning(
             "stripe.checkout.event_registration.promo_usage_failed",
@@ -257,19 +328,44 @@ def _fulfil_course_enrollment(session_data):
         )
         return
 
+    purchase, session_data = _upsert_purchase_from_session(
+        session_data, user=user, course=course,
+    )
+
+    session_id = purchase.stripe_checkout_session_id or ""
     enrollment, created = CourseEnrollment.objects.get_or_create(
         user=user,
         course=course,
-        defaults={"status": CourseEnrollment.Status.ACTIVE},
+        defaults={
+            "status": CourseEnrollment.Status.ACTIVE,
+            "stripe_checkout_session_id": session_id,
+        },
     )
+    enrollment_dirty = []
     if not created and enrollment.status != CourseEnrollment.Status.ACTIVE:
         enrollment.status = CourseEnrollment.Status.ACTIVE
-        enrollment.save(update_fields=["status", "updated_at"])
+        enrollment_dirty.append("status")
+    if not enrollment.stripe_checkout_session_id and session_id:
+        enrollment.stripe_checkout_session_id = session_id
+        enrollment_dirty.append("stripe_checkout_session_id")
+    if enrollment_dirty:
+        enrollment_dirty.append("updated_at")
+        enrollment.save(update_fields=enrollment_dirty)
+
     course.update_counts()
+
+    try:
+        from promo_codes.services import record_usage_from_checkout_session
+
+        record_usage_from_checkout_session(session_data, purchase=purchase, user=user)
+    except Exception as exc:
+        logger.warning(
+            "stripe.checkout.course.promo_usage_failed",
+            extra={"course_uuid": course_uuid, "error": str(exc)},
+        )
 
 
 def _fulfil_program_enrollment(session_data):
-    from billing.models import CoursePurchase
     from learning.models import Program, ProgramEnrollment
 
     metadata = session_data.get("metadata") or {}
@@ -285,30 +381,30 @@ def _fulfil_program_enrollment(session_data):
     if not user or not program:
         return
 
-    # Receipt row first — idempotent by Stripe session id, matches the
-    # course + event purchase pattern so Reports/Refunds hit one surface.
-    session_id = session_data.get("id", "") or ""
-    CoursePurchase.objects.update_or_create(
-        stripe_checkout_session_id=session_id,
-        defaults={
-            "user": user,
-            "program": program,
-            "amount_cents": session_data.get("amount_total") or 0,
-            "currency": (session_data.get("currency") or "CAD").upper(),
-            "stripe_payment_intent_id": session_data.get("payment_intent") or "",
-            "status": CoursePurchase.Status.COMPLETED,
-        },
+    purchase, session_data = _upsert_purchase_from_session(
+        session_data, user=user, program=program,
     )
+    session_id = purchase.stripe_checkout_session_id or ""
 
     enrollment, _ = ProgramEnrollment.objects.get_or_create(
         user=user,
         program=program,
         defaults={"stripe_checkout_session_id": session_id},
     )
-    if not enrollment.stripe_checkout_session_id:
+    if not enrollment.stripe_checkout_session_id and session_id:
         enrollment.stripe_checkout_session_id = session_id
     enrollment.activate()
     program.update_counts()
+
+    try:
+        from promo_codes.services import record_usage_from_checkout_session
+
+        record_usage_from_checkout_session(session_data, purchase=purchase, user=user)
+    except Exception as exc:
+        logger.warning(
+            "stripe.checkout.program.promo_usage_failed",
+            extra={"program_uuid": program_uuid, "error": str(exc)},
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -317,16 +413,32 @@ def _fulfil_program_enrollment(session_data):
 
 
 def handle_charge_refunded(event):
-    from billing.models import RefundRecord
+    """Webhook is now informational — RefundPurchaseView already updated state.
+
+    We still write ``RefundRecord`` rows so admins can audit refunds initiated
+    from the Stripe Dashboard (i.e. without going through our endpoint), and
+    we still send the user notification for event refunds since that's a
+    purchase-side concern.
+    """
+    from billing.models import CoursePurchase, RefundRecord
     from registrations.models import Registration
 
     data = _data(event)
     payment_intent_id = data.get("payment_intent")
     refunds = (data.get("refunds") or {}).get("data") or []
 
+    purchase = None
     registration = None
     if payment_intent_id:
-        registration = Registration.objects.filter(payment_intent_id=payment_intent_id).first()
+        purchase = (
+            CoursePurchase.objects
+            .select_related("event")
+            .prefetch_related("registrations")
+            .filter(stripe_payment_intent_id=payment_intent_id)
+            .first()
+        )
+        if purchase and purchase.event_id:
+            registration = purchase.registrations.first()
 
     for refund in refunds:
         refund_id = refund.get("id")
@@ -341,9 +453,10 @@ def handle_charge_refunded(event):
 
         defaults = {
             "registration": registration,
+            "purchase": purchase,
             "stripe_payment_intent_id": payment_intent_id or "",
             "amount_cents": refund.get("amount", 0),
-            "currency": refund.get("currency", "usd"),
+            "currency": (refund.get("currency") or "").upper(),
             "status": status_value,
             "reason": refund.get("reason") or RefundRecord.Reason.REQUESTED_BY_CUSTOMER,
             "description": "Recorded via Stripe webhook",
@@ -356,10 +469,16 @@ def handle_charge_refunded(event):
             record.error_message = refund.get("failure_reason", "") or record.error_message
             record.save(update_fields=["status", "error_message", "updated_at"])
 
-    if registration:
-        amount = data.get("amount", 0)
-        amount_refunded = data.get("amount_refunded", 0)
-        if amount and amount_refunded >= amount:
+    # Mirror the unified-refund cascade for refunds that originated outside
+    # our endpoint (Stripe Dashboard direct refund). The endpoint path above
+    # already did this work, so this branch is a no-op for in-app refunds.
+    amount = data.get("amount", 0)
+    amount_refunded = data.get("amount_refunded", 0)
+    if amount and amount_refunded >= amount:
+        if purchase and purchase.status != CoursePurchase.Status.REFUNDED:
+            purchase.status = CoursePurchase.Status.REFUNDED
+            purchase.save(update_fields=["status", "updated_at"])
+        if registration:
             registration.payment_status = Registration.PaymentStatus.REFUNDED
             registration.status = Registration.Status.CANCELLED
             registration.save(update_fields=["payment_status", "status", "updated_at"])
@@ -420,15 +539,21 @@ def handle_payment_intent_failed(event):
 
 
 def _resolve_dispute_targets(payment_intent_id, charge_id):
-    """Find the local Registration / CoursePurchase behind this dispute."""
+    """Find the local CoursePurchase + (if event) linked Registration."""
     from billing.models import CoursePurchase
-    from registrations.models import Registration
 
-    registration = None
     purchase = None
+    registration = None
     if payment_intent_id:
-        registration = Registration.objects.filter(payment_intent_id=payment_intent_id).first()
-        purchase = CoursePurchase.objects.filter(stripe_payment_intent_id=payment_intent_id).first()
+        purchase = (
+            CoursePurchase.objects
+            .select_related("event")
+            .prefetch_related("registrations")
+            .filter(stripe_payment_intent_id=payment_intent_id)
+            .first()
+        )
+        if purchase and purchase.event_id:
+            registration = purchase.registrations.first()
     return registration, purchase
 
 

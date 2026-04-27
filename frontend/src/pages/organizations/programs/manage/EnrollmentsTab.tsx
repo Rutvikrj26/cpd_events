@@ -24,8 +24,8 @@ import {
 } from '@/components/billing/PaymentBadge';
 import {
     getProgramEnrollmentsRoster,
-    programRefundEnrollment,
 } from '@/api/programs';
+import { refundPurchase } from '@/api/billing';
 
 interface ProgramEnrollmentRow {
     uuid: string;
@@ -103,26 +103,37 @@ export function EnrollmentsTab({ programUuid }: EnrollmentsTabProps) {
 
     const submitRefund = async () => {
         if (!refundTarget || !refundReason.trim()) return;
+        const purchaseUuid = refundTarget.payment?.purchase_uuid;
+        if (!purchaseUuid) {
+            toast({
+                variant: 'destructive',
+                title: 'No purchase record',
+                description: 'This enrollment is missing a purchase row — refund must be issued from the Stripe dashboard.',
+            });
+            return;
+        }
         setSubmittingRefund(true);
         try {
+            const reasonText = refundTarget.user_name
+                ? `[${refundTarget.user_name}] ${refundTarget.user_email}: ${refundReason.trim()}`
+                : `${refundTarget.user_email}: ${refundReason.trim()}`;
             const fullCents = refundTarget.payment?.amount_cents ?? 0;
             const requestedDollars = parseFloat(refundAmount);
-            const payload: {
-                enrollment_uuid: string;
-                reason: string;
-                amount_cents?: number;
-            } = {
-                enrollment_uuid: refundTarget.uuid,
-                reason: refundTarget.user_name
-                    ? `[${refundTarget.user_name}] ${refundTarget.user_email}: ${refundReason.trim()}`
-                    : `${refundTarget.user_email}: ${refundReason.trim()}`,
-            };
-            if (!isNaN(requestedDollars) && Math.round(requestedDollars * 100) < fullCents) {
-                payload.amount_cents = Math.round(requestedDollars * 100);
-            }
-            const updated = await programRefundEnrollment(programUuid, payload);
+            const partialCents =
+                !isNaN(requestedDollars) && Math.round(requestedDollars * 100) < fullCents
+                    ? Math.round(requestedDollars * 100)
+                    : undefined;
+            await refundPurchase(purchaseUuid, { reason: reasonText, amount_cents: partialCents });
             setRows((prev) =>
-                prev.map((r) => (r.uuid === refundTarget.uuid ? { ...r, ...updated } : r)),
+                prev.map((r) =>
+                    r.uuid === refundTarget.uuid
+                        ? {
+                              ...r,
+                              status: partialCents ? r.status : 'dropped',
+                              payment: r.payment ? { ...r.payment, status: partialCents ? r.payment.status : 'refunded' } : r.payment,
+                          }
+                        : r,
+                ),
             );
             toast({
                 title: 'Refund issued',

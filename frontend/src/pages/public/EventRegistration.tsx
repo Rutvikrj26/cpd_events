@@ -57,6 +57,25 @@ export function EventRegistration() {
                         firstName: first,
                         lastName: last,
                     }));
+                    // Restore form state if the user was bounced to login by
+                    // the LOGIN_REQUIRED guard on a prior submit attempt.
+                    try {
+                        const cached = sessionStorage.getItem(`event-registration:${data.uuid}`);
+                        if (cached) {
+                            const parsed = JSON.parse(cached);
+                            if (parsed?.formData) {
+                                setFormData((prev) => ({
+                                    ...prev,
+                                    ...parsed.formData,
+                                    email: user.email,  // canonical from auth
+                                }));
+                            }
+                            if (parsed?.customFieldValues) {
+                                setCustomFieldValues(parsed.customFieldValues);
+                            }
+                            sessionStorage.removeItem(`event-registration:${data.uuid}`);
+                        }
+                    } catch {/* sessionStorage unavailable — silent */}
                 }
             } catch (e) {
                 setError("Event not found or registration is closed.");
@@ -70,6 +89,22 @@ export function EventRegistration() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!event?.uuid) return;
+
+        // Paid events require auth (backend raises LOGIN_REQUIRED). Pre-empt
+        // the round-trip and route the guest to /login with a return URL so
+        // they land back on this page after authenticating.
+        if (isPaidEvent && !user) {
+            try {
+                sessionStorage.setItem(
+                    `event-registration:${event.uuid}`,
+                    JSON.stringify({ formData, customFieldValues }),
+                );
+            } catch {/* private mode / quota — fall through, user will retype */}
+            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+            navigate(`/login?returnUrl=${returnUrl}`);
+            return;
+        }
+
         setSubmitting(true);
         setError(null);
 
@@ -96,6 +131,13 @@ export function EventRegistration() {
             }
             setStep("success");
         } catch (err: any) {
+            const code = err?.response?.data?.error?.code;
+            // Server-side guard for the same case (e.g. price changed mid-flow)
+            if (code === "LOGIN_REQUIRED") {
+                const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                navigate(`/login?returnUrl=${returnUrl}`);
+                return;
+            }
             const message =
                 err?.response?.data?.error?.message || err?.response?.data?.detail || "Registration failed.";
             setError(message);

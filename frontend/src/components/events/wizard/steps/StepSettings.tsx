@@ -1,35 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 import { useEventWizard } from '../EventWizardContext';
 import { Label } from '@/shared/ui/label';
 import { Input } from '@/shared/ui/input';
 import { Switch } from '@/shared/ui/switch';
 import { Separator } from '@/shared/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
-import { Alert, AlertDescription } from '@/shared/ui/alert';
-import { Button } from '@/shared/ui/button';
 import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
 import { getBadgeTemplates, BadgeTemplate } from '@/api/badges';
-import { useAuth } from '@/features/auth';
-import { getRoleFlags } from '@/lib/role-utils';
-import { getPayoutsStatus, PayoutsStatus } from '@/api/payouts';
 import { toast } from 'sonner';
-import { Link } from 'react-router-dom';
 
 export const StepSettings = () => {
     const { formData, updateFormData } = useEventWizard();
-    const { user } = useAuth();
     const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
     const [badgeTemplates, setBadgeTemplates] = useState<BadgeTemplate[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [loadingBadgeTemplates, setLoadingBadgeTemplates] = useState(false);
 
-    // Payouts state for individual organizers
-    const [userPayoutsEnabled, setUserPayoutsEnabled] = useState(false);
-    const [loadingUserPayouts, setLoadingUserPayouts] = useState(true);
+    // Note: payouts/Stripe Connect UI was removed in the single-tenant
+    // migration — money for paid events goes directly to the institution's
+    // single Stripe account; organizers don't need to connect their own.
 
-    const stripeConnected = userPayoutsEnabled;
-    const isPaidEvent = !formData.is_free;
     const attendanceMinutes = formData.minimum_attendance_minutes ?? 0;
     const durationMinutes = formData.duration_minutes ?? 0;
     const derivedAttendancePercent = durationMinutes
@@ -74,32 +64,6 @@ export const StepSettings = () => {
 
         fetchBadgeTemplates();
     }, [formData.badges_enabled]);
-
-    // Fetch individual user payouts status
-    const { isOrganizer } = getRoleFlags(user);
-    useEffect(() => {
-        const fetchUserPayouts = async () => {
-            if (!isOrganizer) {
-                setLoadingUserPayouts(false);
-                return;
-            }
-            try {
-                const status = await getPayoutsStatus();
-                setUserPayoutsEnabled(status.charges_enabled);
-            } catch (error: any) {
-                // 404 is expected on institutional deployments where the
-                // payouts endpoint doesn't exist. The toast is already
-                // suppressed via `silent: true` — don't add console noise
-                // for the known shape either. Other failures still log.
-                if (error?.response?.status !== 404) {
-                    console.error('Failed to fetch user payouts status', error);
-                }
-            } finally {
-                setLoadingUserPayouts(false);
-            }
-        };
-        fetchUserPayouts();
-    }, [isOrganizer]);
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -196,27 +160,6 @@ export const StepSettings = () => {
 
                 {!formData.is_free && (
                     <div className="pl-6 border-l-2 border-slate-100 ml-2 space-y-4">
-                        {/* Stripe Connect Warning */}
-                        {loadingUserPayouts ? (
-                            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Checking payouts setup...
-                            </div>
-                        ) : !stripeConnected && (
-                            <Alert variant="destructive" className="border-amber-300 bg-amber-50 text-amber-800">
-                                <AlertTriangle className="h-4 w-4" />
-                                <AlertDescription className="flex items-center justify-between">
-                                    <span>Link your bank account to accept payments for this event.</span>
-                                    <Link to="/settings?tab=payouts">
-                                        <Button size="sm" variant="outline" className="ml-4">
-                                            <ExternalLink className="h-3 w-3 mr-1" />
-                                            Link Payouts
-                                        </Button>
-                                    </Link>
-                                </AlertDescription>
-                            </Alert>
-                        )}
-
                         <div className="grid grid-cols-2 gap-4 max-w-sm">
                             <div className="space-y-2">
                                 <Label>Price</Label>

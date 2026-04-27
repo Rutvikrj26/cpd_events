@@ -130,8 +130,10 @@ class TestEventRegistrationViewSet:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data['error']['code'] == 'PAID_REGISTRATION'
 
-    def test_refund_paid_registration(self, organizer_client, published_event, db):
-        """Organizer can refund a paid registration."""
+    def test_refund_paid_registration_via_unified_endpoint(self, organizer_client, published_event, db):
+        """Organizer refunds via the unified billing endpoint, which cascades
+        to Registration.cancel + payment_status=REFUNDED."""
+        from billing.models import CoursePurchase
         from factories import RegistrationFactory
         from registrations.models import Registration
 
@@ -141,24 +143,40 @@ class TestEventRegistrationViewSet:
             payment_status='paid',
             amount_paid=Decimal('50.00'),
         )
+        # Build the unified-receipt anchor that the new endpoint consumes.
+        purchase = CoursePurchase.objects.create(
+            user=registration.user,
+            event=published_event,
+            amount_cents=5000, subtotal_cents=5000, tax_cents=0, currency='USD',
+            stripe_checkout_session_id='cs_evt_refund',
+            stripe_payment_intent_id='pi_test_refund',
+            status=CoursePurchase.Status.COMPLETED,
+        )
+        registration.purchase = purchase
         registration.payment_intent_id = 'pi_test_refund'
-        registration.save(update_fields=['payment_intent_id'])
+        registration.save(update_fields=['purchase', 'payment_intent_id'])
 
-        with patch('billing.services.refund_payment_intent', return_value={'refund_id': 're_test', 'status': 'succeeded', 'amount_cents': 5000}):
+        with patch(
+            'billing.services.refund_payment_intent',
+            return_value={'refund_id': 're_test', 'status': 'succeeded', 'amount_cents': 5000},
+        ):
             response = organizer_client.post(
-                f'/api/v1/events/{published_event.uuid}/registrations/{registration.uuid}/refund/',
+                f'/api/v1/billing/purchases/{purchase.uuid}/refund/',
                 {'reason': 'Requested by attendee'},
                 format='json',
             )
 
         assert response.status_code == status.HTTP_200_OK
         registration.refresh_from_db()
+        purchase.refresh_from_db()
+        assert purchase.status == CoursePurchase.Status.REFUNDED
         assert registration.payment_status == Registration.PaymentStatus.REFUNDED
         assert registration.status == Registration.Status.CANCELLED
         assert registration.cancellation_reason == 'Requested by attendee'
 
-    def test_refund_unpaid_registration_rejected(self, organizer_client, published_event, db):
-        """Unpaid registrations cannot be refunded."""
+    def test_refund_purchase_not_completed_rejected(self, organizer_client, published_event, db):
+        """A non-completed CoursePurchase can't be refunded."""
+        from billing.models import CoursePurchase
         from factories import RegistrationFactory
 
         registration = RegistrationFactory(
@@ -167,15 +185,23 @@ class TestEventRegistrationViewSet:
             payment_status='pending',
             amount_paid=Decimal('0.00'),
         )
+        purchase = CoursePurchase.objects.create(
+            user=registration.user,
+            event=published_event,
+            amount_cents=0, subtotal_cents=0, tax_cents=0, currency='USD',
+            stripe_checkout_session_id='cs_evt_pending',
+            stripe_payment_intent_id='',
+            status=CoursePurchase.Status.PENDING,
+        )
 
         response = organizer_client.post(
-            f'/api/v1/events/{published_event.uuid}/registrations/{registration.uuid}/refund/',
+            f'/api/v1/billing/purchases/{purchase.uuid}/refund/',
             {'reason': 'requested by attendee'},
             format='json',
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data['error']['code'] == 'NOT_PAID'
+        assert response.data['error']['code'] == 'NOT_REFUNDABLE'
 
 
 # =============================================================================

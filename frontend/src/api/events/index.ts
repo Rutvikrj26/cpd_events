@@ -195,10 +195,10 @@ export const cancelEventRegistration = async (eventUuid: string, registrationUui
     return response.data;
 };
 
-export const refundEventRegistration = async (eventUuid: string, registrationUuid: string, reason?: string): Promise<any> => {
-    const response = await client.post<any>(`/events/${eventUuid}/registrations/${registrationUuid}/refund/`, { reason });
-    return response.data;
-};
+// Event refunds moved to the unified billing endpoint:
+//   import { refundPurchase } from '@/api/billing';
+//   await refundPurchase(registration.purchase_uuid, { reason });
+// Cancellation (without refund) still goes through cancelEventRegistration above.
 
 // Upload event featured image
 export const uploadEventImage = async (eventUuid: string, imageFile: File): Promise<Event> => {

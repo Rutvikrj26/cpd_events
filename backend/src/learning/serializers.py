@@ -57,7 +57,13 @@ class ModuleContentSerializer(serializers.ModelSerializer):
 
 
 class ModuleContentCreateSerializer(serializers.ModelSerializer):
-    """Create/update content."""
+    """Create/update content.
+
+    ``validate`` runs the Pydantic per-content_type schema check on the
+    incoming ``content_data`` and surfaces field-level errors so the
+    authoring UI can attribute each error to the right input. See
+    ``learning.content_schemas`` for the canonical shapes.
+    """
 
     class Meta:
         model = ModuleContent
@@ -76,6 +82,33 @@ class ModuleContentCreateSerializer(serializers.ModelSerializer):
         # We manually handle uniqueness in create/update to avoid DRF implicit lookup errors
         # triggered by unique_together when module is read-only or inferred
         validators = []
+
+    def validate(self, attrs):
+        """Cross-field check: content_data shape depends on content_type.
+
+        Done in ``validate`` (not ``validate_content_data``) because we need
+        access to ``content_type`` from the same payload, which only the
+        whole-attrs hook gives us.
+        """
+        from learning.content_schemas import (
+            ContentSchemaError,
+            format_schema_error,
+            validate_content_data,
+        )
+
+        content_type = attrs.get('content_type') or (
+            self.instance.content_type if self.instance else None
+        )
+        content_data = attrs.get('content_data', None)
+        # ``content_data`` may be missing on partial updates that don't touch it.
+        if content_type and content_data is not None:
+            try:
+                validate_content_data(content_type, content_data)
+            except ContentSchemaError as exc:
+                raise serializers.ValidationError(
+                    {'content_data': format_schema_error(exc)}
+                ) from None
+        return attrs
 
 
 class AssignmentSerializer(serializers.ModelSerializer):
@@ -727,11 +760,20 @@ class CourseStaffCreateSerializer(serializers.Serializer):
 
 
 class CourseEnrollmentSerializer(serializers.ModelSerializer):
-    """Enrollment details."""
+    """Enrollment details.
+
+    ``status`` is the canonical write-side state (drives invariants,
+    indexes, signals). ``view_state`` is the read-side projection learner
+    UIs bind to — six discriminated kinds the consumer exhaustively
+    switches on. See ``learning.view_states.derive_course_enrollment_view_state``
+    for the kind taxonomy and ``frontend/src/features/courses/hooks/useCoursePlayerBootstrap.ts``
+    for the matching TypeScript discriminated union.
+    """
 
     course = CourseListSerializer(read_only=True)
     next_session_at = serializers.SerializerMethodField()
     session_progress = serializers.SerializerMethodField()
+    view_state = serializers.SerializerMethodField()
 
     class Meta:
         model = CourseEnrollment
@@ -749,8 +791,14 @@ class CourseEnrollmentSerializer(serializers.ModelSerializer):
             'certificate_issued_at',
             'next_session_at',
             'session_progress',
+            'view_state',
         ]
         read_only_fields = fields
+
+    def get_view_state(self, obj):
+        from learning.view_states import derive_course_enrollment_view_state
+
+        return derive_course_enrollment_view_state(obj)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -1472,6 +1520,7 @@ class ProgramCreateSerializer(serializers.ModelSerializer):
 class ProgramEnrollmentSerializer(serializers.ModelSerializer):
     program = ProgramListSerializer(read_only=True)
     courses = serializers.SerializerMethodField()
+    view_state = serializers.SerializerMethodField()
 
     class Meta:
         model = ProgramEnrollment
@@ -1484,8 +1533,14 @@ class ProgramEnrollmentSerializer(serializers.ModelSerializer):
             'completed_at',
             'course_enrollments_seeded',
             'courses',
+            'view_state',
         ]
         read_only_fields = fields
+
+    def get_view_state(self, obj):
+        from learning.view_states import derive_program_enrollment_view_state
+
+        return derive_program_enrollment_view_state(obj)
 
     def get_courses(self, obj):
         """Per-course breakdown showing order + the learner's enrollment status."""

@@ -67,12 +67,7 @@ export function MyProgramsPage() {
                                     {completed}/{total} courses completed
                                 </p>
                             </div>
-                            <Badge
-                                variant={e.status === 'completed' ? 'success' : 'secondary'}
-                                className="capitalize"
-                            >
-                                {e.status}
-                            </Badge>
+                            <ProgramEnrollmentBadge viewState={(e as any).view_state} />
                         </CardHeader>
                         <CardContent>
                             {courses.length === 0 ? (
@@ -125,4 +120,19 @@ function CourseRow({ course }: { course: ProgramEnrollmentCourse }) {
             </div>
         </div>
     );
+}
+
+// Discriminated badge per backend-derived view_state. Five kinds; the
+// derivation lives in `learning.view_states.derive_program_enrollment_view_state`.
+function ProgramEnrollmentBadge({ viewState }: { viewState?: { kind?: string } | null }) {
+    const kind = viewState?.kind;
+    const config: Record<string, { label: string; variant: 'success' | 'secondary' | 'outline' | 'progress-subtle' | 'success-subtle' | 'locked-subtle' }> = {
+        awaiting_approval: { label: 'Awaiting approval', variant: 'locked-subtle' },
+        ready_to_start: { label: 'Ready to start', variant: 'success-subtle' },
+        in_progress: { label: 'In progress', variant: 'progress-subtle' },
+        completed: { label: 'Completed', variant: 'success' },
+        revoked: { label: 'Dropped', variant: 'outline' },
+    };
+    const c = (kind && config[kind]) || { label: 'Enrolled', variant: 'secondary' as const };
+    return <Badge variant={c.variant}>{c.label}</Badge>;
 }

@@ -4,7 +4,6 @@ Contacts app views and viewsets.
 
 from django.db.models import Count, Q
 from django_filters import rest_framework as filters
-from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -70,11 +69,6 @@ class TagViewSet(BaseModelViewSet):
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
-    @swagger_auto_schema(
-        operation_summary="Merge tags",
-        operation_description="Merge this tag into another tag. Contacts will be re-tagged.",
-        responses={200: serializers.TagSerializer, 400: '{"error": {}}'},
-    )
     @action(detail=True, methods=['post'])
     def merge(self, request, uuid=None):
         """Merge this tag into another."""
@@ -127,11 +121,6 @@ class ContactListViewSet(BaseModelViewSet):
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
-    @swagger_auto_schema(
-        operation_summary="Duplicate list",
-        operation_description="Create a copy of this contact list with all contacts.",
-        responses={201: serializers.ContactListDetailSerializer},
-    )
     @action(detail=True, methods=['post'])
     def duplicate(self, request, uuid=None):
         """Duplicate this contact list."""
@@ -141,11 +130,6 @@ class ContactListViewSet(BaseModelViewSet):
         new_list = contact_list.duplicate(new_name)
         return Response(serializers.ContactListDetailSerializer(new_list).data, status=status.HTTP_201_CREATED)
 
-    @swagger_auto_schema(
-        operation_summary="Merge lists",
-        operation_description="Merge this contact list into another list.",
-        responses={200: serializers.ContactListDetailSerializer, 400: '{"error": {}}'},
-    )
     @action(detail=True, methods=['post'])
     def merge(self, request, uuid=None):
         """Merge this list into another."""
@@ -163,11 +147,6 @@ class ContactListViewSet(BaseModelViewSet):
         contact_list.merge_into(target)
         return Response(serializers.ContactListDetailSerializer(target).data)
 
-    @swagger_auto_schema(
-        operation_summary="Export contacts as CSV",
-        operation_description="Download all contacts in this list as a CSV file.",
-        responses={200: 'text/csv'},
-    )
     @action(detail=True, methods=['get'])
     def export(self, request, uuid=None):
         """Export contacts in this list as CSV."""
@@ -287,11 +266,6 @@ class ContactViewSet(BaseModelViewSet):
         contact_list = self._get_user_list()
         serializer.save(contact_list=contact_list)
 
-    @swagger_auto_schema(
-        operation_summary="Bulk create contacts",
-        operation_description="Import multiple contacts.",
-        request_body=serializers.ContactBulkCreateSerializer,
-    )
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
         """Bulk import contacts."""
@@ -335,10 +309,6 @@ class ContactViewSet(BaseModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    @swagger_auto_schema(
-        operation_summary="Export contacts",
-        operation_description="Export contacts as CSV.",
-    )
     @action(detail=False, methods=['get'])
     def export(self, request):
         """Export contacts as CSV."""
@@ -400,10 +370,6 @@ class ContactViewSet(BaseModelViewSet):
         'notes',
     ]
 
-    @swagger_auto_schema(
-        operation_summary="Download import template",
-        operation_description="Download a CSV template with the expected columns for /import-csv/.",
-    )
     @action(detail=False, methods=['get'], url_path='import-template')
     def import_template(self, request):
         """Empty CSV template for the CSV import flow."""
@@ -425,10 +391,6 @@ class ContactViewSet(BaseModelViewSet):
         ])
         return response
 
-    @swagger_auto_schema(
-        operation_summary="Import contacts from CSV",
-        operation_description="Upload a CSV file (multipart/form-data, field name 'file') with columns from /import-template/.",
-    )
     @action(detail=False, methods=['post'], url_path='import-csv')
     def import_csv(self, request):
         """Parse an uploaded CSV into contacts with row-level error reporting."""

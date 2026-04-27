@@ -7,7 +7,6 @@ import logging
 from django.db.models import Q
 from django.utils import timezone
 from django_filters import rest_framework as filters
-from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -174,11 +173,6 @@ class EventViewSet(SoftDeleteModelViewSet):
             except Exception:
                 logger.warning('audit log failed for event price change %s', instance.uuid, exc_info=True)
 
-    @swagger_auto_schema(
-        operation_summary="Publish event",
-        operation_description="Publish a draft event to make it visible and open for registration.",
-        responses={200: serializers.EventDetailSerializer, 400: '{"error": {"code": "INVALID_STATE"}}'},
-    )
     @action(detail=True, methods=['post'])
     def publish(self, request, uuid=None):
         """Publish a draft event."""
@@ -192,11 +186,6 @@ class EventViewSet(SoftDeleteModelViewSet):
         event.publish(user=request.user)
         return Response(serializers.EventDetailSerializer(event).data)
 
-    @swagger_auto_schema(
-        operation_summary="Unpublish event",
-        operation_description="Revert a published event to draft status. Restricted if event has started.",
-        responses={200: serializers.EventDetailSerializer, 400: '{"error": {"code": "INVALID_STATE"}}'},
-    )
     @action(detail=True, methods=['post'])
     def unpublish(self, request, uuid=None):
         """Revert event to draft."""
@@ -214,12 +203,6 @@ class EventViewSet(SoftDeleteModelViewSet):
 
         return Response(serializers.EventDetailSerializer(event).data)
 
-    @swagger_auto_schema(
-        operation_summary="Cancel event",
-        operation_description="Cancel an event. All registrants will be notified.",
-        request_body=serializers.EventStatusChangeSerializer,
-        responses={200: serializers.EventDetailSerializer, 400: '{"error": {"code": "INVALID_STATE"}}'},
-    )
     @action(detail=True, methods=['post'])
     def cancel(self, request, uuid=None):
         """Cancel an event."""
@@ -235,11 +218,6 @@ class EventViewSet(SoftDeleteModelViewSet):
 
         return Response(serializers.EventDetailSerializer(event).data)
 
-    @swagger_auto_schema(
-        operation_summary="Go live",
-        operation_description="Mark the event as live (in progress).",
-        responses={200: serializers.EventDetailSerializer, 400: '{"error": {"code": "INVALID_STATE"}}'},
-    )
     @action(detail=True, methods=['post'])
     def go_live(self, request, uuid=None):
         """Start the event (mark as live)."""
@@ -252,11 +230,6 @@ class EventViewSet(SoftDeleteModelViewSet):
 
         return Response(serializers.EventDetailSerializer(event).data)
 
-    @swagger_auto_schema(
-        operation_summary="Complete event",
-        operation_description="Mark the event as completed after it has ended.",
-        responses={200: serializers.EventDetailSerializer, 400: '{"error": {"code": "INVALID_STATE"}}'},
-    )
     @action(detail=True, methods=['post'])
     def complete(self, request, uuid=None):
         """Mark event as completed."""
@@ -269,11 +242,6 @@ class EventViewSet(SoftDeleteModelViewSet):
 
         return Response(serializers.EventDetailSerializer(event).data)
 
-    @swagger_auto_schema(
-        operation_summary="Duplicate event",
-        operation_description="Create a copy of this event with a new UUID and draft status.",
-        responses={201: serializers.EventDetailSerializer},
-    )
     @action(detail=True, methods=['post'])
     def duplicate(self, request, uuid=None):
         """Create a copy of this event."""
@@ -283,18 +251,6 @@ class EventViewSet(SoftDeleteModelViewSet):
 
         return Response(serializers.EventDetailSerializer(new_event).data, status=status.HTTP_201_CREATED)
 
-    @swagger_auto_schema(
-        method='post',
-        operation_summary="Upload featured image",
-        operation_description="Upload a featured image for the event.",
-        responses={200: serializers.EventDetailSerializer, 400: '{"error": {"code": "NO_FILE"}}'},
-    )
-    @swagger_auto_schema(
-        method='delete',
-        operation_summary="Delete featured image",
-        operation_description="Remove the featured image from the event.",
-        responses={200: serializers.EventDetailSerializer},
-    )
     @action(detail=True, methods=['post', 'delete'], url_path='upload-image')
     def upload_image(self, request, uuid=None):
         """
@@ -436,11 +392,6 @@ class EventViewSet(SoftDeleteModelViewSet):
 
         return Response({'status': 'matched'})
 
-    @swagger_auto_schema(
-        operation_summary="Event history",
-        operation_description="Get the status change history for this event.",
-        responses={200: serializers.EventStatusHistorySerializer(many=True)},
-    )
     @action(detail=True, methods=['get'])
     def history(self, request, uuid=None):
         """Get status change history."""
@@ -449,10 +400,6 @@ class EventViewSet(SoftDeleteModelViewSet):
         serializer = serializers.EventStatusHistorySerializer(history, many=True)
         return Response(serializer.data)
 
-    @swagger_auto_schema(
-        operation_summary="Dashboard stats",
-        operation_description="Get aggregate statistics for the organizer's events.",
-    )
     @action(detail=False, methods=['get'])
     def dashboard(self, request):
         """Get dashboard stats for organizer."""
@@ -472,10 +419,6 @@ class EventViewSet(SoftDeleteModelViewSet):
             }
         )
 
-    @swagger_auto_schema(
-        operation_summary="Reports & analytics",
-        operation_description="Get report summary and trends for organizer events.",
-    )
     @action(detail=False, methods=['get'])
     def reports(self, request):
         from datetime import timedelta
@@ -788,12 +731,6 @@ class EventSessionViewSet(viewsets.ModelViewSet):
 
         serializer.save(event=event, order=max_order + 1)
 
-    @swagger_auto_schema(
-        operation_summary="Reorder sessions",
-        operation_description="Reorder sessions within a multi-session event by providing a list of session UUIDs in the desired order.",
-        request_body=serializers.SessionReorderSerializer,
-        responses={200: '{"message": "Sessions reordered."}'},
-    )
     @action(detail=False, methods=['post'])
     def reorder(self, request, event_uuid=None):
         """Reorder sessions within the event."""
@@ -847,15 +784,6 @@ class RegistrationSessionAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
             .order_by('session__order', 'session__starts_at')
         )
 
-    @swagger_auto_schema(
-        operation_summary="Override session attendance",
-        operation_description="Override attendance eligibility for a specific session. Only the event owner can perform this action.",
-        request_body=serializers.SessionAttendanceOverrideSerializer,
-        responses={
-            200: serializers.SessionAttendanceSerializer,
-            403: '{"error": "Only the event owner can override attendance."}',
-        },
-    )
     @action(detail=True, methods=['post'])
     def override(self, request, registration_uuid=None, uuid=None):
         """Override session attendance eligibility."""

@@ -56,7 +56,11 @@ class TestCoursePayments(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['session_id'], 'sess_123')
 
-        mock_create_session.assert_called_once_with(self.user, self.course_paid)
+        # The view now also passes through optional success_url / cancel_url
+        # (None when the body omits them — see learning/payment_views.py).
+        mock_create_session.assert_called_once_with(
+            self.user, self.course_paid, success_url=None, cancel_url=None,
+        )
 
     @pytest.mark.skip(
         reason="Webhook processing was moved to an async Cloud Tasks pipeline "

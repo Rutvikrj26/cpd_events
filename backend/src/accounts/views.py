@@ -7,7 +7,6 @@ from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.db import models
 from django.utils import timezone
-from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -897,10 +896,6 @@ class CPDRequirementViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    @swagger_auto_schema(
-        operation_summary="CPD progress",
-        operation_description="Get CPD progress summary across all requirements.",
-    )
     @action(detail=False, methods=["get"])
     def progress(self, request):
         """Get CPD progress summary."""
@@ -924,10 +919,6 @@ class CPDRequirementViewSet(viewsets.ModelViewSet):
         }
         return Response(data)
 
-    @swagger_auto_schema(
-        operation_summary="Export CPD report",
-        operation_description="Export CPD report in various formats. Use export_format=json|csv|txt.",
-    )
     @action(detail=False, methods=["get"])
     def export(self, request):
         """Export CPD report."""
@@ -982,16 +973,12 @@ class ManifestView(generics.GenericAPIView):
 
     permission_classes = [IsAuthenticated]
 
-    @swagger_auto_schema(
-        operation_summary="Get user manifest",
-        operation_description="Returns allowed routes and features for the authenticated user.",
-    )
     def get(self, request):
         from common.rbac import get_allowed_routes_for_user, get_features_for_user
 
         user = request.user
 
-        from common.config.deployment import get_branding
+        from common.config.deployment import INSTITUTION_DEFAULT_CURRENCY, get_branding
 
         data = {
             "routes": get_allowed_routes_for_user(user),
@@ -1003,6 +990,7 @@ class ManifestView(generics.GenericAPIView):
             "deployment": {
                 "mode": DEPLOYMENT_MODE,
                 "registration_mode": REGISTRATION_MODE,
+                "default_currency": INSTITUTION_DEFAULT_CURRENCY,
                 **get_branding(),
             },
         }
@@ -1026,12 +1014,13 @@ class DeploymentConfigView(generics.GenericAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        from common.config.deployment import get_branding
+        from common.config.deployment import INSTITUTION_DEFAULT_CURRENCY, get_branding
 
         return Response(
             {
                 "mode": DEPLOYMENT_MODE,
                 "registration_mode": REGISTRATION_MODE,
+                "default_currency": INSTITUTION_DEFAULT_CURRENCY,
                 **get_branding(),
             }
         )

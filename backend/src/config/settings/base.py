@@ -49,7 +49,7 @@ THIRD_PARTY_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'django_filters',
-    'drf_yasg',
+    'drf_spectacular',
     'corsheaders',
 ]
 
@@ -171,6 +171,10 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
+    # OpenAPI 3.0 schema generator — feeds /api/v1/schema/ which the
+    # frontend's openapi-typescript codegen consumes. drf-yasg was removed
+    # in the typed-contract migration; spectacular is the only schema source.
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     # Permissions
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -200,8 +204,7 @@ REST_FRAMEWORK = {
     ],
     # Exception handling
     'EXCEPTION_HANDLER': 'common.exceptions.custom_exception_handler',
-    # Schema
-    'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.openapi.AutoSchema',
+    # NOTE: DEFAULT_SCHEMA_CLASS is set above (drf_spectacular.openapi.AutoSchema).
 }
 
 # JWT Settings
@@ -215,13 +218,23 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_uuid',
 }
 
-# drf-yasg / Swagger Settings
-SWAGGER_SETTINGS = {
-    'SECURITY_DEFINITIONS': {'Bearer': {'type': 'apiKey', 'name': 'Authorization', 'in': 'header'}},
-    'USE_SESSION_AUTH': False,
-    'JSON_EDITOR': True,
+# drf-spectacular — OpenAPI 3.0 schema for the openapi-typescript codegen.
+# The schema endpoint is mounted at /api/v1/schema/ in config/urls.py. The
+# frontend's `npm run generate-types` script fetches that and writes
+# `frontend/src/api/generated/schema.d.ts`.
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Accredit API',
+    'DESCRIPTION': 'OpenAPI 3.0 schema for the single-tenant LMS backend.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    # Enums get their own component schemas — gives openapi-typescript
+    # named union types instead of inline string-literal enums.
+    'COMPONENT_SPLIT_REQUEST': True,
+    'ENUM_NAME_OVERRIDES': {},
+    # Don't emit any drf-yasg endpoints in this schema — they have their
+    # own UI that runs off SwaggerUIView.
+    'DEFAULT_GENERATOR_CLASS': 'drf_spectacular.generators.SchemaGenerator',
 }
-SWAGGER_USE_COMPAT_RENDERERS = False
 
 # CORS Settings
 CORS_ALLOWED_ORIGINS = [

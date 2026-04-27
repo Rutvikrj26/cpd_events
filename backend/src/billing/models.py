@@ -5,7 +5,7 @@ Checkout drives every purchase and its webhook writes the local rows.
 
 Models:
 - StripeEvent: idempotency + async dispatch record for incoming webhooks
-- CoursePurchase: individual course/event purchase
+- CoursePurchase: unified receipt for every paid surface (event/course/program)
 - PaymentMethod: stored payment methods (kept for future "use saved card")
 - RefundRecord: refund tracking
 - Dispute: Stripe chargeback/dispute record
@@ -13,9 +13,16 @@ Models:
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
+from common.config.deployment import INSTITUTION_DEFAULT_CURRENCY
 from common.models import BaseModel
+
+
+def _default_currency() -> str:
+    """Callable so the env-var-driven default is read at row-create time, not import."""
+    return INSTITUTION_DEFAULT_CURRENCY
 
 
 # =============================================================================
@@ -66,9 +73,11 @@ class StripeEvent(models.Model):
 class CoursePurchase(BaseModel):
     """One row per Stripe-Checkout-backed purchase of a course, event, or program.
 
-    Exactly one of ``course``, ``event``, ``program`` is non-null per row.
-    The model name is a legacy holdover from the courses-only iteration; it
-    is now the shared receipt surface for every non-subscription purchase.
+    Exactly one of ``course``, ``event``, ``program`` is non-null per row —
+    enforced by the ``purchase_one_target`` check constraint. The model name
+    is a legacy holdover from the courses-only iteration; it is now the
+    shared receipt surface for every non-subscription purchase. Refund and
+    dispute resolution traverse this single table.
     """
 
     class Status(models.TextChoices):
@@ -84,9 +93,11 @@ class CoursePurchase(BaseModel):
         "learning.Program", on_delete=models.SET_NULL, null=True, blank=True, related_name="purchases"
     )
 
-    # Payment
-    amount_cents = models.PositiveIntegerField(help_text="Amount paid in cents")
-    currency = models.CharField(max_length=3, default="CAD")
+    # Payment — split out so refund/tax-reporting paths don't have to back-derive.
+    amount_cents = models.PositiveIntegerField(help_text="Total charged in cents (subtotal + tax)")
+    subtotal_cents = models.PositiveIntegerField(default=0, help_text="Pre-tax amount in cents")
+    tax_cents = models.PositiveIntegerField(default=0, help_text="Stripe automatic_tax amount in cents")
+    currency = models.CharField(max_length=3, default=_default_currency)
     stripe_payment_intent_id = models.CharField(max_length=255, blank=True, db_index=True)
     stripe_checkout_session_id = models.CharField(max_length=255, blank=True)
 
@@ -97,6 +108,27 @@ class CoursePurchase(BaseModel):
         ordering = ["-created_at"]
         verbose_name = "Course Purchase"
         verbose_name_plural = "Course Purchases"
+        constraints = [
+            # Exactly one target type per purchase. Without this the model
+            # docstring made a promise the schema didn't enforce.
+            models.CheckConstraint(
+                name="purchase_one_target",
+                condition=(
+                    Q(course__isnull=False, event__isnull=True, program__isnull=True)
+                    | Q(course__isnull=True, event__isnull=False, program__isnull=True)
+                    | Q(course__isnull=True, event__isnull=True, program__isnull=False)
+                ),
+            ),
+            # One purchase per Checkout Session — webhook replays must collapse
+            # to one row. The empty-string exclusion keeps the migration
+            # backward-compatible with historical rows that pre-date the
+            # session-id capture.
+            models.UniqueConstraint(
+                fields=["stripe_checkout_session_id"],
+                condition=~Q(stripe_checkout_session_id=""),
+                name="uniq_purchase_per_checkout_session",
+            ),
+        ]
 
     def __str__(self):
         item = self.course or self.event or self.program
@@ -187,7 +219,7 @@ class RefundRecord(BaseModel):
     stripe_payment_intent_id = models.CharField(max_length=255, db_index=True)
 
     amount_cents = models.PositiveIntegerField(help_text="Amount refunded in cents")
-    currency = models.CharField(max_length=3, default="cad")
+    currency = models.CharField(max_length=3, default=_default_currency)
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     reason = models.CharField(max_length=50, choices=Reason.choices, default=Reason.REQUESTED_BY_CUSTOMER)
@@ -263,7 +295,7 @@ class Dispute(BaseModel):
     )
 
     amount_cents = models.PositiveIntegerField()
-    currency = models.CharField(max_length=3, default="cad")
+    currency = models.CharField(max_length=3, default=_default_currency)
     reason = models.CharField(max_length=64, choices=Reason.choices, default=Reason.GENERAL)
     status = models.CharField(max_length=64, choices=Status.choices, default=Status.NEEDS_RESPONSE, db_index=True)
 

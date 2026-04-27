@@ -1,23 +1,37 @@
 """Billing API views.
 
+Two surfaces:
+
+1. **Admin observability** — StripeEvents (webhook idempotency + error log),
+   Disputes, Reconciliation findings.
+2. **Learner-/staff-facing** — ``VerifySessionView`` (post-checkout polling
+   from the frontend) and ``RefundPurchaseView`` (the canonical refund
+   endpoint that replaced surface-specific actions on Registration / Course /
+   Program viewsets).
+
 The subscription-based endpoints were removed when the platform moved to
-course-based institutional pricing. What remains is admin-only
-observability on the Stripe side: StripeEvents (webhook idempotency +
-error log), Disputes, and Reconciliation findings.
+course-based institutional pricing.
 """
 
 from __future__ import annotations
 
+import logging
+
+from django.db import transaction
+from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
+from rest_framework import serializers as drf_serializers
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import serializers as drf_serializers
 
 from common.rbac import roles
 from common.utils import error_response
 
-from .models import Dispute, StripeEvent
+from .models import CoursePurchase, Dispute, RefundRecord, StripeEvent
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -247,3 +261,284 @@ class AdminReconcileView(APIView):
             return error_response(str(exc), code="RECONCILE_FAILED")
 
         return Response(summary, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# Learner-facing — verify-session (CheckoutReturn polling)
+# ---------------------------------------------------------------------------
+
+
+_KIND_REDIRECT = {
+    "course": "/dashboard",
+    "program": "/my-programs",
+    "event": "/registrations",
+}
+
+
+def _purchase_kind(purchase: CoursePurchase) -> str:
+    if purchase.course_id:
+        return "course"
+    if purchase.program_id:
+        return "program"
+    return "event"
+
+
+class VerifySessionView(APIView):
+    """GET /api/v1/billing/verify-session/?session_id=cs_...
+
+    Authoritative check for post-checkout state. The frontend polls this
+    after Stripe redirects back; on the first request the webhook may
+    still be in flight, so we return ``202 Accepted`` until the
+    ``CoursePurchase`` exists.
+
+    Scoped to the requesting user — a leaked session id can't be probed
+    by anyone other than its purchaser.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        session_id = request.query_params.get("session_id", "")
+        if not session_id.startswith("cs_"):
+            return error_response(
+                "Invalid session id.", code="INVALID_SESSION", status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        purchase = (
+            CoursePurchase.objects
+            .select_related("course", "event", "program")
+            .filter(stripe_checkout_session_id=session_id, user=request.user)
+            .first()
+        )
+        if not purchase:
+            # Webhook hasn't delivered yet (or session belongs to another
+            # user — same response on purpose to avoid existence oracle).
+            return Response(
+                {"fulfilled": False, "kind": None, "payment_status": "unknown"},
+                status=status.HTTP_202_ACCEPTED,
+            )
+
+        kind = _purchase_kind(purchase)
+        return Response({
+            "fulfilled": purchase.status == CoursePurchase.Status.COMPLETED,
+            "kind": kind,
+            "payment_status": purchase.status,
+            "amount_cents": purchase.amount_cents,
+            "currency": purchase.currency,
+            "redirect_url": _KIND_REDIRECT[kind],
+        })
+
+
+# ---------------------------------------------------------------------------
+# Staff-facing — unified refund endpoint
+# ---------------------------------------------------------------------------
+
+
+class RefundPurchaseView(APIView):
+    """POST /api/v1/billing/purchases/{uuid}/refund/
+
+    Body: ``{reason: str, amount_cents?: int}``
+
+    Single canonical refund endpoint replacing the surface-specific actions
+    that used to live on RegistrationViewSet and CourseViewSet. Permission
+    is delegated to the related entity's ``can_manage(user)`` check
+    (course manager / program manager / event organizer / admin).
+
+    Cascade by kind:
+    - **event**: Registration.cancel(reason) + payment_status=REFUNDED;
+      promo code released.
+    - **course**: CourseEnrollment.status=DROPPED. Rejected with
+      PROGRAM_SEEDED if the row was seeded by a program purchase — the
+      learner must refund the program instead.
+    - **program**: ProgramEnrollment.status=DROPPED + cascade-drop every
+      seeded child CourseEnrollment.
+
+    Refunds are issued at the Stripe layer first; local state flips only
+    on Stripe success. The downstream ``charge.refunded`` webhook still
+    runs (writes the ``RefundRecord`` row), but is now informational
+    rather than load-bearing.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, uuid=None):
+        from billing.services import refund_payment_intent
+
+        purchase = get_object_or_404(
+            CoursePurchase.objects.select_related("course", "event", "program", "user"),
+            uuid=uuid,
+        )
+
+        target = purchase.course or purchase.event or purchase.program
+        if target is None or not target.can_manage(request.user):
+            raise PermissionDenied(
+                "You do not have permission to refund this purchase."
+            )
+
+        if purchase.status == CoursePurchase.Status.REFUNDED:
+            return error_response(
+                "Purchase has already been refunded.",
+                code="ALREADY_REFUNDED",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        if purchase.status != CoursePurchase.Status.COMPLETED:
+            return error_response(
+                "Purchase is not in a refundable state.",
+                code="NOT_REFUNDABLE",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        if not purchase.stripe_payment_intent_id:
+            return error_response(
+                "Purchase has no Stripe PaymentIntent.",
+                code="NO_PAYMENT_INTENT",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reason = (request.data.get("reason") or "").strip()
+        if not reason:
+            raise ValidationError({"reason": "required"})
+
+        amount_cents = request.data.get("amount_cents")
+        if amount_cents is not None:
+            try:
+                amount_cents = int(amount_cents)
+            except (TypeError, ValueError):
+                raise ValidationError({"amount_cents": "must be an integer"}) from None
+            if amount_cents <= 0:
+                raise ValidationError({"amount_cents": "must be positive"})
+            if amount_cents > purchase.amount_cents:
+                return error_response(
+                    "Refund amount exceeds amount paid.",
+                    code="REFUND_EXCEEDS_AMOUNT",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Pre-validate program-seeded rejection BEFORE calling Stripe so we
+        # don't issue a refund and then fail to revoke access.
+        kind = _purchase_kind(purchase)
+        if kind == "course":
+            from learning.models import CourseEnrollment
+
+            enrollment = CourseEnrollment.objects.filter(
+                user=purchase.user, course=purchase.course,
+            ).first()
+            if enrollment and enrollment.from_program_enrollment_id:
+                parent = enrollment.from_program_enrollment
+                return Response(
+                    {"error": {
+                        "code": "PROGRAM_SEEDED",
+                        "message": "Refund the program instead.",
+                        "program_uuid": str(parent.program.uuid),
+                        "program_enrollment_uuid": str(parent.uuid),
+                        "program_title": parent.program.title,
+                    }},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        try:
+            stripe_result = refund_payment_intent(
+                purchase.stripe_payment_intent_id,
+                amount_cents=amount_cents,
+                reason="requested_by_customer",
+            )
+        except Exception as exc:
+            return error_response(str(exc), code="REFUND_FAILED", status_code=status.HTTP_400_BAD_REQUEST)
+
+        is_partial = amount_cents is not None and amount_cents < purchase.amount_cents
+
+        with transaction.atomic():
+            if not is_partial:
+                purchase.status = CoursePurchase.Status.REFUNDED
+                purchase.save(update_fields=["status", "updated_at"])
+                self._cascade_full_refund(purchase, kind, reason, request.user)
+
+        self._audit(request, purchase, kind, stripe_result, is_partial, reason)
+
+        return Response({
+            "purchase_uuid": str(purchase.uuid),
+            "kind": kind,
+            "status": purchase.status,
+            "stripe_refund_id": stripe_result.get("refund_id"),
+            "amount_cents": stripe_result.get("amount_cents"),
+            "partial": is_partial,
+        })
+
+    # ------------------------------------------------------------------
+
+    def _cascade_full_refund(self, purchase, kind, reason, actor):
+        from learning.models import CourseEnrollment, ProgramEnrollment
+        from registrations.models import Registration
+
+        if kind == "event":
+            for reg in purchase.registrations.all():
+                if reg.status != Registration.Status.CANCELLED:
+                    reg.cancel(reason=reason, cancelled_by=actor)
+                elif reason and not reg.cancellation_reason:
+                    reg.cancellation_reason = reason
+                    reg.save(update_fields=["cancellation_reason", "updated_at"])
+                reg.payment_status = Registration.PaymentStatus.REFUNDED
+                reg.save(update_fields=["payment_status", "updated_at"])
+                try:
+                    from promo_codes.models import PromoCodeUsage
+
+                    PromoCodeUsage.release_for_registration(reg)
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning(
+                        "billing.refund.promo_release_failed",
+                        extra={"registration_uuid": str(reg.uuid), "error": str(exc)},
+                    )
+
+        elif kind == "course":
+            CourseEnrollment.objects.filter(
+                user=purchase.user, course=purchase.course,
+            ).update(status=CourseEnrollment.Status.DROPPED)
+            self._release_promo_for_purchase(purchase)
+
+        elif kind == "program":
+            program_enrollments = ProgramEnrollment.objects.filter(
+                user=purchase.user, program=purchase.program,
+            )
+            for pe in program_enrollments:
+                pe.status = ProgramEnrollment.Status.DROPPED
+                pe.save(update_fields=["status", "updated_at"])
+                # Cascade-drop only the rows that this program seeded — direct
+                # course enrollments (from_program_enrollment IS NULL) keep
+                # their access.
+                CourseEnrollment.objects.filter(
+                    from_program_enrollment=pe,
+                ).exclude(status=CourseEnrollment.Status.DROPPED).update(
+                    status=CourseEnrollment.Status.DROPPED,
+                )
+            self._release_promo_for_purchase(purchase)
+
+    def _release_promo_for_purchase(self, purchase):
+        try:
+            from promo_codes.models import PromoCodeUsage
+
+            PromoCodeUsage.release_for_purchase(purchase)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "billing.refund.promo_release_failed",
+                extra={"purchase_uuid": str(purchase.uuid), "error": str(exc)},
+            )
+
+    def _audit(self, request, purchase, kind, stripe_result, is_partial, reason):
+        try:
+            from accounts.audit import log_audit_event
+
+            log_audit_event(
+                actor=request.user,
+                action="purchase.refunded",
+                object_type="CoursePurchase",
+                object_uuid=str(purchase.uuid),
+                metadata={
+                    "kind": kind,
+                    "amount_cents": stripe_result.get("amount_cents"),
+                    "partial": is_partial,
+                    "reason": reason,
+                    "stripe_refund_id": stripe_result.get("refund_id"),
+                },
+                request=request,
+            )
+        except Exception as exc:  # pragma: no cover - logging should never fail tests
+            logger.warning("audit log failed for purchase refund %s: %s", purchase.uuid, exc)

@@ -1,9 +1,14 @@
-"""URL routes for the billing admin API.
+"""URL routes for the billing API.
 
-Observability surfaces for admins: StripeEvent listing/retry, Dispute
-listing/detail, and on-demand reconciliation. Stripe checkouts themselves
-run through the webhook endpoint at ``/api/v1/webhooks/stripe/`` (mounted
-from ``config/urls.py``, not here).
+Two surfaces:
+
+- **Admin observability** under ``/admin/billing/...`` — StripeEvent
+  listing/retry, Dispute listing/detail, on-demand reconciliation.
+- **Learner-/staff-facing** under ``/billing/...`` — verify-session
+  (CheckoutReturn polling) and the unified purchase refund endpoint.
+
+Stripe checkouts themselves run through the webhook endpoint at
+``/api/v1/webhooks/stripe/`` (mounted from ``config/urls.py``, not here).
 """
 
 from django.urls import path
@@ -43,5 +48,16 @@ urlpatterns = [
         "admin/billing/reconcile/",
         views.AdminReconcileView.as_view(),
         name="admin-reconcile",
+    ),
+    # Learner-/staff-facing
+    path(
+        "billing/verify-session/",
+        views.VerifySessionView.as_view(),
+        name="billing-verify-session",
+    ),
+    path(
+        "billing/purchases/<uuid:uuid>/refund/",
+        views.RefundPurchaseView.as_view(),
+        name="purchase-refund",
     ),
 ]

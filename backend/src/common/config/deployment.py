@@ -36,6 +36,16 @@ INSTITUTION_SUPPORT_EMAIL: str = os.environ.get("INSTITUTION_SUPPORT_EMAIL", "")
 INSTITUTION_FOOTER_TEXT: str = os.environ.get("INSTITUTION_FOOTER_TEXT", "")
 INSTITUTION_WEBSITE_URL: str = os.environ.get("INSTITUTION_WEBSITE_URL", "")
 
+# =============================================================================
+# Billing Currency
+# =============================================================================
+# ISO-4217 currency code used as the default for every paid surface
+# (events, courses, programs) and for receipts/refunds. Stored uppercase
+# so all comparisons are case-stable. Models reference this in their
+# `default=` callables and services pass it through to Stripe at session
+# creation time.
+INSTITUTION_DEFAULT_CURRENCY: str = os.environ.get("INSTITUTION_DEFAULT_CURRENCY", "USD").upper()
+
 
 def get_branding() -> dict:
     """Single source of truth for brand values exposed to API + templates."""
@@ -64,5 +74,6 @@ __all__ = [
     "INSTITUTION_SUPPORT_EMAIL",
     "INSTITUTION_FOOTER_TEXT",
     "INSTITUTION_WEBSITE_URL",
+    "INSTITUTION_DEFAULT_CURRENCY",
     "get_branding",
 ]

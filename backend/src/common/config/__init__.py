@@ -40,6 +40,7 @@ from .api import (
 # Deployment configuration
 from .deployment import (
     DEPLOYMENT_MODE,
+    INSTITUTION_DEFAULT_CURRENCY,
     INSTITUTION_LOGO_URL,
     INSTITUTION_NAME,
     REGISTRATION_MODE,
@@ -75,6 +76,7 @@ __all__ = [
     'REGISTRATION_MODE',
     'INSTITUTION_NAME',
     'INSTITUTION_LOGO_URL',
+    'INSTITUTION_DEFAULT_CURRENCY',
     # Events
     'EventDuration',
     'AttendanceThresholds',

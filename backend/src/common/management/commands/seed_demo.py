@@ -1129,7 +1129,38 @@ class Command(BaseCommand):
         c_eth_1_welcome = mk_content(m_eth_1, "Welcome & Orientation", "text", 0, duration=5, content_data={"body": "<p>Welcome to clinical ethics.</p>"})
         c_eth_1_video = mk_content(m_eth_1, "Intro Video", "video", 1, duration=15, content_data={"url": "https://demo.example/intro-ethics.mp4", "provider": "demo"})
         c_eth_2_text = mk_content(m_eth_2, "Case Study Guide", "text", 0, duration=20, content_data={"body": "<p>Read the scenario carefully.</p>"})
-        c_eth_2_quiz = mk_content(m_eth_2, "Module 2 Quiz", "quiz", 1, duration=20, content_data={"questions": [{"q": "Beneficence means?", "choices": ["a", "b"], "answer": 0}], "passing_score": 70})
+        # Quiz schema must match the QuizBuilder/QuizTaker contract:
+        #   { questions: [{ id, text, type, options: [{id, text, isCorrect}], points }], passing_score }
+        # See frontend/src/components/custom/QuizBuilder.tsx:12 for the canonical shape.
+        c_eth_2_quiz = mk_content(m_eth_2, "Module 2 Quiz", "quiz", 1, duration=20, content_data={
+            "questions": [
+                {
+                    "id": "q1",
+                    "text": "Which principle obligates clinicians to act in the patient's best interest?",
+                    "type": "single",
+                    "points": 10,
+                    "options": [
+                        {"id": "q1o1", "text": "Beneficence", "isCorrect": True},
+                        {"id": "q1o2", "text": "Autonomy", "isCorrect": False},
+                        {"id": "q1o3", "text": "Justice", "isCorrect": False},
+                        {"id": "q1o4", "text": "Non-maleficence", "isCorrect": False},
+                    ],
+                },
+                {
+                    "id": "q2",
+                    "text": "Informed consent requires which of the following? (Select all that apply.)",
+                    "type": "multiple",
+                    "points": 10,
+                    "options": [
+                        {"id": "q2o1", "text": "Disclosure of material risks", "isCorrect": True},
+                        {"id": "q2o2", "text": "Patient capacity to decide", "isCorrect": True},
+                        {"id": "q2o3", "text": "Voluntariness (no coercion)", "isCorrect": True},
+                        {"id": "q2o4", "text": "Witnessed signature on a court-stamped form", "isCorrect": False},
+                    ],
+                },
+            ],
+            "passing_score": 70,
+        })
         c_eth_3_video = mk_content(m_eth_3, "Advanced Case Video", "video", 0, duration=30, content_data={"url": "https://demo.example/adv-ethics.mp4"})
         c_eth_3_primer = mk_content(m_eth_3, "Telemedicine Ethics Primer", "text", 1, duration=15, content_data={"body": "<p>Emerging considerations.</p>"})
 
@@ -1164,10 +1195,22 @@ class Command(BaseCommand):
         c_dhr_2_doc = mk_content(m_dhr_2, "Coding Reference Guide", "document", 0, duration=25,
                    content_data={})
         c_dhr_2_quiz = mk_content(m_dhr_2, "Documentation Quiz", "quiz", 1, duration=15,
-                   content_data={"questions": [
-                       {"q": "Which note type best supports billing review?",
-                        "choices": ["SOAP", "Free text", "Telephone encounter"], "answer": 0},
-                   ], "passing_score": 70})
+                   content_data={
+                       "questions": [
+                           {
+                               "id": "q1",
+                               "text": "Which note type best supports billing review?",
+                               "type": "single",
+                               "points": 10,
+                               "options": [
+                                   {"id": "q1o1", "text": "SOAP note", "isCorrect": True},
+                                   {"id": "q1o2", "text": "Free-text narrative", "isCorrect": False},
+                                   {"id": "q1o3", "text": "Telephone encounter", "isCorrect": False},
+                               ],
+                           },
+                       ],
+                       "passing_score": 70,
+                   })
         mk_content(m_dhr_3, "Privacy & PHIPA Reading", "text", 0, duration=20,
                    content_data={"body": "<p>Patient privacy obligations under PHIPA.</p>"})
         mk_content(m_dhr_3, "External Reference: PHIPA Toolkit", "external", 1, duration=10,
@@ -1201,9 +1244,17 @@ class Command(BaseCommand):
         c_bc_2_quiz = mk_content(m_bc_2, "Sterile Setup Quiz", "quiz", 1, duration=10,
                                   content_data={
                                       "questions": [
-                                          {"q": "Which step comes first?",
-                                           "choices": ["Hand hygiene", "Glove on", "Drape patient"],
-                                           "answer": 0},
+                                          {
+                                              "id": "q1",
+                                              "text": "Which step comes first when preparing a sterile field?",
+                                              "type": "single",
+                                              "points": 10,
+                                              "options": [
+                                                  {"id": "q1o1", "text": "Hand hygiene", "isCorrect": True},
+                                                  {"id": "q1o2", "text": "Don sterile gloves", "isCorrect": False},
+                                                  {"id": "q1o3", "text": "Drape the patient", "isCorrect": False},
+                                              ],
+                                          },
                                       ],
                                       "passing_score": 70,
                                   })

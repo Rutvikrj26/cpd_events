@@ -42,6 +42,7 @@ import { useAuth } from '@/features/auth';
 import { formatDate } from '@/lib/datetime';
 import { deriveProgressDisplay, formatProgressSubtitle } from '@/lib/progress';
 import { FormatBadge } from '@/components/courses/FormatBadge';
+import { resolveEnrollmentCardCta } from '@/features/courses/lib/enrollmentViewState';
 import { EventFeedback } from '@/api/feedback/types';
 import { format } from 'date-fns';
 
@@ -158,30 +159,38 @@ export const MyLearningPage = () => {
         }
     };
 
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case 'confirmed': return <span className="inline-flex items-center text-green-700 bg-green-50 px-2 py-1 rounded-md text-xs font-medium"><CheckCircle size={12} className="mr-1" /> Confirmed</span>;
-            case 'attended': return <span className="inline-flex items-center text-blue-700 bg-blue-50 px-2 py-1 rounded-md text-xs font-medium"><CheckCircle size={12} className="mr-1" /> Attended</span>;
-            case 'cancelled': return <span className="inline-flex items-center text-red-700 bg-red-50 px-2 py-1 rounded-md text-xs font-medium"><XCircle size={12} className="mr-1" /> Cancelled</span>;
-            case 'waitlisted': return <span className="inline-flex items-center text-yellow-700 bg-yellow-50 px-2 py-1 rounded-md text-xs font-medium"><Clock size={12} className="mr-1" /> Waitlisted</span>;
-            case 'pending': return <span className="inline-flex items-center text-amber-700 bg-amber-50 px-2 py-1 rounded-md text-xs font-medium"><Clock size={12} className="mr-1" /> Pending Payment</span>;
-            default: return <span className="inline-flex items-center text-muted-foreground bg-muted px-2 py-1 rounded-md text-xs font-medium"><Clock size={12} className="mr-1" /> Pending</span>;
-        }
-    };
-
-    const getPaymentBadge = (paymentStatus: string) => {
-        switch (paymentStatus) {
-            case 'paid':
-                return <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50"><DollarSign size={10} className="mr-1" /> Paid</Badge>;
-            case 'pending':
-                return <Badge variant="outline" className="text-yellow-700 border-yellow-300 bg-yellow-50"><Clock size={10} className="mr-1" /> Payment Pending</Badge>;
-            case 'failed':
-                return <Badge variant="outline" className="text-red-700 border-red-300 bg-red-50"><AlertCircle size={10} className="mr-1" /> Payment Failed</Badge>;
-            case 'refunded':
-                return <Badge variant="outline" className="text-purple-700 border-purple-300 bg-purple-50"><DollarSign size={10} className="mr-1" /> Refunded</Badge>;
-            case 'na':
+    /**
+     * Single status pill driven by ``view_state.kind``. Replaces the
+     * legacy two-badge model (status + payment_status) — those columns
+     * required the user to read both pills and mentally compose them
+     * into "where is my registration?". The discriminated kind from the
+     * backend collapses that.
+     *
+     * Six kinds map to (label, icon, color tone). The ``payment_failed``
+     * sub-flag on awaiting_payment escalates the tone.
+     */
+    const renderViewStateBadge = (reg: Registration) => {
+        const vs: any = (reg as any).view_state;
+        const kind: string = vs?.kind ?? '';
+        switch (kind) {
+            case 'awaiting_payment':
+                return vs?.payment_failed
+                    ? <span className="inline-flex items-center text-red-700 bg-red-50 px-2 py-1 rounded-md text-xs font-medium"><AlertCircle size={12} className="mr-1" /> Payment Failed</span>
+                    : <span className="inline-flex items-center text-amber-700 bg-amber-50 px-2 py-1 rounded-md text-xs font-medium"><Clock size={12} className="mr-1" /> Awaiting Payment</span>;
+            case 'confirmed_upcoming':
+                return <span className="inline-flex items-center text-green-700 bg-green-50 px-2 py-1 rounded-md text-xs font-medium"><CheckCircle size={12} className="mr-1" /> Confirmed</span>;
+            case 'confirmed_attended':
+                return <span className="inline-flex items-center text-blue-700 bg-blue-50 px-2 py-1 rounded-md text-xs font-medium"><CheckCircle size={12} className="mr-1" /> Attended</span>;
+            case 'confirmed_missed':
+                return <span className="inline-flex items-center text-muted-foreground bg-muted px-2 py-1 rounded-md text-xs font-medium"><XCircle size={12} className="mr-1" /> Missed</span>;
+            case 'waitlisted':
+                return <span className="inline-flex items-center text-yellow-700 bg-yellow-50 px-2 py-1 rounded-md text-xs font-medium"><Clock size={12} className="mr-1" /> Waitlisted{vs?.position != null ? ` · #${vs.position}` : ''}</span>;
+            case 'cancelled':
+                return <span className="inline-flex items-center text-red-700 bg-red-50 px-2 py-1 rounded-md text-xs font-medium"><XCircle size={12} className="mr-1" /> Cancelled</span>;
             default:
-                return null;
+                // Defensive: an unknown kind shouldn't ship, but if it
+                // does, render something neutral instead of nothing.
+                return <span className="inline-flex items-center text-muted-foreground bg-muted px-2 py-1 rounded-md text-xs font-medium"><Clock size={12} className="mr-1" /> {reg.status}</span>;
         }
     };
 
@@ -228,7 +237,6 @@ export const MyLearningPage = () => {
                                         <th className="px-6 py-4 font-medium text-muted-foreground">Event</th>
                                         <th className="px-6 py-4 font-medium text-muted-foreground">Date Registered</th>
                                         <th className="px-6 py-4 font-medium text-muted-foreground">Status</th>
-                                        <th className="px-6 py-4 font-medium text-muted-foreground">Payment</th>
                                         <th className="px-6 py-4 font-medium text-muted-foreground">Actions</th>
                                     </tr>
                                 </thead>
@@ -246,8 +254,7 @@ export const MyLearningPage = () => {
                                             <td className="px-6 py-4 text-muted-foreground">
                                                 {formatDate(reg.created_at, user)}
                                             </td>
-                                            <td className="px-6 py-4">{getStatusBadge(reg.status)}</td>
-                                            <td className="px-6 py-4">{getPaymentBadge(reg.payment_status)}</td>
+                                            <td className="px-6 py-4">{renderViewStateBadge(reg)}</td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
                                                     {isEventLive(reg) && reg.status === 'confirmed' && (
@@ -369,13 +376,21 @@ export const MyLearningPage = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {enrollments.map((enrollment) => {
                                 const display = deriveProgressDisplay(enrollment);
+                                // Source-of-truth for badge + CTA is the
+                                // server-derived view_state, not local
+                                // status-enum interpretation. See
+                                // `enrollmentViewState.tsx` for the mapping.
+                                const cta = resolveEnrollmentCardCta(
+                                    (enrollment as any).view_state,
+                                    enrollment as any,
+                                );
                                 return (
                                     <Card key={enrollment.uuid} className="flex flex-col h-full hover:shadow-md transition-shadow">
                                         <CardHeader className="pb-4">
                                             <div className="flex justify-between items-start mb-2 gap-2">
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <Badge variant={display.isCompleted ? 'default' : display.statusLabel === 'Awaiting Review' ? 'outline' : 'secondary'}>
-                                                        {display.statusLabel}
+                                                    <Badge variant={cta.badge.variant}>
+                                                        {cta.badge.label}
                                                     </Badge>
                                                     <FormatBadge
                                                         course={enrollment.course}
@@ -418,12 +433,18 @@ export const MyLearningPage = () => {
                                             </div>
                                         </CardContent>
                                         <CardFooter className="pt-0 flex gap-2">
-                                            <Button className="flex-1" asChild>
-                                                <Link to={`/learn/${enrollment.course?.uuid}`}>
-                                                    {display.isCompleted ? 'Review' : 'Continue'}
-                                                    <ArrowRight className="ml-2 h-4 w-4" />
-                                                </Link>
-                                            </Button>
+                                            {cta.primary.to ? (
+                                                <Button className="flex-1" asChild>
+                                                    <Link to={cta.primary.to}>
+                                                        {cta.primary.label}
+                                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                                    </Link>
+                                                </Button>
+                                            ) : (
+                                                <Button className="flex-1" disabled>
+                                                    {cta.primary.label}
+                                                </Button>
+                                            )}
                                             {enrollment.certificate_issued && (
                                                 <Button
                                                     variant="outline"

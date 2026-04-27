@@ -104,6 +104,18 @@ class Registration(SoftDeleteModel):
     total_amount = models.DecimalField(
         max_digits=10, decimal_places=2, default=0, help_text="Total amount charged (ticket + tax)"
     )
+    # Unified receipt link. Set by the fulfilment handler on the same
+    # transaction that flips payment_status to PAID. SET_NULL because a
+    # purchase row may be hard-deleted in admin while the registration
+    # remains for attendance/certificate history.
+    purchase = models.ForeignKey(
+        'billing.CoursePurchase',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='registrations',
+        help_text="Unified receipt row (CoursePurchase). Set on fulfilment.",
+    )
 
     source = models.CharField(
         max_length=20, choices=Source.choices, default=Source.SELF, help_text="How this registration was created"

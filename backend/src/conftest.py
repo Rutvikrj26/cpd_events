@@ -125,8 +125,7 @@ def unverified_user(db):
 
 @pytest.fixture
 def organizer(db):
-    """An organizer user. (Subscription model removed in single-tenant transition;
-    services already guard with getattr(user, 'subscription', None).)"""
+    """An organizer user."""
     return OrganizerFactory(
         email='organizer@example.com',
         full_name='Test Organizer',
@@ -135,7 +134,7 @@ def organizer(db):
 
 @pytest.fixture
 def instructor(db):
-    """An instructor user. (See organizer fixture re: subscription removal.)"""
+    """An instructor user."""
     return UserFactory(
         email='instructor@example.com',
         full_name='Test Instructor',
@@ -357,20 +356,6 @@ def tag(db, organizer):
 
 
 # =============================================================================
-# Billing Fixtures
-# =============================================================================
-
-
-@pytest.fixture
-def subscription(db, organizer):
-    """Stub — Subscription model was removed in the single-tenant transition.
-    Returns a MagicMock so any test still consuming this fixture doesn't blow
-    up at import time. Tests that actually exercise subscription behaviour
-    are skipped (see test_lms_plan_access.py)."""
-    return MagicMock(plan='free', status='active', user=organizer)
-
-
-# =============================================================================
 # Learning Fixtures
 # =============================================================================
 
@@ -451,32 +436,26 @@ def registration_create_data(user):
 
 @pytest.fixture
 def mock_stripe(settings):
-    """Mock Stripe API for billing tests."""
+    """Mock Stripe API for billing tests.
+
+    Subscription/billing-portal mocks were removed when the platform moved
+    to single-tenant; only the primitives the unified Checkout flow uses
+    remain (Customer + checkout.Session + PaymentMethod).
+    """
     settings.STRIPE_SECRET_KEY = 'sk_test_mock'
     with (
         patch('stripe.Customer') as mock_customer,
-        patch('stripe.Subscription') as mock_sub,
         patch('stripe.checkout.Session') as mock_checkout,
-        patch('stripe.billing_portal.Session') as mock_portal,
         patch('stripe.PaymentMethod') as mock_pm,
     ):
         mock_customer.create.return_value = MagicMock(id='cus_test123')
-        mock_sub.create.return_value = MagicMock(
-            id='sub_test123',
-            status='active',
-        )
         mock_checkout.create.return_value = MagicMock(
             id='cs_test123',
             url='https://checkout.stripe.com/test',
         )
-        mock_portal.create.return_value = MagicMock(
-            url='https://billing.stripe.com/test',
-        )
         yield MagicMock(
             Customer=mock_customer,
-            Subscription=mock_sub,
             checkout=MagicMock(Session=mock_checkout),
-            billing_portal=MagicMock(Session=mock_portal),
             PaymentMethod=mock_pm,
         )
 

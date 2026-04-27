@@ -4,20 +4,21 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Award, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { useToast } from '@/shared/ui/use-toast';
+
 import {
-    useCoursePlayerData,
-    useUpdateContentProgress,
-    courseKeys,
-} from '../../hooks';
-import type {
-    ContentWithProgress,
-    ModuleWithContents,
-} from '../../hooks';
+    useCoursePlayerBootstrap,
+    isGranted,
+    isPendingApproval,
+    isRedirect,
+    type CoursePlayerGranted,
+} from '../../hooks/useCoursePlayerBootstrap';
+import { useUpdateContentProgress, courseKeys } from '../../hooks';
 import type { Assignment, AssignmentSubmission } from '@/api/courses/types';
 import { PlayerSidebar } from './PlayerSidebar';
 import { PlayerHeader } from './PlayerHeader';
 import { PlayerContent } from './PlayerContent';
 import { PlayerDialogs } from './PlayerDialogs';
+import { PendingApprovalShell } from './PendingApprovalShell';
 import type { CourseItem } from './types';
 import type { QuizResult } from '../content-viewers/QuizTaker';
 
@@ -27,34 +28,138 @@ interface CoursePlayerProps {
     currentUserUuid?: string;
 }
 
+/**
+ * CoursePlayer — top-level orchestrator for the learner's course player.
+ *
+ * Bootstraps via a single typed fetch. The response is one of three
+ * discriminated shapes (see `useCoursePlayerBootstrap`); we exhaustively
+ * switch on `access.kind`:
+ *
+ *   - `granted`            → render the full <CoursePlayerGrantedShell />
+ *   - `pending_approval`   → render <PendingApprovalShell />
+ *   - `redirect_to_detail` → navigate to /courses/{slug}; the catalog page
+ *                            handles the actual CTA (purchase / sign in /
+ *                            "registration opens at ..." / etc.).
+ *
+ * No 6-fetch composition, no per-resource 403 spam, no boolean cascade
+ * over four flags. The previous incarnation lived in
+ * `useCoursePlayerData.ts` and is replaced wholesale by this hook + this
+ * dispatcher.
+ */
+export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps) {
+    const navigate = useNavigate();
+    const { data, isLoading, isError } = useCoursePlayerBootstrap(courseUuid);
+
+    /* ---- Loading / error sentinels ---- */
+    if (isLoading) {
+        return (
+            <div className="flex h-[80vh] items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
+    if (isError || !data) {
+        return (
+            <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
+                <p className="text-muted-foreground">Course not found</p>
+                <Button onClick={() => navigate('/registrations?tab=courses')}>
+                    Back to My Courses
+                </Button>
+            </div>
+        );
+    }
+
+    /* ---- Discriminated dispatch ---- */
+    if (isPendingApproval(data)) {
+        return <PendingApprovalShell data={data} />;
+    }
+
+    if (isRedirect(data)) {
+        // The catalog page is the source of truth for the CTA in every
+        // not-granted-but-not-pending case (paid, window closed, dropped,
+        // expired, just-not-enrolled). Replace the route so the back
+        // button doesn't bounce the user back into the player.
+        navigate(`/courses/${data.access.slug}`, { replace: true });
+        return null;
+    }
+
+    if (isGranted(data)) {
+        return <CoursePlayerGrantedShell data={data} courseUuid={courseUuid} />;
+    }
+
+    // Exhaustiveness guard. If a new access kind ships and someone forgets
+    // to update this dispatch, TypeScript narrows `data` to `never` and
+    // this branch becomes a typecheck error at the assignment line above.
+    const _exhaustive: never = data;
+    return _exhaustive;
+}
+
+// =============================================================================
+// Granted shell — the actual player UI, rendered only when access.kind === 'granted'.
+// =============================================================================
+
+interface GrantedShellProps {
+    data: CoursePlayerGranted;
+    courseUuid: string;
+}
+
 function getLatestSubmission(
     submissions: AssignmentSubmission[],
-    assignmentUuid: string
+    assignmentUuid: string,
 ): AssignmentSubmission | undefined {
     return submissions
         .filter((s) => s.assignment === assignmentUuid)
         .sort((a, b) => (b.attempt_number || 0) - (a.attempt_number || 0))[0];
 }
 
-/**
- * CoursePlayer — top-level orchestrator for the learner's course player.
- *
- * Owns:
- *   - `currentItem` (active content/assignment + module)
- *   - dialog open flags (announcements, discussion)
- *   - module-row expansion state
- *
- * Server state is delegated to `useCoursePlayerData` (one composite hook
- * that fans out to the existing per-resource RQ hooks). Mark-complete
- * goes through `useUpdateContentProgress` so progress invalidates
- * automatically.
- */
-export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps) {
+function CoursePlayerGrantedShell({ data, courseUuid }: GrantedShellProps) {
     const navigate = useNavigate();
     const { toast } = useToast();
     const queryClient = useQueryClient();
-    const data = useCoursePlayerData(courseUuid);
     const updateProgress = useUpdateContentProgress();
+
+    /* ---- Derived view models from the bootstrap payload ----
+     *
+     * The bootstrap exposes `module_progress` as a flat array; we derive
+     * the cross-cutting views the UI needs (availability map, completed
+     * set, content_progress map) once instead of recomputing per-render.
+     */
+    const moduleAvailability = useMemo(() => {
+        const map: Record<string, boolean> = {};
+        for (const slice of data.module_progress) {
+            map[slice.module_uuid] = slice.is_available;
+        }
+        return map;
+    }, [data.module_progress]);
+
+    const completedContents = useMemo(() => {
+        const set = new Set<string>();
+        for (const slice of data.module_progress) {
+            for (const uuid of slice.completed_content_uuids) {
+                set.add(uuid);
+            }
+        }
+        return set;
+    }, [data.module_progress]);
+
+    const progressPercent = useMemo(() => {
+        if (data.view_state?.kind === 'completed') return 100;
+        if (data.view_state?.kind === 'in_progress') return data.view_state.percent ?? 0;
+        return 0;
+    }, [data.view_state]);
+
+    // Reshape modules into the legacy `ModuleWithContents` shape the
+    // PlayerSidebar still consumes — keeps that component's contract
+    // stable while the hook layer changed underneath. Sidebar refactor
+    // is a follow-up; not blocking the toast-spam fix.
+    const modules = useMemo(
+        () =>
+            data.modules.map((m: any) => ({
+                ...m,
+                contents: m.module?.contents ?? [],
+            })),
+        [data.modules],
+    );
 
     /* ---- Local UI state ---- */
     const [currentItem, setCurrentItem] = useState<CourseItem | null>(null);
@@ -66,15 +171,14 @@ export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps)
     /* ---- Auto-select first incomplete content on first hydrate ---- */
     useEffect(() => {
         if (hasAutoSelectedRef.current) return;
-        if (data.isLoading) return;
-        if (data.modules.length === 0) return;
+        if (modules.length === 0) return;
 
-        let target: { content: ContentWithProgress; moduleUuid: string } | null = null;
-        for (const mod of data.modules) {
+        let target: { content: any; moduleUuid: string } | null = null;
+        for (const mod of modules) {
             const moduleUuid = mod.module?.uuid || mod.uuid;
-            if (data.moduleAvailability[moduleUuid] === false) continue;
+            if (moduleAvailability[moduleUuid] === false) continue;
             for (const content of mod.contents || []) {
-                if (!data.completedContents.has(content.uuid)) {
+                if (!completedContents.has(content.uuid)) {
                     target = { content, moduleUuid };
                     break;
                 }
@@ -83,7 +187,7 @@ export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps)
         }
         // Fallback: first content of first module that has any.
         if (!target) {
-            const firstWith = data.modules.find((m) => (m.contents?.length ?? 0) > 0);
+            const firstWith = modules.find((m: any) => (m.contents?.length ?? 0) > 0);
             if (firstWith && firstWith.contents?.[0]) {
                 target = {
                     content: firstWith.contents[0],
@@ -100,39 +204,45 @@ export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps)
             setExpandedModules({ [target.moduleUuid]: true });
         }
         hasAutoSelectedRef.current = true;
-    }, [data.isLoading, data.modules, data.moduleAvailability, data.completedContents]);
+    }, [modules, moduleAvailability, completedContents]);
 
     /* ---- Selection handlers ---- */
     const toggleModule = (moduleUuid: string) => {
         setExpandedModules((prev) => ({ ...prev, [moduleUuid]: !prev[moduleUuid] }));
     };
 
-    const selectContent = (content: ContentWithProgress, moduleUuid: string) => {
-        if (data.moduleAvailability[moduleUuid] === false) return;
+    const selectContent = (content: any, moduleUuid: string) => {
+        if (moduleAvailability[moduleUuid] === false) return;
         setCurrentItem({ type: 'content', item: content, moduleUuid });
     };
 
     const selectAssignment = (assignment: Assignment, moduleUuid: string) => {
-        if (data.moduleAvailability[moduleUuid] === false) return;
+        if (moduleAvailability[moduleUuid] === false) return;
         setCurrentItem({ type: 'assignment', item: assignment, moduleUuid });
     };
 
     /* ---- Progress / mark-complete ---- */
-    const refreshProgress = () => {
-        queryClient.invalidateQueries({ queryKey: courseKeys.progress(courseUuid) });
-        // Newly unlocked modules need their content list — invalidate the
-        // module-tree key, useQueries picks the new module ids up.
-        queryClient.invalidateQueries({ queryKey: courseKeys.modules(courseUuid) });
+    const refreshAfterProgress = () => {
+        // Mark-complete invalidates the bootstrap so the next paint reflects
+        // newly-unlocked modules + updated view_state. The legacy narrow
+        // `progress` and `modules` keys are no longer in the data flow.
+        queryClient.invalidateQueries({
+            queryKey: ['courses', 'player-bootstrap', courseUuid],
+        });
+        // Keep the legacy enrollments-list key fresh so the My Learning
+        // page reflects status / completion changes when the user
+        // navigates back.
+        queryClient.invalidateQueries({ queryKey: courseKeys.enrollments() });
     };
 
     const advanceToNext = () => {
         if (!currentItem || currentItem.type !== 'content') return;
-        const moduleIndex = data.modules.findIndex(
-            (m) => (m.module?.uuid || m.uuid) === currentItem.moduleUuid
+        const moduleIndex = modules.findIndex(
+            (m: any) => (m.module?.uuid || m.uuid) === currentItem.moduleUuid,
         );
-        const currentModule = data.modules[moduleIndex];
+        const currentModule = modules[moduleIndex];
         const contentIndex =
-            currentModule?.contents?.findIndex((c) => c.uuid === currentItem.item.uuid) ?? -1;
+            currentModule?.contents?.findIndex((c: any) => c.uuid === currentItem.item.uuid) ?? -1;
 
         // Next content in same module
         if (currentModule?.contents && contentIndex < currentModule.contents.length - 1) {
@@ -144,16 +254,16 @@ export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps)
             return;
         }
         // First content of next available module
-        for (let i = moduleIndex + 1; i < data.modules.length; i++) {
-            const nextUuid = data.modules[i].module?.uuid || data.modules[i].uuid;
+        for (let i = moduleIndex + 1; i < modules.length; i++) {
+            const nextUuid = modules[i].module?.uuid || modules[i].uuid;
             if (
-                data.moduleAvailability[nextUuid] !== false &&
-                data.modules[i].contents &&
-                data.modules[i].contents.length > 0
+                moduleAvailability[nextUuid] !== false &&
+                modules[i].contents &&
+                modules[i].contents.length > 0
             ) {
                 setCurrentItem({
                     type: 'content',
-                    item: data.modules[i].contents[0],
+                    item: modules[i].contents[0],
                     moduleUuid: nextUuid,
                 });
                 setExpandedModules({ [nextUuid]: true });
@@ -178,6 +288,7 @@ export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps)
                 title: 'Progress saved!',
                 description: 'Content marked as complete.',
             });
+            refreshAfterProgress();
             advanceToNext();
         } catch (error) {
             console.error('Failed to update progress:', error);
@@ -189,10 +300,7 @@ export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps)
         }
     };
 
-    const handleQuizComplete = async (
-        content: ContentWithProgress,
-        result: QuizResult | undefined
-    ) => {
+    const handleQuizComplete = async (content: any, result: QuizResult | undefined) => {
         try {
             await updateProgress.mutateAsync({
                 contentUuid: content.uuid,
@@ -212,84 +320,50 @@ export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps)
         } catch (error) {
             console.error('Failed to save quiz progress:', error);
         }
-        refreshProgress();
+        refreshAfterProgress();
     };
 
-    /* ---- Derived view models ---- */
-    const activeContent =
-        currentItem?.type === 'content' ? (currentItem.item as ContentWithProgress) : null;
-    const activeAssignment =
-        currentItem?.type === 'assignment' ? (currentItem.item as Assignment) : null;
-    const isLocked =
-        !!currentItem && data.moduleAvailability[currentItem.moduleUuid] === false;
-    const isCurrentContentCompleted = !!activeContent && data.completedContents.has(activeContent.uuid);
+    /* ---- Active item / lock state ---- */
+    const activeContent = currentItem?.type === 'content' ? currentItem.item : null;
+    const activeAssignment = currentItem?.type === 'assignment' ? (currentItem.item as Assignment) : null;
+    const isLocked = !!currentItem && moduleAvailability[currentItem.moduleUuid] === false;
+    const isCurrentContentCompleted = !!activeContent && completedContents.has(activeContent.uuid);
+
+    // Submissions are not yet returned in the bootstrap (Phase 1.5). For
+    // now, the player surfaces the latest submission per assignment via a
+    // separate side-fetch in PlayerContent. Pass an empty array — the
+    // component already handles the empty case gracefully.
+    const submissions: AssignmentSubmission[] = [];
     const latestSubmissionForActive = useMemo(
         () =>
             activeAssignment
-                ? getLatestSubmission(data.submissions, activeAssignment.uuid)
+                ? getLatestSubmission(submissions, activeAssignment.uuid)
                 : undefined,
-        [activeAssignment, data.submissions]
+        [activeAssignment, submissions],
     );
 
-    /* ---- Loading / error / empty states ---- */
-    if (data.isLoading) {
-        return (
-            <div className="flex h-[80vh] items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-        );
-    }
-
-    if (data.isCourseNotFound || !data.course) {
-        return (
-            <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
-                <p className="text-muted-foreground">Course not found</p>
-                <Button onClick={() => navigate('/registrations?tab=courses')}>
-                    Back to My Courses
-                </Button>
-            </div>
-        );
-    }
-
-    if (data.isEnrollmentBlocked) {
-        return (
-            <div className="flex h-[80vh] flex-col items-center justify-center gap-4 text-center">
-                <p className="text-muted-foreground">You are not enrolled in this course yet.</p>
-                <div className="flex gap-2">
-                    <Button onClick={() => navigate('/registrations?tab=courses')}>
-                        Back to My Courses
-                    </Button>
-                    {data.course.slug && (
-                        <Button
-                            variant="outline"
-                            onClick={() => navigate(`/courses/${data.course!.slug}`)}
-                        >
-                            View Course Page
-                        </Button>
-                    )}
-                </div>
-            </div>
-        );
-    }
-
-    // Match the legacy redirect for non-enrolled learners hitting /learn/...
-    if (data.isNotEnrolled) {
-        navigate(`/courses/${data.course.slug || courseUuid}`, { replace: true });
-        return null;
-    }
+    // contentProgressMap: legacy shape derived from module_progress slices.
+    // Kept minimal for now — only the fields PlayerContent actually reads.
+    const contentProgressMap = useMemo(() => {
+        const map: Record<string, any> = {};
+        for (const uuid of completedContents) {
+            map[uuid] = { status: 'completed', progress_percent: 100 };
+        }
+        return map;
+    }, [completedContents]);
 
     return (
         <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
             <PlayerSidebar
-                course={data.course}
-                progressPercent={data.progressPercent}
-                sessions={data.sessions}
-                modules={data.modules as ModuleWithContents[]}
+                course={data.course as any}
+                progressPercent={progressPercent}
+                sessions={(data.sessions ?? []) as any}
+                modules={modules as any}
                 expandedModules={expandedModules}
                 onToggleModule={toggleModule}
-                completedContents={data.completedContents}
-                moduleAvailability={data.moduleAvailability}
-                submissions={data.submissions}
+                completedContents={completedContents}
+                moduleAvailability={moduleAvailability}
+                submissions={submissions}
                 currentItem={currentItem}
                 onSelectContent={selectContent}
                 onSelectAssignment={selectAssignment}
@@ -313,7 +387,7 @@ export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps)
                                 activeContent={activeContent}
                                 activeAssignment={activeAssignment}
                                 isLocked={isLocked}
-                                contentProgressMap={data.contentProgressMap}
+                                contentProgressMap={contentProgressMap}
                                 latestSubmissionForActive={latestSubmissionForActive}
                                 onQuizComplete={handleQuizComplete}
                             />
@@ -322,11 +396,7 @@ export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps)
                 ) : (
                     <div className="flex-1 overflow-y-auto p-6">
                         <div className="max-w-4xl mx-auto">
-                            {/* Sessions are rendered in the sidebar (two-track
-                                layout). The empty-state branch only fires for
-                                pure-live courses with no sessions yet — keep
-                                that, drop the duplicate SessionsPanel render. */}
-                            {data.course.format === 'live' && data.sessions.length === 0 ? (
+                            {(data.course as any).format === 'live' && (data.sessions ?? []).length === 0 ? (
                                 <div className="text-center py-12">
                                     <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
                                     <h3 className="text-lg font-medium mb-2">
@@ -337,20 +407,8 @@ export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps)
                                     </p>
                                 </div>
                             ) : (
-                                <div className="text-center py-12">
-                                    <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                                    <h3 className="text-lg font-medium mb-2">
-                                        {data.sessions.length > 0
-                                            ? 'Continue Learning'
-                                            : 'No content selected'}
-                                    </h3>
-                                    <p className="text-muted-foreground">
-                                        {data.course.format === 'live'
-                                            ? 'Join an upcoming live session above, or watch a past recording.'
-                                            : data.sessions.length > 0
-                                              ? 'Join a live session above or select a lesson from the sidebar.'
-                                              : 'Select a lesson from the sidebar to begin.'}
-                                    </p>
+                                <div className="text-center py-12 text-muted-foreground">
+                                    Select a module item from the sidebar to begin.
                                 </div>
                             )}
                         </div>
@@ -360,8 +418,8 @@ export function CoursePlayer({ courseUuid, currentUserUuid }: CoursePlayerProps)
 
             <PlayerDialogs
                 courseUuid={courseUuid}
-                currentUserUuid={currentUserUuid}
-                announcements={data.announcements}
+                currentUserUuid={undefined}
+                announcements={data.announcements as any}
                 showAnnouncements={showAnnouncements}
                 onAnnouncementsOpenChange={setShowAnnouncements}
                 showDiscussion={showDiscussion}
