@@ -64,9 +64,9 @@ class IssuedBadgeViewSet(viewsets.ReadOnlyModelViewSet):
 
         return queryset.filter(recipient=self.request.user)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
     def public(self, request):
-        """Public verification endpoint (handled separately strictly speaking, but handy here)."""
+        """Public verification endpoint — anonymous lookup by short_code or verification_code."""
         code = request.query_params.get('code')
         if not code:
             return Response({'error': 'Code required'}, status=400)

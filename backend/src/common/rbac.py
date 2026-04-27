@@ -158,19 +158,24 @@ def get_features_for_user(user) -> dict[str, bool]:
             "view_own_certificates": True,
         }
 
+    is_admin = user.groups.filter(name="admin").exists()
     is_organizer = user.groups.filter(name__in=["organizer", "admin"]).exists()
     is_instructor = user.groups.filter(name__in=["instructor", "admin"]).exists()
     is_creator = is_organizer or is_instructor
 
+    # Group membership is the source of truth (matches the DRF permission
+    # classes in common/permissions.py — IsOrganizerOrAdmin etc.). The
+    # `has_perm` fallback lets per-user grants from Django admin still flow
+    # through for any institution that hasn't run setup_groups yet.
     return {
-        "create_events": user.has_perm("events.can_create_event"),
-        "create_courses": user.has_perm("learning.can_create_course"),
-        "manage_certificates": user.has_perm("certificates.can_issue_certificate"),
+        "create_events": is_organizer or user.has_perm("events.can_create_event"),
+        "create_courses": is_creator or user.has_perm("learning.can_create_course"),
+        "manage_certificates": is_creator or user.has_perm("certificates.can_issue_certificate"),
         "manage_contacts": is_organizer,
         "manage_badges": is_creator,
         "manage_video": is_creator,
-        "manage_users": user.has_perm("accounts.can_manage_users"),
-        "configure_billing": user.has_perm("billing.can_configure_billing"),
+        "manage_users": is_admin or user.has_perm("accounts.can_manage_users"),
+        "configure_billing": is_admin or user.has_perm("billing.can_configure_billing"),
         "browse_events": True,
         "register_for_events": True,
         "view_own_registrations": True,

@@ -8,6 +8,7 @@ from rest_framework import serializers
 
 from badges.models import BadgeTemplate
 from certificates.models import CertificateTemplate
+from common.serializer_fields import IdOrObjectRelatedField
 from common.serializers import BaseModelSerializer, SoftDeleteModelSerializer
 from common.utils import generate_unique_slug
 
@@ -535,7 +536,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
     badge_template = serializers.SlugRelatedField(
         slug_field='uuid', queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
     )
-    speakers = serializers.SlugRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
+    speakers = IdOrObjectRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
     video_settings = VideoSettingsSerializer(required=False)
 
     class Meta:
@@ -628,13 +629,10 @@ class EventUpdateSerializer(serializers.ModelSerializer):
     certificate_template = serializers.SlugRelatedField(
         slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
     )
-    certificate_template = serializers.SlugRelatedField(
-        slug_field='uuid', queryset=CertificateTemplate.objects.all(), required=False, allow_null=True
-    )
     badge_template = serializers.SlugRelatedField(
         slug_field='uuid', queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
     )
-    speakers = serializers.SlugRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
+    speakers = IdOrObjectRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
 
     class Meta:
         model = Event

@@ -120,8 +120,12 @@ const WizardContent = () => {
 
             navigate('/events');
         } catch (error) {
+            // The axios response interceptor (api/client.ts) already surfaces
+            // a field-level error toast with the actual server message — e.g.
+            // "Cannot edit event details after the event has started." — so
+            // adding a generic "Failed to update event" toast here only stacks
+            // a less-useful message on top. Just log for debugging.
             console.error(error);
-            toast.error(isEditMode ? 'Failed to update event. Please try again.' : 'Failed to create event. Please try again.');
         } finally {
             setIsSubmitting(false);
         }

@@ -3,12 +3,36 @@ import { getToken, getRefreshToken, setToken, removeToken } from '@/lib/auth';
 import { ApiErrorResponse } from './types';
 import { toast } from 'sonner';
 
+/**
+ * Error-handling conventions for this client
+ * ------------------------------------------
+ *
+ * The response interceptor below is the SINGLE SOURCE OF TRUTH for error
+ * toasts. For every non-401 error response it shows a toast whose
+ * description comes from `getApiErrorMessage(error)` — which knows how to
+ * format DRF's `{ error: { details: { field: ["msg", ...] } } }` shape into
+ * "Field name: message" lines.
+ *
+ * Callers should NOT add their own `toast.error('Failed to save')` in catch
+ * blocks — that just stacks a less-useful generic message on top of the
+ * field-level one the interceptor already showed. If a caller needs full
+ * control over error UX (e.g. inline form errors), it should pass
+ * `silent: true` on the axios config and then format the error itself with
+ * `getApiErrorMessage()` or `formErrorsFromApi()` (see lib/form-errors.ts).
+ */
 declare module 'axios' {
     export interface AxiosRequestConfig {
         // When true, suppress the global error toast for this request.
+        // Use when the caller wants to surface errors inline (e.g. form
+        // field errors via formErrorsFromApi) instead of as a toast.
         silent?: boolean;
     }
 }
+
+// Maximum length of the toast description. DRF errors that contain a
+// stringified dict (e.g. SlugRelatedField rejecting a nested object) can
+// balloon to several hundred chars; truncating keeps the toast readable.
+const TOAST_DESCRIPTION_MAX = 240;
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
@@ -28,6 +52,7 @@ const PUBLIC_ENDPOINTS = [
     '/auth/password-reset/confirm/',
     '/auth/zoom/login/',
     '/auth/zoom/callback/',
+    '/badges/issued/public/',
 ];
 
 function isPublicEndpoint(url: string | undefined): boolean {
@@ -119,7 +144,7 @@ client.interceptors.response.use(
         // Callers can opt out by setting `silent: true` on the axios config.
         const silent = originalRequest?.silent === true;
         if (error.response && !isPublicEndpoint(originalRequest?.url) && !silent) {
-            const errorMessage = getApiErrorMessage(error);
+            const errorMessage = truncate(getApiErrorMessage(error), TOAST_DESCRIPTION_MAX);
 
             if (error.response.status >= 500) {
                 toast.error('Server Error', {
@@ -139,9 +164,20 @@ client.interceptors.response.use(
     }
 );
 
+/** Truncate a string with an ellipsis if it exceeds `max` chars. */
+function truncate(text: string, max: number): string {
+    if (text.length <= max) return text;
+    return text.slice(0, max - 1).trimEnd() + '…';
+}
+
 /**
  * Extracts a user-friendly error message from an API error response.
  * Handles the standard backend error format: { error: { code, message, details } }
+ *
+ * Use this in any caller that opts out of the global toast (`silent: true`)
+ * and wants to show its own error UI. For inline form-field errors, prefer
+ * `formErrorsFromApi()` from `@/lib/form-errors` which returns a structured
+ * `{ fieldErrors, formErrors }` object you can feed directly into a form.
  */
 export function getApiErrorMessage(error: unknown): string {
     if (axios.isAxiosError(error) && error.response?.data) {

@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { useCurrentUser } from './useCurrentUser';
@@ -74,36 +75,87 @@ export function useAuth(): UseAuthReturn {
         ? userQuery.isLoading || manifestQuery.isLoading
         : deploymentQuery.isLoading;
 
-    return {
+    // Stabilize the function returns. These are commonly destructured by
+    // consumers and dropped into `useEffect` dependency arrays — recreating
+    // them every render causes infinite re-render/refetch loops at the
+    // call site. Scope each callback to the smallest state it actually
+    // reads so identity only changes when the underlying data changes.
+    const loginAsync = loginMut.mutateAsync;
+    const completeLoginAsync = completeLoginMut.mutateAsync;
+
+    const login = useCallback(async (data: LoginRequest) => {
+        await loginAsync(data);
+    }, [loginAsync]);
+
+    const completeLogin = useCallback(async (access: string, refresh: string) => {
+        await completeLoginAsync({ access, refresh });
+    }, [completeLoginAsync]);
+
+    const hasRoute = useCallback(
+        (routeKey: string) => Boolean(manifest?.routes.includes(routeKey)),
+        [manifest],
+    );
+    const hasFeature = useCallback(
+        (feature: keyof Manifest['features']) => Boolean(manifest?.features[feature]),
+        [manifest],
+    );
+
+    const refreshUser = useCallback(async () => {
+        await queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
+    }, [queryClient]);
+    const refreshManifest = useCallback(async () => {
+        await queryClient.invalidateQueries({ queryKey: authKeys.manifest() });
+    }, [queryClient]);
+    const fetchManifest = refreshManifest;
+
+    const setToken = useCallback(
+        (access: string, refresh: string) => setTokens(access, refresh),
+        [setTokens],
+    );
+    // No-ops kept for shape compatibility — stable identity regardless.
+    const setIsAuthenticated = useCallback(() => undefined, []);
+    const setUser = useCallback(() => undefined, []);
+
+    // Memoize the return object so consumers that destructure it (or pass
+    // it whole into deps) see stable identity unless the underlying state
+    // actually changes.
+    return useMemo<UseAuthReturn>(() => ({
         user: userQuery.data ?? null,
         isAuthenticated,
         isLoading,
         manifest,
         deployment,
 
-        login: async (data) => {
-            await loginMut.mutateAsync(data);
-        },
-        completeLogin: async (access, refresh) => {
-            await completeLoginMut.mutateAsync({ access, refresh });
-        },
+        login,
+        completeLogin,
         logout: logoutCallback,
 
-        hasRoute: (routeKey) => Boolean(manifest?.routes.includes(routeKey)),
-        hasFeature: (feature) => Boolean(manifest?.features[feature]),
+        hasRoute,
+        hasFeature,
 
-        refreshUser: async () => {
-            await queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
-        },
-        refreshManifest: async () => {
-            await queryClient.invalidateQueries({ queryKey: authKeys.manifest() });
-        },
+        refreshUser,
+        refreshManifest,
 
-        setToken: (access, refresh) => setTokens(access, refresh),
-        setIsAuthenticated: () => undefined, // derived from token presence
-        setUser: () => undefined, // owned by RQ cache
-        fetchManifest: async () => {
-            await queryClient.invalidateQueries({ queryKey: authKeys.manifest() });
-        },
-    };
+        setToken,
+        setIsAuthenticated,
+        setUser,
+        fetchManifest,
+    }), [
+        userQuery.data,
+        isAuthenticated,
+        isLoading,
+        manifest,
+        deployment,
+        login,
+        completeLogin,
+        logoutCallback,
+        hasRoute,
+        hasFeature,
+        refreshUser,
+        refreshManifest,
+        setToken,
+        setIsAuthenticated,
+        setUser,
+        fetchManifest,
+    ]);
 }
