@@ -21,20 +21,20 @@ import {
     FeedbackFieldInput,
     FeedbackFieldType,
 } from '@/api/feedback/types';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/shared/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Input } from '@/shared/ui/input';
+import { Label } from '@/shared/ui/label';
+import { Switch } from '@/shared/ui/switch';
+import { Textarea } from '@/shared/ui/textarea';
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+} from '@/shared/ui/select';
+import { ConfirmDialog } from '@/shared/ui/confirm-dialog';
 
 const FIELD_TYPES: { value: FeedbackFieldType; label: string; needsOptions: boolean }[] = [
     { value: 'rating', label: 'Rating (1–5 stars)', needsOptions: false },

@@ -3,9 +3,9 @@ import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Checkbox } from "@/shared/ui/checkbox";
 import {
   Form,
   FormControl,
@@ -13,13 +13,13 @@ import {
   FormItem,
   FormLabel,
   FormMessage
-} from "@/components/ui/form";
+} from "@/shared/ui/form";
 import { Loader2, Eye, EyeOff } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/features/auth";
 import { toast } from "sonner";
 import { signInWithFirebase } from "@/api/accounts";
 import { getGoogleIdToken, isFirebaseConfigured } from "@/lib/firebase";
-import { useDocumentTitle } from "@/lib/useDocumentTitle";
+import { useDocumentTitle } from "@/shared/hooks/useDocumentTitle";
 
 const formSchema = z.object({
   email: z.string().email({
@@ -159,7 +159,7 @@ export function LoginPage() {
       )}
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-6">
+        <form noValidate onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-6">
           <FormField
             control={form.control as any}
             name="email"
@@ -194,14 +194,19 @@ export function LoginPage() {
                     Forgot password?
                   </Link>
                 </div>
-                <FormControl>
-                  <div className="relative">
+                {/* FormControl uses Radix Slot — its id/aria props go to the
+                    *immediate* child. Keep <Input> as that child so the label
+                    association is correct, and overlay the show/hide toggle
+                    via absolute positioning on a sibling. */}
+                <div className="relative">
+                  <FormControl>
                     <Input
                       type={showPassword ? "text" : "password"}
                       autoComplete="current-password"
                       placeholder="••••••••"
                       {...field}
                     />
+                  </FormControl>
                     <Button
                       type="button"
                       variant="ghost"
@@ -218,8 +223,7 @@ export function LoginPage() {
                         {showPassword ? "Hide password" : "Show password"}
                       </span>
                     </Button>
-                  </div>
-                </FormControl>
+                </div>
                 <FormMessage />
               </FormItem>
             )}

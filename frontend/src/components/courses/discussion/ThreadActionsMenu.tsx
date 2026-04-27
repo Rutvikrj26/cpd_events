@@ -1,13 +1,13 @@
 import React from 'react';
 import { Pin, PinOff, Lock, Unlock, EyeOff, Eye, Trash2, MoreVertical } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/ui/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@/shared/ui/dropdown-menu';
 import { DiscussionThreadList } from '@/api/courses';
 
 interface ThreadActionsMenuProps {

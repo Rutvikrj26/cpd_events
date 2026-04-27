@@ -1,15 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
-import { queryKeys } from '@/lib/queryClient';
 import { getEvent } from '../services';
 import type { Event } from '../types';
+import { eventKeys } from './queryKeys';
 
 /**
- * Hook to fetch a single event by UUID
+ * useEvent — fetch a single event by UUID. Disabled when `uuid` is
+ * undefined so consumers can call it before route params resolve.
  */
 export function useEvent(uuid: string | undefined) {
-    return useQuery<Event, Error>({
-        queryKey: queryKeys.events.detail(uuid ?? ''),
+    return useQuery<Event>({
+        queryKey: uuid ? eventKeys.detail(uuid) : ['events', 'detail', 'noop'],
         queryFn: () => getEvent(uuid!),
-        enabled: !!uuid, // Only fetch when uuid is provided
+        enabled: Boolean(uuid),
+        staleTime: 1000 * 30,
     });
 }

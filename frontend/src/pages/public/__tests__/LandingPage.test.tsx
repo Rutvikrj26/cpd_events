@@ -15,7 +15,9 @@ describe("LandingPage", () => {
     it("renders hero section with main headline", () => {
         renderLandingPage();
 
-        expect(screen.getByText(/professional development/i)).toBeInTheDocument();
+        // "Professional development" appears in both the hero headline
+        // and a section header — match all occurrences and assert ≥ 1.
+        expect(screen.getAllByText(/professional development/i).length).toBeGreaterThan(0);
         expect(screen.getByText(/for learners/i)).toBeInTheDocument();
         expect(screen.getByText(/for providers/i)).toBeInTheDocument();
     });

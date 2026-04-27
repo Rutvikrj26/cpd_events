@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/ui/button';
 import { EventWizardProvider, useEventWizard, WizardStep } from './EventWizardContext';
 import { StepBasicInfo } from './steps/StepBasicInfo';
 import { StepSchedule } from './steps/StepSchedule';

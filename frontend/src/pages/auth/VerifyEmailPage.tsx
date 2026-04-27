@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, CheckCircle, XCircle, Eye, EyeOff, Lock } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useAuth } from "@/contexts/AuthContext";
+import { Card, CardContent } from "@/shared/ui/card";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
+import { useAuth } from "@/features/auth";
 import { verifyEmail, confirmPasswordReset } from "@/api/accounts";
 import { toast } from "sonner";
 
@@ -167,7 +167,7 @@ export function VerifyEmailPage() {
                             </p>
                         </div>
 
-                        <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                        <form noValidate onSubmit={handlePasswordSubmit} className="space-y-4">
                             <div className="space-y-2">
                                 <Label htmlFor="password">Password</Label>
                                 <div className="relative">

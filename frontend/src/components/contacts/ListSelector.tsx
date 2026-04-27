@@ -5,11 +5,11 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
+} from '@/shared/ui/select';
+import { Button } from '@/shared/ui/button';
 import { Plus, Users, Share2 } from 'lucide-react';
 import { ContactList } from '@/api/contacts';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/shared/ui/badge';
 
 interface ListSelectorProps {
     lists: ContactList[];

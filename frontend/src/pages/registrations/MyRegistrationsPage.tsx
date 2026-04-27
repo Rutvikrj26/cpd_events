@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { getMyRegistrations, linkRegistrations } from '@/api/registrations';
+import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { linkRegistrations } from '@/api/registrations';
 import { Registration } from '@/api/registrations/types';
-import { getEnrollments } from '@/api/courses';
+import { useMyRegistrations, eventKeys } from '@/features/events';
+import { useEnrollments, courseKeys } from '@/features/courses';
 import {
     Calendar,
     CheckCircle,
@@ -20,7 +22,7 @@ import {
     ArrowRight,
 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/ui/button';
 import {
     Card,
     CardContent,
@@ -28,15 +30,15 @@ import {
     CardFooter,
     CardHeader,
     CardTitle,
-} from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+} from '@/shared/ui/card';
+import { Progress } from '@/shared/ui/progress';
+import { Separator } from '@/shared/ui/separator';
+import { Badge } from '@/shared/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { toast } from 'sonner';
 import { FeedbackModal } from '@/components/feedback';
 import { getRegistrationFeedback } from '@/api/feedback';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/features/auth';
 import { formatDate } from '@/lib/datetime';
 import { deriveProgressDisplay, formatProgressSubtitle } from '@/lib/progress';
 import { FormatBadge } from '@/components/courses/FormatBadge';
@@ -45,9 +47,10 @@ import { format } from 'date-fns';
 
 export const MyLearningPage = () => {
     const { user } = useAuth();
-    const [registrations, setRegistrations] = useState<Registration[]>([]);
-    const [enrollments, setEnrollments] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
+    const { data: registrations = [], isLoading: loadingRegs } = useMyRegistrations();
+    const { data: enrollments = [], isLoading: loadingEnrolls } = useEnrollments();
+    const loading = loadingRegs || loadingEnrolls;
     const [linking, setLinking] = useState(false);
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -59,44 +62,31 @@ export const MyLearningPage = () => {
     const [existingFeedback, setExistingFeedback] = useState<EventFeedback | null>(null);
     const [feedbackMap, setFeedbackMap] = useState<Record<string, boolean>>({});
 
-    const checkFeedbackStatus = async (regs: Registration[]) => {
-        const pastEvents = regs.filter(r =>
-            r.attended || new Date(r.event.starts_at) < new Date()
+    // Whenever registrations change (initial load or refetch), refresh
+    // feedback availability for past events.
+    useEffect(() => {
+        if (registrations.length === 0) return;
+        const pastEvents = registrations.filter(
+            (r) => r.attended || new Date(r.event.starts_at) < new Date()
         );
-
-        const feedbackChecks = await Promise.all(
+        Promise.all(
             pastEvents.map(async (reg) => {
                 const feedback = await getRegistrationFeedback(reg.uuid);
                 return { uuid: reg.uuid, hasFeedback: !!feedback };
             })
-        );
-
-        const map: Record<string, boolean> = {};
-        feedbackChecks.forEach(({ uuid, hasFeedback }) => {
-            map[uuid] = hasFeedback;
+        ).then((results) => {
+            const map: Record<string, boolean> = {};
+            results.forEach(({ uuid, hasFeedback }) => {
+                map[uuid] = hasFeedback;
+            });
+            setFeedbackMap(map);
         });
-        setFeedbackMap(map);
-    };
+    }, [registrations]);
 
-    const fetchAll = async () => {
-        try {
-            const [regsResp, enrolls] = await Promise.all([
-                getMyRegistrations(),
-                getEnrollments(),
-            ]);
-            setRegistrations(regsResp.results);
-            setEnrollments(enrolls);
-            checkFeedbackStatus(regsResp.results);
-        } catch (error) {
-            console.error('Failed to load learning data', error);
-        } finally {
-            setLoading(false);
-        }
+    const refetchAll = () => {
+        queryClient.invalidateQueries({ queryKey: eventKeys.myRegistrations() });
+        queryClient.invalidateQueries({ queryKey: courseKeys.enrollments() });
     };
-
-    useEffect(() => {
-        fetchAll();
-    }, []);
 
     const handleOpenFeedback = async (reg: Registration) => {
         setSelectedRegistration(reg);
@@ -156,7 +146,7 @@ export const MyLearningPage = () => {
             const result = await linkRegistrations();
             if (result.linked_count > 0) {
                 toast.success(`Found and linked ${result.linked_count} event${result.linked_count > 1 ? 's' : ''} to your account!`);
-                await fetchAll();
+                refetchAll();
             } else {
                 toast.info('No additional events found to link to your account.');
             }

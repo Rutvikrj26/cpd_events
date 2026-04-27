@@ -6,7 +6,7 @@
 // the earliest upcoming non-attended-eligibly session. Avoids per-card N+1
 // queries.
 
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/shared/ui/badge';
 import { Calendar, Radio, Video } from 'lucide-react';
 
 interface FormatBadgeProps {

@@ -1,6 +1,6 @@
 import { MessageSquare, Star, Users } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Progress } from '@/shared/ui/progress';
 import { RatingDisplay } from './StarRating';
 import { FeedbackSummary as FeedbackSummaryData } from '@/api/feedback/types';
 

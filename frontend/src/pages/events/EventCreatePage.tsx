@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader } from '@/shared/ui/page-header';
 import { EventWizard } from '@/components/events/wizard/EventWizard';
 import { getEvent } from '@/api/events';
 import { toast } from 'sonner';

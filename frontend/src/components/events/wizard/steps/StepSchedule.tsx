@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useEventWizard } from '../EventWizardContext';
-import { DateTimePicker } from '@/components/ui/date-time-picker';
+import { DateTimePicker } from '@/shared/ui/date-time-picker';
 import { Clock, Plus, Edit2, Trash2, GripVertical, Users } from 'lucide-react';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { Label } from '@/shared/ui/label';
+import { Switch } from '@/shared/ui/switch';
+import { Button } from '@/shared/ui/button';
+import { Card, CardContent } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { Input } from '@/shared/ui/input';
 import { SessionEditor } from '../SessionEditor';
 import { SessionFormData } from '@/api/events/types';
 

@@ -4,16 +4,16 @@ import { Award, BadgeCheck, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/custom/PageHeader';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/shared/ui/card';
+import { Input } from '@/shared/ui/input';
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
+} from '@/shared/ui/select';
+import { Badge } from '@/shared/ui/badge';
 import { getOrganizationCertificates } from '@/api/certificates';
 import { getIssuedBadgesByMe } from '@/api/badges';
 

@@ -5,10 +5,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import { useDocumentTitle } from "@/lib/useDocumentTitle";
+import { useDocumentTitle } from "@/shared/hooks/useDocumentTitle";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
 import {
     Form,
     FormControl,
@@ -16,8 +16,8 @@ import {
     FormItem,
     FormLabel,
     FormMessage,
-} from "@/components/ui/form";
-import { useAuth } from "@/contexts/AuthContext";
+} from "@/shared/ui/form";
+import { useAuth } from "@/features/auth";
 import { signup, signInWithFirebase } from "@/api/accounts";
 import { getGoogleIdToken, isFirebaseConfigured } from "@/lib/firebase";
 
@@ -153,7 +153,7 @@ export function SignupPage() {
             )}
 
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-4">
+                <form noValidate onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-4">
                     <FormField
                         control={form.control as any}
                         name="full_name"

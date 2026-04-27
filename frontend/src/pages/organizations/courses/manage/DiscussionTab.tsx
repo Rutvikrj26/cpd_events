@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { Flag, Loader2, ShieldCheck, ShieldOff } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/shared/ui/button';
+import { Badge } from '@/shared/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { toast } from 'sonner';
 import { listOpenFlags, resolveFlag, DiscussionFlag } from '@/api/courses';
 import { DiscussionPanel } from '@/components/courses/discussion/DiscussionPanel';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/features/auth';
 
 interface DiscussionTabProps {
     courseUuid: string;

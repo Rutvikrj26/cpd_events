@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, UserCheck, AlertTriangle, Clock } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/shared/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select';
+} from '@/shared/ui/select';
 import { toast } from 'sonner';
 
 export interface UnmatchedParticipant {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 // TAGGING-DISABLED: Link + TagIcon imports removed while tag UI is hidden.
 // import { Link } from "react-router-dom";
 import {
@@ -14,8 +14,8 @@ import {
     Trash2,
     // Tag as TagIcon, // TAGGING-DISABLED
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
 import {
     Table,
     TableBody,
@@ -23,7 +23,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@/shared/ui/table";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -31,19 +31,15 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { PageHeader } from "@/components/ui/page-header";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+} from "@/shared/ui/dropdown-menu";
+import { PageHeader } from "@/shared/ui/page-header";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { Badge } from "@/shared/ui/badge";
+import { Card, CardContent } from "@/shared/ui/card";
 import { toast } from "sonner";
-import {
-    getContacts,
-    // getTags, // TAGGING-DISABLED: UI hidden while feature is deferred
-    exportContacts,
-    Contact,
-    // Tag, // TAGGING-DISABLED
-} from "@/api/contacts";
+import { exportContacts, type Contact } from "@/api/contacts";
+import { useContacts } from "@/features/contacts";
+import { useDebounce } from "@/shared/hooks";
 import {
     ContactFormDialog,
     DeleteContactDialog,
@@ -53,11 +49,16 @@ import {
 
 export function ContactsPage() {
     const [searchTerm, setSearchTerm] = useState("");
-    const [contacts, setContacts] = useState<Contact[]>([]);
-    // TAGGING-DISABLED: tag state retained as comments for easy restore.
-    // const [tags, setTags] = useState<Tag[]>([]);
-    const [loading, setLoading] = useState(true);
-    // const [selectedTagUuids, setSelectedTagUuids] = useState<string[]>([]);
+    const debouncedSearch = useDebounce(searchTerm, 250);
+
+    // Build params reactively — empty string means "no filter".
+    const queryParams = useMemo(() => {
+        const params: Record<string, string> = {};
+        if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
+        return params;
+    }, [debouncedSearch]);
+
+    const { data: contacts = [], isLoading: loading } = useContacts(queryParams);
 
     // Dialog states
     const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -66,51 +67,6 @@ export function ContactsPage() {
     const [importDialogOpen, setImportDialogOpen] = useState(false);
     const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
     const [exporting, setExporting] = useState(false);
-
-    useEffect(() => {
-        fetchData();
-    }, []);
-
-    // TAGGING-DISABLED: tag-filter effect removed.
-    // useEffect(() => { fetchContacts(searchTerm, undefined /* TAGGING-DISABLED: selectedTagUuids */); }, [selectedTagUuids]);
-
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const contactsRes = await getContacts();
-            setContacts(contactsRes.results);
-            // TAGGING-DISABLED: tag fetch removed. Restore with getTags() + setTags.
-        } catch (error) {
-            console.error("Failed to fetch contacts data", error);
-            toast.error("Failed to load contacts.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchContacts = async (search?: string, tagUuids?: string[]) => {
-        setLoading(true);
-        try {
-            const params: Record<string, string> = {};
-            if (search) params.search = search;
-            // TAGGING-DISABLED: tag filter param dropped.
-            // if (tagUuids && tagUuids.length > 0) { params.tags = tagUuids.join(','); }
-            const response = await getContacts(params);
-            setContacts(response.results);
-        } catch (error) {
-            console.error("Failed to fetch contacts", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSearch = (term: string) => {
-        setSearchTerm(term);
-        fetchContacts(term, undefined /* TAGGING-DISABLED: selectedTagUuids */);
-    };
-
-    // TAGGING-DISABLED: handler unused while tag filter is hidden.
-    // const handleTagsChange = (uuids: string[]) => { setSelectedTagUuids(uuids); };
 
     const handleExport = async () => {
         setExporting(true);
@@ -136,18 +92,6 @@ export function ContactsPage() {
     const handleDelete = (contact: Contact) => {
         setSelectedContact(contact);
         setDeleteDialogOpen(true);
-    };
-
-    const handleContactSaved = () => {
-        fetchContacts(searchTerm, undefined /* TAGGING-DISABLED: selectedTagUuids */);
-    };
-
-    const handleContactDeleted = () => {
-        fetchContacts(searchTerm, undefined /* TAGGING-DISABLED: selectedTagUuids */);
-    };
-
-    const handleImportComplete = () => {
-        fetchContacts(searchTerm, undefined /* TAGGING-DISABLED: selectedTagUuids */);
     };
 
     return (
@@ -187,7 +131,7 @@ export function ContactsPage() {
                                 placeholder="Search contacts..."
                                 className="pl-9 bg-background"
                                 value={searchTerm}
-                                onChange={(e) => handleSearch(e.target.value)}
+                                onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
                         {/* TAGGING-DISABLED: restore TagFilter when re-enabling.
@@ -333,7 +277,6 @@ export function ContactsPage() {
             <ContactFormDialog
                 open={addDialogOpen}
                 onOpenChange={setAddDialogOpen}
-                onSuccess={handleContactSaved}
             />
             <ContactFormDialog
                 open={editDialogOpen}
@@ -342,7 +285,6 @@ export function ContactsPage() {
                     if (!open) setSelectedContact(null);
                 }}
                 contact={selectedContact}
-                onSuccess={handleContactSaved}
             />
             <DeleteContactDialog
                 open={deleteDialogOpen}
@@ -351,12 +293,10 @@ export function ContactsPage() {
                     if (!open) setSelectedContact(null);
                 }}
                 contact={selectedContact}
-                onSuccess={handleContactDeleted}
             />
             <ImportDialog
                 open={importDialogOpen}
                 onOpenChange={setImportDialogOpen}
-                onSuccess={handleImportComplete}
             />
         </div>
     );

@@ -22,10 +22,10 @@ import {
    Plug,
    Video as VideoIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Textarea } from "@/shared/ui/textarea";
+import { Switch } from "@/shared/ui/switch";
 import {
    Form,
    FormControl,
@@ -34,14 +34,14 @@ import {
    FormItem,
    FormLabel,
    FormMessage
-} from "@/components/ui/form";
+} from "@/shared/ui/form";
 import {
    Card,
    CardContent,
    CardDescription,
    CardHeader,
    CardTitle
-} from "@/components/ui/card";
+} from "@/shared/ui/card";
 import {
    Dialog,
    DialogContent,
@@ -49,22 +49,22 @@ import {
    DialogFooter,
    DialogHeader,
    DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+} from "@/shared/ui/dialog";
+import { Label } from "@/shared/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar";
+import { Separator } from "@/shared/ui/separator";
+import { Badge } from "@/shared/ui/badge";
+import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { PageHeader } from "@/components/custom/PageHeader";
 import { getCurrentUser, updateProfile, changePassword, getNotificationPreferences, updateNotificationPreferences, exportUserData, deleteAccount, requestEmailChange } from "@/api/accounts";
 import { User as UserType, NotificationPreferences } from "@/api/accounts/types";
 import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/features/auth";
 import { getPayoutsDashboardLink, getPayoutsStatus, initiatePayoutsConnect, PayoutsStatus } from "@/api/payouts";
 import { getRoleFlags } from "@/lib/role-utils";
 import { ActiveSessionsTab } from "@/components/settings/ActiveSessionsTab";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 
 // Schema for General Profile
 const profileSchema = z.object({
@@ -462,7 +462,7 @@ export function ProfileSettings() {
                            <Separator />
 
                            <Form {...profileForm}>
-                              <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
+                              <form noValidate onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField
                                        control={profileForm.control}
@@ -564,7 +564,7 @@ export function ProfileSettings() {
                         </CardHeader>
                         <CardContent>
                            <Form {...securityForm}>
-                              <form onSubmit={securityForm.handleSubmit(onSecuritySubmit)} className="space-y-4">
+                              <form noValidate onSubmit={securityForm.handleSubmit(onSecuritySubmit)} className="space-y-4">
                                  <FormField
                                     control={securityForm.control}
                                     name="current_password"
@@ -917,7 +917,7 @@ export function ProfileSettings() {
                      We'll send a confirmation link to the new address. The change only takes effect after you click that link.
                   </DialogDescription>
                </DialogHeader>
-               <form onSubmit={handleRequestEmailChange} className="space-y-4">
+               <form noValidate onSubmit={handleRequestEmailChange} className="space-y-4">
                   {emailChangeError && (
                      <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
                         {emailChangeError}

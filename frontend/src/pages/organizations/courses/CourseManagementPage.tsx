@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/ui/button';
 import { PageHeader } from '@/components/custom/PageHeader';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { CurriculumTab } from "./manage/CurriculumTab";
 import { OverviewTab } from "./manage/OverviewTab";
 import { EnrollmentsTab } from "./manage/EnrollmentsTab";

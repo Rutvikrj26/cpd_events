@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/components/ui/use-toast';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Button } from '@/shared/ui/button';
+import { Badge } from '@/shared/ui/badge';
+import { useToast } from '@/shared/ui/use-toast';
 import { Loader2, DollarSign, RotateCcw, TrendingUp, GraduationCap, Award, Percent } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '@/lib/queryClient';
 import { updateEvent, deleteEvent } from '../services';
 import type { Event, EventUpdateRequest } from '../types';
+import { eventKeys } from './queryKeys';
 
 interface UpdateEventVariables {
     uuid: string;
@@ -9,33 +9,31 @@ interface UpdateEventVariables {
 }
 
 /**
- * Hook for updating an event with automatic cache invalidation
+ * useUpdateEvent — PATCH + invalidate list + invalidate the specific
+ * event's detail. Refetched automatically by any mounted consumer.
  */
 export function useUpdateEvent() {
     const queryClient = useQueryClient();
-
     return useMutation<Event, Error, UpdateEventVariables>({
         mutationFn: ({ uuid, data }) => updateEvent(uuid, data),
         onSuccess: (_, { uuid }) => {
-            // Invalidate both the list and the specific event
-            queryClient.invalidateQueries({ queryKey: queryKeys.events.list() });
-            queryClient.invalidateQueries({ queryKey: queryKeys.events.detail(uuid) });
+            queryClient.invalidateQueries({ queryKey: eventKeys.all });
+            queryClient.invalidateQueries({ queryKey: eventKeys.detail(uuid) });
         },
     });
 }
 
 /**
- * Hook for deleting an event with automatic cache invalidation
+ * useDeleteEvent — DELETE + remove from cache so a redirect away from
+ * the now-gone detail page doesn't show stale data on bfcache hit.
  */
 export function useDeleteEvent() {
     const queryClient = useQueryClient();
-
     return useMutation<void, Error, string>({
         mutationFn: deleteEvent,
         onSuccess: (_, uuid) => {
-            // Invalidate list and remove the specific event from cache
-            queryClient.invalidateQueries({ queryKey: queryKeys.events.list() });
-            queryClient.removeQueries({ queryKey: queryKeys.events.detail(uuid) });
+            queryClient.invalidateQueries({ queryKey: eventKeys.all });
+            queryClient.removeQueries({ queryKey: eventKeys.detail(uuid) });
         },
     });
 }

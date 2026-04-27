@@ -1,233 +1,184 @@
-import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Calendar, Award, Clock, Video, GraduationCap, ExternalLink } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { DashboardStat } from "@/components/dashboard/DashboardStats";
-import { PageHeader } from "@/components/ui/page-header";
-import { getMyRegistrations } from "@/api/registrations";
-import { Registration } from "@/api/registrations/types";
-import { getMyCertificates } from "@/api/certificates";
-import { Certificate } from "@/api/certificates/types";
-import { useAuth } from "@/contexts/AuthContext";
+import {
+    ArrowRight,
+    Award,
+    BookOpen,
+    Calendar,
+    GraduationCap,
+    PlayCircle,
+    Sparkles,
+} from "lucide-react";
+import { Button } from "@/shared/ui/button";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { CardRow, AvatarTile } from "@/shared/components";
+import { useAuth } from "@/features/auth";
+import {
+    HeroBand,
+    MiniStat,
+    SectionHeader,
+    DashboardSkeleton,
+    useAttendeeDashboard,
+    type ResumeCandidate,
+} from "@/features/dashboard";
+import { RegistrationRow } from "@/features/events";
 
 const TITLE_PREFIXES = new Set([
-  'dr', 'dr.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.',
-  'prof', 'prof.', 'professor', 'sir', 'madam', 'rev', 'rev.',
+    'dr', 'dr.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.',
+    'prof', 'prof.', 'professor', 'sir', 'madam', 'rev', 'rev.',
 ]);
 
 function friendlyFirstName(fullName?: string | null): string {
-  if (!fullName) return '';
-  const parts = fullName.trim().split(/\s+/);
-  const first = parts.find(p => !TITLE_PREFIXES.has(p.toLowerCase()) && p.length > 1);
-  return (first || parts[0] || '').replace(/,$/, '');
+    if (!fullName) return '';
+    const parts = fullName.trim().split(/\s+/);
+    const first = parts.find((p) => !TITLE_PREFIXES.has(p.toLowerCase()) && p.length > 1);
+    return (first || parts[0] || '').replace(/,$/, '');
 }
 
 export function AttendeeDashboard() {
-  const { user } = useAuth();
-  const [registrations, setRegistrations] = useState<Registration[]>([]);
-  const [certificates, setCertificates] = useState<Certificate[]>([]);
-  const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
+    const dashboard = useAttendeeDashboard();
+    const firstName = friendlyFirstName(user?.full_name) || 'there';
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // Fetch the certificate list separately so the "Earned & Ready"
-        // dashboard tile reflects the same count the /certificates page
-        // shows (filtered by `is_valid`) — registration.certificate_issued
-        // stays true even after revocation, so it overcounts. (QA F-25)
-        const [regData, certData] = await Promise.all([
-          getMyRegistrations(),
-          getMyCertificates().catch(() => ({ results: [] as Certificate[] })),
-        ]);
-        setRegistrations(regData.results);
-        setCertificates(certData.results ?? []);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data", error);
-      } finally {
-        setLoading(false);
-      }
+    if (dashboard.isLoading) {
+        return <DashboardSkeleton />;
     }
-    fetchData();
-  }, []);
 
-  // Only count confirmed registrations toward credits + upcoming counters.
-  // Waitlisted / cancelled / pending-payment rows otherwise inflate the
-  // dashboard and surface as "Join Session" CTAs the learner can't use.
-  const confirmedRegs = registrations.filter(r => r.status === 'confirmed');
-  const stats = {
-    totalCredits: confirmedRegs
-      .filter(r => r.attended || new Date(r.event.starts_at) <= new Date())
-      .reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
-    certificates: certificates.filter(c => c.is_valid !== false && c.status !== 'revoked').length,
-    upcomingEvents: confirmedRegs.filter(r => new Date(r.event.starts_at) > new Date()).length,
-    learningHours: confirmedRegs
-      .filter(r => r.attended)
-      .reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
-  };
+    const { resumeTarget, stats, upcomingRegistrations, recentCertificates } = dashboard;
 
-  const upcomingRegistrations = confirmedRegs
-    .filter(r => new Date(r.event.starts_at) > new Date())
-    .sort((a, b) => new Date(a.event.starts_at).getTime() - new Date(b.event.starts_at).getTime());
-
-  const recentCertificates = registrations
-    .filter(r => r.certificate_issued)
-    .sort((a, b) => new Date(b.certificate_issued_at || 0).getTime() - new Date(a.certificate_issued_at || 0).getTime())
-    .slice(0, 3);
-
-  if (loading) {
-    return <div className="p-8 flex items-center justify-center min-h-[50vh] text-muted-foreground animate-pulse">Loading dashboard...</div>;
-  }
-
-  return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
-      {/* Welcome Header */}
-      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary to-primary/80 p-8 text-white shadow-lg">
-        <div className="relative z-10">
-          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {friendlyFirstName(user?.full_name) || 'Professional'}!</h1>
-          <p className="mt-2 text-primary-foreground/90 max-w-xl">
-            Track your professional development, manage upcoming events, and view your earned certificates.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Button asChild variant="secondary" className="font-semibold shadow-sm">
-              <Link to="/registrations">My Learning</Link>
-            </Button>
-            <Button asChild variant="outline" className="bg-transparent text-white border-white/30 hover:bg-card/10 hover:text-white hover:border-white/50">
-              <Link to="/settings">View Profile</Link>
-            </Button>
-          </div>
-        </div>
-        {/* Decorative background element */}
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-card/10 blur-3xl"></div>
-        <div className="absolute bottom-0 right-20 -mb-10 h-40 w-40 rounded-full bg-primary/20 blur-2xl"></div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <DashboardStat
-          title="Total Credits"
-          value={stats.totalCredits}
-          icon={Award}
-          description="CPD credits earned"
-          className="border-primary/10 bg-primary/5"
-        />
-        <DashboardStat
-          title="Certificates"
-          value={stats.certificates}
-          icon={GraduationCap}
-          description="Earned & Ready"
-        />
-        <DashboardStat
-          title="Upcoming Events"
-          value={stats.upcomingEvents}
-          icon={Calendar}
-          description="Registered events"
-        />
-        <DashboardStat
-          title="Learning Hours"
-          value={stats.learningHours}
-          icon={Clock}
-          description="Total time invested"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Column: Upcoming Events */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold tracking-tight text-foreground">Your Upcoming Events</h2>
-            {upcomingRegistrations.length > 0 && (
-              <Button variant="link" asChild className="text-primary p-0 h-auto font-medium">
-                <Link to="/registrations">View All</Link>
-              </Button>
+    return (
+        <div className="space-y-block animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {resumeTarget ? (
+                <HeroBand
+                    eyebrow={`Welcome back, ${firstName}`}
+                    title="Continue where you left off"
+                    description={resumeTarget.courseTitle}
+                    progressPercent={resumeTarget.progressPercent}
+                    actions={[
+                        {
+                            label: <><PlayCircle className="mr-2 h-5 w-5" /> Resume course</>,
+                            to: `/learn/${resumeTarget.courseUuid}`,
+                            primary: true,
+                        },
+                        {
+                            label: <>My learning <ArrowRight className="ml-1 h-4 w-4" /></>,
+                            to: '/registrations',
+                        },
+                    ]}
+                />
+            ) : (
+                <HeroBand
+                    eyebrow={`Hello, ${firstName}`}
+                    title="Ready to learn something new?"
+                    description="Explore the course catalog or browse upcoming events to start earning CPD credits."
+                    actions={[
+                        { label: 'Browse courses', to: '/courses', primary: true },
+                        {
+                            label: <>Find an event <ArrowRight className="ml-1 h-4 w-4" /></>,
+                            to: '/events',
+                        },
+                    ]}
+                />
             )}
-          </div>
 
-          {upcomingRegistrations.length === 0 ? (
-            <Card className="border-dashed border-2 bg-muted/50 shadow-none border-border">
-              <CardContent className="flex flex-col items-center justify-center p-12 text-center">
-                <div className="p-4 bg-card rounded-full shadow-sm mb-4">
-                  <Calendar className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <h3 className="text-lg font-medium text-foreground">No upcoming events</h3>
-                <p className="text-muted-foreground mt-2 max-w-sm">
-                  You haven't registered for any upcoming events yet. Explore our catalog to find your next learning opportunity.
-                </p>
-                <Button asChild className="mt-6">
-                  <Link to="/events">Browse Events Catalog</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {upcomingRegistrations.map((reg) => (
-                <div key={reg.uuid} className="group relative overflow-hidden rounded-xl border border-border/60 bg-card p-5 shadow-sm transition-all hover:shadow-md hover:border-primary/20">
-                  <div className="flex flex-col sm:flex-row gap-5">
-                    {/* Date Badge */}
-                    <div className="flex flex-col items-center justify-center rounded-lg bg-primary/10 p-3 min-w-[80px] text-center border border-primary/20">
-                      <span className="text-xs font-bold uppercase text-primary">
-                        {new Date(reg.event.starts_at).toLocaleString('default', { month: 'short' })}
-                      </span>
-                      <span className="text-2xl font-bold text-primary">
-                        {new Date(reg.event.starts_at).getDate()}
-                      </span>
-                      <span className="text-xs text-primary/80 mt-1 font-medium">
-                        {new Date(reg.event.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-
-                    {/* Event Details */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                            <Link to={`/events/${reg.event.slug || reg.event.uuid}/details`}>
-                              <span className="absolute inset-0" aria-hidden="true" />
-                              {reg.event.title}
-                            </Link>
-                          </h3>
-                          <div className="flex flex-wrap items-center gap-2 mt-2">
-                            <Badge variant="secondary" className="text-xs font-medium">
-                              {reg.event.event_type}
-                            </Badge>
-                            <span className="text-muted-foreground/60 text-xs">•</span>
-                            <span className="text-xs font-medium text-muted-foreground flex items-center">
-                              <Award className="h-3 w-3 mr-1 text-amber-500" />
-                              {reg.event.cpd_credit_value} CPD Credits
-                            </span>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="icon" className="shrink-0 z-10 relative text-muted-foreground hover:text-primary hover:bg-primary/10">
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      {/* Action Area */}
-                      <div className="mt-4 flex items-center gap-3 relative z-10">
-                        <Button size="sm" className="h-8 shadow-sm" asChild>
-                          <Link to={`/events/${reg.event.uuid}/lobby`}>
-                            <Video className="h-3 w-3 mr-1" /> Go to lobby
-                          </Link>
-                        </Button>
-                        <Button variant="outline" size="sm" className="h-8" asChild>
-                          <Link to={`/events/${reg.event.slug || reg.event.uuid}/details`}>View Details</Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="grid grid-cols-2 gap-tight lg:grid-cols-4">
+                <MiniStat label="Active courses" value={stats.activeCourses} icon={BookOpen} tone="primary" />
+                <MiniStat label="Upcoming events" value={stats.upcomingEvents} icon={Calendar} tone="warning" />
+                <MiniStat label="Certificates" value={stats.certificates} icon={GraduationCap} tone="success" />
+                <MiniStat label="CPD credits" value={stats.totalCredits} icon={Award} tone="muted" />
             </div>
-          )}
-        </div>
 
-        {/* Side Column */}
-        <div className="space-y-6">
-        </div>
-      </div>
+            <div className="grid grid-cols-1 gap-card lg:grid-cols-3">
+                <div className="space-y-card lg:col-span-2">
+                    <SectionHeader
+                        title="Up next this week"
+                        link={
+                            upcomingRegistrations.length > 0
+                                ? { to: '/registrations', label: 'View all' }
+                                : undefined
+                        }
+                    />
+                    {upcomingRegistrations.length === 0 ? (
+                        <EmptyState
+                            tone="dashed"
+                            icon={Calendar}
+                            title="No upcoming events"
+                            description="Browse the catalog to find your next learning opportunity."
+                            action={
+                                <Button asChild>
+                                    <Link to="/events">Browse events</Link>
+                                </Button>
+                            }
+                        />
+                    ) : (
+                        <div className="space-y-tight">
+                            {upcomingRegistrations.slice(0, 4).map((reg) => (
+                                <RegistrationRow key={reg.uuid} reg={reg} />
+                            ))}
+                        </div>
+                    )}
+                </div>
 
-    </div>
-  );
+                <div className="space-y-card">
+                    <SectionHeader
+                        title="Recently earned"
+                        link={
+                            recentCertificates.length > 0
+                                ? { to: '/certificates', label: 'See all' }
+                                : undefined
+                        }
+                    />
+                    {recentCertificates.length === 0 ? (
+                        <EmptyState
+                            tone="muted"
+                            icon={Sparkles}
+                            title="No certificates yet"
+                            description="Complete a course or attend an event to earn your first certificate."
+                            className="min-h-[14rem]"
+                        />
+                    ) : (
+                        <div className="space-y-tight">
+                            {recentCertificates.map((cert: any) => (
+                                <RecentCertificateRow key={cert.uuid || cert.id} cert={cert} />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 }
+
+/* ------------------------------------------------------------------ */
+/* Page-local row composers — bind to certificate shape. If they      */
+/* recur, promote to features/dashboard/components/.                   */
+/* ------------------------------------------------------------------ */
+
+function RecentCertificateRow({ cert }: { cert: any }) {
+    const issued = cert.issued_at || cert.created_at;
+    const issuedLabel = issued
+        ? new Date(issued).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+          })
+        : 'Recently';
+    const title = cert.title || cert.event_title || cert.course_title || 'Certificate';
+    return (
+        <CardRow
+            density="compact"
+            leading={<AvatarTile icon={GraduationCap} tone="success" />}
+            title={title}
+            subtitle={`Issued ${issuedLabel}`}
+            trailing={
+                <Button size="sm" variant="ghost" asChild>
+                    <Link to={`/certificates/${cert.uuid || cert.id}`} aria-label={`View ${title}`}>
+                        <ArrowRight className="h-4 w-4" />
+                    </Link>
+                </Button>
+            }
+        />
+    );
+}
+
+// Suppress "unused" warning kept here for the type re-export.
+export type { ResumeCandidate };

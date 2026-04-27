@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Video, Loader2, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/shared/ui/dialog';
 import { joinEventVideo, joinCourseSessionVideo } from '@/api/video';
 import { VideoRoom } from './VideoRoom';
 

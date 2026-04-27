@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { ArrowLeft, Loader2, Save, Video } from 'lucide-react';
+import { ArrowLeft, Loader2, Video } from 'lucide-react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 
 import { formatCompletionCriteria } from '@/lib/completion-criteria';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/ui/button';
 import {
     Form,
     FormControl,
@@ -18,63 +15,36 @@ import {
     FormItem,
     FormLabel,
     FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+} from '@/shared/ui/form';
+import { Input } from '@/shared/ui/input';
 import {
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-} from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
+} from '@/shared/ui/card';
+import { Switch } from '@/shared/ui/switch';
+import { Separator } from '@/shared/ui/separator';
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select';
-import { useToast } from '@/components/ui/use-toast';
-import { createCourse } from '@/api/courses';
+} from '@/shared/ui/select';
+import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
+import { useToast } from '@/shared/ui/use-toast';
+import { useZodForm } from '@/shared/lib/forms';
+import {
+    createCourseSchema,
+    useCreateCourse,
+    useCreateCourseSession,
+    type CreateCourseFormValues,
+} from '@/features/courses';
 import { getAvailableCertificateTemplates, CertificateTemplate } from '@/api/certificates';
 import { getBadgeTemplates, BadgeTemplate } from '@/api/badges';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { SessionScheduler, SessionDraft } from '@/components/courses/SessionScheduler';
-
-// Schema for course creation
-const courseSchema = z.object({
-    title: z.string().min(3, { message: 'Title must be at least 3 characters' }),
-    slug: z.string().min(3, { message: 'Slug must be at least 3 characters' })
-        .regex(/^[a-z0-9-]+$/, { message: 'Slug can only contain lowercase letters, numbers, and hyphens' }),
-    short_description: z.string().max(300, { message: 'Short description limited to 300 characters' }).optional(),
-    description: z.string().optional(),
-    cpd_credits: z.coerce.number().min(0).default(0),
-    is_public: z.boolean().default(true),
-    price_cents: z.coerce.number().min(0).default(0),
-    enrollment_open: z.boolean().default(true),
-    estimated_hours: z.coerce.number().min(0).optional(),
-    // Format: Online = self-paced; Live = lectures only; Hybrid = both
-    format: z.enum(['online', 'live', 'hybrid']).default('online'),
-    // Hybrid completion
-    hybrid_completion_criteria: z.enum(['modules_only', 'sessions_only', 'both', 'either', 'min_sessions']).optional(),
-    min_sessions_required: z.coerce.number().min(1).default(1),
-    // Live session scheduling
-    live_session_start: z.string().optional(),
-    live_session_end: z.string().optional(),
-    live_session_timezone: z.string().default('UTC'),
-    // Certificate & Badge settings
-    certificates_enabled: z.boolean().default(false),
-    certificate_template: z.string().uuid().optional().nullable(),
-    auto_issue_certificates: z.boolean().default(true),
-    badges_enabled: z.boolean().default(false),
-    badge_template: z.string().uuid().optional().nullable(),
-    auto_issue_badges: z.boolean().default(true),
-});
-
-type CourseFormValues = z.infer<typeof courseSchema>;
 
 const CreateCoursePage = () => {
     const { slug } = useParams<{ slug?: string }>();
@@ -82,11 +52,12 @@ const CreateCoursePage = () => {
     const { toast } = useToast();
     const isPersonal = !slug;
 
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const createCourse = useCreateCourse();
+    const createCourseSession = useCreateCourseSession();
+
     const [submitError, setSubmitError] = useState<string | null>(null);
 
-    const form = useForm<CourseFormValues>({
-        resolver: zodResolver(courseSchema) as any,
+    const form = useZodForm(createCourseSchema, {
         defaultValues: {
             title: '',
             slug: '',
@@ -102,7 +73,8 @@ const CreateCoursePage = () => {
             min_sessions_required: 1,
             live_session_start: '',
             live_session_end: '',
-            live_session_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+            live_session_timezone:
+                Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
             certificates_enabled: false,
             certificate_template: null,
             auto_issue_certificates: true,
@@ -112,15 +84,13 @@ const CreateCoursePage = () => {
         },
     });
 
-
     const [certTemplates, setCertTemplates] = useState<CertificateTemplate[]>([]);
     const [badgeTemplates, setBadgeTemplates] = useState<BadgeTemplate[]>([]);
     const [loadingCerts, setLoadingCerts] = useState(false);
     const [loadingBadges, setLoadingBadges] = useState(false);
-    // Sessions for hybrid courses (stored locally until course is created)
+    // Sessions for hybrid courses (stored locally until course is created).
     const [scheduledSessions, setScheduledSessions] = useState<SessionDraft[]>([]);
 
-    // Fetch templates
     React.useEffect(() => {
         async function fetchTemplates() {
             setLoadingCerts(true);
@@ -148,10 +118,10 @@ const CreateCoursePage = () => {
 
     const courseFormat = form.watch('format');
 
-    // Auto-generate slug from title
+    // Auto-generate slug from title until the slug field is touched manually.
     const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const title = e.target.value;
-        form.setValue('title', title);
+        form.setValue('title', title, { shouldValidate: true });
 
         if (!form.getFieldState('slug').isTouched) {
             const generatedSlug = title
@@ -159,82 +129,98 @@ const CreateCoursePage = () => {
                 .replace(/[^a-z0-9\s-]/g, '')
                 .trim()
                 .replace(/\s+/g, '-');
-            form.setValue('slug', generatedSlug);
+            form.setValue('slug', generatedSlug, { shouldValidate: true });
         }
     };
 
-    const onSubmit = async (values: CourseFormValues) => {
-        setIsSubmitting(true);
+    const onSubmit = async (values: CreateCourseFormValues) => {
         setSubmitError(null);
 
-        // Hard-block: live and hybrid courses must have at least one session
-        if ((values.format === 'live' || values.format === 'hybrid') && scheduledSessions.length === 0) {
-            setIsSubmitting(false);
+        // Hard-block: live and hybrid courses must have at least one session.
+        // This constraint references SessionScheduler state which lives
+        // outside the form, so it stays as an imperative guard.
+        if (
+            (values.format === 'live' || values.format === 'hybrid') &&
+            scheduledSessions.length === 0
+        ) {
             setSubmitError('Add at least one live session before saving this course.');
             return;
         }
 
-        // Sanitize date fields: remove empty strings to avoid backend validation error
+        // Sanitize date fields: empty strings would fail backend validation.
         const cleanValues = { ...values };
         if (!cleanValues.live_session_start) delete (cleanValues as any).live_session_start;
         if (!cleanValues.live_session_end) delete (cleanValues as any).live_session_end;
 
-        // Default completion criteria for live-only courses to sessions_only
+        // Default completion criteria for live-only courses to sessions_only.
         if (cleanValues.format === 'live' && !cleanValues.hybrid_completion_criteria) {
             cleanValues.hybrid_completion_criteria = 'sessions_only';
         }
 
         try {
-            const course = await createCourse({
+            const course = await createCourse.mutateAsync({
                 ...(isPersonal ? {} : { organization_slug: slug }),
                 ...cleanValues,
-                // Backend computes is_free from price_cents
             });
 
-            // For live and hybrid courses, create the scheduled sessions
-            if ((values.format === 'live' || values.format === 'hybrid') && scheduledSessions.length > 0) {
-                const { createCourseSession } = await import('@/api/courses');
-
+            // For live and hybrid courses, persist the scheduled sessions.
+            if (
+                (values.format === 'live' || values.format === 'hybrid') &&
+                scheduledSessions.length > 0
+            ) {
                 for (let i = 0; i < scheduledSessions.length; i++) {
                     const session = scheduledSessions[i];
                     try {
-                        await createCourseSession(course.uuid, {
-                            title: session.title,
-                            description: session.description,
-                            order: i + 1,
-                            session_type: session.session_type,
-                            starts_at: session.starts_at,
-                            duration_minutes: session.duration_minutes,
-                            timezone: session.timezone,
-                            cpd_credits: session.cpd_credits,
-                            is_mandatory: session.is_mandatory,
-                            minimum_attendance_percent: session.minimum_attendance_percent,
-                            is_published: true,
+                        await createCourseSession.mutateAsync({
+                            courseUuid: course.uuid,
+                            data: {
+                                title: session.title,
+                                description: session.description,
+                                order: i + 1,
+                                session_type: session.session_type,
+                                starts_at: session.starts_at,
+                                duration_minutes: session.duration_minutes,
+                                timezone: session.timezone,
+                                cpd_credits: session.cpd_credits,
+                                is_mandatory: session.is_mandatory,
+                                minimum_attendance_percent:
+                                    session.minimum_attendance_percent,
+                                is_published: true,
+                            },
                         });
                     } catch (sessionError) {
-                        console.error(`Failed to create session ${session.title}:`, sessionError);
-                        // Continue creating other sessions even if one fails
+                        console.error(
+                            `Failed to create session ${session.title}:`,
+                            sessionError,
+                        );
+                        // Continue creating other sessions even if one fails.
                     }
                 }
             }
 
             toast({
-                title: "Course created",
-                description: (values.format === 'live' || values.format === 'hybrid') && scheduledSessions.length > 0
-                    ? `Your course and ${scheduledSessions.length} session(s) have been created.`
-                    : "Your course has been created successfully.",
+                title: 'Course created',
+                description:
+                    (values.format === 'live' || values.format === 'hybrid') &&
+                    scheduledSessions.length > 0
+                        ? `Your course and ${scheduledSessions.length} session(s) have been created.`
+                        : 'Your course has been created successfully.',
             });
 
-            // Navigate to course management/builder
             navigate(`/courses/manage/${course.slug}`);
-
         } catch (error: any) {
             console.error('Failed to create course:', error);
-            setSubmitError(error.response?.data?.message || 'Failed to create course. Please try again.');
-        } finally {
-            setIsSubmitting(false);
+            setSubmitError(
+                error.response?.data?.message ||
+                    'Failed to create course. Please try again.',
+            );
         }
     };
+
+    const isSubmitting =
+        createCourse.isPending ||
+        createCourseSession.isPending ||
+        form.formState.isSubmitting;
 
     return (
         <div className="container mx-auto py-8 px-4 max-w-3xl">
@@ -248,7 +234,9 @@ const CreateCoursePage = () => {
                     Back to Courses
                 </Button>
                 <h1 className="text-3xl font-bold tracking-tight">Create New Course</h1>
-                <p className="text-muted-foreground mt-1">Start by defining the basics of your course.</p>
+                <p className="text-muted-foreground mt-1">
+                    Start by defining the basics of your course.
+                </p>
             </div>
 
             {submitError && (
@@ -259,8 +247,7 @@ const CreateCoursePage = () => {
             )}
 
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-
+                <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-8">
                     <Card>
                         <CardHeader>
                             <CardTitle>Course Details</CardTitle>
@@ -270,7 +257,7 @@ const CreateCoursePage = () => {
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="title"
                                 render={({ field }) => (
                                     <FormItem>
@@ -291,7 +278,7 @@ const CreateCoursePage = () => {
                             />
 
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="slug"
                                 render={({ field }) => (
                                     <FormItem>
@@ -313,13 +300,16 @@ const CreateCoursePage = () => {
                             />
 
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="short_description"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Short Description</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="Brief summary for course cards (max 300 chars)" {...field} />
+                                            <Input
+                                                placeholder="Brief summary for course cards (max 300 chars)"
+                                                {...field}
+                                            />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -327,7 +317,7 @@ const CreateCoursePage = () => {
                             />
 
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="description"
                                 render={({ field }) => (
                                     <FormItem>
@@ -336,7 +326,7 @@ const CreateCoursePage = () => {
                                             <ReactQuill
                                                 theme="snow"
                                                 className="mb-4"
-                                                {...field}
+                                                value={field.value ?? ''}
                                                 onChange={(content) => field.onChange(content)}
                                             />
                                         </FormControl>
@@ -357,7 +347,7 @@ const CreateCoursePage = () => {
                         <CardContent className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <FormField
-                                    control={form.control}
+                                    control={form.control as any}
                                     name="cpd_credits"
                                     render={({ field }) => (
                                         <FormItem>
@@ -368,7 +358,9 @@ const CreateCoursePage = () => {
                                                     step="0.5"
                                                     min="0"
                                                     {...field}
-                                                    onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                                    onChange={(e) =>
+                                                        field.onChange(parseFloat(e.target.value) || 0)
+                                                    }
                                                 />
                                             </FormControl>
                                             <FormDescription>
@@ -380,7 +372,7 @@ const CreateCoursePage = () => {
                                 />
 
                                 <FormField
-                                    control={form.control}
+                                    control={form.control as any}
                                     name="estimated_hours"
                                     render={({ field }) => (
                                         <FormItem>
@@ -391,7 +383,9 @@ const CreateCoursePage = () => {
                                                     step="0.5"
                                                     min="0"
                                                     {...field}
-                                                    onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                                    onChange={(e) =>
+                                                        field.onChange(parseFloat(e.target.value) || 0)
+                                                    }
                                                 />
                                             </FormControl>
                                             <FormDescription>
@@ -406,14 +400,17 @@ const CreateCoursePage = () => {
                             <Separator />
 
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="is_public"
                                 render={({ field }) => (
                                     <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                                         <div className="space-y-0.5">
-                                            <FormLabel className="text-base">Public Visibility</FormLabel>
+                                            <FormLabel className="text-base">
+                                                Public Visibility
+                                            </FormLabel>
                                             <FormDescription>
-                                                Make this course visible in your organization's public catalog.
+                                                Make this course visible in your organization's
+                                                public catalog.
                                             </FormDescription>
                                         </div>
                                         <FormControl>
@@ -427,12 +424,14 @@ const CreateCoursePage = () => {
                             />
 
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="enrollment_open"
                                 render={({ field }) => (
                                     <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                                         <div className="space-y-0.5">
-                                            <FormLabel className="text-base">Open for Enrollment</FormLabel>
+                                            <FormLabel className="text-base">
+                                                Open for Enrollment
+                                            </FormLabel>
                                             <FormDescription>
                                                 Allow users to enroll in this course.
                                             </FormDescription>
@@ -459,7 +458,7 @@ const CreateCoursePage = () => {
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="format"
                                 render={({ field }) => (
                                     <FormItem>
@@ -468,14 +467,18 @@ const CreateCoursePage = () => {
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                                 <Button
                                                     type="button"
-                                                    variant={field.value === 'online' ? 'default' : 'outline'}
+                                                    variant={
+                                                        field.value === 'online' ? 'default' : 'outline'
+                                                    }
                                                     onClick={() => field.onChange('online')}
                                                 >
                                                     Online (Self-Paced)
                                                 </Button>
                                                 <Button
                                                     type="button"
-                                                    variant={field.value === 'live' ? 'default' : 'outline'}
+                                                    variant={
+                                                        field.value === 'live' ? 'default' : 'outline'
+                                                    }
                                                     onClick={() => field.onChange('live')}
                                                 >
                                                     <Video className="mr-2 h-4 w-4" />
@@ -483,7 +486,9 @@ const CreateCoursePage = () => {
                                                 </Button>
                                                 <Button
                                                     type="button"
-                                                    variant={field.value === 'hybrid' ? 'default' : 'outline'}
+                                                    variant={
+                                                        field.value === 'hybrid' ? 'default' : 'outline'
+                                                    }
                                                     onClick={() => field.onChange('hybrid')}
                                                 >
                                                     <Video className="mr-2 h-4 w-4" />
@@ -492,15 +497,17 @@ const CreateCoursePage = () => {
                                             </div>
                                         </FormControl>
                                         <FormDescription>
-                                            {courseFormat === 'online' && 'Self-paced modules — learners progress on their own time.'}
-                                            {courseFormat === 'live' && 'Live lectures only — no self-paced modules.'}
-                                            {courseFormat === 'hybrid' && 'Self-paced modules plus scheduled live lectures.'}
+                                            {courseFormat === 'online' &&
+                                                'Self-paced modules — learners progress on their own time.'}
+                                            {courseFormat === 'live' &&
+                                                'Live lectures only — no self-paced modules.'}
+                                            {courseFormat === 'hybrid' &&
+                                                'Self-paced modules plus scheduled live lectures.'}
                                         </FormDescription>
                                         <FormMessage />
                                     </FormItem>
                                 )}
                             />
-
 
                             {/* Live Session Settings — shown for Live and Hybrid */}
                             {(courseFormat === 'live' || courseFormat === 'hybrid') && (
@@ -527,7 +534,7 @@ const CreateCoursePage = () => {
 
                                     <div className="pt-4 border-t mt-4">
                                         <FormField
-                                            control={form.control}
+                                            control={form.control as any}
                                             name="hybrid_completion_criteria"
                                             render={({ field }) => (
                                                 <FormItem>
@@ -545,16 +552,40 @@ const CreateCoursePage = () => {
                                                         <SelectContent>
                                                             {courseFormat === 'live' ? (
                                                                 <>
-                                                                    <SelectItem value="sessions_only">{formatCompletionCriteria('sessions_only')}</SelectItem>
-                                                                    <SelectItem value="min_sessions">{formatCompletionCriteria('min_sessions', form.watch('min_sessions_required') as number)}</SelectItem>
+                                                                    <SelectItem value="sessions_only">
+                                                                        {formatCompletionCriteria('sessions_only')}
+                                                                    </SelectItem>
+                                                                    <SelectItem value="min_sessions">
+                                                                        {formatCompletionCriteria(
+                                                                            'min_sessions',
+                                                                            form.watch(
+                                                                                'min_sessions_required',
+                                                                            ) as number,
+                                                                        )}
+                                                                    </SelectItem>
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    <SelectItem value="both">{formatCompletionCriteria('both')}</SelectItem>
-                                                                    <SelectItem value="modules_only">{formatCompletionCriteria('modules_only')}</SelectItem>
-                                                                    <SelectItem value="sessions_only">{formatCompletionCriteria('sessions_only')}</SelectItem>
-                                                                    <SelectItem value="either">{formatCompletionCriteria('either')}</SelectItem>
-                                                                    <SelectItem value="min_sessions">{formatCompletionCriteria('min_sessions', form.watch('min_sessions_required') as number)}</SelectItem>
+                                                                    <SelectItem value="both">
+                                                                        {formatCompletionCriteria('both')}
+                                                                    </SelectItem>
+                                                                    <SelectItem value="modules_only">
+                                                                        {formatCompletionCriteria('modules_only')}
+                                                                    </SelectItem>
+                                                                    <SelectItem value="sessions_only">
+                                                                        {formatCompletionCriteria('sessions_only')}
+                                                                    </SelectItem>
+                                                                    <SelectItem value="either">
+                                                                        {formatCompletionCriteria('either')}
+                                                                    </SelectItem>
+                                                                    <SelectItem value="min_sessions">
+                                                                        {formatCompletionCriteria(
+                                                                            'min_sessions',
+                                                                            form.watch(
+                                                                                'min_sessions_required',
+                                                                            ) as number,
+                                                                        )}
+                                                                    </SelectItem>
                                                                 </>
                                                             )}
                                                         </SelectContent>
@@ -567,23 +598,31 @@ const CreateCoursePage = () => {
                                             )}
                                         />
 
-                                        {form.watch('hybrid_completion_criteria') === 'min_sessions' && (
+                                        {form.watch('hybrid_completion_criteria') ===
+                                            'min_sessions' && (
                                             <FormField
-                                                control={form.control}
+                                                control={form.control as any}
                                                 name="min_sessions_required"
                                                 render={({ field }) => (
                                                     <FormItem className="mt-4">
-                                                        <FormLabel>Minimum Sessions Required</FormLabel>
+                                                        <FormLabel>
+                                                            Minimum Sessions Required
+                                                        </FormLabel>
                                                         <FormControl>
                                                             <Input
                                                                 type="number"
                                                                 min={1}
                                                                 {...field}
-                                                                onChange={e => field.onChange(parseInt(e.target.value))}
+                                                                onChange={(e) =>
+                                                                    field.onChange(
+                                                                        parseInt(e.target.value, 10),
+                                                                    )
+                                                                }
                                                             />
                                                         </FormControl>
                                                         <FormDescription>
-                                                            Number of live sessions a learner must attend.
+                                                            Number of live sessions a learner must
+                                                            attend.
                                                         </FormDescription>
                                                         <FormMessage />
                                                     </FormItem>
@@ -593,7 +632,6 @@ const CreateCoursePage = () => {
                                     </div>
                                 </div>
                             )}
-
                         </CardContent>
                     </Card>
 
@@ -609,14 +647,17 @@ const CreateCoursePage = () => {
                             {/* Certificate Section */}
                             <div className="space-y-4">
                                 <FormField
-                                    control={form.control}
+                                    control={form.control as any}
                                     name="certificates_enabled"
                                     render={({ field }) => (
                                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                                             <div className="space-y-0.5">
-                                                <FormLabel className="text-base">Enable Certificates</FormLabel>
+                                                <FormLabel className="text-base">
+                                                    Enable Certificates
+                                                </FormLabel>
                                                 <FormDescription>
-                                                    Issue a PDF certificate when learners complete the course.
+                                                    Issue a PDF certificate when learners complete the
+                                                    course.
                                                 </FormDescription>
                                             </div>
                                             <FormControl>
@@ -632,7 +673,7 @@ const CreateCoursePage = () => {
                                 {form.watch('certificates_enabled') && (
                                     <div className="pl-6 border-l-2 border-slate-100 ml-2 space-y-4">
                                         <FormField
-                                            control={form.control}
+                                            control={form.control as any}
                                             name="certificate_template"
                                             render={({ field }) => (
                                                 <FormItem>
@@ -643,11 +684,17 @@ const CreateCoursePage = () => {
                                                     >
                                                         <FormControl>
                                                             <SelectTrigger>
-                                                                <SelectValue placeholder={loadingCerts ? "Loading..." : "Select a template"} />
+                                                                <SelectValue
+                                                                    placeholder={
+                                                                        loadingCerts
+                                                                            ? 'Loading...'
+                                                                            : 'Select a template'
+                                                                    }
+                                                                />
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
-                                                            {certTemplates.map(t => (
+                                                            {certTemplates.map((t) => (
                                                                 <SelectItem key={t.uuid} value={t.uuid}>
                                                                     {t.name}
                                                                 </SelectItem>
@@ -660,14 +707,15 @@ const CreateCoursePage = () => {
                                         />
 
                                         <FormField
-                                            control={form.control}
+                                            control={form.control as any}
                                             name="auto_issue_certificates"
                                             render={({ field }) => (
                                                 <FormItem className="flex flex-row items-center justify-between">
                                                     <div className="space-y-0.5">
                                                         <FormLabel>Auto-issue Certificate</FormLabel>
                                                         <FormDescription className="text-xs">
-                                                            Issue automatically upon 100% course completion.
+                                                            Issue automatically upon 100% course
+                                                            completion.
                                                         </FormDescription>
                                                     </div>
                                                     <FormControl>
@@ -688,14 +736,17 @@ const CreateCoursePage = () => {
                             {/* Badge Section */}
                             <div className="space-y-4">
                                 <FormField
-                                    control={form.control}
+                                    control={form.control as any}
                                     name="badges_enabled"
                                     render={({ field }) => (
                                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                                             <div className="space-y-0.5">
-                                                <FormLabel className="text-base">Enable Digital Badges</FormLabel>
+                                                <FormLabel className="text-base">
+                                                    Enable Digital Badges
+                                                </FormLabel>
                                                 <FormDescription>
-                                                    Award a verifiable digital badge for course completion.
+                                                    Award a verifiable digital badge for course
+                                                    completion.
                                                 </FormDescription>
                                             </div>
                                             <FormControl>
@@ -711,7 +762,7 @@ const CreateCoursePage = () => {
                                 {form.watch('badges_enabled') && (
                                     <div className="pl-6 border-l-2 border-slate-100 ml-2 space-y-4">
                                         <FormField
-                                            control={form.control}
+                                            control={form.control as any}
                                             name="badge_template"
                                             render={({ field }) => (
                                                 <FormItem>
@@ -722,11 +773,17 @@ const CreateCoursePage = () => {
                                                     >
                                                         <FormControl>
                                                             <SelectTrigger>
-                                                                <SelectValue placeholder={loadingBadges ? "Loading..." : "Select a template"} />
+                                                                <SelectValue
+                                                                    placeholder={
+                                                                        loadingBadges
+                                                                            ? 'Loading...'
+                                                                            : 'Select a template'
+                                                                    }
+                                                                />
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
-                                                            {badgeTemplates.map(t => (
+                                                            {badgeTemplates.map((t) => (
                                                                 <SelectItem key={t.uuid} value={t.uuid}>
                                                                     {t.name}
                                                                 </SelectItem>
@@ -739,14 +796,15 @@ const CreateCoursePage = () => {
                                         />
 
                                         <FormField
-                                            control={form.control}
+                                            control={form.control as any}
                                             name="auto_issue_badges"
                                             render={({ field }) => (
                                                 <FormItem className="flex flex-row items-center justify-between">
                                                     <div className="space-y-0.5">
                                                         <FormLabel>Auto-issue Badge</FormLabel>
                                                         <FormDescription className="text-xs">
-                                                            Issue automatically upon 100% course completion.
+                                                            Issue automatically upon 100% course
+                                                            completion.
                                                         </FormDescription>
                                                     </div>
                                                     <FormControl>
@@ -765,7 +823,11 @@ const CreateCoursePage = () => {
                     </Card>
 
                     <div className="flex justify-end gap-4">
-                        <Button type="button" variant="outline" onClick={() => navigate(`/courses/manage`)}>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => navigate(`/courses/manage`)}
+                        >
                             Cancel
                         </Button>
                         <Button type="submit" disabled={isSubmitting}>

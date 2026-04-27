@@ -10,10 +10,10 @@ import {
     XCircle,
     Download
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import { Badge } from "@/shared/ui/badge";
 import {
     Table,
     TableBody,
@@ -21,7 +21,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@/shared/ui/table";
 import { toast } from "sonner";
 import { getIssuedBadgesByMe } from "@/api/badges";
 import { IssuedBadge } from "@/api/badges/types";

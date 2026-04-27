@@ -1,37 +1,38 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster as SonnerToaster } from "sonner";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { ProtectedRoute } from "@/features/auth";
+import { ProtectedRoute, BrandTheme } from "@/features/auth";
 import { AuthenticatedRoot } from "@/components/auth/AuthenticatedRoot";
+import { lazyNamed } from "@/shared/lib";
+import { Loader2 } from "lucide-react";
 
+/** Generic suspense fallback while a route chunk loads. */
+function RouteFallback() {
+    return (
+        <div className="flex h-screen w-full items-center justify-center" role="status" aria-label="Loading">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" strokeWidth={1.75} />
+        </div>
+    );
+}
 
-// Layouts
+// Layouts (eagerly imported — needed on initial render)
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { AuthLayout } from './components/layout/AuthLayout';
+import { PublicLayout } from './components/layout/PublicLayout';
 import ScrollToTop from './components/layout/ScrollToTop';
 
-// Legal Pages
-import { NotFoundPage } from './pages/NotFoundPage';
-import { TermsPage } from './pages/public/TermsPage';
-import { PrivacyPage } from './pages/public/PrivacyPage';
-import { CookiePolicyPage } from './pages/public/CookiePolicyPage';
-import { PublicLayout } from './components/layout/PublicLayout';
+import { ThemeBootstrap } from "@/app/providers/ThemeBootstrap";
+import { DialogHost } from "@/app/providers/DialogHost";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-// Learner browsing (reused from public pages, now behind auth)
-import { EventDetail } from './pages/public/EventDetail';
-import { EventDiscovery } from './pages/public/EventDiscovery';
-import { EventRegistration } from './pages/public/EventRegistration';
-import { EventLobbyPage } from './pages/events/EventLobbyPage';
-import { EventRecordingPage } from './pages/events/EventRecordingPage';
-import { CourseSessionLobbyPage } from './pages/courses/CourseSessionLobbyPage';
-import { CourseSessionRecordingPage } from './pages/courses/CourseSessionRecordingPage';
-import { CheckoutCancel, CheckoutSuccess } from './pages/public/CheckoutReturn';
-import { PublicCourseDetailPage } from './pages/courses/PublicCourseDetailPage';
-import { ProgramDiscoveryPage } from './pages/public/ProgramDiscoveryPage';
-import { PublicProgramDetailPage } from './pages/programs/PublicProgramDetailPage';
+/* ------------------------------------------------------------------ */
+/* Lazy-loaded pages (P2 — every route imports its chunk on demand).  */
+/* Auth + 404 stay eager because they're tiny and on the cold-load   */
+/* path. Everything else splits into its own chunk.                  */
+/* ------------------------------------------------------------------ */
 
-// Auth Pages
+// Auth (eager — fast cold-start)
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { SignupPage } from "@/pages/auth/SignupPage";
 import { VerifyEmailPage } from "@/pages/auth/VerifyEmailPage";
@@ -40,67 +41,78 @@ import { ForgotPasswordPage } from "@/pages/auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "@/pages/auth/ResetPasswordPage";
 import { AcceptInvitationPage } from "@/pages/auth/AcceptInvitationPage";
 import { ConfirmEmailChangePage } from "@/pages/auth/ConfirmEmailChangePage";
+import { NotFoundPage } from './pages/NotFoundPage';
 
-// Dashboard Pages
-import { DashboardPage } from './pages/dashboard/DashboardPage';
-import { EventsPage } from './pages/events/EventsPage';
-import { EventCreatePage } from './pages/events/EventCreatePage';
-import { EventDetailPage } from './pages/events/EventDetailPage';
-import { MyLearningPage } from './pages/registrations/MyRegistrationsPage';
-import { CertificatesPage } from './pages/certificates/CertificatesPage';
-import { CertificateVerify } from './pages/certificates/CertificateVerify';
+// Legal (lazy)
+const TermsPage = lazyNamed(() => import('./pages/public/TermsPage'), 'TermsPage');
+const PrivacyPage = lazyNamed(() => import('./pages/public/PrivacyPage'), 'PrivacyPage');
+const CookiePolicyPage = lazyNamed(() => import('./pages/public/CookiePolicyPage'), 'CookiePolicyPage');
 
-// Shared Dashboard Pages
-import { Notifications } from './pages/dashboard/Notifications';
-import { ProfileSettings } from './pages/dashboard/ProfileSettings';
+// Public / Discovery (lazy)
+const EventDetail = lazyNamed(() => import('./pages/public/EventDetail'), 'EventDetail');
+const EventDiscovery = lazyNamed(() => import('./pages/public/EventDiscovery'), 'EventDiscovery');
+const EventRegistration = lazyNamed(() => import('./pages/public/EventRegistration'), 'EventRegistration');
+const EventLobbyPage = lazyNamed(() => import('./pages/events/EventLobbyPage'), 'EventLobbyPage');
+const EventRecordingPage = lazyNamed(() => import('./pages/events/EventRecordingPage'), 'EventRecordingPage');
+const CourseSessionLobbyPage = lazyNamed(() => import('./pages/courses/CourseSessionLobbyPage'), 'CourseSessionLobbyPage');
+const CourseSessionRecordingPage = lazyNamed(() => import('./pages/courses/CourseSessionRecordingPage'), 'CourseSessionRecordingPage');
+const CheckoutCancel = lazyNamed(() => import('./pages/public/CheckoutReturn'), 'CheckoutCancel');
+const CheckoutSuccess = lazyNamed(() => import('./pages/public/CheckoutReturn'), 'CheckoutSuccess');
+const PublicCourseDetailPage = lazyNamed(() => import('./pages/courses/PublicCourseDetailPage'), 'PublicCourseDetailPage');
+const ProgramDiscoveryPage = lazyNamed(() => import('./pages/public/ProgramDiscoveryPage'), 'ProgramDiscoveryPage');
+const PublicProgramDetailPage = lazyNamed(() => import('./pages/programs/PublicProgramDetailPage'), 'PublicProgramDetailPage');
+const PublicBadgePage = lazyNamed(() => import('./pages/badges/PublicBadgePage'), 'PublicBadgePage');
+const CertificateVerify = lazyNamed(() => import('./pages/certificates/CertificateVerify'), 'CertificateVerify');
 
-// Learner Pages
-import { MyEvents } from './pages/dashboard/attendee/MyEvents';
-import { CPDTracking } from './pages/dashboard/attendee/CPDTracking';
-import { CoursePlayerPage } from './pages/courses/CoursePlayerPage';
+// Dashboard / Learner (lazy — heavy)
+const DashboardPage = lazyNamed(() => import('./pages/dashboard/DashboardPage'), 'DashboardPage');
+const EventsPage = lazyNamed(() => import('./pages/events/EventsPage'), 'EventsPage');
+const EventCreatePage = lazyNamed(() => import('./pages/events/EventCreatePage'), 'EventCreatePage');
+const EventDetailPage = lazyNamed(() => import('./pages/events/EventDetailPage'), 'EventDetailPage');
+const MyLearningPage = lazyNamed(() => import('./pages/registrations/MyRegistrationsPage'), 'MyLearningPage');
+const CertificatesPage = lazyNamed(() => import('./pages/certificates/CertificatesPage'), 'CertificatesPage');
+const Notifications = lazyNamed(() => import('./pages/dashboard/Notifications'), 'Notifications');
+const ProfileSettings = lazyNamed(() => import('./pages/dashboard/ProfileSettings'), 'ProfileSettings');
+const MyEvents = lazyNamed(() => import('./pages/dashboard/attendee/MyEvents'), 'MyEvents');
+const CPDTracking = lazyNamed(() => import('./pages/dashboard/attendee/CPDTracking'), 'CPDTracking');
+const CoursePlayerPage = lazyNamed(() => import('./pages/courses/CoursePlayerPage'), 'CoursePlayerPage');
+const MyBadgesPage = lazyNamed(() => import('./pages/badges/MyBadgesPage'), 'MyBadgesPage');
+const MyAccreditationsPage = lazyNamed(() => import('./pages/accreditations/MyAccreditationsPage'), 'MyAccreditationsPage');
+const MyProgramsPage = lazyNamed(() => import('./pages/programs/MyProgramsPage'), 'MyProgramsPage');
 
-// Organizer Pages
-import { ContactsPage } from './pages/dashboard/organizer/ContactsPage';
-// TAGGING-DISABLED: restore TagLibraryPage import when re-enabling tag UI.
-// import { TagLibraryPage } from './pages/dashboard/organizer/TagLibraryPage';
-import { ReportsPage } from './pages/dashboard/organizer/ReportsPage';
-import { EventManagement } from './pages/dashboard/organizer/EventManagement';
-import { OrganizerAccreditationsPage } from './pages/dashboard/organizer/OrganizerAccreditationsPage';
-import PromoCodesPage from './pages/dashboard/organizer/PromoCodesPage';
-import SpeakersPage from './pages/dashboard/organizer/SpeakersPage';
-import { PublicBadgePage } from './pages/badges/PublicBadgePage';
-import { MyBadgesPage } from './pages/badges/MyBadgesPage';
-import { MyAccreditationsPage } from './pages/accreditations/MyAccreditationsPage';
-import { MyProgramsPage } from './pages/programs/MyProgramsPage';
+// Organizer (lazy — heavy)
+const ContactsPage = lazyNamed(() => import('./pages/dashboard/organizer/ContactsPage'), 'ContactsPage');
+const ReportsPage = lazyNamed(() => import('./pages/dashboard/organizer/ReportsPage'), 'ReportsPage');
+const EventManagement = lazyNamed(() => import('./pages/dashboard/organizer/EventManagement'), 'EventManagement');
+const OrganizerAccreditationsPage = lazyNamed(() => import('./pages/dashboard/organizer/OrganizerAccreditationsPage'), 'OrganizerAccreditationsPage');
+const PromoCodesPage = lazy(() => import('./pages/dashboard/organizer/PromoCodesPage'));
+const SpeakersPage = lazy(() => import('./pages/dashboard/organizer/SpeakersPage'));
 
-// Course Pages
-import { CourseCatalogPage } from './pages/courses';
-import OrgCoursesPage from './pages/organizations/courses/OrgCoursesPage';
-import CreateCoursePage from './pages/organizations/courses/CreateCoursePage';
-import { CourseManagementPage } from './pages/organizations/courses/CourseManagementPage';
-import OrgProgramsPage from './pages/organizations/programs/OrgProgramsPage';
-import CreateProgramPage from './pages/organizations/programs/CreateProgramPage';
-import ProgramManagementPage from './pages/organizations/programs/ProgramManagementPage';
+// Course management (lazy — heavy)
+const CourseCatalogPage = lazyNamed(() => import('./pages/courses'), 'CourseCatalogPage');
+const OrgCoursesPage = lazy(() => import('./pages/organizations/courses/OrgCoursesPage'));
+const CreateCoursePage = lazy(() => import('./pages/organizations/courses/CreateCoursePage'));
+const CourseManagementPage = lazyNamed(() => import('./pages/organizations/courses/CourseManagementPage'), 'CourseManagementPage');
+const OrgProgramsPage = lazy(() => import('./pages/organizations/programs/OrgProgramsPage'));
+const CreateProgramPage = lazy(() => import('./pages/organizations/programs/CreateProgramPage'));
+const ProgramManagementPage = lazy(() => import('./pages/organizations/programs/ProgramManagementPage'));
 
-// Admin Pages
-import { UserManagementPage } from './pages/admin/UserManagementPage';
-import { AdminUserDetailPage } from './pages/admin/AdminUserDetailPage';
-import { BillingAdminPage } from './pages/admin/BillingAdminPage';
+// Admin (lazy)
+const UserManagementPage = lazyNamed(() => import('./pages/admin/UserManagementPage'), 'UserManagementPage');
+const AdminUserDetailPage = lazyNamed(() => import('./pages/admin/AdminUserDetailPage'), 'AdminUserDetailPage');
+const BillingAdminPage = lazyNamed(() => import('./pages/admin/BillingAdminPage'), 'BillingAdminPage');
 
-// Onboarding
-import { OnboardingWizard } from './pages/onboarding';
-
-import { ThemeProvider } from "@/components/theme-provider";
-import { InstallPrompt } from "@/components/pwa/InstallPrompt";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
+// Onboarding (lazy)
+const OnboardingWizard = lazyNamed(() => import('./pages/onboarding'), 'OnboardingWizard');
 
 export default function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
-        <BrowserRouter>
+      <ThemeBootstrap />
+      <BrowserRouter>
           <ScrollToTop />
-          <AuthProvider>
+          <BrandTheme />
+            <Suspense fallback={<RouteFallback />}>
             <Routes>
               {/* Root: redirect to dashboard if authenticated, login if not */}
               <Route path="/" element={<AuthenticatedRoot />} />
@@ -244,13 +256,6 @@ export default function App() {
                       <ContactsPage />
                     </ProtectedRoute>
                   } />
-                  {/* TAGGING-DISABLED: restore /organizer/contacts/tags route when re-enabling.
-                  <Route path="/organizer/contacts/tags" element={
-                    <ProtectedRoute requiredFeature="manage_contacts">
-                      <TagLibraryPage />
-                    </ProtectedRoute>
-                  } />
-                  */}
                   {/* Reports page gates its own Events/Courses/Programs tabs based on role;
                       drop the requiredFeature so instructors without create_events can load it. */}
                   <Route path="/organizer/reports" element={<ReportsPage />} />
@@ -307,11 +312,11 @@ export default function App() {
               {/* Fallback — show a real 404 page that preserves auth state */}
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
-          </AuthProvider>
+            </Suspense>
           <SonnerToaster position="top-right" richColors closeButton duration={5000} />
           <InstallPrompt />
+          <DialogHost />
         </BrowserRouter>
-      </ThemeProvider>
     </ErrorBoundary>
   );
 }

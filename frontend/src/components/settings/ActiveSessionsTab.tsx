@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { Loader2, Monitor, Smartphone, Tablet, Globe, LogOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/shared/ui/button";
+import { Badge } from "@/shared/ui/badge";
 import {
    Card,
    CardContent,
    CardDescription,
    CardHeader,
    CardTitle,
-} from "@/components/ui/card";
-import { DataTable, DataTableColumn } from "@/components/ui/data-table";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+} from "@/shared/ui/card";
+import { DataTable, DataTableColumn } from "@/shared/ui/data-table";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { getUserSessions, revokeSession, logoutAllSessions } from "@/api/accounts";
 import { UserSession } from "@/api/accounts/types";
 import { toast } from "sonner";

@@ -68,3 +68,7 @@ export const updateModuleContent = async (courseUuid: string, moduleUuid: string
     const response = await client.patch(`/courses/${courseUuid}/modules/${moduleUuid}/contents/${contentUuid}/`, data, config);
     return response.data;
 };
+
+export const deleteModuleContent = async (courseUuid: string, moduleUuid: string, contentUuid: string): Promise<void> => {
+    await client.delete(`/courses/${courseUuid}/modules/${moduleUuid}/contents/${contentUuid}/`);
+};

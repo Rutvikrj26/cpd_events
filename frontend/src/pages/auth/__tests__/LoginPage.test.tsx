@@ -3,14 +3,22 @@ import { describe, it, expect, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import { LoginPage } from "../LoginPage";
 
-// Mock useAuth hook
-vi.mock("@/contexts/AuthContext", () => ({
+// Mock the auth feature.  The LoginPage now uses BOTH the imperative
+// `useAuth().login` (kept for backward compat) AND the deployment query
+// to gate UI on `registration_mode`. Provide both so the page renders
+// the invitation-only copy expected by these tests.
+vi.mock("@/features/auth", () => ({
     useAuth: () => ({
         login: vi.fn(),
+        deployment: {
+            mode: "single_tenant",
+            registration_mode: "invite_only",
+            institution_name: "Accredit",
+            institution_logo_url: "",
+        },
     }),
 }));
 
-// Mock sonner toast
 vi.mock("sonner", () => ({
     toast: {
         success: vi.fn(),
@@ -39,7 +47,9 @@ describe("LoginPage", () => {
     it("shows invitation-only access copy", () => {
         renderLoginPage();
 
-        expect(screen.getByText(/accounts on this platform are created by invitation only/i)).toBeInTheDocument();
+        expect(
+            screen.getByText(/accounts on this platform are created by invitation only/i)
+        ).toBeInTheDocument();
     });
 
     it("has link to forgot password page", () => {
@@ -55,5 +65,4 @@ describe("LoginPage", () => {
         expect(screen.getByRole("checkbox")).toBeInTheDocument();
         expect(screen.getByText(/remember me/i)).toBeInTheDocument();
     });
-
 });

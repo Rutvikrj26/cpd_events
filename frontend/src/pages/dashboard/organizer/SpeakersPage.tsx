@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { z } from "zod";
 import { toast } from "sonner";
 import {
     Mic,
@@ -9,22 +10,30 @@ import {
     Mail,
     Link2 as Linkedin,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Textarea } from "@/shared/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar";
+import { PageHeader } from "@/shared/ui/page-header";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { FormDialog } from "@/components/ui/form-dialog";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+} from "@/shared/ui/dropdown-menu";
+import { DataTable, type DataTableColumn } from "@/shared/ui/data-table";
+import { FormDialog } from "@/shared/ui/form-dialog";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
+} from "@/shared/ui/form";
+import { useZodForm } from "@/shared/lib";
+import { nonEmpty } from "@/shared/schemas/primitives";
 import {
     getSpeakers,
     createSpeaker,
@@ -32,6 +41,32 @@ import {
     deleteSpeaker,
 } from "@/api/speakers";
 import type { Speaker, CreateSpeakerRequest } from "@/api/speakers/types";
+
+/**
+ * Speaker form schema. Email + LinkedIn URL are optional but validated
+ * when provided. The empty-string ↔ undefined coercion happens in the
+ * submit handler so the request body matches the API expectation
+ * (`field?: string`).
+ */
+const speakerSchema = z.object({
+    name: nonEmpty("Name"),
+    bio: z.string().trim().optional(),
+    qualifications: z.string().trim().optional(),
+    email: z.union([z.literal(""), z.string().email("Enter a valid email")]).optional(),
+    linkedin_url: z
+        .union([z.literal(""), z.string().url("Enter a valid URL")])
+        .optional(),
+});
+
+type SpeakerFormValues = z.infer<typeof speakerSchema>;
+
+const EMPTY_SPEAKER_VALUES: SpeakerFormValues = {
+    name: "",
+    bio: "",
+    qualifications: "",
+    email: "",
+    linkedin_url: "",
+};
 
 export default function SpeakersPage() {
     const [speakers, setSpeakers] = useState<Speaker[]>([]);
@@ -42,15 +77,11 @@ export default function SpeakersPage() {
     const [formOpen, setFormOpen] = useState(false);
     const [editingSpeaker, setEditingSpeaker] = useState<Speaker | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<Speaker | null>(null);
-    const [formLoading, setFormLoading] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
 
-    // Form fields
-    const [name, setName] = useState("");
-    const [bio, setBio] = useState("");
-    const [qualifications, setQualifications] = useState("");
-    const [email, setEmail] = useState("");
-    const [linkedinUrl, setLinkedinUrl] = useState("");
+    const form = useZodForm(speakerSchema, {
+        defaultValues: EMPTY_SPEAKER_VALUES,
+    });
 
     const fetchSpeakers = useCallback(async () => {
         try {
@@ -68,40 +99,32 @@ export default function SpeakersPage() {
         fetchSpeakers();
     }, [fetchSpeakers]);
 
-    function resetForm() {
-        setName("");
-        setBio("");
-        setQualifications("");
-        setEmail("");
-        setLinkedinUrl("");
-        setEditingSpeaker(null);
-    }
-
     function openCreate() {
-        resetForm();
+        form.reset(EMPTY_SPEAKER_VALUES);
+        setEditingSpeaker(null);
         setFormOpen(true);
     }
 
     function openEdit(speaker: Speaker) {
         setEditingSpeaker(speaker);
-        setName(speaker.name);
-        setBio(speaker.bio || "");
-        setQualifications(speaker.qualifications || "");
-        setEmail(speaker.email || "");
-        setLinkedinUrl(speaker.linkedin_url || "");
+        form.reset({
+            name: speaker.name,
+            bio: speaker.bio || "",
+            qualifications: speaker.qualifications || "",
+            email: speaker.email || "",
+            linkedin_url: speaker.linkedin_url || "",
+        });
         setFormOpen(true);
     }
 
-    async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        setFormLoading(true);
+    const onSubmit = form.handleSubmit(async (values) => {
         try {
             const payload: CreateSpeakerRequest = {
-                name,
-                bio: bio || undefined,
-                qualifications: qualifications || undefined,
-                email: email || undefined,
-                linkedin_url: linkedinUrl || undefined,
+                name: values.name,
+                bio: values.bio || undefined,
+                qualifications: values.qualifications || undefined,
+                email: values.email || undefined,
+                linkedin_url: values.linkedin_url || undefined,
             };
 
             if (editingSpeaker) {
@@ -112,14 +135,13 @@ export default function SpeakersPage() {
                 toast.success("Speaker created");
             }
             setFormOpen(false);
-            resetForm();
+            form.reset(EMPTY_SPEAKER_VALUES);
+            setEditingSpeaker(null);
             fetchSpeakers();
         } catch (err: any) {
             toast.error(err?.response?.data?.error?.message || "Failed to save speaker");
-        } finally {
-            setFormLoading(false);
         }
-    }
+    });
 
     async function handleDelete() {
         if (!deleteTarget) return;
@@ -182,7 +204,7 @@ export default function SpeakersPage() {
             key: "bio",
             header: "Bio",
             cell: (row) => (
-                <span className="text-sm text-muted-foreground line-clamp-1 max-w-xs">
+                <span className="text-sm text-muted-foreground line-clamp-2">
                     {row.bio || "-"}
                 </span>
             ),
@@ -191,14 +213,24 @@ export default function SpeakersPage() {
             key: "links",
             header: "Links",
             cell: (row) => (
-                <div className="flex items-center gap-2">
+                <div className="flex gap-2 text-muted-foreground">
                     {row.email && (
-                        <a href={`mailto:${row.email}`} className="text-muted-foreground hover:text-foreground">
+                        <a
+                            href={`mailto:${row.email}`}
+                            title={row.email}
+                            className="hover:text-foreground"
+                        >
                             <Mail className="h-4 w-4" />
                         </a>
                     )}
                     {row.linkedin_url && (
-                        <a href={row.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
+                        <a
+                            href={row.linkedin_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="LinkedIn"
+                            className="hover:text-foreground"
+                        >
                             <Linkedin className="h-4 w-4" />
                         </a>
                     )}
@@ -206,22 +238,16 @@ export default function SpeakersPage() {
             ),
         },
         {
-            key: "status",
-            header: "Status",
-            cell: (row) => (
-                <Badge variant={row.is_active ? "default" : "secondary"}>
-                    {row.is_active ? "Active" : "Inactive"}
-                </Badge>
-            ),
-        },
-        {
             key: "actions",
             header: "",
-            headerClassName: "w-12",
             cell: (row) => (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                        >
                             <MoreHorizontal className="h-4 w-4" />
                         </Button>
                     </DropdownMenuTrigger>
@@ -277,71 +303,108 @@ export default function SpeakersPage() {
                 rowKey={(row) => row.uuid}
             />
 
-            {/* Create/Edit Dialog */}
+            {/* Create / Edit dialog */}
             <FormDialog
                 open={formOpen}
                 onOpenChange={(open) => {
                     setFormOpen(open);
-                    if (!open) resetForm();
+                    if (!open) {
+                        form.reset(EMPTY_SPEAKER_VALUES);
+                        setEditingSpeaker(null);
+                    }
                 }}
                 title={editingSpeaker ? "Edit Speaker" : "Add Speaker"}
-                description={editingSpeaker ? "Update speaker details." : "Add a new speaker to your pool."}
-                onSubmit={handleSubmit}
+                description={
+                    editingSpeaker
+                        ? "Update speaker details."
+                        : "Add a new speaker to your pool."
+                }
+                onSubmit={onSubmit}
                 submitLabel={editingSpeaker ? "Save Changes" : "Add Speaker"}
-                isLoading={formLoading}
+                isLoading={form.formState.isSubmitting}
             >
-                <div className="space-y-2">
-                    <Label htmlFor="speakerName">Name *</Label>
-                    <Input
-                        id="speakerName"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="Full name"
-                        required
+                <Form {...form}>
+                    <FormField
+                        control={form.control}
+                        name="name"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Name *</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="Full name" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
                     />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="speakerEmail">Email</Label>
-                    <Input
-                        id="speakerEmail"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="speaker@example.com"
+                    <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Email</FormLabel>
+                                <FormControl>
+                                    <Input
+                                        type="email"
+                                        placeholder="speaker@example.com"
+                                        {...field}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
                     />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="speakerQualifications">Qualifications</Label>
-                    <Input
-                        id="speakerQualifications"
-                        value={qualifications}
-                        onChange={(e) => setQualifications(e.target.value)}
-                        placeholder="e.g. MD, PhD, CPA"
+                    <FormField
+                        control={form.control}
+                        name="qualifications"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Qualifications</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="e.g. MD, PhD, CPA" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
                     />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="speakerBio">Bio</Label>
-                    <Textarea
-                        id="speakerBio"
-                        value={bio}
-                        onChange={(e) => setBio(e.target.value)}
-                        placeholder="Brief biography"
-                        rows={3}
+                    <FormField
+                        control={form.control}
+                        name="bio"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Bio</FormLabel>
+                                <FormControl>
+                                    <Textarea
+                                        placeholder="Brief biography"
+                                        rows={3}
+                                        {...field}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
                     />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="speakerLinkedin">LinkedIn URL</Label>
-                    <Input
-                        id="speakerLinkedin"
-                        type="url"
-                        value={linkedinUrl}
-                        onChange={(e) => setLinkedinUrl(e.target.value)}
-                        placeholder="https://linkedin.com/in/..."
+                    <FormField
+                        control={form.control}
+                        name="linkedin_url"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>LinkedIn URL</FormLabel>
+                                <FormControl>
+                                    <Input
+                                        type="url"
+                                        placeholder="https://linkedin.com/in/..."
+                                        {...field}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
                     />
-                </div>
+                </Form>
             </FormDialog>
 
-            {/* Delete Confirmation */}
+            {/* Delete confirmation */}
             <ConfirmDialog
                 open={!!deleteTarget}
                 onOpenChange={(open) => !open && setDeleteTarget(null)}

@@ -39,12 +39,22 @@
     --destructive-foreground: 0 0% 100%;
 
     /* Semantic Colors */
-    --success: 155 45% 42%;
-    /* Richer green for success */
+    /* Success shifted off the sage hue (155) to a true emerald (145) so
+       a "Completed" badge no longer competes with a "Resume" CTA. (D4) */
+    --success: 145 55% 38%;
     --success-foreground: 0 0% 100%;
     --warning: 40 90% 50%;
     /* Warm amber */
     --warning-foreground: 150 10% 18%;
+    /* Status: "in progress" amber — distinct from warning's louder yellow */
+    --status-progress: 35 80% 52%;
+    --status-progress-foreground: 0 0% 100%;
+    /* Status: "locked" slate — communicates inertness without using muted-foreground */
+    --status-locked: 220 10% 55%;
+    --status-locked-foreground: 0 0% 100%;
+    /* Status: "overdue / failed" — a softer red than destructive's danger red */
+    --status-overdue: 8 70% 50%;
+    --status-overdue-foreground: 0 0% 100%;
 
     --border: 50 10% 88%;
     --input: 50 10% 88%;
@@ -94,10 +104,17 @@
     --destructive: 0 65% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 155 40% 48%;
+    /* Dark-mode success — same hue shift as light, lifted lightness for contrast (D4) */
+    --success: 145 50% 50%;
     --success-foreground: 0 0% 100%;
     --warning: 40 90% 50%;
     --warning-foreground: 0 0% 0%;
+    --status-progress: 35 80% 58%;
+    --status-progress-foreground: 0 0% 0%;
+    --status-locked: 220 10% 45%;
+    --status-locked-foreground: 0 0% 100%;
+    --status-overdue: 8 65% 55%;
+    --status-overdue-foreground: 0 0% 100%;
 
     --border: 150 15% 20%;
     --input: 150 15% 20%;

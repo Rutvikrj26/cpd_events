@@ -21,17 +21,17 @@ function formatCurrency(cents: number, currency: string = "USD"): string {
         currency,
     }).format((cents ?? 0) / 100);
 }
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/shared/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/shared/ui/card";
+import { PageHeader } from "@/shared/ui/page-header";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select";
+} from "@/shared/ui/select";
 import { DashboardStat } from "@/components/dashboard/DashboardStats";
 import {
     getReports,
@@ -42,7 +42,7 @@ import {
     ProgramReportsResponse,
     LearningTopItem,
 } from "@/api/reports";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/features/auth";
 import { getRoleFlags } from "@/lib/role-utils";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";

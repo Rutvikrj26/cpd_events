@@ -1,27 +1,31 @@
-import { useQuery } from '@tanstack/react-query';
-import { queryKeys } from '@/lib/queryClient';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { getEvents, getPublicEvents } from '../services';
-import { PaginatedResponse } from '@/api/types';
 import type { Event } from '../types';
+import { eventKeys } from './queryKeys';
 
 /**
- * Hook to fetch all events for the current user (organizer view)
+ * useEvents — organizer/admin event list. Server returns paginated;
+ * `select` flattens to just `.results` so consumers get an array.
  */
 export function useEvents() {
-    return useQuery<PaginatedResponse<Event>, Error, Event[]>({
-        queryKey: queryKeys.events.list(),
+    return useQuery({
+        queryKey: eventKeys.list(),
         queryFn: () => getEvents(),
-        select: (data) => data.results,
+        select: (data) => data.results as Event[],
+        staleTime: 1000 * 30,
     });
 }
 
 /**
- * Hook to fetch public events (discovery view)
+ * usePublicEvents — public discovery list. Same shape as useEvents
+ * but hits the unauthenticated endpoint.
  */
 export function usePublicEvents() {
-    return useQuery<PaginatedResponse<Event>, Error, Event[]>({
-        queryKey: queryKeys.events.public(),
+    return useQuery({
+        queryKey: eventKeys.publicList(),
         queryFn: () => getPublicEvents(),
-        select: (data) => data.results,
+        select: (data) => data.results as Event[],
+        placeholderData: keepPreviousData,
+        staleTime: 1000 * 30,
     });
 }

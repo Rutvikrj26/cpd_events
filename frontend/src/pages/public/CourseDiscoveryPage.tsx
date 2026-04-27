@@ -2,25 +2,25 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Search, Filter, BookOpen, SlidersHorizontal, Award, X, Clock, Users } from "lucide-react";
 import { formatCpdLabel } from "@/lib/completion-criteria";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
-import { Pagination } from "@/components/ui/pagination";
+} from "@/shared/ui/select";
+import { Separator } from "@/shared/ui/separator";
+import { Checkbox } from "@/shared/ui/checkbox";
+import { Badge } from "@/shared/ui/badge";
+import { Card, CardContent } from "@/shared/ui/card";
+import { PageHeader } from "@/shared/ui/page-header";
+import { Pagination } from "@/shared/ui/pagination";
 import { getPublicCourses, PublicCourseListParams, Course } from "@/api/courses";
 import { PaginatedResponse } from "@/api/types";
-import { useAuth } from "@/contexts/AuthContext";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAuth } from "@/features/auth";
+import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar";
 
 // Define filter options
 type Filters = {

@@ -3,7 +3,7 @@ import { Activity, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import client from "@/api/client";
 import { unwrapList } from "@/api/pagination";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
 import { JoinButton } from "@/components/video/JoinButton";
 
 type RoomTarget =

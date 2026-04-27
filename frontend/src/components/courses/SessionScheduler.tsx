@@ -1,29 +1,29 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Calendar, Clock, Edit2, GripVertical } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
+import { Label } from '@/shared/ui/label';
+import { Textarea } from '@/shared/ui/textarea';
+import { Switch } from '@/shared/ui/switch';
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
     DialogFooter,
-} from '@/components/ui/dialog';
+} from '@/shared/ui/dialog';
 import {
     Card,
     CardContent,
-} from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+} from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select';
+} from '@/shared/ui/select';
 
 export interface SessionDraft {
     id: string; // temporary client ID

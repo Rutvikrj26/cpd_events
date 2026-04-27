@@ -6,10 +6,10 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+} from '@/shared/ui/dropdown-menu';
+import { Button } from '@/shared/ui/button';
+import { Badge } from '@/shared/ui/badge';
+import { Input } from '@/shared/ui/input';
 import { Plus, Tag as TagIcon, X } from 'lucide-react';
 import { Tag, createTag } from '@/api/contacts';
 import { toast } from 'sonner';

@@ -3,7 +3,6 @@ import { describe, it, expect, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import { EventsPage } from "../EventsPage";
 
-// Mock AuthContext
 const mockUser = {
     uuid: "test-uuid",
     roles: ["organizer"],
@@ -11,16 +10,35 @@ const mockUser = {
     display_name: "Test User",
 };
 
-vi.mock("@/contexts/AuthContext", () => ({
+vi.mock("@/features/auth", () => ({
     useAuth: () => ({
         user: mockUser,
     }),
 }));
 
-// Mock events API
+// Mock events API. The page expects the paginated `{results: []}` shape;
+// returning a bare array makes `data.results` undefined and the page
+// crashes silently. Return the canonical shape.
 vi.mock("@/api/events", () => ({
-    getEvents: vi.fn().mockResolvedValue([]),
-    getPublicEvents: vi.fn().mockResolvedValue([]),
+    getEvents: vi
+        .fn()
+        .mockResolvedValue({ results: [], count: 0, next: null, previous: null }),
+    getPublicEvents: vi
+        .fn()
+        .mockResolvedValue({ results: [], count: 0, next: null, previous: null }),
+    deleteEvent: vi.fn(),
+}));
+
+// Page also imports `duplicateEvent` from a separate module.
+vi.mock("@/api/events/actions", () => ({
+    duplicateEvent: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({
+    toast: {
+        success: vi.fn(),
+        error: vi.fn(),
+    },
 }));
 
 const renderEventsPage = () => {

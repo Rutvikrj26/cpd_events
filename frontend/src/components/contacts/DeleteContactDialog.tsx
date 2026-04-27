@@ -1,4 +1,3 @@
-import React, { useState } from 'react';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -8,10 +7,11 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from '@/shared/ui/alert-dialog';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Contact, deleteContact } from '@/api/contacts';
+import type { Contact } from '@/api/contacts';
+import { useDeleteContact } from '@/features/contacts';
 
 interface DeleteContactDialogProps {
     open: boolean;
@@ -24,23 +24,20 @@ export function DeleteContactDialog({
     open,
     onOpenChange,
     contact,
-    onSuccess
+    onSuccess,
 }: DeleteContactDialogProps) {
-    const [loading, setLoading] = useState(false);
+    const deleteContact = useDeleteContact();
 
     if (!contact) return null;
 
     const handleDelete = async () => {
-        setLoading(true);
         try {
-            await deleteContact(contact.uuid);
+            await deleteContact.mutateAsync(contact.uuid);
             toast.success('Contact deleted successfully');
             onSuccess?.();
             onOpenChange(false);
         } catch (error) {
             console.error('Failed to delete contact:', error);
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -55,13 +52,13 @@ export function DeleteContactDialog({
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                    <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+                    <AlertDialogCancel disabled={deleteContact.isPending}>Cancel</AlertDialogCancel>
                     <AlertDialogAction
                         onClick={handleDelete}
-                        disabled={loading}
+                        disabled={deleteContact.isPending}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
-                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {deleteContact.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Delete
                     </AlertDialogAction>
                 </AlertDialogFooter>

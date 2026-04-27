@@ -1,79 +1,66 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { getPublicCourses, Course, PublicCourseListParams } from '@/api/courses';
-import { formatCpdLabel } from '@/lib/completion-criteria';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Search, BookOpen, Clock, Award, Users, ArrowRight } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Pagination } from '@/components/ui/pagination';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, BookOpen } from 'lucide-react';
+import { Input } from '@/shared/ui/input';
+import { Button } from '@/shared/ui/button';
+import { Card } from '@/shared/ui/card';
+import { Skeleton } from '@/shared/ui/skeleton';
+import { Pagination } from '@/shared/ui/pagination';
+import { EmptyState } from '@/shared/ui/empty-state';
+import { useDebounce } from '@/shared/hooks';
+import { CourseCard, usePublicCourses } from '@/features/courses';
+import type { Course } from '@/api/courses/types';
 
+const PAGE_SIZE = 12;
+
+/**
+ * CourseCatalogPage — thin shell. Data via React Query, UI via the
+ * feature's CourseCard. Search input is debounced so typing doesn't
+ * re-fetch on every keystroke.
+ */
 export const CourseCatalogPage: React.FC = () => {
-    const [courses, setCourses] = useState<Course[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
     const navigate = useNavigate();
-
-    // Pagination state
+    const [searchQuery, setSearchQuery] = useState('');
     const [page, setPage] = useState(1);
-    const [pageSize] = useState(12);
-    const [totalPages, setTotalPages] = useState(1);
-    const [totalCount, setTotalCount] = useState(0);
+    const debouncedSearch = useDebounce(searchQuery, 250);
 
-    const fetchCourses = useCallback(async () => {
-        setLoading(true);
-        try {
-            const params: PublicCourseListParams = {
-                page,
-                page_size: pageSize,
-                search: searchQuery || undefined,
-            };
-            const response = await getPublicCourses(params);
-            // Filter only published and public courses (client-side for now)
-            const publicCourses = response.results.filter(
-                course => course.status === 'published' && course.is_public
-            );
-            setCourses(publicCourses);
-            setTotalPages(response.total_pages);
-            setTotalCount(response.count);
-        } catch (error) {
-            console.error('Failed to load courses:', error);
-        } finally {
-            setLoading(false);
-        }
-    }, [page, pageSize, searchQuery]);
-
-    useEffect(() => {
-        fetchCourses();
-    }, [fetchCourses]);
-
-    // Reset to page 1 when search changes
+    // Reset to page 1 whenever the search term changes.
     useEffect(() => {
         setPage(1);
-    }, [searchQuery]);
+    }, [debouncedSearch]);
+
+    const { data, isLoading } = usePublicCourses({
+        page,
+        page_size: PAGE_SIZE,
+        search: debouncedSearch || undefined,
+    });
+
+    const courses = (data?.results ?? []).filter(
+        (c) => c.status === 'published' && c.is_public
+    );
+    const totalPages = data?.total_pages ?? 1;
+    const totalCount = data?.count ?? 0;
 
     const handleViewCourse = (course: Course) => {
         navigate(`/courses/${course.slug || course.uuid}`);
     };
 
-    if (loading && page === 1) {
+    if (isLoading && page === 1) {
         return (
-            <div className="container mx-auto py-8 px-4 max-w-7xl">
-                <div className="mb-8">
-                    <Skeleton className="h-12 w-64 mb-4" />
-                    <Skeleton className="h-6 w-96" />
+            <div className="container mx-auto max-w-7xl px-4 py-section">
+                <div className="mb-section text-center">
+                    <Skeleton className="mx-auto mb-tight h-10 w-72" />
+                    <Skeleton className="mx-auto h-5 w-96" />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {[...Array(6)].map((_, i) => (
-                        <Card key={i}>
-                            <CardHeader>
-                                <Skeleton className="h-40 w-full mb-4" />
-                                <Skeleton className="h-6 w-3/4 mb-2" />
+                <div className="grid grid-cols-1 gap-card md:grid-cols-2 xl:grid-cols-3">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <Card key={i} elevation="rest">
+                            <Skeleton className="aspect-video w-full" />
+                            <div className="space-y-tight p-card">
+                                <Skeleton className="h-6 w-3/4" />
                                 <Skeleton className="h-4 w-full" />
-                            </CardHeader>
+                                <Skeleton className="h-4 w-1/2" />
+                            </div>
                         </Card>
                     ))}
                 </div>
@@ -83,34 +70,43 @@ export const CourseCatalogPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-            <div className="container mx-auto py-12 px-4 max-w-7xl">
-                {/* Header */}
-                <div className="text-center mb-12">
-                    <div className="flex items-center justify-center gap-3 mb-4">
-                        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                            <BookOpen className="h-6 w-6 text-primary" />
+            <div className="container mx-auto max-w-7xl px-4 py-section">
+                <header className="mb-section text-center">
+                    <div className="mb-tight inline-flex items-center justify-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                            <BookOpen
+                                className="h-6 w-6 text-primary"
+                                strokeWidth={1.75}
+                                aria-hidden="true"
+                            />
                         </div>
-                        <h1 className="text-4xl font-bold">Course Catalog</h1>
+                        <h1 className="text-display-lg text-foreground">Course catalog</h1>
                     </div>
-                    <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                        Discover self-paced professional development courses from leading organizations
+                    <p className="mx-auto max-w-2xl text-body-lg text-muted-foreground">
+                        Discover self-paced, live, and hybrid professional development courses
+                        from leading organizations.
                     </p>
-                </div>
+                </header>
 
-                {/* Search Bar */}
-                <div className="max-w-2xl mx-auto mb-12">
+                <div className="mx-auto mb-section max-w-2xl">
                     <div className="relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                        <Search
+                            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
+                            aria-hidden="true"
+                        />
                         <Input
                             type="text"
                             placeholder="Search courses by title, description, or organization..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-12 h-14 text-base"
+                            className="h-14 pl-12 text-body-lg"
+                            aria-label="Search courses"
                         />
                     </div>
-                    <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
-                        <span>{totalCount} courses found</span>
+                    <div className="mt-tight flex items-center gap-card text-body text-muted-foreground">
+                        <span>
+                            {totalCount} {totalCount === 1 ? 'course' : 'courses'} found
+                        </span>
                         {searchQuery && (
                             <Button variant="ghost" size="sm" onClick={() => setSearchQuery('')}>
                                 Clear search
@@ -119,143 +115,48 @@ export const CourseCatalogPage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Course Grid */}
                 {courses.length === 0 ? (
-                    <div className="text-center py-16">
-                        <BookOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold mb-2">No courses found</h3>
-                        <p className="text-muted-foreground mb-6">
-                            {searchQuery
-                                ? 'Try adjusting your search terms'
-                                : 'Check back soon for new courses'}
-                        </p>
-                        {searchQuery && (
-                            <Button variant="outline" onClick={() => setSearchQuery('')}>
-                                Clear search
-                            </Button>
-                        )}
-                    </div>
+                    <EmptyState
+                        tone="muted"
+                        icon={BookOpen}
+                        title="No courses found"
+                        description={
+                            searchQuery
+                                ? 'Try a different search term, or clear the filter to browse everything.'
+                                : 'Check back soon for new courses.'
+                        }
+                        action={
+                            searchQuery ? (
+                                <Button variant="outline" onClick={() => setSearchQuery('')}>
+                                    Clear search
+                                </Button>
+                            ) : undefined
+                        }
+                    />
                 ) : (
                     <>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 gap-card md:grid-cols-2 xl:grid-cols-3">
                             {courses.map((course) => (
-                                <Card
+                                <CourseCard
                                     key={course.uuid}
-                                    className="group hover:shadow-lg transition-shadow duration-200 flex flex-col"
-                                >
-                                    <CardHeader className="pb-4">
-                                        {/* Course Image */}
-                                        <div className="relative aspect-video bg-muted rounded-lg mb-4 overflow-hidden">
-                                            {course.featured_image_url ? (
-                                                <img
-                                                    src={course.featured_image_url}
-                                                    alt={course.title}
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                                                />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
-                                                    <BookOpen className="h-16 w-16 text-primary/30" />
-                                                </div>
-                                            )}
-                                            {!course.is_free && (
-                                                <div className="absolute top-3 right-3">
-                                                    <Badge className="bg-background/90 text-foreground border backdrop-blur-sm">
-                                                        {(course.currency || 'USD').toUpperCase()}{' '}
-                                                        ${(course.price_cents / 100).toFixed(0)}
-                                                    </Badge>
-                                                </div>
-                                            )}
-                                            {course.is_free && (
-                                                <div className="absolute top-3 right-3">
-                                                    <Badge className="bg-success/90 text-white">Free</Badge>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Course Title */}
-                                        <CardTitle className="text-xl group-hover:text-primary transition-colors line-clamp-2">
-                                            {course.title}
-                                        </CardTitle>
-
-                                        {/* Organization */}
-                                        {course.organization_name && (
-                                            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                                                <Avatar className="h-6 w-6">
-                                                    {course.organization_logo_url ? (
-                                                        <AvatarImage src={course.organization_logo_url} alt={course.organization_name} />
-                                                    ) : null}
-                                                    <AvatarFallback className="text-xs">
-                                                        {course.organization_name[0]}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <span>{course.organization_name}</span>
-                                            </div>
-                                        )}
-                                    </CardHeader>
-
-                                    <CardContent className="flex-grow pb-4">
-                                        {/* Description */}
-                                        <CardDescription className="line-clamp-3 mb-4">
-                                            {course.short_description || course.description}
-                                        </CardDescription>
-
-                                        {/* Course Stats */}
-                                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                                            {course.estimated_hours && (
-                                                <div className="flex items-center gap-1">
-                                                    <Clock className="h-4 w-4" />
-                                                    <span>{course.estimated_hours}h</span>
-                                                </div>
-                                            )}
-                                            {course.cpd_credits && (
-                                                <div className="flex items-center gap-1">
-                                                    <Award className="h-4 w-4" />
-                                                    <span>{formatCpdLabel({ credits: course.cpd_credits, criteria: course.hybrid_completion_criteria, isCompleted: false })}</span>
-                                                </div>
-                                            )}
-                                            {course.enrollment_count > 0 && (
-                                                <div className="flex items-center gap-1">
-                                                    <Users className="h-4 w-4" />
-                                                    <span>{course.enrollment_count} enrolled</span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Modules Count */}
-                                        {course.module_count > 0 && (
-                                            <div className="mt-3 text-sm text-muted-foreground">
-                                                {course.module_count} module{course.module_count !== 1 ? 's' : ''}
-                                            </div>
-                                        )}
-                                    </CardContent>
-
-                                    <CardFooter className="pt-4 border-t">
-                                        <Button
-                                            className="w-full group/btn"
-                                            onClick={() => handleViewCourse(course)}
-                                        >
-                                            View Course
-                                            <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
-                                        </Button>
-                                    </CardFooter>
-                                </Card>
+                                    course={course}
+                                    onView={handleViewCourse}
+                                />
                             ))}
                         </div>
 
-                        {/* Pagination */}
                         {totalPages > 1 && (
                             <Pagination
                                 page={page}
                                 totalPages={totalPages}
                                 totalCount={totalCount}
-                                pageSize={pageSize}
+                                pageSize={PAGE_SIZE}
                                 onPageChange={setPage}
-                                className="mt-8"
+                                className="mt-block"
                             />
                         )}
                     </>
                 )}
-
             </div>
         </div>
     );

@@ -5,17 +5,17 @@ import { Award, BadgeCheck, Download, ExternalLink, Loader2, Search } from 'luci
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/custom/PageHeader';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Button } from '@/shared/ui/button';
+import { Card, CardContent } from '@/shared/ui/card';
+import { Input } from '@/shared/ui/input';
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
+} from '@/shared/ui/select';
+import { Badge } from '@/shared/ui/badge';
 import { AccreditationItem, getMyAccreditations } from '@/api/accounts';
 
 type KindFilter = 'all' | 'certificate' | 'badge';

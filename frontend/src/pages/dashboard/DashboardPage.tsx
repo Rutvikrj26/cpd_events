@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/features/auth';
 import { OrganizerDashboard } from './organizer/OrganizerDashboard';
 import { InstructorDashboard } from './instructor/InstructorDashboard';
 import { AttendeeDashboard } from './attendee/AttendeeDashboard';

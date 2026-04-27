@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/shared/ui/use-toast';
 import { getCourseBySlug, enrollInCourse, getPublicCourses, courseCheckout, getEnrollments } from '@/api/courses';
 import { Course } from '@/api/courses/types';
 import { formatCpdLabel } from '@/lib/completion-criteria';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useAuth } from '@/features/auth';
+import { Button } from '@/shared/ui/button';
+import { Badge } from '@/shared/ui/badge';
+import { Separator } from '@/shared/ui/separator';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/shared/ui/accordion';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Loader2, CheckCircle, Clock, BookOpen, Award, Users, Building2, ArrowRight, Layers } from 'lucide-react';
 
 export const PublicCourseDetailPage = () => {

@@ -4,9 +4,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Mail, MapPin, Send, MessageSquare, Clock, ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Textarea } from "@/shared/ui/textarea";
 import {
     Form,
     FormControl,
@@ -14,9 +14,9 @@ import {
     FormItem,
     FormLabel,
     FormMessage,
-} from "@/components/ui/form";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+} from "@/shared/ui/form";
+import { Card, CardContent } from "@/shared/ui/card";
+import { Badge } from "@/shared/ui/badge";
 import { toast } from "sonner";
 
 const contactSchema = z.object({
@@ -138,7 +138,7 @@ export function ContactPage() {
                             <CardContent className="p-8">
                                 <h2 className="text-xl font-bold mb-6 text-foreground">Send us a message</h2>
                                 <Form {...form}>
-                                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                                    <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                             <FormField
                                                 control={form.control}
