@@ -762,8 +762,15 @@ def _handle_recording_ended(video_room, payload):
             },
         )
 
-    # Inherit auto_publish from parent event/session — overrides the row's
-    # default which may have been left False at create time.
+    # Inherit auto_publish from parent event/session.
+    #
+    # Default is **False** (opt-in): if the event organizer / instructor
+    # didn't explicitly turn on auto-publish in the event settings, the
+    # recording stays unpublished and they must publish it manually after
+    # review. This protects against accidentally exposing raw,
+    # un-reviewed footage (e.g. a session that ran over with off-topic
+    # discussion, or had a participant request to be removed). Flip the
+    # `auto_publish_recording` setting in the event wizard to opt in.
     parent = video_room.content_object
     auto_publish = False
     if parent is not None:
@@ -772,9 +779,9 @@ def _handle_recording_ended(video_room, payload):
 
         if isinstance(parent, Event):
             settings_dict = parent.video_settings if isinstance(parent.video_settings, dict) else {}
-            auto_publish = bool(settings_dict.get('auto_publish_recording', True))
+            auto_publish = bool(settings_dict.get('auto_publish_recording', False))
         elif isinstance(parent, CourseSession):
-            auto_publish = bool(getattr(parent, 'recording_auto_publish', True))
+            auto_publish = bool(getattr(parent, 'recording_auto_publish', False))
 
     # Single guarded transition: only fires if status is still RECORDING or
     # PROCESSING. If a concurrent handler already wrote a terminal state,

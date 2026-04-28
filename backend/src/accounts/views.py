@@ -1727,3 +1727,223 @@ class FirebaseAuthView(generics.GenericAPIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+# =============================================================================
+# Learning Invitation Views
+# =============================================================================
+#
+# Three logical groups, deliberately separated by permission posture:
+#
+#   1. PublicLearningInvitationView — unauthenticated GET (resolve token,
+#      render the accept page) and authenticated POST (accept). The view
+#      itself is `AllowAny`; the POST checks for an authenticated user
+#      and email match before mutating state.
+#
+#   2. LearningInvitationActionView — authenticated, host-only resend /
+#      cancel. Reuses `is_event_host` / `course.can_manage` rather than
+#      defining a new permission predicate so the gate matches the
+#      existing Manage UI affordances.
+
+
+class PublicLearningInvitationView(generics.GenericAPIView):
+    """GET / POST /api/v1/public/invitations/<uuid>/[accept/]?t=<token>.
+
+    Unauthenticated GET resolves the token to render the accept page;
+    POST requires authentication AND email match — the view returns
+    401/409 with structured payloads so the frontend can route the
+    invitee through sign-in or account-switch as appropriate.
+    """
+
+    authentication_classes: list = []  # set per-method below
+    permission_classes = [AllowAny]
+
+    def get(self, request, uuid):
+        from accounts.serializers import PublicInvitationSerializer
+        from accounts.services import verify_invite_token
+
+        token = request.query_params.get('t', '')
+        invitation = verify_invite_token(uuid, token)
+        if invitation is None:
+            return error_response(
+                'This invitation link is invalid or has expired.',
+                code='INVALID_TOKEN',
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        if invitation.is_expired or invitation.status == invitation.Status.EXPIRED:
+            return Response(
+                {**PublicInvitationSerializer(invitation).data, 'expired': True},
+                status=status.HTTP_410_GONE,
+            )
+        if invitation.status == invitation.Status.CANCELLED:
+            return Response(
+                {**PublicInvitationSerializer(invitation).data, 'cancelled': True},
+                status=status.HTTP_410_GONE,
+            )
+        return Response(PublicInvitationSerializer(invitation).data)
+
+
+class PublicLearningInvitationAcceptView(generics.GenericAPIView):
+    """POST /api/v1/public/invitations/<uuid>/accept/?t=<token>.
+
+    Auth required (the underlying registration/enrollment needs a User);
+    if the caller isn't authenticated we return 401 with `requires_signup`
+    + the prefill email so the frontend redirects through sign-in/sign-up
+    with `next=` pointing back at the accept page.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request, uuid):
+        from accounts.services import accept_invitation_for_user, verify_invite_token
+
+        token = request.query_params.get('t') or request.data.get('t', '')
+        invitation = verify_invite_token(uuid, token)
+        if invitation is None:
+            return error_response(
+                'This invitation link is invalid or has expired.',
+                code='INVALID_TOKEN',
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        if invitation.is_expired:
+            return error_response(
+                'This invitation has expired.',
+                code='INVITATION_EXPIRED',
+                status_code=status.HTTP_410_GONE,
+            )
+        if invitation.status == invitation.Status.CANCELLED:
+            return error_response(
+                'This invitation has been cancelled.',
+                code='INVITATION_CANCELLED',
+                status_code=status.HTTP_410_GONE,
+            )
+
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {
+                    'requires_signup': True,
+                    'prefill_email': invitation.email,
+                    'invitation_uuid': str(invitation.uuid),
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        if request.user.email.lower() != invitation.email.lower():
+            return Response(
+                {
+                    'wrong_email': True,
+                    'invitee_email': invitation.email,
+                    'current_email': request.user.email,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Accepted invites are still idempotent — re-clicking a stale
+        # accept link just returns the same redirect URL.
+        if invitation.status == invitation.Status.ACCEPTED:
+            target = invitation.target
+            if target is None:
+                return error_response('Invitation target no longer exists.', code='TARGET_GONE')
+            slug_or_uuid = getattr(target, 'slug', None) or str(target.uuid)
+            redirect_url = (
+                f"/events/{slug_or_uuid}/details" if invitation.target_type == 'event'
+                else f"/learn/{target.uuid}"
+            )
+            return Response({
+                'redirect_url': redirect_url,
+                'target_type': invitation.target_type,
+                'target_uuid': str(target.uuid),
+                'already_accepted': True,
+            })
+
+        result = accept_invitation_for_user(invitation, request.user)
+        return Response({
+            'redirect_url': result.redirect_url,
+            'target_type': result.target_type,
+            'target_uuid': result.target_uuid,
+        })
+
+
+class LearningInvitationResendView(generics.GenericAPIView):
+    """POST /api/v1/invitations/<uuid>/resend/ — host-only.
+
+    1-minute cool-down between resends to keep the email service from
+    being abused as a notification spammer.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, uuid):
+        from accounts.models import LearningInvitation
+        from accounts.tasks import send_invitation_email
+        from datetime import timedelta
+
+        invitation = LearningInvitation.objects.select_related(
+            'event', 'course', 'invited_by',
+        ).filter(uuid=uuid).first()
+        if invitation is None:
+            return error_response('Invitation not found.', status_code=status.HTTP_404_NOT_FOUND)
+
+        if not _user_can_manage_invitation(request.user, invitation):
+            return error_response(
+                'You do not have permission to resend this invitation.',
+                code='FORBIDDEN', status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        if invitation.status != invitation.Status.PENDING:
+            return error_response(
+                f'Cannot resend a {invitation.status} invitation.',
+                code='INVALID_STATE', status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if invitation.last_sent_at and (timezone.now() - invitation.last_sent_at) < timedelta(minutes=1):
+            return error_response(
+                'Please wait a minute between resends.',
+                code='RATE_LIMITED', status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        invitation.send_count += 1
+        invitation.last_sent_at = timezone.now()
+        invitation.save(update_fields=['send_count', 'last_sent_at', 'updated_at'])
+        send_invitation_email(invitation.id)
+        return Response({'sent': True, 'send_count': invitation.send_count})
+
+
+class LearningInvitationCancelView(generics.GenericAPIView):
+    """POST /api/v1/invitations/<uuid>/cancel/ — host-only.
+
+    Cancellation is non-destructive (status flip + audit) so the row
+    survives for compliance / debugging.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, uuid):
+        from accounts.models import LearningInvitation
+
+        invitation = LearningInvitation.objects.select_related(
+            'event', 'course',
+        ).filter(uuid=uuid).first()
+        if invitation is None:
+            return error_response('Invitation not found.', status_code=status.HTTP_404_NOT_FOUND)
+        if not _user_can_manage_invitation(request.user, invitation):
+            return error_response(
+                'You do not have permission to cancel this invitation.',
+                code='FORBIDDEN', status_code=status.HTTP_403_FORBIDDEN,
+            )
+        if invitation.status != invitation.Status.PENDING:
+            return error_response(
+                f'Cannot cancel a {invitation.status} invitation.',
+                code='INVALID_STATE', status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        invitation.mark_cancelled()
+        return Response({'cancelled': True})
+
+
+def _user_can_manage_invitation(user, invitation) -> bool:
+    """Mirror the same predicates the create-invite endpoints use."""
+    if invitation.event:
+        from conferencing.views import is_event_host
+        return is_event_host(user, invitation.event)
+    if invitation.course:
+        return invitation.course.can_manage(user)
+    return False

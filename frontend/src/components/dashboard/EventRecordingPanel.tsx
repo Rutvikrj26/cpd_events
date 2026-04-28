@@ -149,20 +149,27 @@ export function EventRecordingPanel({ eventUuid }: EventRecordingPanelProps) {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
+                                    {/* Watch is always available to the host once the
+                                        recording is processed — published or not.
+                                        Unpublished recordings render via the same
+                                        EventRecordingPage (which sends ?manage=true
+                                        when the user is host) and surface the
+                                        "Unpublished — preview only" pill so the host
+                                        knows what attendees currently see. */}
+                                    {isAvailable && (
+                                        <Button asChild variant="outline" size="sm">
+                                            <Link to={`/events/${eventUuid}/recording/${rec.uuid}`}>Watch</Link>
+                                        </Button>
+                                    )}
                                     {isAvailable && rec.is_published && (
-                                        <>
-                                            <Button asChild variant="outline" size="sm">
-                                                <Link to={`/events/${eventUuid}/recording/${rec.uuid}`}>Watch</Link>
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handleUnpublish(rec)}
-                                                disabled={actingOn === rec.uuid}
-                                            >
-                                                <EyeOff className="h-3 w-3 mr-1" /> Unpublish
-                                            </Button>
-                                        </>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleUnpublish(rec)}
+                                            disabled={actingOn === rec.uuid}
+                                        >
+                                            <EyeOff className="h-3 w-3 mr-1" /> Unpublish
+                                        </Button>
                                     )}
                                     {isAvailable && !rec.is_published && (
                                         <Button

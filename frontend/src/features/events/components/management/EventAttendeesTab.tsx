@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { MoreVertical, Search, Download, Filter } from 'lucide-react';
+import { MoreVertical, Search, Download, Filter, MailPlus } from 'lucide-react';
+import { InviteLearnerDialog } from '@/shared/components/invitations/InviteLearnerDialog';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Badge } from '@/shared/ui/badge';
@@ -63,6 +64,7 @@ export function EventAttendeesTab({
     onSearchChange,
     onExportCsv,
 }: EventAttendeesTabProps) {
+    const [inviteOpen, setInviteOpen] = useState(false);
     const [editAttendanceOpen, setEditAttendanceOpen] = useState(false);
     const [selectedAttendee, setSelectedAttendee] = useState<any>(null);
     const [customFieldDialogOpen, setCustomFieldDialogOpen] = useState(false);
@@ -132,6 +134,15 @@ export function EventAttendeesTab({
                     />
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
+                    {event.is_current_user_host && (
+                        <Button
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            onClick={() => setInviteOpen(true)}
+                        >
+                            <MailPlus className="mr-2 h-4 w-4" /> Invite Learner
+                        </Button>
+                    )}
                     <Button variant="outline" size="sm" className="w-full sm:w-auto">
                         <Filter className="mr-2 h-4 w-4" /> Filter
                     </Button>
@@ -140,6 +151,17 @@ export function EventAttendeesTab({
                     </Button>
                 </div>
             </div>
+
+            <InviteLearnerDialog
+                open={inviteOpen}
+                onOpenChange={setInviteOpen}
+                target={{
+                    type: 'event',
+                    uuid: event.uuid,
+                    title: event.title,
+                    isPaid: Number(event.price ?? 0) > 0,
+                }}
+            />
 
             <Card>
                 <div className="overflow-x-auto">

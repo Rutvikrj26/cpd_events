@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { CurriculumTab } from "./manage/CurriculumTab";
 import { OverviewTab } from "./manage/OverviewTab";
 import { EnrollmentsTab } from "./manage/EnrollmentsTab";
+import { InvitationsListTab } from "@/shared/components/invitations/InvitationsListTab";
 import { AnnouncementsTab } from "./manage/AnnouncementsTab";
 import { DiscussionTab } from "./manage/DiscussionTab";
 import { SubmissionsTab } from "./manage/SubmissionsTab";
@@ -101,6 +102,7 @@ export function CourseManagementPage() {
                     {showSessions && <TabsTrigger value="sessions">Sessions</TabsTrigger>}
                     {showCurriculum && <TabsTrigger value="curriculum">Curriculum</TabsTrigger>}
                     <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
+                    <TabsTrigger value="invitations">Invitations</TabsTrigger>
                     <TabsTrigger value="announcements">Announcements</TabsTrigger>
                     <TabsTrigger value="discussion">Discussion</TabsTrigger>
                     <TabsTrigger value="submissions">Submissions</TabsTrigger>
@@ -127,7 +129,22 @@ export function CourseManagementPage() {
                 )}
 
                 <TabsContent value="enrollments" className="mt-6">
-                    <EnrollmentsTab courseUuid={course.uuid} />
+                    <EnrollmentsTab
+                        courseUuid={course.uuid}
+                        courseTitle={course.title}
+                        courseIsPaid={Number(course.price_cents ?? 0) > 0}
+                    />
+                </TabsContent>
+
+                <TabsContent value="invitations" className="mt-6">
+                    <InvitationsListTab
+                        target={{
+                            type: 'course',
+                            uuid: course.uuid,
+                            title: course.title,
+                            isPaid: Number(course.price_cents ?? 0) > 0,
+                        }}
+                    />
                 </TabsContent>
 
                 <TabsContent value="announcements" className="mt-6">

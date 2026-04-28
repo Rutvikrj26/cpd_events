@@ -24,7 +24,11 @@ class VideoSettingsSerializer(serializers.Serializer):
 
     enabled = serializers.BooleanField(default=False)
     recording_enabled = serializers.BooleanField(default=False)
-    auto_publish_recording = serializers.BooleanField(default=True)
+    # Auto-publish defaults to OFF — organizers must opt in via the event
+    # wizard. Avoids exposing un-reviewed recordings (off-topic content,
+    # GDPR-removal requests, etc.) by default. See
+    # `conferencing.tasks._handle_recording_finalized`.
+    auto_publish_recording = serializers.BooleanField(default=False)
     screen_share = serializers.BooleanField(default=True)
 
     def to_representation(self, instance):
@@ -34,7 +38,7 @@ class VideoSettingsSerializer(serializers.Serializer):
         return {
             'enabled': bool(instance.get('enabled', False)),
             'recording_enabled': bool(instance.get('recording_enabled', False)),
-            'auto_publish_recording': bool(instance.get('auto_publish_recording', True)),
+            'auto_publish_recording': bool(instance.get('auto_publish_recording', False)),
             'screen_share': bool(instance.get('screen_share', True)),
         }
 
@@ -633,6 +637,12 @@ class EventUpdateSerializer(serializers.ModelSerializer):
         slug_field='uuid', queryset=BadgeTemplate.objects.all(), required=False, allow_null=True
     )
     speakers = IdOrObjectRelatedField(slug_field='uuid', queryset=Speaker.objects.all(), many=True, required=False)
+    # Mirror EventCreateSerializer — without this declaration the nested
+    # JSON wouldn't survive the round-trip even if listed in `fields`,
+    # because DRF would try to hand the dict to the JSONField directly
+    # and skip the typed validation. Using the typed wrapper also strips
+    # unexpected keys defensively.
+    video_settings = VideoSettingsSerializer(required=False)
 
     class Meta:
         model = Event
@@ -678,6 +688,8 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             # Education
             'learning_objectives',
             'speakers',
+            # Video conferencing
+            'video_settings',
         ]
 
     def validate(self, attrs):

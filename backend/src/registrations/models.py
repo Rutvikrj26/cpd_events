@@ -121,6 +121,22 @@ class Registration(SoftDeleteModel):
         max_length=20, choices=Source.choices, default=Source.SELF, help_text="How this registration was created"
     )
 
+    # Comp-seat audit trail (populated when a paid event is granted via
+    # an invite with `comp=True`). The Invitation row also records this,
+    # but storing it on the registration too means revenue reports can
+    # exclude/segregate comp seats without joining to invitations.
+    was_comped = models.BooleanField(
+        default=False, help_text="True iff this registration was granted as a comp seat (no payment required)",
+    )
+    comped_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='registrations_comped',
+        help_text="Organizer who granted the comp seat (when was_comped=True)",
+    )
+
     # Waitlist position (only if waitlisted)
     waitlist_position = models.PositiveIntegerField(null=True, blank=True, help_text="Position in waitlist (1 = first)")
     promoted_from_waitlist_at = models.DateTimeField(
@@ -393,8 +409,18 @@ class Registration(SoftDeleteModel):
 
     @classmethod
     def link_registrations_for_user(cls, user):
-        """Link all registrations with matching email to this user."""
+        """Link all registrations AND guest course enrollments with matching email to this user.
+
+        Also links any guest `CourseEnrollment` rows (created via
+        LearningInvitation accept-before-signup) so a single signup picks
+        up both event registrations and course enrollments. Returns the
+        registration count for backwards compatibility with existing
+        callers; the enrollment side-effect is fire-and-forget.
+        """
         count = cls.objects.filter(email__iexact=user.email, user__isnull=True, deleted_at__isnull=True).update(user=user)
+        # Local import to avoid a learning ↔ registrations cycle.
+        from learning.models import CourseEnrollment
+        CourseEnrollment.link_pending_for_user(user)
         return count
 
 

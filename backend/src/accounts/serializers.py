@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from accounts.models import Notification
+from accounts.models import LearningInvitation, Notification
 from common.serializers import SoftDeleteModelSerializer
 
 User = get_user_model()
@@ -552,3 +552,137 @@ class DataExportSerializer(serializers.Serializer):
     include_certificates = serializers.BooleanField(default=True)
     include_attendance = serializers.BooleanField(default=True)
     format = serializers.ChoiceField(choices=['json', 'csv'], default='json')
+
+
+# =============================================================================
+# Learning Invitation Serializers
+# =============================================================================
+#
+# Three shapes:
+#   - InviteCreateSerializer: bulk-create payload from the invite dialog.
+#   - LearningInvitationSerializer: organizer-side list/detail view (full
+#     row including target uuid, status, send_count, contact link).
+#   - PublicInvitationSerializer: invitee-facing accept page; redacts
+#     organizer email + Contact details, exposes only what the
+#     /invite/:uuid page needs.
+
+
+class InviteeInputSerializer(serializers.Serializer):
+    """One row in the bulk-invite payload. Either contact_uuid OR email."""
+
+    contact_uuid = serializers.UUIDField(required=False)
+    email = serializers.EmailField(required=False)
+    full_name = serializers.CharField(required=False, max_length=255, allow_blank=True)
+
+    def validate(self, attrs):
+        if not attrs.get('contact_uuid') and not attrs.get('email'):
+            raise serializers.ValidationError(
+                "Each invitee must specify either `contact_uuid` or `email`."
+            )
+        return attrs
+
+
+class InviteCreateSerializer(serializers.Serializer):
+    """Bulk-invite payload posted to /events/{uuid}/invite/ or /courses/{uuid}/invite/.
+
+    The view resolves each invitee against the requester's contacts (so a
+    free-form `email` that already matches a Contact gets linked automatically),
+    auto-upserts a Contact for brand-new emails, then creates or refreshes the
+    pending LearningInvitation.
+    """
+
+    invitees = InviteeInputSerializer(many=True)
+    personal_message = serializers.CharField(
+        required=False, max_length=1000, allow_blank=True, default='',
+    )
+    comp = serializers.BooleanField(
+        required=False, default=False,
+        help_text="Only meaningful when target is paid. Grants a free seat on accept.",
+    )
+
+    def validate_invitees(self, value):
+        if not value:
+            raise serializers.ValidationError("At least one invitee is required.")
+        if len(value) > 100:
+            raise serializers.ValidationError("Cannot invite more than 100 people at once.")
+        return value
+
+
+class LearningInvitationSerializer(serializers.ModelSerializer):
+    """Organizer-side row representation."""
+
+    target_uuid = serializers.SerializerMethodField()
+    target_title = serializers.SerializerMethodField()
+    invited_by_name = serializers.CharField(source='invited_by.full_name', read_only=True, default='')
+    contact_uuid = serializers.UUIDField(source='contact.uuid', read_only=True, default=None)
+
+    class Meta:
+        model = LearningInvitation
+        fields = [
+            'uuid', 'target_type', 'target_uuid', 'target_title',
+            'email', 'full_name', 'contact_uuid',
+            'personal_message', 'comp',
+            'status', 'send_count', 'last_sent_at', 'expires_at',
+            'accepted_at', 'created_at',
+            'invited_by_name',
+        ]
+        read_only_fields = fields
+
+    def get_target_uuid(self, obj):
+        target = obj.target
+        return str(target.uuid) if target else None
+
+    def get_target_title(self, obj):
+        target = obj.target
+        return target.title if target else None
+
+
+class PublicInvitationSerializer(serializers.ModelSerializer):
+    """Invitee-facing payload for the public accept page.
+
+    Redacts everything except what the page needs to render: target name,
+    organizer display name, the personal message, and the comp/payment
+    posture (so the accept button copy can adapt — "Accept invite" vs
+    "Accept and pay").
+    """
+
+    target_type = serializers.CharField(read_only=True)
+    target_uuid = serializers.SerializerMethodField()
+    target_title = serializers.SerializerMethodField()
+    target_slug = serializers.SerializerMethodField()
+    target_is_paid = serializers.SerializerMethodField()
+    invited_by_name = serializers.CharField(source='invited_by.full_name', read_only=True, default='')
+    expired = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LearningInvitation
+        fields = [
+            'uuid', 'target_type', 'target_uuid', 'target_title', 'target_slug', 'target_is_paid',
+            'email', 'full_name',
+            'personal_message', 'comp',
+            'status', 'expired', 'expires_at',
+            'invited_by_name',
+        ]
+        read_only_fields = fields
+
+    def get_target_uuid(self, obj):
+        target = obj.target
+        return str(target.uuid) if target else None
+
+    def get_target_title(self, obj):
+        target = obj.target
+        return target.title if target else None
+
+    def get_target_slug(self, obj):
+        target = obj.target
+        return getattr(target, 'slug', None)
+
+    def get_target_is_paid(self, obj):
+        target = obj.target
+        if not target:
+            return False
+        price = getattr(target, 'price', 0) or 0
+        return float(price) > 0
+
+    def get_expired(self, obj):
+        return obj.is_expired

@@ -107,9 +107,9 @@ export function EventLobbyPage() {
             <h1 className="text-xl font-semibold">Couldn't load this event</h1>
             <p className="text-sm text-muted-foreground">{error ?? 'Please check the link and try again.'}</p>
             <Button asChild variant="outline">
-              <Link to="/my-events">
+              <Link to="/registrations?tab=events">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                My Events
+                My Learning
               </Link>
             </Button>
           </CardContent>
@@ -175,7 +175,7 @@ export function EventLobbyPage() {
           />
         ) : null
       }
-      backLink={isGuest ? { to: '/', label: 'Home' } : { to: '/my-events', label: 'Back to My Events' }}
+      backLink={isGuest ? { to: '/', label: 'Home' } : { to: '/registrations?tab=events', label: 'Back to My Learning' }}
       recordingLink={isPast ? { to: `/events/${event.uuid}/recording` } : undefined}
       additionalCards={
         <>

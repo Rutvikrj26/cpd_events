@@ -20,6 +20,7 @@ import {
     BookOpen,
     Award,
     ArrowRight,
+    PlayCircle,
 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/shared/ui/button';
@@ -268,6 +269,24 @@ export const MyLearningPage = () => {
                                                     <Link to={`/events/${reg.event.slug || reg.event.uuid}/details`} className="text-primary hover:text-primary/80 font-medium text-xs">
                                                         View Event
                                                     </Link>
+                                                    {(reg.event.has_recording ?? reg.event.has_published_recording) && (
+                                                        <Button
+                                                            asChild
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="text-xs h-7"
+                                                        >
+                                                            <Link to={`/events/${reg.event.slug || reg.event.uuid}/recording`}>
+                                                                <PlayCircle size={12} className="mr-1" />
+                                                                Watch Recording
+                                                                {(reg.event.published_recordings_count ?? 0) > 1 && (
+                                                                    <span className="ml-1 text-muted-foreground">
+                                                                        ({reg.event.published_recordings_count})
+                                                                    </span>
+                                                                )}
+                                                            </Link>
+                                                        </Button>
+                                                    )}
                                                     {reg.status === 'pending' && (reg.payment_status === 'pending' || reg.payment_status === 'refunded') && !isEventEnded(reg) && (
                                                         <Button
                                                             size="sm"
@@ -351,7 +370,7 @@ export const MyLearningPage = () => {
                                 ) : (
                                     <>
                                         <RefreshCw className="h-4 w-4 mr-2" />
-                                        Find &amp; Link My Events
+                                        Find &amp; Link My Registrations
                                     </>
                                 )}
                             </Button>

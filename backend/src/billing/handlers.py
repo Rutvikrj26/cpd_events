@@ -491,7 +491,7 @@ def handle_charge_refunded(event):
                         notification_type="refund_processed",
                         title="Refund processed",
                         message=f"Your refund for {registration.event.title} has been processed.",
-                        action_url="/my-events",
+                        action_url="/registrations?tab=events",
                         metadata={"registration_uuid": str(registration.uuid)},
                     )
                 except Exception as exc:

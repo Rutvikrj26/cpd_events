@@ -16,7 +16,8 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/shared/ui/alert-dialog';
-import { Loader2, Search, UserCircle, Mail, Calendar, RotateCcw } from 'lucide-react';
+import { Loader2, Search, UserCircle, Mail, Calendar, RotateCcw, MailPlus } from 'lucide-react';
+import { InviteLearnerDialog } from '@/shared/components/invitations/InviteLearnerDialog';
 import { format } from 'date-fns';
 import client from '@/api/client';
 import { refundPurchase } from '@/api/billing';
@@ -49,14 +50,19 @@ interface CourseEnrollment {
 
 interface EnrollmentsTabProps {
     courseUuid: string;
+    /** Optional: enables the "Invite Learner" toolbar button. */
+    courseTitle?: string;
+    /** Optional: when true, the invite dialog shows the comp toggle. */
+    courseIsPaid?: boolean;
 }
 
-export function EnrollmentsTab({ courseUuid }: EnrollmentsTabProps) {
+export function EnrollmentsTab({ courseUuid, courseTitle, courseIsPaid }: EnrollmentsTabProps) {
     const { toast } = useToast();
     const [enrollments, setEnrollments] = useState<CourseEnrollment[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [inviteOpen, setInviteOpen] = useState(false);
 
     useEffect(() => {
         const fetchEnrollments = async () => {
@@ -204,8 +210,27 @@ export function EnrollmentsTab({ courseUuid }: EnrollmentsTabProps) {
                             {status}
                         </Button>
                     ))}
+                    {courseTitle && (
+                        <Button size="sm" onClick={() => setInviteOpen(true)}>
+                            <MailPlus className="mr-2 h-4 w-4" />
+                            Invite Learner
+                        </Button>
+                    )}
                 </div>
             </div>
+
+            {courseTitle && (
+                <InviteLearnerDialog
+                    open={inviteOpen}
+                    onOpenChange={setInviteOpen}
+                    target={{
+                        type: 'course',
+                        uuid: courseUuid,
+                        title: courseTitle,
+                        isPaid: !!courseIsPaid,
+                    }}
+                />
+            )}
 
             {/* Stats Summary */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

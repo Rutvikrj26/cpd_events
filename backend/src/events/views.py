@@ -187,6 +187,86 @@ class EventViewSet(SoftDeleteModelViewSet):
         event.publish(user=request.user)
         return Response(serializers.EventDetailSerializer(event).data)
 
+    @action(detail=True, methods=['post'], url_path='invite',
+            permission_classes=[IsAuthenticated])
+    def invite(self, request, uuid=None):
+        """Bulk-invite learners to this event by email or contact_uuid.
+
+        See `accounts.services.create_invitations` for the resolution
+        and idempotency rules. Only event owners + platform admins can
+        issue invites — gated by the `is_event_host` predicate so the
+        same check that grants the Manage Event affordance gates the
+        invite action.
+        """
+        from conferencing.views import is_event_host
+        from accounts.serializers import (
+            InviteCreateSerializer,
+            LearningInvitationSerializer,
+        )
+        from accounts.services import create_invitations
+        from accounts.models import LearningInvitation
+
+        event = self.get_object()
+        if not is_event_host(request.user, event):
+            return error_response(
+                'You do not have permission to invite learners to this event.',
+                code='FORBIDDEN',
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        ser = InviteCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        result = create_invitations(
+            inviter=request.user,
+            target_type=LearningInvitation.TargetType.EVENT,
+            target=event,
+            invitees=ser.validated_data['invitees'],
+            personal_message=ser.validated_data.get('personal_message', ''),
+            comp=ser.validated_data.get('comp', False),
+        )
+
+        # Hydrate created/refreshed rows so the UI can show titles/state
+        # without a follow-up GET.
+        created_uuids = [r.invitation_uuid for r in result.created if r.invitation_uuid]
+        refreshed_uuids = [r.invitation_uuid for r in result.refreshed if r.invitation_uuid]
+        all_uuids = created_uuids + refreshed_uuids
+        invitation_qs = LearningInvitation.objects.filter(uuid__in=all_uuids).select_related(
+            'event', 'course', 'invited_by', 'contact',
+        )
+
+        return Response({
+            'invitations': LearningInvitationSerializer(invitation_qs, many=True).data,
+            'created': [{'email': r.email, 'invitation_uuid': r.invitation_uuid} for r in result.created],
+            'refreshed': [{'email': r.email, 'invitation_uuid': r.invitation_uuid} for r in result.refreshed],
+            'skipped': [{'email': r.email, 'reason': r.status, 'detail': r.reason} for r in result.skipped],
+        })
+
+    @action(detail=True, methods=['get'], url_path='invitations',
+            permission_classes=[IsAuthenticated])
+    def invitations(self, request, uuid=None):
+        """List invitations for an event (host only)."""
+        from conferencing.views import is_event_host
+        from accounts.models import LearningInvitation
+        from accounts.serializers import LearningInvitationSerializer
+
+        event = self.get_object()
+        if not is_event_host(request.user, event):
+            return error_response(
+                'You do not have permission to view invitations for this event.',
+                code='FORBIDDEN',
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        qs = (
+            LearningInvitation.objects
+            .filter(event=event)
+            .select_related('invited_by', 'contact')
+            .order_by('-created_at')
+        )
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return Response(LearningInvitationSerializer(qs, many=True).data)
+
     @action(detail=True, methods=['post'])
     def unpublish(self, request, uuid=None):
         """Revert event to draft."""

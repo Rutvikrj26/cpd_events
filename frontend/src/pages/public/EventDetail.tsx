@@ -810,9 +810,22 @@ export function EventDetail() {
                         {isPast ? (
                           <div className="mt-1 space-y-1">
                             <p className="text-muted-foreground">This session has ended.</p>
-                            {isConfirmedRegistration && (
+                            {/* For confirmed registrants + hosts, point at the
+                                consolidated My Learning page rather than
+                                embedding a player here. Keeps the recording UX
+                                in one place; the My Learning Events tab gates
+                                the Watch Recording button on actual
+                                availability per user. */}
+                            {(isConfirmedRegistration || isEventHost) && (
                               <p className="text-xs text-muted-foreground">
-                                If the organizer recorded the session, it will appear here once it's ready.
+                                If a recording is available, you can watch it from{' '}
+                                <Link
+                                  to="/registrations?tab=events"
+                                  className="text-primary underline-offset-2 hover:underline"
+                                >
+                                  My Learning
+                                </Link>
+                                .
                               </p>
                             )}
                           </div>

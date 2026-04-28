@@ -495,6 +495,160 @@ class UserInvitation(BaseModel):
         )
 
 
+class LearningInvitation(BaseModel):
+    """
+    Invitation to a specific event or course.
+
+    Distinct from `UserInvitation` (which invites someone to JOIN the
+    platform with a role). A `LearningInvitation` says "register for this
+    event" or "enroll in this course" — the invitee may already be a
+    platform user, or may be a brand-new email that signs up first.
+
+    On accept:
+      - Event invite → creates a `Registration` (or links the existing one).
+      - Course invite → creates a `CourseEnrollment` (which now allows
+        `user=NULL` so we can pre-create a guest enrollment that gets
+        linked when the invitee signs up).
+    """
+
+    class TargetType(models.TextChoices):
+        EVENT = "event", "Event"
+        COURSE = "course", "Course"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        EXPIRED = "expired", "Expired"
+        CANCELLED = "cancelled", "Cancelled"
+
+    target_type = models.CharField(max_length=10, choices=TargetType.choices, db_index=True)
+    # We model the (Event | Course) target as two nullable FKs rather
+    # than a GenericForeignKey because the union is closed and small,
+    # FK indexes work normally, and the `event=` / `course=` query
+    # paths stay strongly typed.
+    event = models.ForeignKey(
+        'events.Event',
+        null=True, blank=True,
+        on_delete=models.CASCADE,
+        related_name='learning_invitations',
+    )
+    course = models.ForeignKey(
+        'learning.Course',
+        null=True, blank=True,
+        on_delete=models.CASCADE,
+        related_name='learning_invitations',
+    )
+
+    # Recipient
+    email = LowercaseEmailField(db_index=True, help_text="Invitee email (canonical, lowercase)")
+    full_name = models.CharField(max_length=255, blank=True, help_text="Snapshot at invite time")
+    contact = models.ForeignKey(
+        'contacts.Contact',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='learning_invitations',
+        help_text="Linked Contact (if invitee was picked from organizer's contacts)",
+    )
+
+    invited_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='learning_invitations_sent',
+        help_text="Organizer / instructor / admin who sent the invite",
+    )
+    personal_message = models.TextField(blank=True, max_length=1000)
+
+    # Comp seat — applies to paid events/courses. When True, accept
+    # creates a confirmed registration with payment_status=NA and
+    # marks the row `was_comped=True` for audit.
+    comp = models.BooleanField(
+        default=False,
+        help_text="If True and target is paid, accept creates a free comp seat instead of routing to checkout",
+    )
+
+    # Token: random secret stored once, signed via TimestampSigner on
+    # render. Verifying on accept means a leaked DB column doesn't yield
+    # valid links — the same pattern the recording stream view uses.
+    token = models.CharField(max_length=64, unique=True, db_index=True)
+
+    expires_at = models.DateTimeField()
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True,
+    )
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_by = models.ForeignKey(
+        User, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='learning_invitations_accepted',
+    )
+
+    last_sent_at = models.DateTimeField(default=timezone.now)
+    send_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "learning_invitations"
+        ordering = ["-created_at"]
+        verbose_name = "Learning Invitation"
+        verbose_name_plural = "Learning Invitations"
+        indexes = [
+            models.Index(fields=["event", "status"]),
+            models.Index(fields=["course", "status"]),
+            models.Index(fields=["email"]),
+        ]
+        constraints = [
+            # Exactly one target FK populated.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(event__isnull=False, course__isnull=True)
+                    | models.Q(event__isnull=True, course__isnull=False)
+                ),
+                name="learning_invitation_one_target",
+            ),
+            # At most one PENDING invite per (event, email). Re-inviting
+            # the same email refreshes the existing pending row instead
+            # of creating duplicates. Accepted/cancelled rows don't
+            # block a fresh invite (the predicate filters them out).
+            models.UniqueConstraint(
+                fields=["event", "email"],
+                condition=models.Q(status="pending", event__isnull=False),
+                name="one_pending_event_invite_per_email",
+            ),
+            models.UniqueConstraint(
+                fields=["course", "email"],
+                condition=models.Q(status="pending", course__isnull=False),
+                name="one_pending_course_invite_per_email",
+            ),
+        ]
+
+    def __str__(self):
+        target = self.event or self.course
+        return f"Invitation: {self.email} → {target}"
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+    @property
+    def target(self):
+        return self.event or self.course
+
+    def mark_accepted(self, user):
+        """Idempotent. Caller is responsible for creating the registration/enrollment."""
+        if self.status != self.Status.ACCEPTED:
+            self.status = self.Status.ACCEPTED
+            self.accepted_at = timezone.now()
+            self.accepted_by = user
+            self.save(update_fields=["status", "accepted_at", "accepted_by", "updated_at"])
+
+    def mark_cancelled(self):
+        if self.status == self.Status.PENDING:
+            self.status = self.Status.CANCELLED
+            self.save(update_fields=["status", "updated_at"])
+
+    @classmethod
+    def generate_token(cls):
+        """64-char URL-safe random token. Stored once, signed on render."""
+        import secrets
+        return secrets.token_urlsafe(48)
+
+
 class UserSession(BaseModel):
     """
     Active user session for tracking logins.
