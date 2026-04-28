@@ -1,0 +1,11 @@
+# Service-account credentials and any other local secrets. Anything
+# under .secrets/ is local-only — never committed. The agent runtime
+# reads these via paths configured in docker-compose / Cloud Run, not
+# from this directory.
+.secrets/
+.env
+.env.dev
+.env.local
+.venv/
+__pycache__/
+*.pyc

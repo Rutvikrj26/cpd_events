@@ -107,6 +107,22 @@ class VideoProvider(ABC):
     def stop_recording(self, egress_id: str) -> bool:
         """Stop a recording. Returns True if stopped."""
 
+    def dispatch_agent(
+        self, room_name: str, agent_name: str, metadata: str = '',
+    ) -> str | None:
+        """Dispatch a registered agent worker into the named room.
+
+        Default implementation returns None (provider doesn't support
+        agent dispatch). The LiveKit provider overrides this to call
+        the AgentDispatchService API. Non-abstract so providers without
+        agents (none currently, but conceptually) don't fail to
+        instantiate.
+
+        Returns the dispatch_id on success, None on failure (caller
+        treats failure as non-fatal — meetings still work without
+        transcription)."""
+        return None
+
     @abstractmethod
     def verify_webhook(self, body: bytes, auth_header: str) -> bool:
         """Verify webhook signature. Returns True if valid."""

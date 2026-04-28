@@ -74,7 +74,7 @@ export function AdminLiveRoomsWidget() {
                                         <JoinButton
                                             eventUuid={target.event_uuid}
                                             role="host"
-                                            state="live"
+                                            state="meeting_live"
                                             size="sm"
                                         />
                                     ) : (
@@ -82,7 +82,7 @@ export function AdminLiveRoomsWidget() {
                                             courseUuid={target.course_uuid}
                                             sessionUuid={target.session_uuid}
                                             role="host"
-                                            state="live"
+                                            state="meeting_live"
                                             size="sm"
                                         />
                                     )}

@@ -3,8 +3,9 @@ Events app views and viewsets.
 """
 
 import logging
+from datetime import timedelta
 
-from django.db.models import Q
+from django.db.models import DateTimeField, ExpressionWrapper, F, Q
 from django.utils import timezone
 from django_filters import rest_framework as filters
 from rest_framework import generics, status, viewsets
@@ -510,6 +511,15 @@ class EventViewSet(SoftDeleteModelViewSet):
             {
                 'registration_uuid': str(reg.uuid),
                 'event_title': reg.event.title if reg.event else '',
+                # Including the buyer collapses what would otherwise look
+                # like duplicate $19.99 rows into distinguishable per-attendee
+                # records — without this, two different people registering
+                # for the same paid event are visually indistinguishable on
+                # the report. Falls back to the registration-time snapshot
+                # (full_name/email columns on Registration) when the user
+                # account hasn't been linked yet (guest checkout flow).
+                'buyer_name': reg.full_name or '',
+                'buyer_email': reg.email or '',
                 'amount_cents': int((reg.total_amount or 0) * 100),
                 'currency': reg.event.currency if reg.event else primary_currency,
                 'created_at': reg.created_at.isoformat(),
@@ -852,15 +862,28 @@ class MySpeakingEventsView(generics.ListAPIView):
     serializer_class = serializers.EventListSerializer
 
     def get_queryset(self):
-        from django.utils import timezone as _tz
-
-        now = _tz.now()
+        now = timezone.now()
+        # `Event.ends_at` is a Python @property (starts_at + duration_minutes),
+        # not a database column — filtering on it directly raises FieldError.
+        # We compute the same value in the queryset via an ExpressionWrapper
+        # so the database can evaluate "is this event still upcoming or live?"
+        # with one round trip. `actual_end_at` (when an organizer recorded an
+        # explicit end) takes precedence; otherwise we fall back to the
+        # scheduled end derived from `starts_at + duration_minutes`.
+        scheduled_end = ExpressionWrapper(
+            F('starts_at') + F('duration_minutes') * timedelta(minutes=1),
+            output_field=DateTimeField(),
+        )
         return (
             Event.objects.filter(
                 speakers__owner=self.request.user,
                 deleted_at__isnull=True,
             )
-            .filter(Q(ends_at__gte=now) | Q(ends_at__isnull=True, starts_at__gte=now))
+            .annotate(_scheduled_end=scheduled_end)
+            .filter(
+                Q(actual_end_at__gte=now)
+                | Q(actual_end_at__isnull=True, _scheduled_end__gte=now)
+            )
             .distinct()
             .order_by('starts_at')
         )

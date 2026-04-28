@@ -15,6 +15,34 @@ export interface JoinVideoResponse {
   recording_active: boolean;
 }
 
+/**
+ * GET `/meetings/active/` payload. Returned by the lobby polling loop
+ * every ~10s.
+ *
+ * `status` reflects the most recent VideoRoom for the content object:
+ *   - `none`      — no meeting has ever been created. Host sees
+ *                   "Start meeting"; attendee sees "Waiting for host".
+ *   - `scheduled` — host clicked Start but no participant has connected
+ *                   yet. Host can join their own pending room; attendee
+ *                   keeps waiting until status flips to `active`.
+ *   - `active`    — meeting is live; host gets "Join as host", attendee
+ *                   gets "Join now".
+ *   - `ended`     — most recent session has finalized. Host sees "Start
+ *                   a new meeting"; attendee sees "Meeting has ended".
+ *
+ * The endpoint never returns a token. The frontend POSTs to
+ * `/meetings/start/` or `/meetings/join/` to actually get one.
+ */
+export type ActiveMeetingStatus = 'none' | 'scheduled' | 'active' | 'ended';
+
+export interface ActiveMeetingResponse {
+  status: ActiveMeetingStatus;
+  room_uuid?: string;
+  started_at?: string | null;
+  ended_at?: string | null;
+  is_host?: boolean;
+}
+
 export interface VideoRoom {
   uuid: string;
   room_name: string;

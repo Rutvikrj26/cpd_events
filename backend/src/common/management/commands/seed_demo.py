@@ -381,7 +381,18 @@ class Command(BaseCommand):
                 location=location,
                 recording_enabled=recording_enabled,
                 video_settings=(
-                    {"enabled": True, "recording_enabled": recording_enabled, "screen_share": True}
+                    {
+                        "enabled": True,
+                        "recording_enabled": recording_enabled,
+                        "screen_share": True,
+                        # Transcription opt-in. Demo events with video on
+                        # also turn on captions so the live overlay +
+                        # post-event panel both have data to render.
+                        # Effective only when TRANSCRIPTION_PROVIDER is
+                        # set in the deployment env (defaults to 'null'
+                        # so this flag is a no-op for fresh installs).
+                        "transcription_enabled": True,
+                    }
                     if video_enabled else {}
                 ),
             )
@@ -2388,80 +2399,64 @@ class Command(BaseCommand):
     # Video rooms + published recordings
     # ------------------------------------------------------------------
     def _build_video_rooms_and_recordings(self, now, events):
-        """Stand up VideoRoom rows for video-enabled events and a single
-        published VideoRecording (with a sample MP4) for the on-demand replay.
+        """Seed historical artifacts for the recordings page demo.
 
-        The room rows are recorded with status=ACTIVE for the live event,
-        SCHEDULED for upcoming events, and ENDED for past ones — so the join
-        flow has plausible state in admin even when the LiveKit provider
-        isn't running locally. The published recording lets the
-        ``/events/<uuid>/recording`` page render a real ``<video>`` element
-        end-to-end.
+        Zoom-model lifecycle: VideoRoom rows are NOT eagerly created for
+        upcoming/live events. The host creates a fresh row by clicking
+        **Start meeting**, which calls ``StartMeetingView``. So the only
+        thing we seed here is the *past* on-demand event, which has an
+        ENDED VideoRoom + a published VideoRecording — i.e. the
+        durable artefact left behind by a finished session.
+
+        The MP4 itself is not seeded; the playback page renders the
+        "file unavailable" empty state until a real recording lands in
+        RECORDING_STORAGE_DIR. The seed exists so the page UI can be
+        exercised end-to-end without actually running a meeting.
         """
         from django.contrib.contenttypes.models import ContentType
 
-        from conferencing.models import VideoRecording, VideoRecordingFile, VideoRoom
+        from conferencing.models import (
+            VideoRecording,
+            VideoRecordingFile,
+            VideoRoom,
+            generate_room_name,
+        )
         from events.models import Event
 
         ct = ContentType.objects.get_for_model(Event)
 
-        def upsert_room(event, *, status, started_at=None, ended_at=None):
-            room_name = f"event-{event.uuid}"
-            obj, _ = VideoRoom.objects.update_or_create(
-                content_type=ct, object_id=event.id,
-                defaults=dict(
-                    room_id=f"demo-{event.uuid}",
-                    room_name=room_name,
-                    provider='livekit',
-                    status=status,
-                    started_at=started_at,
-                    ended_at=ended_at,
-                    settings={"enabled": True, "screen_share": True},
-                    max_participants=event.max_attendees or 0,
-                ),
-            )
-            return obj
-
-        # Live event — currently active
-        live_room = upsert_room(
-            events["live_now"], status=VideoRoom.Status.ACTIVE,
-            started_at=now - timedelta(minutes=15),
-        )
-        # Imminent event — scheduled, not yet started
-        upsert_room(events["imminent"], status=VideoRoom.Status.SCHEDULED)
-        # Hybrid (upcoming) — scheduled
-        upsert_room(events["hybrid"], status=VideoRoom.Status.SCHEDULED)
-        # On-demand replay — ended, recording was captured
-        ondemand_room = upsert_room(
-            events["ondemand"], status=VideoRoom.Status.ENDED,
-            started_at=events["ondemand"].starts_at,
-            ended_at=events["ondemand"].starts_at + timedelta(minutes=events["ondemand"].duration_minutes),
-        )
-
-        # Published recording on the on-demand replay event. The MP4 itself
-        # is not seeded — the recording_storage_dir mount is empty in seed,
-        # so the playback page will render the "Recording isn't ready / file
-        # unavailable" empty state. To exercise real playback in dev, run a
-        # live session against the LiveKit egress (records to the mount) or
-        # drop a placeholder MP4 into RECORDING_STORAGE_DIR with a filename
-        # matching `storage_path`. The serializer generates the streaming
-        # URL on every response, so we leave the file row's storage_url blank.
-        recording, _ = VideoRecording.objects.update_or_create(
-            event=events["ondemand"], video_room=ondemand_room,
+        ondemand_event = events["ondemand"]
+        ended_at = ondemand_event.starts_at + timedelta(minutes=ondemand_event.duration_minutes)
+        ondemand_room, _ = VideoRoom.objects.update_or_create(
+            content_type=ct, object_id=ondemand_event.id,
             defaults=dict(
-                egress_id=f"demo-egress-{events['ondemand'].uuid}",
+                room_id=f"demo-{ondemand_event.uuid}",
+                room_name=generate_room_name('event', ondemand_event.uuid),
                 provider='livekit',
-                recording_start=events["ondemand"].starts_at,
-                recording_end=events["ondemand"].starts_at + timedelta(minutes=75),
+                status=VideoRoom.Status.ENDED,
+                started_at=ondemand_event.starts_at,
+                ended_at=ended_at,
+                settings={"enabled": True, "screen_share": True, "ended_by_host": True},
+                max_participants=ondemand_event.max_attendees or 0,
+            ),
+        )
+
+        recording, _ = VideoRecording.objects.update_or_create(
+            event=ondemand_event, video_room=ondemand_room,
+            defaults=dict(
+                egress_id=f"demo-egress-{ondemand_event.uuid}",
+                provider='livekit',
+                recording_start=ondemand_event.starts_at,
+                recording_end=ondemand_event.starts_at + timedelta(minutes=75),
                 duration_seconds=75 * 60,
                 total_size_bytes=42_000_000,
                 status=VideoRecording.Status.AVAILABLE,
-                storage_path=f"event-{events['ondemand'].uuid}.mp4",
+                storage_path=f"event-{ondemand_event.uuid}.mp4",
                 access_level=VideoRecording.AccessLevel.REGISTRANTS,
-                title=f"{events['ondemand'].title} — Recording",
+                title=f"{ondemand_event.title} — Recording",
                 description='Auto-published replay of the live session.',
                 is_published=True,
-                published_at=events["ondemand"].starts_at + timedelta(hours=2),
+                published_at=ondemand_event.starts_at + timedelta(hours=2),
                 view_count=18,
                 unique_viewers=12,
             ),
@@ -2469,30 +2464,13 @@ class Command(BaseCommand):
         VideoRecordingFile.objects.update_or_create(
             recording=recording, file_type=VideoRecordingFile.FileType.VIDEO,
             defaults=dict(
-                file_name=f"event-{events['ondemand'].uuid}.mp4",
+                file_name=f"event-{ondemand_event.uuid}.mp4",
                 file_extension='mp4',
                 file_size_bytes=42_000_000,
                 storage_url='',  # Generated dynamically by VideoRecordingFileSerializer.
                 is_visible=True,
             ),
         )
-
-        # Optional: also surface the live room as having an in-progress
-        # recording (no file yet) so the UI shows the "recording" status badge
-        # mid-event. Useful for showcasing the recording-active indicator.
-        if events["live_now"].recording_enabled:
-            VideoRecording.objects.update_or_create(
-                video_room=live_room, event=events["live_now"],
-                defaults=dict(
-                    egress_id=f"demo-egress-live-{events['live_now'].uuid}",
-                    provider='livekit',
-                    recording_start=events["live_now"].starts_at,
-                    status=VideoRecording.Status.RECORDING,
-                    access_level=VideoRecording.AccessLevel.REGISTRANTS,
-                    title=f"{events['live_now'].title} — Live Recording",
-                    is_published=False,
-                ),
-            )
 
     # ------------------------------------------------------------------
     # Denormalized counts
@@ -2529,9 +2507,13 @@ class Command(BaseCommand):
     # Re-assert event statuses after LiveKit / signal side-effects
     # ------------------------------------------------------------------
     def _reassert_event_statuses(self, events, now):
-        """Creating VideoRooms through the real LiveKit provider fires
-        room_started webhooks that flip events to ``live``. We undo that for
-        every event except the one we intentionally want live-now.
+        """Force each demo event into the status the demo expects.
+
+        Defensive reset — Event.status is denormalised from a few
+        sources (registration counts, video webhooks, scheduler) and
+        the seed runs all of them in sequence. Re-asserting at the end
+        makes the demo deterministic regardless of which side-effect
+        fired last.
         """
         from events.models import Event
 

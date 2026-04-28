@@ -59,7 +59,13 @@ export async function deleteFeedback(uuid: string): Promise<void> {
 // --- Feedback form schema CRUD (organizer-only) ---------------------------
 
 export async function getFeedbackFields(eventUuid: string): Promise<FeedbackField[]> {
-    const response = await client.get(`/events/${eventUuid}/feedback-fields/`);
+    // `silent: true` suppresses the global error toast — the FeedbackForm
+    // modal renders its own inline error/empty state, so a top-right toast
+    // is redundant noise. Without this flag, a 404 (no form configured) or
+    // 500 fires both a toast AND the inline message simultaneously.
+    const response = await client.get(`/events/${eventUuid}/feedback-fields/`, {
+        silent: true,
+    });
     const data = response.data as any;
     const list: FeedbackField[] = Array.isArray(data) ? data : data.results || [];
     return list.sort((a, b) => a.order - b.order);

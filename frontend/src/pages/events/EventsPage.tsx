@@ -27,7 +27,7 @@ import {
 import { Badge } from '@/shared/ui/badge';
 import { toast } from 'sonner';
 import { getRoleFlags } from '@/lib/role-utils';
-import { getEventStatusStyle } from '@/lib/eventStatus';
+import { getEventStatusStyle, formatEventStatus } from '@/lib/eventStatus';
 
 export const EventsPage = () => {
     const { user } = useAuth();
@@ -228,7 +228,7 @@ export const EventsPage = () => {
                                         {getEventStatusStyle(event.status).pulse && (
                                             <span className="mr-1 inline-block h-2 w-2 rounded-full bg-current animate-pulse" />
                                         )}
-                                        {event.status}
+                                        {formatEventStatus(event.status)}
                                     </Badge>
                                     {event.organization_info && (
                                         <Badge

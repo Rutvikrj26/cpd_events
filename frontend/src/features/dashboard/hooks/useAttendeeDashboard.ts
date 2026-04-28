@@ -5,6 +5,7 @@ import type { Registration } from '@/api/registrations/types';
 import { getMyCertificates } from '@/api/certificates';
 import type { Certificate } from '@/api/certificates/types';
 import { getEnrollments } from '@/api/courses';
+import { getCPDProgress } from '@/api/cpd';
 import { dashboardKeys } from './queryKeys';
 
 /**
@@ -56,8 +57,8 @@ export interface AttendeeDashboardData {
 function pickResumeCandidate(enrollments: EnrollmentLike[]): ResumeCandidate | null {
     const active = enrollments
         .filter((e) => {
-            const status = (e.status || '').toString().toUpperCase();
-            return status === 'ACTIVE' || status === 'IN_PROGRESS' || status === 'PENDING';
+            const status = (e.status || '').toString().toLowerCase();
+            return status === 'active';
         })
         .map<ResumeCandidate>((e) => ({
             enrollmentUuid: e.uuid,
@@ -113,9 +114,26 @@ export function useAttendeeDashboard(): AttendeeDashboardData {
         },
     });
 
+    // Pull the CPD total from the canonical source — the same endpoint the
+    // /cpd page renders. Computing credits from `confirmedRegistrations`
+    // alone double-counted some events and ignored course credits, which
+    // is why the dashboard reported "15" while /cpd showed "14.5". Falls
+    // back to 0 on failure so the dashboard still loads.
+    const cpdQuery = useQuery({
+        queryKey: [...dashboardKeys.attendee(), 'cpd-progress'],
+        queryFn: async () => {
+            try {
+                return await getCPDProgress();
+            } catch {
+                return null;
+            }
+        },
+    });
+
     const registrations = registrationsQuery.data ?? [];
     const certificates = certificatesQuery.data ?? [];
     const enrollments = enrollmentsQuery.data ?? [];
+    const cpdProgress = cpdQuery.data ?? null;
 
     const confirmedRegistrations = useMemo(
         () => registrations.filter((r) => r.status === 'confirmed'),
@@ -155,9 +173,12 @@ export function useAttendeeDashboard(): AttendeeDashboardData {
 
     const stats = useMemo(
         () => ({
-            totalCredits: confirmedRegistrations
-                .filter((r) => r.attended || new Date(r.event.starts_at) <= new Date())
-                .reduce((acc, r) => acc + Number(r.event.cpd_credit_value || 0), 0),
+            // Authoritative CPD total comes from the CPD endpoint, rounded
+            // to one decimal so the displayed value matches the /cpd page
+            // exactly (and so 14.5 doesn't round up to 15 here).
+            totalCredits: cpdProgress
+                ? Math.round(Number(cpdProgress.total_credits_earned ?? 0) * 10) / 10
+                : 0,
             certificates: certificates.filter(
                 (c) => c.is_valid !== false && c.status !== 'revoked'
             ).length,
@@ -165,11 +186,11 @@ export function useAttendeeDashboard(): AttendeeDashboardData {
                 (r) => new Date(r.event.starts_at) > new Date()
             ).length,
             activeCourses: enrollments.filter((e) => {
-                const s = (e.status || '').toString().toUpperCase();
-                return s === 'ACTIVE' || s === 'IN_PROGRESS';
+                const s = (e.status || '').toString().toLowerCase();
+                return s === 'active' || s === 'pending';
             }).length,
         }),
-        [confirmedRegistrations, certificates, enrollments]
+        [cpdProgress, confirmedRegistrations, certificates, enrollments]
     );
 
     return {

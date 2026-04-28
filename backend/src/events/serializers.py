@@ -791,6 +791,38 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
     organizer = serializers.SerializerMethodField()
     spots_remaining = serializers.SerializerMethodField()
     sessions = serializers.SerializerMethodField()
+    # The lobby page uses this flag to decide whether to render the host CTA
+    # ("Start meeting") or the gated attendee CTA ("Join when live"). It's
+    # public-detail rather than admin-only because the same lobby URL is
+    # used by both audiences — gating is per-user, not per-event-type.
+    is_current_user_host = serializers.SerializerMethodField()
+    # Flat boolean derived from `video_settings.enabled`. The lobby reads
+    # this to decide whether to render the JoinButton at all — without it
+    # the UI has no way to distinguish "online event with video set up"
+    # (render Join CTA, talk to /join-video/) from "online event without
+    # video" (the join endpoint will 404). The model stores the JSON
+    # config; clients shouldn't have to know the JSON shape.
+    video_enabled = serializers.SerializerMethodField()
+    # Flat boolean derived from `video_settings.transcription_enabled`. The
+    # lobby uses it to surface a "Live captions enabled" chip so attendees
+    # know what to expect before joining; the in-meeting Captions toggle
+    # also reads it to decide whether to render the toolbar button at all.
+    transcription_enabled = serializers.SerializerMethodField()
+
+    def get_is_current_user_host(self, obj):
+        from conferencing.views import is_event_host
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return is_event_host(request.user, obj)
+
+    def get_video_enabled(self, obj):
+        settings = obj.video_settings or {}
+        return bool(settings.get('enabled', False))
+
+    def get_transcription_enabled(self, obj):
+        settings = obj.video_settings or {}
+        return bool(settings.get('transcription_enabled', False))
 
     class Meta(PublicEventListSerializer.Meta):
         fields = PublicEventListSerializer.Meta.fields + [
@@ -808,6 +840,9 @@ class PublicEventDetailSerializer(PublicEventListSerializer):
             # Education
             'learning_objectives',
             'speakers',
+            'is_current_user_host',
+            'video_enabled',
+            'transcription_enabled',
         ]
 
     speakers = SpeakerSerializer(many=True, read_only=True)

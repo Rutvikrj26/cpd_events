@@ -14,6 +14,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Textarea } from "@/shared/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar";
+import { getInitials } from "@/lib/initials";
 import { PageHeader } from "@/shared/ui/page-header";
 import {
     DropdownMenu,
@@ -173,14 +174,7 @@ export default function SpeakersPage() {
                 <div className="flex items-center gap-3">
                     <Avatar className="h-9 w-9">
                         <AvatarImage src={row.photo || undefined} alt={row.name} />
-                        <AvatarFallback>
-                            {row.name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")
-                                .slice(0, 2)
-                                .toUpperCase()}
-                        </AvatarFallback>
+                        <AvatarFallback>{getInitials(row.name)}</AvatarFallback>
                     </Avatar>
                     <div>
                         <p className="font-medium">{row.name}</p>

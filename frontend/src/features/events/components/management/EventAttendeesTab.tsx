@@ -150,7 +150,7 @@ export function EventAttendeesTab({
                                     Attendee
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                    Ticket Type
+                                    Type
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                     Status
@@ -192,8 +192,23 @@ export function EventAttendeesTab({
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground capitalize">
-                                            {attendee.status}
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                                            {/* "Type" is derived from payment data because the
+                                                domain has no ticket-tier model. Free events show
+                                                "Free"; paid events show the amount the attendee
+                                                paid (which is the only ticket-type-equivalent
+                                                signal the schema actually carries). The legacy
+                                                cell duplicated the Status column verbatim, so
+                                                organisers saw "confirmed" twice per row. */}
+                                            {(() => {
+                                                const paid = Number(attendee.amount_paid ?? 0);
+                                                if (!(paid > 0)) return 'Free';
+                                                const currency = (attendee.currency || 'USD').toUpperCase();
+                                                return new Intl.NumberFormat(undefined, {
+                                                    style: 'currency',
+                                                    currency,
+                                                }).format(paid);
+                                            })()}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <Badge variant="outline" className={badge.className}>

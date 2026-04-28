@@ -162,7 +162,17 @@ function RecentCertificateRow({ cert }: { cert: any }) {
               year: 'numeric',
           })
         : 'Recently';
-    const title = cert.title || cert.event_title || cert.course_title || 'Certificate';
+    // Fall through several shapes — `MyCertificateSerializer` nests
+    // the title under `cert.event.title` (works for both event-issued
+    // and course-issued certs because the serializer normalises into
+    // a single `event` field). The flat shapes are kept for forward
+    // compatibility with the analytics endpoint.
+    const title =
+        cert.title ||
+        cert.event?.title ||
+        cert.event_title ||
+        cert.course_title ||
+        'Certificate';
     return (
         <CardRow
             density="compact"

@@ -84,6 +84,15 @@ services:
       DEPLOYMENT_MODE: single_tenant
       REGISTRATION_MODE: invite_only
       INSTITUTION_NAME: Accredit
+      # Transcription — backend uses these for provider introspection
+      # (is_configured()) and for the HMAC verification of agent posts.
+      # The agent service reads the same vars from its own block below.
+      # GOOGLE_APPLICATION_CREDENTIALS is set as a string so backend
+      # is_configured() returns True; the file itself only needs to
+      # exist on the agent container (which mounts it).
+      TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-null}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      INTERNAL_AGENT_SHARED_SECRET: ${INTERNAL_AGENT_SHARED_SECRET:-}
     depends_on:
       db:
         condition: service_healthy
@@ -149,6 +158,51 @@ services:
         condition: service_healthy
       recording-perms:
         condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Transcription agent — separate Python service that joins rooms via
+  # the LiveKit Agents framework, runs an STT plugin on participant
+  # audio, and POSTs finalised segments to the Django backend's
+  # /api/v1/internal/transcripts/ endpoints.
+  #
+  # Deliberately separate from `backend` because livekit-agents pulls in
+  # heavy native deps and audio workloads scale differently from HTTP.
+  # See agent/README.md for the rationale.
+  agent:
+    build:
+      context: ../agent
+      dockerfile: Dockerfile
+      target: development
+    container_name: cpd_agent
+    command: uv run python -m src.main dev
+    volumes:
+      - ../agent:/app
+      # Mount the GCP service-account JSON read-only. Lives outside the
+      # repo's working tree (under .secrets/, gitignored) so it never
+      # ends up committed. Path inside the container matches what the
+      # GOOGLE_APPLICATION_CREDENTIALS env var points at.
+      - ../agent/.secrets:/secrets:ro
+    environment:
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: secret_dev_key_change_in_production
+      BACKEND_INTERNAL_URL: http://backend:8000
+      INTERNAL_AGENT_SHARED_SECRET: ${INTERNAL_AGENT_SHARED_SECRET:-}
+      # Default 'null' — agent joins rooms but doesn't run STT.
+      # Override at compose-up time:
+      #   TRANSCRIPTION_PROVIDER=google docker compose up -d agent
+      TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-null}
+      # Google Cloud Speech-to-Text v2 — service-account JSON path
+      # inside the container, populated by the .secrets volume mount.
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/secrets/gcp-sa.json}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY:-}
+    depends_on:
+      livekit:
+        condition: service_healthy
+      backend:
+        condition: service_started
     restart: unless-stopped
 
   # Frontend React Application (optional - if you want to dockerize frontend too)

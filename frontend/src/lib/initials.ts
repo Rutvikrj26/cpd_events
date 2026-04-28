@@ -2,6 +2,19 @@
 // "Dr. Michael Torres" produces "MT" rather than "DT" (QA finding F-19).
 // Also exports `splitFullName` which uses the same honorific-stripping logic
 // to feed first_name / last_name form prefills correctly (F-33).
+//
+// Display-name shape we normalise from:
+//
+//     "[Honorific] Firstname [Middle] Lastname[, Postnom1, Postnom2, ...]"
+//
+// Two stripping rules, applied in order:
+//
+//   1. Anything after the first comma is post-nominal credentials —
+//      "MD, FRCPC", "RN, MN", "PhD", "MPH" — and is dropped wholesale.
+//      We do NOT enumerate medical/professional credentials by name; the
+//      comma is the structural signal authors use everywhere this matters.
+//   2. From the remaining tokens, drop any honorific prefix (Dr., Prof.,
+//      Mr., etc.) — a small enumerable set with no domain-specific tail.
 
 const HONORIFICS = new Set([
     'dr', 'dr.',
@@ -17,8 +30,15 @@ const HONORIFICS = new Set([
     'sir',
 ]);
 
+/** Drop comma-delimited post-nominals AND any honorific prefix tokens. */
 function stripHonorifics(name: string): string {
-    return name
+    // Step 1 — keep only the segment before the first comma. Everything
+    // after is post-nominals by convention (Western display-name syntax),
+    // which is more reliable than maintaining a list of every credential
+    // a user might append (RN, MN, MD, FRCPC, MPH, FACS, CNCC(C), …).
+    const beforeComma = name.split(',', 1)[0] ?? '';
+    // Step 2 — strip the small enumerable set of honorific prefixes.
+    return beforeComma
         .split(/\s+/)
         .filter((token) => token && !HONORIFICS.has(token.toLowerCase()))
         .join(' ');

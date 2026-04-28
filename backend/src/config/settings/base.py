@@ -258,6 +258,32 @@ LIVEKIT_RECORDING_OUTPUT_PATH_TEMPLATE = os.environ.get(
     '/recordings/{room_name}-{time}.mp4',
 )
 
+# Transcription (LiveKit Agents + STT plugin)
+# `TRANSCRIPTION_PROVIDER='null'` (the default) means transcription is
+# globally disabled regardless of per-event toggles — fail-closed for
+# deployments that haven't set up an STT vendor. Production overrides
+# to one of: 'google' | 'deepgram' | 'openai' | 'assemblyai' and
+# supplies the matching API key (or, for Google Cloud STT path, a
+# service-account credentials file).
+TRANSCRIPTION_PROVIDER = os.environ.get('TRANSCRIPTION_PROVIDER', 'null')
+# Path to a Google Cloud service-account JSON file. Required when
+# TRANSCRIPTION_PROVIDER='google'. Cloud Speech-to-Text v2 uses ADC
+# (the standard Google client auth chain), reading this env var to
+# locate credentials.
+GOOGLE_APPLICATION_CREDENTIALS = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '')
+DEEPGRAM_API_KEY = os.environ.get('DEEPGRAM_API_KEY', '')
+ASSEMBLYAI_API_KEY = os.environ.get('ASSEMBLYAI_API_KEY', '')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+
+# HMAC secret shared between the Django web service and the accredit-agent
+# Cloud Run service. The agent signs `(room_sid, timestamp)` with this
+# secret when POSTing finalised transcript segments to the internal
+# ingest endpoint; the web service uses the same secret to verify. Empty
+# string in dev unless the agent is being tested end-to-end; the ingest
+# endpoint hard-fails with 401 if the secret is unset, so the agent and
+# web service must share a non-empty value to operate.
+INTERNAL_AGENT_SHARED_SECRET = os.environ.get('INTERNAL_AGENT_SHARED_SECRET', '')
+
 # Google OAuth
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')

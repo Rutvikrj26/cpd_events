@@ -25,7 +25,8 @@ import { Separator } from "@/shared/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { StatusBadge } from "@/components/custom/StatusBadge";
-import { JoinButton } from "@/components/video/JoinButton";
+import { JoinButton, type JoinState } from "@/components/video/JoinButton";
+import { useEventActiveMeeting } from "@/hooks/useEventActiveMeeting";
 import { getPublicEvent, getPublicEvents } from "@/api/events";
 import { getMyRegistrations } from "@/api/registrations";
 import { Event } from "@/api/events/types";
@@ -115,6 +116,46 @@ export function EventDetail() {
     fetchRelatedEvents();
   }, [event]);
 
+  // Poll the *real* meeting state every 10s so the "live now" pill
+  // below reflects whether anyone's actually in a meeting — not just
+  // whether we're inside the event's scheduled window. Without this
+  // distinction the pill would say "Event is live now" + "Join as
+  // host" for the entire scheduled window, even after the host ended
+  // the meeting (and the join button would 409 because no room is
+  // active).
+  //
+  // Hoisted ABOVE the loading/error early returns so React's hook
+  // order stays stable across renders. The `enabled` flag gates
+  // actual fetching so we don't burn polls during the loading state
+  // or for non-host / past / non-online viewers.
+  const eventForPoll = event;
+  const isPastForPoll = !!(
+    eventForPoll &&
+    (eventForPoll.ends_at
+      ? new Date(eventForPoll.ends_at) < new Date()
+      : new Date(eventForPoll.starts_at) < new Date())
+  );
+  const eventStartedForPoll = !!(
+    eventForPoll && new Date(eventForPoll.starts_at) <= new Date()
+  );
+  const isEventOwnerForPoll =
+    !!eventForPoll &&
+    isAuthenticated &&
+    (user?.uuid === eventForPoll.owner?.uuid || user?.uuid === eventForPoll.organizer?.uuid);
+  const isEventHostForPoll =
+    !!eventForPoll &&
+    isAuthenticated &&
+    (eventForPoll.is_current_user_host ?? isEventOwnerForPoll);
+  const enableMeetingPoll =
+    !!eventForPoll &&
+    isEventHostForPoll &&
+    eventStartedForPoll &&
+    !isPastForPoll &&
+    (eventForPoll.format === 'online' || eventForPoll.format === 'hybrid');
+  const { status: meetingStatus } = useEventActiveMeeting(eventForPoll?.uuid, {
+    enabled: enableMeetingPoll,
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -138,19 +179,26 @@ export function EventDetail() {
     );
   }
 
-  // Derive states from event data
-  const isPast = event.ends_at
-    ? new Date(event.ends_at) < new Date()
-    : new Date(event.starts_at) < new Date();
-  const eventStarted = new Date(event.starts_at) <= new Date();
+  // Derive states from event data (mirrors the *ForPoll values above
+  // — kept duplicated rather than reused so the post-load values are
+  // free of the `event && …` defensive checks).
+  const isPast = isPastForPoll;
+  const eventStarted = eventStartedForPoll;
   const isRegistrationOpen = event.is_registration_open ?? event.registration_enabled;
   const organizerName = event.organizer?.display_name || event.organizer_name || event.owner?.display_name || "Unknown Organizer";
-
-  // Check if current user is the organizer (check both nested objects as per API variant)
-  const isEventOwner = isAuthenticated && (user?.uuid === event.owner?.uuid || user?.uuid === event.organizer?.uuid);
-  // Host = owner + listed speaker + platform admin; computed on the server.
-  // Falls back to ownership for legacy responses missing the flag.
-  const isEventHost = isAuthenticated && (event.is_current_user_host ?? isEventOwner);
+  const isEventOwner = isEventOwnerForPoll;
+  const isEventHost = isEventHostForPoll;
+  const meetingActive = meetingStatus === 'active' || meetingStatus === 'scheduled';
+  const headerJoinState: JoinState =
+    meetingStatus === 'active' ? 'meeting_live'
+    : meetingStatus === 'scheduled' ? 'meeting_live'
+    : meetingStatus === 'ended' ? 'meeting_ended'
+    : 'awaiting_host';
+  const meetingPillCopy =
+    meetingStatus === 'active' ? 'Meeting in progress'
+    : meetingStatus === 'scheduled' ? 'Meeting starting…'
+    : meetingStatus === 'ended' ? 'No meeting in progress'
+    : 'Within scheduled window';
 
   // Calculate duration display
   const getDurationDisplay = () => {
@@ -332,18 +380,30 @@ export function EventDetail() {
               </h1>
 
               {isEventHost && eventStarted && !isPast && (event.format === 'online' || event.format === 'hybrid') && (
-                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
-                  <span className="flex items-center gap-2 text-sm font-medium text-destructive">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75 animate-ping" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
-                    </span>
-                    Event is live now
+                <div
+                  className={`flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 ${
+                    meetingActive
+                      ? 'border-destructive/40 bg-destructive/10'
+                      : 'border-muted-foreground/20 bg-muted/40'
+                  }`}
+                >
+                  <span
+                    className={`flex items-center gap-2 text-sm font-medium ${
+                      meetingActive ? 'text-destructive' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {meetingActive && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75 animate-ping" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
+                      </span>
+                    )}
+                    {meetingPillCopy}
                   </span>
                   <JoinButton
                     eventUuid={event.uuid}
                     role="host"
-                    state="live"
+                    state={headerJoinState}
                     size="sm"
                   />
                 </div>
@@ -763,7 +823,14 @@ export function EventDetail() {
                                 eventUuid={event.uuid}
                                 size="sm"
                                 role="host"
-                                state={eventStarted ? "live" : "pre_event"}
+                                // Same real-meeting-state derivation as the
+                                // header pill — see headerJoinState above.
+                                // Without this the Location box's "Start
+                                // meeting" / "Join as host" CTA fires
+                                // /meetings/join/ for non-existent rooms
+                                // (HTTP 409) when no meeting is live but
+                                // we're inside the event's scheduled window.
+                                state={headerJoinState}
                               />
                             ) : (
                               <Button size="sm" asChild>
@@ -802,7 +869,14 @@ export function EventDetail() {
                                 eventUuid={event.uuid}
                                 size="sm"
                                 role="host"
-                                state={eventStarted ? "live" : "pre_event"}
+                                // Same real-meeting-state derivation as the
+                                // header pill — see headerJoinState above.
+                                // Without this the Location box's "Start
+                                // meeting" / "Join as host" CTA fires
+                                // /meetings/join/ for non-existent rooms
+                                // (HTTP 409) when no meeting is live but
+                                // we're inside the event's scheduled window.
+                                state={headerJoinState}
                               />
                             ) : (
                               <Button size="sm" asChild>

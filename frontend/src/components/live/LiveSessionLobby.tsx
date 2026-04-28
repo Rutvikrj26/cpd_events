@@ -27,6 +27,18 @@ export interface LiveSessionLobbyProps {
     maxAttendees?: number;
     status: 'scheduled' | 'live' | 'completed' | 'cancelled' | 'closed' | 'draft' | 'published';
     deliveryMode?: 'online' | 'in_person' | 'hybrid';
+    /**
+     * True only when an actual meeting room is live right now (host has
+     * clicked Start and the room is ACTIVE/SCHEDULED). When false, the
+     * lobby suppresses the green "Live now" countdown pill — even if
+     * `status==='live'` (which is schedule-driven and stays true for
+     * the entire scheduled window). Without this we'd show two
+     * conflicting signals: a green "Live now" pill alongside a
+     * disabled "Meeting has ended" / "Waiting for host" join button.
+     * Callers that don't poll meeting state can leave it undefined;
+     * the pill falls back to status-driven behaviour.
+     */
+    meetingActive?: boolean;
     /** True iff the join window has opened and the session isn't past. */
     canJoinNow: boolean;
     /** True iff the session has ended. Hides the join slot, shows recording link. */
@@ -55,6 +67,7 @@ export function LiveSessionLobby({
     maxAttendees,
     status,
     deliveryMode,
+    meetingActive,
     canJoinNow,
     isPast,
     joinSlot,
@@ -85,6 +98,7 @@ export function LiveSessionLobby({
                 startsAt={startsAt}
                 endsAt={endsAt}
                 status={status as any}
+                meetingLive={meetingActive}
                 className="w-full max-w-md"
             />
 

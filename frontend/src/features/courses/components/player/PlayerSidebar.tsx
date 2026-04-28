@@ -156,7 +156,7 @@ export function PlayerSidebar({
                                             courseUuid={course.uuid}
                                             sessionUuid={s.uuid}
                                             role="host"
-                                            state={s.status === 'live' ? 'live' : 'pre_event'}
+                                            state={s.status === 'live' ? 'meeting_live' : 'awaiting_host'}
                                             size="sm"
                                             variant="outline"
                                             className="shrink-0 h-7 px-2 text-xs"

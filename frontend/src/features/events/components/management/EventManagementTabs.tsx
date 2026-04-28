@@ -131,10 +131,7 @@ export function EventManagementTabs({ event, isEventHost }: EventManagementTabsP
 
                 {event.certificates_enabled && (
                     <TabsContent value="certificates" className="mt-0">
-                        <EventCertificatesTab
-                            eventUuid={event.uuid}
-                            checkedInCount={stats.checkedIn}
-                        />
+                        <EventCertificatesTab eventUuid={event.uuid} />
                     </TabsContent>
                 )}
 

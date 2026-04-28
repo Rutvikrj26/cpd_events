@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend",
+      "runtimeExecutable": "/Users/rutvikrj26/.nvm/versions/node/v24.14.1/bin/node",
+      "runtimeArgs": [
+        "/Users/rutvikrj26/Desktop/accredit/frontend/node_modules/vite/bin/vite.js",
+        "/Users/rutvikrj26/Desktop/accredit/frontend"
+      ],
+      "port": 5173
+    }
+  ]
+}

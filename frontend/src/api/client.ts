@@ -175,8 +175,11 @@ client.interceptors.response.use(
         }
 
         if (!error.response) {
-            // Network error — request never reached the server.
+            // Network error — request never reached the server. The stable
+            // `id` collapses repeats: if N parallel requests fail (common on
+            // initial dashboard load), the user sees one toast, not N.
             toast.error('Network error', {
+                id: 'network-error',
                 description: 'Could not reach the server. Check your connection and try again.',
             });
             return Promise.reject(error);
@@ -185,6 +188,7 @@ client.interceptors.response.use(
         const status = error.response.status;
         if (status >= 500) {
             toast.error('Server Error', {
+                id: 'server-error',
                 description: 'Something went wrong on our end. Please try again later.',
             });
         } else if (status === 401) {

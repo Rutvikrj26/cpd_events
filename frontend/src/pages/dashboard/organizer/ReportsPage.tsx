@@ -230,7 +230,14 @@ function EventsTab({ period }: { period: string }) {
                                     <div className="flex items-center gap-4">
                                         <div className="h-10 w-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center font-bold">$</div>
                                         <div>
-                                            <p className="font-medium text-foreground">Ticket Sale</p>
+                                            {/* Lead with the buyer when known so two different
+                                                attendees registering for the same event don't
+                                                read as a single "duplicate" $19.99 line. Falls
+                                                back to "Ticket Sale" for legacy rows whose
+                                                buyer info hasn't been captured. */}
+                                            <p className="font-medium text-foreground">
+                                                {(txn as any).buyer_name || 'Ticket Sale'}
+                                            </p>
                                             <p className="text-xs text-muted-foreground">{txn.event_title}</p>
                                         </div>
                                     </div>

@@ -157,9 +157,14 @@ def derive_course_enrollment_view_state(enrollment: CourseEnrollment) -> dict[st
         certificate_uuid = None
         if enrollment.certificate_issued:
             # Lazy: the wallet endpoint will surface the actual cert.
+            # CourseEnrollment has a reverse FK from Certificate via
+            # related_name='certificates', so traverse through the
+            # enrollment directly rather than through the user (which
+            # has no direct certificates relation; certificates link
+            # to enrollments and registrations, not users).
             cert = (
-                enrollment.user.certificates.filter(
-                    course_enrollment=enrollment, status="active", deleted_at__isnull=True,
+                enrollment.certificates.filter(
+                    status="active", deleted_at__isnull=True,
                 )
                 .order_by("-created_at")
                 .first()
@@ -220,17 +225,25 @@ def derive_program_enrollment_view_state(enrollment: ProgramEnrollment) -> dict[
 
     if status == ProgramEnrollment.Status.ACTIVE:
         # "Started" means at least one member-course CourseEnrollment is
-        # ACTIVE/COMPLETED with progress > 0.
-        any_started = (
-            CourseEnrollment.objects.filter(
-                from_program_enrollment=enrollment,
-                status__in=(
-                    CourseEnrollment.Status.ACTIVE,
-                    CourseEnrollment.Status.COMPLETED,
-                ),
-                progress_percent__gt=0,
-            ).exists()
+        # ACTIVE/COMPLETED with progress > 0. We match member courses
+        # via the program-courses through-table (rather than the
+        # `from_program_enrollment` reverse FK) because that link is only
+        # populated when the user enters the program through the bundle
+        # checkout flow — direct course enrollments belonging to a program
+        # member also count toward "started" and would otherwise wrongly
+        # leave the badge stuck on "ready to start".
+        program_course_ids = list(
+            enrollment.program.program_courses.values_list("course_id", flat=True)
         )
+        member_enrollments = CourseEnrollment.objects.filter(
+            user=enrollment.user,
+            course_id__in=program_course_ids,
+            status__in=(
+                CourseEnrollment.Status.ACTIVE,
+                CourseEnrollment.Status.COMPLETED,
+            ),
+        )
+        any_started = member_enrollments.filter(progress_percent__gt=0).exists()
         if not any_started:
             return {"kind": "ready_to_start"}
         # Aggregate progress across required member courses; gives the UI
@@ -245,9 +258,19 @@ def derive_program_enrollment_view_state(enrollment: ProgramEnrollment) -> dict[
 
 
 def _program_aggregate_percent(enrollment: ProgramEnrollment) -> int:
-    """Average of member-course progress percentages, clamped to [0, 100]."""
+    """Average of member-course progress percentages, clamped to [0, 100].
+
+    Aggregates across the user's enrollments in any course that's a member
+    of this program — see `derive_program_enrollment_view_state` for why
+    we don't filter by `from_program_enrollment` (link not set for direct
+    enrollments).
+    """
+    program_course_ids = list(
+        enrollment.program.program_courses.values_list("course_id", flat=True)
+    )
     rows = CourseEnrollment.objects.filter(
-        from_program_enrollment=enrollment,
+        user=enrollment.user,
+        course_id__in=program_course_ids,
     ).values_list("progress_percent", flat=True)
     if not rows:
         return 0

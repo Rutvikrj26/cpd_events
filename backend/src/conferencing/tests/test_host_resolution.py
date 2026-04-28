@@ -1,5 +1,5 @@
 """
-Tests for host-role resolution on the join-video endpoints.
+Tests for host-role resolution on the meeting endpoints.
 
 Covers the expanded host model:
 - Event host: owner, listed Speaker, platform admin
@@ -10,6 +10,10 @@ Backed by helpers in `conferencing.views`:
 - is_event_host
 - is_course_session_host
 - is_platform_admin
+
+These tests exercise the **join** endpoint (``POST /meetings/join/``)
+which mirrors the host predicate behaviour the legacy ``join-video``
+endpoint used to test. Start/end have their own coverage.
 """
 
 from unittest.mock import MagicMock, patch
@@ -24,8 +28,11 @@ from conferencing.models import VideoRoom
 @pytest.fixture
 def mock_video_provider():
     provider = MagicMock()
+    provider.is_configured.return_value = True
     provider.generate_join_token.return_value = 'mock-token'
-    with patch('conferencing.views.get_video_provider', return_value=provider):
+    # The meetings module imports the provider lazily inside helpers,
+    # so patch the canonical accessor.
+    with patch('conferencing.meetings.get_video_provider', return_value=provider):
         yield provider
 
 
@@ -83,11 +90,11 @@ def session_room(db, course_session):
 
 
 def event_url(event):
-    return f'/api/v1/events/{event.uuid}/join-video/'
+    return f'/api/v1/events/{event.uuid}/meetings/join/'
 
 
 def session_url(course, course_session):
-    return f'/api/v1/courses/{course.uuid}/sessions/{course_session.uuid}/join-video/'
+    return f'/api/v1/courses/{course.uuid}/sessions/{course_session.uuid}/meetings/join/'
 
 
 @pytest.mark.django_db

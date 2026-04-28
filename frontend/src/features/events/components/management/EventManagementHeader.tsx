@@ -15,7 +15,8 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from '@/shared/ui/alert-dialog';
-import { JoinButton } from '@/components/video/JoinButton';
+import { JoinButton, type JoinState } from '@/components/video/JoinButton';
+import { useEventActiveMeeting } from '@/hooks/useEventActiveMeeting';
 import { toast } from 'sonner';
 import { usePublishEvent, useUnpublishEvent, useDeleteEventMutation } from '../../hooks';
 import type { Event } from '../../types';
@@ -78,24 +79,98 @@ export function EventManagementHeader({
         });
     };
 
+    // Poll the *real* meeting state so the pill below reflects whether
+    // a meeting is actually running, not just whether we're inside the
+    // event's scheduled window. `isLive` (from the parent) is
+    // schedule-driven (`event.status==='live'`); meetingStatus is
+    // webhook-driven and refreshes every 10s.
+    //
+    // Without this distinction the header showed "Event is live now"
+    // for the entire scheduled window, even after the host ended a
+    // session — and the "Join as host" button would 409 because the
+    // backend correctly reported no active meeting.
+    const { status: meetingStatus } = useEventActiveMeeting(event.uuid, {
+        enabled: isLive && isEventHost,
+    });
+
+    // Pill visibility + label/colour logic. We only show the pill when
+    // the host has something actionable to see — i.e. either a meeting
+    // is in progress (loud red) or the scheduled window is open and
+    // they could start one (muted neutral). Outside the window: nothing.
+    const meetingActive = meetingStatus === 'active' || meetingStatus === 'scheduled';
+    const showPill = isEventHost && (meetingActive || isLive);
+    const headerJoinState: JoinState =
+        meetingStatus === 'active' ? 'meeting_live'
+        : meetingStatus === 'scheduled' ? 'meeting_live'
+        : meetingStatus === 'ended' ? 'meeting_ended'
+        : 'awaiting_host';
+    const pillCopy =
+        meetingStatus === 'active' ? 'Meeting in progress'
+        : meetingStatus === 'scheduled' ? 'Meeting starting…'
+        : meetingStatus === 'ended' ? 'No meeting in progress'
+        : 'Within scheduled window';
+
     return (
         <>
-            {isLive && isEventHost && (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
-                    <span className="flex items-center gap-2 text-sm font-medium text-destructive">
-                        <span className="relative flex h-2 w-2">
-                            <span className="absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75 animate-ping" />
-                            <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
-                        </span>
-                        Event is live now
+            {showPill && (
+                <div
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 ${
+                        meetingActive
+                            ? 'border-destructive/40 bg-destructive/10'
+                            : 'border-muted-foreground/20 bg-muted/40'
+                    }`}
+                >
+                    <span
+                        className={`flex items-center gap-2 text-sm font-medium ${
+                            meetingActive ? 'text-destructive' : 'text-muted-foreground'
+                        }`}
+                    >
+                        {meetingActive && (
+                            <span className="relative flex h-2 w-2">
+                                <span className="absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75 animate-ping" />
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
+                            </span>
+                        )}
+                        {pillCopy}
                     </span>
-                    <JoinButton eventUuid={event.uuid} role="host" state="live" size="sm" />
+                    <JoinButton
+                        eventUuid={event.uuid}
+                        role="host"
+                        state={headerJoinState}
+                        size="sm"
+                    />
                 </div>
             )}
 
             <PageHeader
                 title={event.title}
-                description={`Manage registrations and attendance for your ${event.format ? `${event.format} event` : 'event'}.`}
+                // Subtitle composed from real event facts (date + format)
+                // rather than a static "manage your event" sentence — every
+                // organiser-facing page used to say the same thing, which
+                // made the page feel like a template rather than this
+                // specific event. Falls back gracefully when fields are
+                // missing.
+                description={(() => {
+                    const parts: string[] = [];
+                    if (event.starts_at) {
+                        parts.push(
+                            new Date(event.starts_at).toLocaleDateString(undefined, {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                            }),
+                        );
+                    }
+                    if (event.format) {
+                        const formatLabel =
+                            event.format.charAt(0).toUpperCase() + event.format.slice(1);
+                        parts.push(formatLabel);
+                    }
+                    return parts.length > 0
+                        ? parts.join(' · ')
+                        : 'Manage registrations, attendance, and certificates.';
+                })()}
                 actions={
                     <div className="flex gap-2">
                         {event.status === 'draft' && !hasStarted && (

@@ -2,7 +2,13 @@
 
 from rest_framework import serializers
 
-from conferencing.models import VideoRecording, VideoRecordingFile, VideoRoom
+from conferencing.models import (
+    Transcript,
+    TranscriptSegment,
+    VideoRecording,
+    VideoRecordingFile,
+    VideoRoom,
+)
 
 
 class VideoRoomSerializer(serializers.ModelSerializer):
@@ -124,3 +130,143 @@ class JoinVideoResponseSerializer(serializers.Serializer):
 class VideoStatusSerializer(serializers.Serializer):
     configured = serializers.BooleanField()
     provider = serializers.CharField()
+
+
+# =========================================================================
+# Transcripts
+# =========================================================================
+#
+# Serializer split:
+#
+#   TranscriptSegmentReadSerializer  — public read shape (panel + search).
+#                                      Excludes provenance the UI doesn't
+#                                      need; includes speaker attribution
+#                                      snapshot.
+#
+#   TranscriptSegmentHistorySerializer — read shape for the audit-trail
+#                                        endpoint (organisers only).
+#                                        Adds source/edited_by/edited_at.
+#
+#   TranscriptSegmentIngestSerializer — agent-only WRITE shape. Validates
+#                                       livekit_segment_id is non-empty
+#                                       (the unique-constraint condition)
+#                                       and clamps confidence to [0, 1].
+#
+#   TranscriptSegmentEditSerializer  — organiser PATCH shape. Only `text`
+#                                      is editable; timing and speaker
+#                                      attribution are immutable for
+#                                      compliance traceability.
+#
+#   TranscriptSerializer             — wraps a Transcript with its current
+#                                      segments (filtered to replaced_by
+#                                      __isnull=True).
+
+
+class TranscriptSegmentReadSerializer(serializers.ModelSerializer):
+    speaker_name = serializers.CharField(source='speaker_name_snapshot', read_only=True)
+
+    class Meta:
+        model = TranscriptSegment
+        fields = [
+            'uuid',
+            'start_ms',
+            'end_ms',
+            'text',
+            'is_final',
+            'participant_identity',
+            'speaker_name',
+            'confidence',
+        ]
+        read_only_fields = fields
+
+
+class TranscriptSegmentHistorySerializer(TranscriptSegmentReadSerializer):
+    """Read shape that exposes provenance for the audit-trail endpoint.
+
+    Inherits from the public read serializer so any field added to the
+    public shape automatically lands here too — preventing drift where
+    history shows fewer fields than the live transcript view.
+    """
+
+    edited_by_name = serializers.SerializerMethodField()
+
+    class Meta(TranscriptSegmentReadSerializer.Meta):
+        fields = TranscriptSegmentReadSerializer.Meta.fields + [
+            'source',
+            'edited_at',
+            'edited_by_name',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_edited_by_name(self, obj) -> str:
+        return obj.edited_by.full_name if obj.edited_by_id else ''
+
+
+class TranscriptSegmentIngestSerializer(serializers.Serializer):
+    """Validates a single segment posted by the agent."""
+
+    livekit_segment_id = serializers.CharField(max_length=128)
+    start_ms = serializers.IntegerField(min_value=0)
+    end_ms = serializers.IntegerField(min_value=0)
+    text = serializers.CharField(allow_blank=False, max_length=10_000)
+    is_final = serializers.BooleanField(default=True)
+    participant_identity = serializers.CharField(
+        required=False, allow_blank=True, max_length=255,
+    )
+    speaker_name = serializers.CharField(
+        required=False, allow_blank=True, max_length=255,
+    )
+    # Some plugins (Whisper) don't emit confidence — accept null so the
+    # agent doesn't need to fabricate a value.
+    confidence = serializers.FloatField(
+        required=False, allow_null=True, min_value=0.0, max_value=1.0,
+    )
+
+    def validate(self, attrs):
+        if attrs['end_ms'] < attrs['start_ms']:
+            raise serializers.ValidationError(
+                {'end_ms': 'end_ms must be >= start_ms'}
+            )
+        return attrs
+
+
+class TranscriptSegmentEditSerializer(serializers.Serializer):
+    """Validates an organiser edit payload.
+
+    Only `text` is editable — timing, speaker attribution, and provenance
+    are immutable so the audit trail records exactly what the STT said
+    versus what was changed. If an organiser needs to retime a segment,
+    they should use the recording's chapter/marker tooling (separate
+    feature) rather than rewriting transcript history.
+    """
+
+    text = serializers.CharField(allow_blank=False, max_length=10_000)
+
+
+class TranscriptSerializer(serializers.ModelSerializer):
+    segments = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Transcript
+        fields = [
+            'uuid',
+            'provider',
+            'provider_model',
+            'language_code',
+            'status',
+            'started_at',
+            'finalized_at',
+            'word_count',
+            'error_message',
+            'segments',
+        ]
+        read_only_fields = fields
+
+    def get_segments(self, obj):
+        # Default read filters to the *current* version of each segment
+        # (replaced_by IS NULL) so consumers don't have to know about the
+        # edit history schema. The history endpoint exposes the full chain
+        # for auditors.
+        qs = obj.segments.filter(replaced_by__isnull=True).order_by('start_ms')
+        return TranscriptSegmentReadSerializer(qs, many=True).data

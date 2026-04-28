@@ -176,7 +176,17 @@ const OrgCoursesPage = () => {
                                         </TableRow>
                                     ) : (
                                         filteredCourses.map((course) => (
-                                            <TableRow key={course.uuid}>
+                                            <TableRow
+                                                key={course.uuid}
+                                                // Make the whole row a click target — the
+                                                // dropdown's MenuTrigger calls
+                                                // event.stopPropagation() internally so its
+                                                // clicks don't bubble up to here. Without
+                                                // this, the only way into a course was via
+                                                // the kebab menu, which most users miss.
+                                                onClick={() => navigate(`/courses/manage/${course.slug}`)}
+                                                className="cursor-pointer"
+                                            >
                                                 <TableCell>
                                                     <div className="flex items-center gap-3">
                                                         <div className="h-10 w-16 bg-slate-100 rounded overflow-hidden flex-shrink-0">
@@ -223,7 +233,12 @@ const OrgCoursesPage = () => {
                                                         {format(new Date(course.created_at), 'MMM d, yyyy')}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-right">
+                                                <TableCell
+                                                    className="text-right"
+                                                    // Don't let actions-cell clicks navigate
+                                                    // the row — the menu owns its own UX.
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button variant="ghost" className="h-8 w-8 p-0">

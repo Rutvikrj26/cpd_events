@@ -35,6 +35,7 @@ import {
 } from '@/features/dashboard';
 import { getRoleFlags } from '@/lib/role-utils';
 import { formatDate } from '@/lib/datetime';
+import { formatEventStatus } from '@/lib/eventStatus';
 
 const EVENT_STATUS_VARIANT: Record<string, 'success' | 'progress' | 'locked' | 'overdue' | 'secondary'> = {
     published: 'success',
@@ -118,7 +119,7 @@ export function OrganizerDashboard() {
                                         <thead className="border-b border-border bg-muted/40 text-caption font-medium uppercase tracking-wide text-muted-foreground">
                                             <tr>
                                                 <th className="px-card py-3">Event name</th>
-                                                <th className="px-card py-3">Date</th>
+                                                <th className="whitespace-nowrap px-card py-3">Date</th>
                                                 <th className="px-card py-3">Status</th>
                                                 <th className="px-card py-3 text-right">Registrations</th>
                                                 <th className="w-[50px] px-card py-3" />
@@ -143,15 +144,15 @@ export function OrganizerDashboard() {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td className="px-card py-3 text-muted-foreground">
+                                                    <td className="whitespace-nowrap px-card py-3 text-muted-foreground">
                                                         {formatDate(event.starts_at, user)}
                                                     </td>
                                                     <td className="px-card py-3">
                                                         <Badge
                                                             variant={EVENT_STATUS_VARIANT[event.status] || 'secondary'}
-                                                            className={`capitalize ${event.status === 'live' ? 'animate-pulse' : ''}`}
+                                                            className={event.status === 'live' ? 'animate-pulse' : ''}
                                                         >
-                                                            {event.status}
+                                                            {formatEventStatus(event.status)}
                                                         </Badge>
                                                     </td>
                                                     <td className="px-card py-3 text-right font-medium text-foreground tabular-nums">

@@ -11,7 +11,6 @@ import type { CertificateIssueResult } from '@/api/certificates';
 
 interface EventCertificatesTabProps {
     eventUuid: string;
-    checkedInCount: number;
 }
 
 function summarizeIssueResult(result: CertificateIssueResult) {
@@ -34,7 +33,7 @@ function summarizeIssueResult(result: CertificateIssueResult) {
     }
 }
 
-export function EventCertificatesTab({ eventUuid, checkedInCount }: EventCertificatesTabProps) {
+export function EventCertificatesTab({ eventUuid }: EventCertificatesTabProps) {
     const [revokeTarget, setRevokeTarget] = useState<any>(null);
     const [revokeReason, setRevokeReason] = useState('');
 
@@ -44,6 +43,14 @@ export function EventCertificatesTab({ eventUuid, checkedInCount }: EventCertifi
     const { mutate: reissue } = useReissueCertificate(eventUuid);
 
     const activeAttendees = (attendees as any[]).filter((a) => a.status !== 'cancelled');
+    // The "X verified attendees eligible" copy must mirror the actual issue-
+    // gating predicate. The legacy `checkedInCount` prop included every
+    // checked-in attendee regardless of whether they cleared the eligibility
+    // criteria (attendance threshold, etc.), inflating the figure above the
+    // number of rows that actually offered an "Issue" button.
+    const eligibleCount = activeAttendees.filter(
+        (a) => a.attendance_eligible && !a.certificate_uuid,
+    ).length;
 
     const handleIssueCertificate = (registrationUuid: string) => {
         issue(
@@ -104,7 +111,7 @@ export function EventCertificatesTab({ eventUuid, checkedInCount }: EventCertifi
                     <div>
                         <h3 className="text-sm font-bold text-info">Ready to issue?</h3>
                         <p className="text-sm text-muted-foreground">
-                            You have {checkedInCount} verified attendees eligible for certificates.
+                            You have {eligibleCount} verified attendee{eligibleCount === 1 ? '' : 's'} eligible for certificates.
                         </p>
                     </div>
                 </div>
@@ -177,16 +184,21 @@ export function EventCertificatesTab({ eventUuid, checkedInCount }: EventCertifi
                                                     Revoke
                                                 </Button>
                                             </>
-                                        ) : (
+                                        ) : attendee.attendance_eligible ? (
+                                            // Hide the Issue button entirely when the attendee
+                                            // doesn't qualify, rather than rendering it disabled.
+                                            // A disabled button reads as "this row is also a
+                                            // candidate, just blocked right now" and inflates
+                                            // the eligible count in the organiser's mental model
+                                            // — the UI now matches the data.
                                             <Button
                                                 size="sm"
                                                 variant="outline"
-                                                disabled={!attendee.attendance_eligible}
                                                 onClick={() => handleIssueCertificate(attendee.uuid)}
                                             >
                                                 Issue
                                             </Button>
-                                        )}
+                                        ) : null}
                                     </td>
                                 </tr>
                             ))}

@@ -22,6 +22,7 @@ import {
     FeedbackField,
 } from '@/api/feedback/types';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/api/client';
 
 interface FeedbackFormProps {
     eventUuid: string;
@@ -55,6 +56,7 @@ export function FeedbackForm({
 }: FeedbackFormProps) {
     const [fields, setFields] = useState<FeedbackField[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [responses, setResponses] = useState<Record<string, unknown>>(
         responsesFromFeedback(existingFeedback),
     );
@@ -64,10 +66,20 @@ export function FeedbackForm({
     useEffect(() => {
         let cancelled = false;
         getFeedbackFields(eventUuid)
-            .then((data) => !cancelled && setFields(data))
+            .then((data) => {
+                if (cancelled) return;
+                setFields(data);
+                setLoadError(null);
+            })
             .catch((err) => {
+                if (cancelled) return;
                 console.error(err);
-                toast.error('Failed to load feedback form');
+                // Render inline inside the modal — the API wrapper passes
+                // `silent: true` so the global toast doesn't fire. We
+                // intentionally DON'T raise a toast here either: showing
+                // both is the bug we're fixing. The empty/error state below
+                // gives the user the same information without doubling up.
+                setLoadError(getApiErrorMessage(err));
             })
             .finally(() => !cancelled && setLoading(false));
         return () => {
@@ -273,6 +285,10 @@ export function FeedbackForm({
                 <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
                 </div>
+            ) : loadError ? (
+                <p className="text-sm text-destructive py-4">
+                    Could not load the feedback form. {loadError}
+                </p>
             ) : fields.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4">
                     This event has no feedback form configured.

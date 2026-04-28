@@ -136,6 +136,38 @@ class LiveKitProvider(VideoProvider):
         finally:
             await api.aclose()
 
+    async def _dispatch_agent_async(
+        self, room_name: str, agent_name: str, metadata: str,
+    ) -> str | None:
+        """Tell LiveKit to dispatch a registered agent into a specific room.
+
+        Returns the dispatch_id on success, None on failure (logged).
+        Idempotent on the LiveKit side — re-dispatching a known agent
+        into a room it's already in is a no-op. We tolerate failures
+        (logged as warnings) because transcription is non-critical
+        relative to the room itself; the meeting should proceed even
+        if captions don't.
+        """
+        lk = _get_livekit_api_module()
+        api = await self._create_api()
+        try:
+            response = await api.agent_dispatch.create_dispatch(
+                lk.CreateAgentDispatchRequest(
+                    agent_name=agent_name,
+                    room=room_name,
+                    metadata=metadata,
+                )
+            )
+            return response.id
+        except Exception:
+            logger.exception(
+                "Failed to dispatch agent %s into room %s",
+                agent_name, room_name,
+            )
+            return None
+        finally:
+            await api.aclose()
+
     # ------------------------------------------------------------------
     # Sync façade
     # ------------------------------------------------------------------
@@ -159,6 +191,15 @@ class LiveKitProvider(VideoProvider):
         if ok:
             logger.info("LiveKit room deleted: %s", room_name)
         return ok
+
+    def dispatch_agent(
+        self, room_name: str, agent_name: str, metadata: str = '',
+    ) -> str | None:
+        """Sync façade for `_dispatch_agent_async`. Returns the dispatch
+        id on success, None on failure (already logged)."""
+        return async_to_sync(self._dispatch_agent_async)(
+            room_name, agent_name, metadata,
+        )
 
     def list_participants(self, room_name: str) -> list[ParticipantInfo]:
         participants = async_to_sync(self._list_participants_async)(room_name)
@@ -200,15 +241,25 @@ class LiveKitProvider(VideoProvider):
         is_host: bool = False,
         waiting: bool = False,
     ) -> str:
+        import json
+
         lk = _get_livekit_api_module()
         # Waiting participants still join the room (so hosts can see & admit
         # them) but cannot publish or subscribe until upgraded.
         can_publish = True if is_host else (not waiting)
         can_subscribe = True if is_host else (not waiting)
+        # Stamp `is_host` into the participant metadata so other clients can
+        # see it (e.g. for the "you're the last host" leave-confirmation
+        # check). LiveKit propagates `participant.metadata` to every other
+        # participant in the room as a JSON string. Anything beyond
+        # `is_host` is presentation-layer only — auth still flows through
+        # the JWT grants above.
+        metadata = json.dumps({'is_host': bool(is_host)})
         token = (
             lk.AccessToken(self._api_key, self._api_secret)
             .with_identity(participant_identity)
             .with_name(participant_name)
+            .with_metadata(metadata)
             .with_grants(
                 lk.VideoGrants(
                     room_join=True,

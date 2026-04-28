@@ -1,5 +1,11 @@
 import api from '../client';
-import type { JoinVideoResponse, VideoRecording, VideoRoom, VideoStatus } from './types';
+import type {
+  ActiveMeetingResponse,
+  JoinVideoResponse,
+  VideoRecording,
+  VideoRoom,
+  VideoStatus,
+} from './types';
 
 export async function getVideoStatus(): Promise<VideoStatus> {
   const response = await api.get('/video/status/');
@@ -11,20 +17,70 @@ export async function getVideoRooms(): Promise<VideoRoom[]> {
   return response.data.results || response.data;
 }
 
-export async function joinEventVideo(eventUuid: string): Promise<JoinVideoResponse> {
-  const response = await api.post(`/events/${eventUuid}/join-video/`);
+// ---------------------------------------------------------------------------
+// Meetings — Zoom-model lifecycle (start / join / end / active).
+//
+// Each meeting session is a fresh `VideoRoom` row on the backend.
+// `start` is host-only and creates the row; `join` is everyone-else
+// and 409s when no meeting is active; `active` is the cheap polling
+// endpoint the lobby uses to know when to flip the join button on;
+// `end` is the host's "End meeting for all" action.
+// ---------------------------------------------------------------------------
+
+export async function startEventMeeting(eventUuid: string): Promise<JoinVideoResponse> {
+  const response = await api.post(`/events/${eventUuid}/meetings/start/`);
   return response.data;
 }
 
-export async function joinCourseSessionVideo(
+export async function joinEventMeeting(eventUuid: string): Promise<JoinVideoResponse> {
+  const response = await api.post(`/events/${eventUuid}/meetings/join/`);
+  return response.data;
+}
+
+export async function getEventActiveMeeting(eventUuid: string): Promise<ActiveMeetingResponse> {
+  const response = await api.get(`/events/${eventUuid}/meetings/active/`);
+  return response.data;
+}
+
+export async function startCourseSessionMeeting(
   courseUuid: string,
-  sessionUuid: string
+  sessionUuid: string,
 ): Promise<JoinVideoResponse> {
   const response = await api.post(
-    `/courses/${courseUuid}/sessions/${sessionUuid}/join-video/`
+    `/courses/${courseUuid}/sessions/${sessionUuid}/meetings/start/`,
   );
   return response.data;
 }
+
+export async function joinCourseSessionMeeting(
+  courseUuid: string,
+  sessionUuid: string,
+): Promise<JoinVideoResponse> {
+  const response = await api.post(
+    `/courses/${courseUuid}/sessions/${sessionUuid}/meetings/join/`,
+  );
+  return response.data;
+}
+
+export async function getCourseSessionActiveMeeting(
+  courseUuid: string,
+  sessionUuid: string,
+): Promise<ActiveMeetingResponse> {
+  const response = await api.get(
+    `/courses/${courseUuid}/sessions/${sessionUuid}/meetings/active/`,
+  );
+  return response.data;
+}
+
+/** Host-only "End meeting for all". Boots every participant. */
+export async function endMeeting(roomUuid: string): Promise<{ status: string; room_uuid: string }> {
+  const response = await api.post(`/video/rooms/${roomUuid}/end/`);
+  return response.data;
+}
+
+// ---------------------------------------------------------------------------
+// Recording / participant control — unchanged from previous design.
+// ---------------------------------------------------------------------------
 
 export async function getVideoRecordings(
   params?: { event_uuid?: string; course_session_uuid?: string; manage?: boolean },
@@ -61,7 +117,7 @@ export async function stopRoomRecording(roomUuid: string): Promise<{ status: str
 
 export async function admitParticipant(
   roomUuid: string,
-  identity: string
+  identity: string,
 ): Promise<{ status: string; identity: string }> {
   const response = await api.post(`/video/rooms/${roomUuid}/admit_participant/`, {
     identity,
@@ -71,7 +127,7 @@ export async function admitParticipant(
 
 export async function denyParticipant(
   roomUuid: string,
-  identity: string
+  identity: string,
 ): Promise<{ status: string; identity: string }> {
   const response = await api.post(`/video/rooms/${roomUuid}/deny_participant/`, {
     identity,

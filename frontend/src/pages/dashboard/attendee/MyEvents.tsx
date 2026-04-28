@@ -121,7 +121,7 @@ export function MyEvents() {
                   <JoinButton
                     eventUuid={ev.uuid}
                     role="host"
-                    state={eventStarted ? "live" : "pre_event"}
+                    state={eventStarted ? "meeting_live" : "awaiting_host"}
                     size="sm"
                   />
                 </div>
@@ -246,23 +246,22 @@ function RegistrationCard({ registration, isPast = false }: { registration: Regi
         )}
 
         <div className="flex gap-2 pt-2 flex-wrap">
+          {/* Single primary CTA per card. The previous version rendered
+              both an "Open Lobby" full-width button AND a "Go to lobby"
+              icon button that pointed at the *exact same URL*; two
+              identical actions on one card is a tell that the card was
+              composed from older partials and never reconciled. The icon
+              now lives on the single primary button. */}
           {!isPast ? (
             <Link to={`/events/${event.uuid}/lobby`} className="flex-1">
               <Button variant="default" size="sm" className="w-full">
-                Open Lobby
+                <Video className="h-3 w-3 mr-1" /> Open Lobby
               </Button>
             </Link>
           ) : (
             <Link to={`/events/${event.slug || event.uuid}/details`} className="flex-1">
               <Button variant="outline" size="sm" className="w-full">
                 View Event
-              </Button>
-            </Link>
-          )}
-          {!isPast && (
-            <Link to={`/events/${event.uuid}/lobby`}>
-              <Button size="sm">
-                <Video className="h-3 w-3 mr-1" /> Go to lobby
               </Button>
             </Link>
           )}

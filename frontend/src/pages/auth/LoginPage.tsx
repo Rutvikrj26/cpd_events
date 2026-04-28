@@ -64,8 +64,13 @@ export function LoginPage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
+    // Clear any leftover toasts (e.g. a "Network error" from offline retries
+    // or a previous failed login attempt) so the user starts each submit
+    // with a clean slate.
+    toast.dismiss();
     try {
       await login({ email: values.email, password: values.password });
+      toast.dismiss();
       toast.success("Logged in successfully");
 
       // SMART REDIRECT LOGIC
@@ -78,7 +83,7 @@ export function LoginPage() {
       // 2. Default fallback
       navigate("/dashboard");
     } catch (error) {
-      toast.error("Invalid email or password");
+      toast.error("Invalid email or password", { id: "login-error" });
     } finally {
       setIsLoading(false);
     }

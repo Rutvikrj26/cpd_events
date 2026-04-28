@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 
@@ -9,6 +9,7 @@ import { getVideoRecordings } from '@/api/video';
 import type { VideoRecording } from '@/api/video/types';
 import { getPublicEvent } from '@/api/events';
 import type { Event } from '@/api/events/types';
+import { TranscriptPanel } from '@/components/recording/TranscriptPanel';
 
 export function EventRecordingPage() {
   const { id: eventUuid, recordingUuid } = useParams<{ id: string; recordingUuid?: string }>();
@@ -17,6 +18,10 @@ export function EventRecordingPage() {
   const [recordings, setRecordings] = useState<VideoRecording[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Shared ref between the <video> element and the TranscriptPanel.
+  // The panel reads currentTime via timeupdate listeners and writes
+  // it back when the user clicks a segment to seek.
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (!eventUuid) return;
@@ -155,24 +160,42 @@ export function EventRecordingPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video
-              key={videoFile.uuid}
-              src={videoFile.storage_url}
-              controls
-              preload="metadata"
-              className="w-full rounded-md"
-              style={{ maxHeight: '70vh', backgroundColor: 'black' }}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
+          <Card>
+            <CardContent className="p-0">
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video
+                ref={videoRef}
+                key={videoFile.uuid}
+                src={videoFile.storage_url}
+                controls
+                preload="metadata"
+                className="w-full rounded-md"
+                style={{ maxHeight: '70vh', backgroundColor: 'black' }}
+              />
+              <div className="p-4 text-sm text-muted-foreground">
+                <a href={videoFile.storage_url} download={videoFile.file_name} className="underline">
+                  Download {videoFile.file_name}
+                </a>
+              </div>
+            </CardContent>
+          </Card>
+          {/* Transcript panel — fetches its own data via react-query;
+              renders nothing meaningful when no transcript exists. The
+              parent (this page) doesn't gate on transcript existence
+              because the panel handles the empty/error states inline. */}
+          <div className="lg:max-h-[80vh] lg:sticky lg:top-4">
+            <TranscriptPanel
+              recordingUuid={recording.uuid}
+              videoRef={videoRef}
+              // Server-computed: owner / staff / admin → can edit. The
+              // backend re-checks the same predicate on PATCH; surfacing
+              // the affordance via the same flag keeps both sides
+              // consistent without an extra round-trip.
+              canEdit={!!event?.is_current_user_host}
             />
-            <div className="p-4 text-sm text-muted-foreground">
-              <a href={videoFile.storage_url} download={videoFile.file_name} className="underline">
-                Download {videoFile.file_name}
-              </a>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );

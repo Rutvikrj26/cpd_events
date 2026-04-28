@@ -90,7 +90,11 @@ export function CourseSessionLobbyPage() {
             courseUuid={course.uuid}
             sessionUuid={session.uuid}
             role={isHost ? 'host' : 'attendee'}
-            state={isHost ? (canJoinNow ? 'live' : 'pre_event') : (canJoinNow ? 'in_window' : 'pre_event')}
+            // Course-session lobby keeps the schedule-driven state for now (no
+            // active-meeting polling yet — that's a follow-up; the join button
+            // 409s with "no active meeting" when the host hasn't started, so
+            // attendees see an inline error rather than a real lobby state).
+            state={isHost ? 'awaiting_host' : (canJoinNow ? 'meeting_live' : 'pre_event')}
             size="lg"
         />
     ) : null;

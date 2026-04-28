@@ -24,6 +24,12 @@ export const PublicCourseDetailPage = () => {
     const [isEnrolling, setIsEnrolling] = useState(false);
     const [relatedCourses, setRelatedCourses] = useState<Course[]>([]);
     const [isEnrolled, setIsEnrolled] = useState(false);
+    // Tracked separately so the CTA can distinguish "in progress" (resume the
+    // player) from "completed" (route to the certificate). Without this, a
+    // learner who finished the course saw "Enroll Now"/"Continue Course"
+    // again — the page can't decide between the three states with just a
+    // boolean.
+    const [completedAt, setCompletedAt] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchCourse = async () => {
@@ -80,8 +86,9 @@ export const PublicCourseDetailPage = () => {
             if (!course || !isAuthenticated) return;
             try {
                 const enrollments = await getEnrollments();
-                const enrolled = enrollments.some(enrollment => enrollment.course?.uuid === course.uuid);
-                setIsEnrolled(enrolled);
+                const match = enrollments.find(enrollment => enrollment.course?.uuid === course.uuid);
+                setIsEnrolled(!!match);
+                setCompletedAt(match?.completed_at ?? null);
             } catch (error) {
                 console.error('Failed to fetch enrollments:', error);
             }
@@ -100,7 +107,15 @@ export const PublicCourseDetailPage = () => {
         if (!course) return;
 
         if (isEnrolled) {
-            navigate(`/learn/${course.uuid}`);
+            // Completed users are sent to their accreditations page to find
+            // the cert; the in-player content is unchanged from when they
+            // finished, so the cert is the high-value destination here.
+            // In-progress users land on the player to resume.
+            if (completedAt) {
+                navigate('/accreditations');
+            } else {
+                navigate(`/learn/${course.uuid}`);
+            }
             return;
         }
 
@@ -170,10 +185,19 @@ export const PublicCourseDetailPage = () => {
                             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                                 <Link to="/discover/courses" className="hover:underline">Browse</Link>
                                 <span>/</span>
-                                <Link to="/discover/courses" className="hover:underline text-foreground font-medium">
-                                    {course.organization_name}
-                                </Link>
-                                <span>/</span>
+                                {/* The org segment is optional — when the
+                                    course has no organization_name (the
+                                    seeded demo data, single-tenant deploys),
+                                    rendering an empty <Link> produces the
+                                    visible "Browse / / Title" double-slash. */}
+                                {course.organization_name && (
+                                    <>
+                                        <Link to="/discover/courses" className="hover:underline text-foreground font-medium">
+                                            {course.organization_name}
+                                        </Link>
+                                        <span>/</span>
+                                    </>
+                                )}
                                 <span>{course.title}</span>
                             </div>
 
@@ -243,9 +267,17 @@ export const PublicCourseDetailPage = () => {
                                 {(() => {
                                     const windowState = course.enrollment_window_state;
                                     const isWindowBlocked = windowState === 'upcoming' || windowState === 'closed';
+                                    const isCompleted = isEnrolled && !!completedAt;
                                     const disabled = !isEnrolled && (isEnrolling || !course.enrollment_open || isWindowBlocked);
+                                    // Three-state CTA. The legacy two-state
+                                    // version (enrolled vs not) showed
+                                    // "Continue Course" for users who had
+                                    // already completed the course — they
+                                    // need a path to their certificate, not
+                                    // back into the player.
                                     let label = 'Enroll Now';
-                                    if (isEnrolled) label = 'Continue Course';
+                                    if (isCompleted) label = 'View Certificate';
+                                    else if (isEnrolled) label = 'Continue Course';
                                     else if (!course.enrollment_open) label = 'Enrollment Closed';
                                     else if (windowState === 'upcoming') label = 'Opens Soon';
                                     else if (windowState === 'closed') label = 'Enrollment Closed';

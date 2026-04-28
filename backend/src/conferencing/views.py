@@ -24,14 +24,26 @@ from rest_framework import generics, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from conferencing.models import VideoRecording, VideoRoom, VideoWebhookLog
+from conferencing.models import (
+    Transcript,
+    TranscriptSegment,
+    VideoRecording,
+    VideoRoom,
+    VideoWebhookLog,
+)
 from conferencing.serializers import (
     JoinVideoResponseSerializer,
+    TranscriptSegmentEditSerializer,
+    TranscriptSegmentHistorySerializer,
+    TranscriptSegmentIngestSerializer,
+    TranscriptSegmentReadSerializer,
+    TranscriptSerializer,
     VideoRecordingSerializer,
     VideoRoomSerializer,
     VideoStatusSerializer,
 )
 from common.rbac import roles
+from conferencing.permissions import IsInternalAgent
 from conferencing.service import get_video_provider
 
 logger = logging.getLogger(__name__)
@@ -135,292 +147,18 @@ class VideoStatusView(generics.GenericAPIView):
         return Response(VideoStatusSerializer(data).data)
 
 
-@roles('learner', 'organizer', 'admin', route_name='join_video')
-class JoinVideoView(generics.GenericAPIView):
-    """
-    POST /api/v1/events/{event_uuid}/join-video/
+# NOTE: The legacy `JoinVideoView` / `JoinVideoGuestView` /
+# `JoinCourseSessionVideoView` were deleted as part of the Zoom-model
+# redesign. Their replacements live in `conferencing/meetings.py`:
+#
+#   POST /events/{uuid}/meetings/start/   — host creates a fresh room
+#   POST /events/{uuid}/meetings/join/    — attendee/host joins the active room
+#   GET  /events/{uuid}/meetings/active/  — lobby polling
+#   POST /video/rooms/{uuid}/end/         — host ends meeting for everyone
+#
+# (Same endpoints mirrored under `/courses/{course_uuid}/sessions/...`
+# and `/public/events/...` for course sessions and unauthenticated guests.)
 
-    Generates a participant JWT token for joining the video room
-    associated with an event. The user must have a confirmed registration.
-    """
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, event_uuid):
-        from events.models import Event
-
-        try:
-            event = Event.objects.get(uuid=event_uuid, deleted_at__isnull=True)
-        except Event.DoesNotExist:
-            return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        # Find the video room for this event
-        from django.contrib.contenttypes.models import ContentType
-
-        ct = ContentType.objects.get_for_model(Event)
-        try:
-            video_room = VideoRoom.objects.get(content_type=ct, object_id=event.id)
-        except VideoRoom.DoesNotExist:
-            return Response({'error': 'No video room for this event'}, status=status.HTTP_404_NOT_FOUND)
-
-        is_host = is_event_host(request.user, event)
-
-        if video_room.status == VideoRoom.Status.ENDED:
-            if is_host:
-                video_room.reopen()
-            else:
-                return Response({'error': 'Video room has ended'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not is_host:
-            from registrations.models import Registration
-
-            has_registration = Registration.objects.filter(
-                event=event,
-                user=request.user,
-                status__in=['confirmed', 'attended'],
-                deleted_at__isnull=True,
-            ).exists()
-            if not has_registration:
-                return Response(
-                    {'error': 'You must be registered for this event'},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
-        if is_platform_admin(request.user) and event.owner_id != request.user.id:
-            logger.info(
-                "admin_host_override event_uuid=%s admin_user_id=%s",
-                event.uuid, request.user.id,
-            )
-
-        video_settings = event.video_settings or {}
-        waiting_room_enabled = bool(video_settings.get('waiting_room_enabled', False))
-        recording_default = bool(video_settings.get('recording_enabled', False))
-        waiting = waiting_room_enabled and not is_host
-
-        # Auto-start recording on first host join when the event opted in.
-        # ensure_recording_started is idempotent so concurrent joins / reconnects
-        # don't spawn duplicate egress processes.
-        if (
-            is_host
-            and recording_default
-            and video_room.status == VideoRoom.Status.ACTIVE
-        ):
-            try:
-                ensure_recording_started(video_room)
-            except Exception:
-                logger.exception(
-                    "Auto-start recording failed for event %s; host can retry manually",
-                    event.uuid,
-                )
-
-        provider = get_video_provider()
-        token = provider.generate_join_token(
-            room_name=video_room.room_name,
-            participant_identity=str(request.user.uuid),
-            participant_name=request.user.full_name or request.user.email,
-            is_host=is_host,
-            waiting=waiting,
-        )
-
-        recording_active = VideoRecording.objects.filter(
-            video_room=video_room, status=VideoRecording.Status.RECORDING
-        ).exists()
-
-        ws_url = getattr(settings, 'LIVEKIT_WS_URL', '')
-        data = {
-            'token': token,
-            'ws_url': ws_url,
-            'room_name': video_room.room_name,
-            'room_uuid': str(video_room.uuid),
-            'is_host': is_host,
-            'waiting': waiting,
-            'waiting_room_enabled': waiting_room_enabled,
-            'recording_enabled_default': recording_default,
-            'recording_active': recording_active,
-        }
-        return Response(JoinVideoResponseSerializer(data).data)
-
-
-class JoinVideoGuestView(generics.GenericAPIView):
-    """
-    POST /api/v1/public/events/{event_uuid}/join-video/
-
-    Issue a LiveKit token for a guest attendee using their registration UUID.
-    No authentication required — the registration UUID itself is the bearer
-    secret. Used by attendees who registered through the public event page
-    without creating an account.
-    """
-
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request, event_uuid):
-        from django.contrib.contenttypes.models import ContentType
-
-        from events.models import Event
-        from registrations.models import Registration
-
-        registration_uuid = request.data.get('registration_uuid') if isinstance(request.data, dict) else None
-        if not registration_uuid:
-            return Response(
-                {'error': 'registration_uuid is required'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            event = Event.objects.get(uuid=event_uuid, deleted_at__isnull=True)
-        except Event.DoesNotExist:
-            return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        try:
-            registration = Registration.objects.get(
-                uuid=registration_uuid,
-                event=event,
-                deleted_at__isnull=True,
-            )
-        except Registration.DoesNotExist:
-            return Response(
-                {'error': 'Registration not found for this event'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        if registration.status not in ['confirmed', 'attended']:
-            return Response(
-                {'error': 'Registration is not confirmed'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        ct = ContentType.objects.get_for_model(Event)
-        try:
-            video_room = VideoRoom.objects.get(content_type=ct, object_id=event.id)
-        except VideoRoom.DoesNotExist:
-            return Response(
-                {'error': 'No video room for this event'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        if video_room.status == VideoRoom.Status.ENDED:
-            return Response(
-                {'error': 'Video room has ended'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        video_settings = event.video_settings or {}
-        waiting_room_enabled = bool(video_settings.get('waiting_room_enabled', False))
-        recording_default = bool(video_settings.get('recording_enabled', False))
-        waiting = waiting_room_enabled
-
-        provider = get_video_provider()
-        token = provider.generate_join_token(
-            room_name=video_room.room_name,
-            participant_identity=f"guest-{registration.uuid}",
-            participant_name=registration.full_name or registration.email,
-            is_host=False,
-            waiting=waiting,
-        )
-
-        recording_active = VideoRecording.objects.filter(
-            video_room=video_room, status=VideoRecording.Status.RECORDING
-        ).exists()
-
-        ws_url = getattr(settings, 'LIVEKIT_WS_URL', '')
-        data = {
-            'token': token,
-            'ws_url': ws_url,
-            'room_name': video_room.room_name,
-            'room_uuid': str(video_room.uuid),
-            'is_host': False,
-            'waiting': waiting,
-            'waiting_room_enabled': waiting_room_enabled,
-            'recording_enabled_default': recording_default,
-            'recording_active': recording_active,
-        }
-        return Response(JoinVideoResponseSerializer(data).data)
-
-
-@roles('learner', 'organizer', 'instructor', 'admin', route_name='join_course_video')
-class JoinCourseSessionVideoView(generics.GenericAPIView):
-    """
-    POST /api/v1/courses/{course_uuid}/sessions/{session_uuid}/join-video/
-
-    Generates a participant JWT token for joining a course session video room.
-    """
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, course_uuid, session_uuid):
-        from learning.models import Course, CourseSession
-
-        try:
-            course = Course.objects.get(uuid=course_uuid)
-        except Course.DoesNotExist:
-            return Response({'error': 'Course not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        try:
-            session = CourseSession.objects.get(uuid=session_uuid, course=course)
-        except CourseSession.DoesNotExist:
-            return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        from django.contrib.contenttypes.models import ContentType
-
-        ct = ContentType.objects.get_for_model(CourseSession)
-        try:
-            video_room = VideoRoom.objects.get(content_type=ct, object_id=session.id)
-        except VideoRoom.DoesNotExist:
-            return Response({'error': 'No video room for this session'}, status=status.HTTP_404_NOT_FOUND)
-
-        is_host = is_course_session_host(request.user, course)
-
-        if video_room.status == VideoRoom.Status.ENDED:
-            if is_host:
-                video_room.reopen()
-            else:
-                return Response({'error': 'Video room has ended'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not is_host:
-            from learning.models import CourseEnrollment
-
-            has_enrollment = CourseEnrollment.objects.filter(
-                course=course,
-                user=request.user,
-                status='active',
-            ).exists()
-            if not has_enrollment:
-                return Response(
-                    {'error': 'You must be enrolled in this course'},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
-        if is_platform_admin(request.user) and course.created_by_id != request.user.id:
-            logger.info(
-                "admin_host_override course_uuid=%s session_uuid=%s admin_user_id=%s",
-                course.uuid, session.uuid, request.user.id,
-            )
-
-        provider = get_video_provider()
-        token = provider.generate_join_token(
-            room_name=video_room.room_name,
-            participant_identity=str(request.user.uuid),
-            participant_name=request.user.full_name or request.user.email,
-            is_host=is_host,
-        )
-
-        recording_active = VideoRecording.objects.filter(
-            video_room=video_room, status=VideoRecording.Status.RECORDING
-        ).exists()
-
-        ws_url = getattr(settings, 'LIVEKIT_WS_URL', '')
-        data = {
-            'token': token,
-            'ws_url': ws_url,
-            'room_name': video_room.room_name,
-            'room_uuid': str(video_room.uuid),
-            'is_host': is_host,
-            'waiting': False,
-            'waiting_room_enabled': False,
-            'recording_enabled_default': False,
-            'recording_active': recording_active,
-        }
-        return Response(JoinVideoResponseSerializer(data).data)
 
 
 @roles('organizer', 'admin', route_name='video_rooms')
@@ -890,3 +628,619 @@ class VideoWebhookView(View):
         process_video_webhook(log.id)
 
         return JsonResponse({'status': 'ok'})
+
+
+# =============================================================================
+# Transcripts
+# =============================================================================
+#
+# Endpoint surface:
+#
+#   Internal (agent-only, HMAC-authenticated):
+#     POST /api/v1/internal/transcripts/{uuid}/segments/   ingest one segment
+#     POST /api/v1/internal/transcripts/{uuid}/finalize/   transcript end-of-stream
+#
+#   Public (recording audience, IsAuthenticated + recording-access):
+#     GET  /api/v1/video/recordings/{uuid}/transcript/        (full transcript)
+#     GET  /api/v1/video/recordings/{uuid}/transcript/search/  (q=foo, GIN-backed)
+#     GET  /api/v1/video/recordings/{uuid}/transcript/export/  (?format=vtt|srt|txt)
+#
+# Edit + history endpoints land in Step 7. Defining the URL contract here
+# keeps the read shape stable for the agent + frontend to build against.
+
+
+def _resolve_recording_for_user(recording_uuid: str, user) -> VideoRecording | None:
+    """Returns the recording IFF `user` is allowed to view its transcript.
+
+    Read access mirrors the existing recording-list scope (see
+    `VideoRecordingViewSet.get_queryset`):
+
+      - Admins: all recordings.
+      - Event owners: recordings for events they own.
+      - Confirmed registrants: recordings for events they registered for.
+      - Course staff: recordings for sessions of courses they own/staff.
+      - Active/completed enrollees: recordings for sessions of those courses.
+
+    Returns None when no row matches — callers map to 404 (not 403) to
+    avoid leaking the existence of recordings the user can't see.
+    """
+    from django.db.models import Q
+
+    from events.models import Event
+    from learning.models import Course, CourseEnrollment, CourseSession
+    from registrations.models import Registration
+
+    qs = VideoRecording.objects.filter(uuid=recording_uuid)
+
+    if not user or not user.is_authenticated:
+        return None
+    if user.groups.filter(name='admin').exists():
+        return qs.first()
+
+    user_event_ids = Event.objects.filter(
+        owner=user, deleted_at__isnull=True,
+    ).values_list('id', flat=True)
+    registered_event_ids = Registration.objects.filter(
+        user=user,
+        status=Registration.Status.CONFIRMED,
+        deleted_at__isnull=True,
+    ).values_list('event_id', flat=True)
+
+    staff_course_ids = Course.objects.filter(
+        Q(created_by=user) | Q(staff_assignments__user=user)
+    ).values_list('id', flat=True).distinct()
+    enrolled_course_ids = CourseEnrollment.objects.filter(
+        user=user,
+        status__in=[CourseEnrollment.Status.ACTIVE, CourseEnrollment.Status.COMPLETED],
+    ).values_list('course_id', flat=True)
+    accessible_session_ids = CourseSession.objects.filter(
+        course_id__in=list(staff_course_ids) + list(enrolled_course_ids),
+    ).values_list('id', flat=True)
+
+    qs = qs.filter(
+        Q(event_id__in=user_event_ids)
+        | Q(event_id__in=registered_event_ids)
+        | Q(course_session_id__in=accessible_session_ids)
+    )
+    return qs.first()
+
+
+def _accounts_user_for_identity(identity: str):
+    """LiveKit participant_identity is the user's uuid (we set it at JWT
+    issuance in conferencing.meetings._build_join_response). Resolve
+    it back to a User for the FK.
+
+    Returns None for service participants (egress/ingress bots) whose
+    identities aren't UUIDs — those don't get speaker rows."""
+    if not identity:
+        return None
+    try:
+        from accounts.models import User
+        return User.objects.filter(uuid=identity).first()
+    except (ValueError, Exception):
+        return None
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class TranscriptIngestView(generics.GenericAPIView):
+    """POST /api/v1/internal/transcripts/{uuid}/segments/ — agent-only.
+
+    Idempotent on `(transcript, livekit_segment_id, source='live')`. The
+    agent re-publishes a segment with the same `lk.segment_id` until it's
+    finalised (LiveKit's normal interim-then-final flow); we update the
+    same row in place so the segment count reflects logical segments, not
+    revisions.
+
+    Once an organiser edits a live segment (Step 7), the live row's text
+    becomes immutable — further re-publishes from the agent are dropped
+    by checking `replaced_by` before update. This protects edits from
+    being reverted by late-arriving agent traffic.
+    """
+
+    permission_classes = [IsInternalAgent]
+    serializer_class = TranscriptSegmentIngestSerializer
+
+    def post(self, request, transcript_uuid):
+        try:
+            transcript = Transcript.objects.get(uuid=transcript_uuid)
+        except Transcript.DoesNotExist:
+            return Response(
+                {'error': 'Transcript not found'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if transcript.status == Transcript.Status.FINALIZED:
+            # Late segments after finalization are dropped silently.
+            # The agent might post one or two stragglers as it shuts
+            # down; we don't want to 4xx and pollute its retry logic.
+            return Response({'status': 'ignored', 'reason': 'finalized'})
+
+        ser = self.get_serializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+
+        # Speaker attribution is an *invariant* of a livekit_segment_id —
+        # LiveKit guarantees the segment maps to one participant for its
+        # whole lifetime, so we capture the speaker on first insert and
+        # never overwrite it on revisions. This protects against agents
+        # that drop `participant_identity` from the revise payload (they
+        # only resend changing fields), which would otherwise blank the
+        # snapshot when the row is updated.
+        existing = TranscriptSegment.objects.filter(
+            transcript=transcript,
+            livekit_segment_id=data['livekit_segment_id'],
+            source=TranscriptSegment.Source.LIVE,
+        ).first()
+
+        if existing is not None:
+            if existing.replaced_by_id is not None:
+                # Live row already superseded by an organiser edit — drop
+                # the agent's update so the human-corrected text wins.
+                return Response({'status': 'locked'})
+            # Mutable fields only on revise — keep speaker attribution.
+            existing.start_ms = data['start_ms']
+            existing.end_ms = data['end_ms']
+            existing.text = data['text']
+            existing.is_final = data.get('is_final', True)
+            if data.get('confidence') is not None:
+                existing.confidence = data['confidence']
+            existing.save()
+            return Response(
+                {'status': 'updated', 'uuid': str(existing.uuid)},
+                status=status.HTTP_200_OK,
+            )
+
+        # First-time insert — resolve speaker.
+        speaker_user = _accounts_user_for_identity(
+            data.get('participant_identity', '')
+        )
+        seg = TranscriptSegment.objects.create(
+            transcript=transcript,
+            livekit_segment_id=data['livekit_segment_id'],
+            source=TranscriptSegment.Source.LIVE,
+            start_ms=data['start_ms'],
+            end_ms=data['end_ms'],
+            text=data['text'],
+            is_final=data.get('is_final', True),
+            participant_identity=data.get('participant_identity', ''),
+            speaker_user=speaker_user,
+            speaker_name_snapshot=(
+                data.get('speaker_name', '')
+                or (speaker_user.full_name if speaker_user else '')
+            ),
+            confidence=data.get('confidence'),
+        )
+
+        return Response(
+            {'status': 'created', 'uuid': str(seg.uuid)},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class TranscriptFinalizeView(generics.GenericAPIView):
+    """POST /api/v1/internal/transcripts/{uuid}/finalize/ — agent-only.
+
+    Idempotent. Sets `status=FINALIZED`, populates `word_count` and
+    `finalized_at`. Optional body: {"error_message": "..."} to flip to
+    ERROR when the agent crashes mid-stream and drains its buffer
+    before exiting.
+    """
+
+    permission_classes = [IsInternalAgent]
+
+    def post(self, request, transcript_uuid):
+        try:
+            transcript = Transcript.objects.get(uuid=transcript_uuid)
+        except Transcript.DoesNotExist:
+            return Response(
+                {'error': 'Transcript not found'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        error_message = (request.data or {}).get('error_message', '') or ''
+        target_status = (
+            Transcript.Status.ERROR if error_message
+            else Transcript.Status.FINALIZED
+        )
+
+        # Idempotent: re-finalize is allowed (agent may retry on network
+        # blip during shutdown) but doesn't reset finalized_at.
+        if transcript.status != target_status:
+            transcript.status = target_status
+            transcript.error_message = error_message
+            if not transcript.finalized_at:
+                transcript.finalized_at = timezone.now()
+            # Recompute word_count from the current (un-replaced) segments
+            # so edits that landed before finalization are reflected.
+            current = transcript.segments.filter(replaced_by__isnull=True)
+            transcript.word_count = sum(
+                len(s.text.split()) for s in current.only('text')
+            )
+            transcript.save(update_fields=[
+                'status', 'error_message', 'finalized_at',
+                'word_count', 'updated_at',
+            ])
+
+        return Response({
+            'status': transcript.status,
+            'word_count': transcript.word_count,
+            'finalized_at': (
+                transcript.finalized_at.isoformat()
+                if transcript.finalized_at else None
+            ),
+        })
+
+
+class RecordingTranscriptView(generics.GenericAPIView):
+    """GET /api/v1/video/recordings/{uuid}/transcript/
+
+    Returns the recording's transcript with all current (non-superseded)
+    segments. 404 when no transcript exists or the user lacks access to
+    the parent recording (we don't 403 to avoid leaking which recordings
+    have transcripts to unauthorised viewers).
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TranscriptSerializer
+
+    def get(self, request, recording_uuid):
+        recording = _resolve_recording_for_user(recording_uuid, request.user)
+        if recording is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        try:
+            transcript = recording.video_room.transcript
+        except (AttributeError, Transcript.DoesNotExist):
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(TranscriptSerializer(transcript).data)
+
+
+class RecordingTranscriptSearchView(generics.GenericAPIView):
+    """GET /api/v1/video/recordings/{uuid}/transcript/search/?q=foo
+
+    Trigram-matched search over the current segments of a transcript.
+    Returns segments in chronological order (start_ms asc) — relevance
+    ranking would be jarring for a player-synced transcript where users
+    expect to scrub by time.
+
+    On non-Postgres backends (sqlite test runs), falls back to ILIKE.
+    The fallback is ~200x slower for large transcripts but exists so
+    the test suite doesn't have to mock the search endpoint.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, recording_uuid):
+        q = (request.query_params.get('q') or '').strip()
+        if not q:
+            return Response({'results': []})
+
+        recording = _resolve_recording_for_user(recording_uuid, request.user)
+        if recording is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        try:
+            transcript = recording.video_room.transcript
+        except (AttributeError, Transcript.DoesNotExist):
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        from django.db import connection
+
+        qs = transcript.segments.filter(
+            replaced_by__isnull=True,
+        ).order_by('start_ms')
+
+        if connection.vendor == 'postgresql':
+            # The trgm GIN index lights up for `text % q` (similarity) but
+            # users expect substring matches in a transcript search box, so
+            # we use `ILIKE` which trgm also accelerates when the index is
+            # `gin_trgm_ops`. Patterns of length < 3 don't benefit from the
+            # GIN; that's a per-character matter not a correctness issue.
+            qs = qs.filter(text__icontains=q)
+        else:
+            qs = qs.filter(text__icontains=q)
+
+        # Cap at 200 matches to keep payload small — the UI lists matches
+        # for navigation, not as a search-results page.
+        qs = qs[:200]
+        return Response({
+            'q': q,
+            'results': TranscriptSegmentReadSerializer(qs, many=True).data,
+        })
+
+
+class RecordingTranscriptExportView(generics.GenericAPIView):
+    """GET /api/v1/video/recordings/{uuid}/transcript/export/?as=vtt|srt|txt
+
+    Renders the transcript in the requested subtitle/text format. Defaults
+    to `vtt` (WebVTT, native to HTML5 `<track>` and the most useful for
+    organiser workflows that download → upload-as-captions to a video host).
+
+    The query param is `as=` rather than `format=` because DRF reserves
+    `?format=` for renderer/content-negotiation — a value DRF doesn't know
+    about (e.g. `format=vtt`) makes the framework 404 the request before
+    the view runs.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, recording_uuid):
+        fmt = (request.query_params.get('as') or 'vtt').lower()
+        if fmt not in ('vtt', 'srt', 'txt'):
+            return Response(
+                {'error': "as= must be one of: vtt, srt, txt"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        recording = _resolve_recording_for_user(recording_uuid, request.user)
+        if recording is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        try:
+            transcript = recording.video_room.transcript
+        except (AttributeError, Transcript.DoesNotExist):
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        segments = list(
+            transcript.segments
+            .filter(replaced_by__isnull=True)
+            .order_by('start_ms')
+        )
+
+        if fmt == 'vtt':
+            body = _render_vtt(segments)
+            content_type = 'text/vtt; charset=utf-8'
+        elif fmt == 'srt':
+            body = _render_srt(segments)
+            content_type = 'application/x-subrip; charset=utf-8'
+        else:
+            body = _render_txt(segments)
+            content_type = 'text/plain; charset=utf-8'
+
+        from django.http import HttpResponse
+        resp = HttpResponse(body, content_type=content_type)
+        resp['Content-Disposition'] = (
+            f'attachment; filename="transcript-{recording.uuid}.{fmt}"'
+        )
+        return resp
+
+
+# ---------- Subtitle / text renderers --------------------------------------
+
+
+def _format_vtt_timestamp(ms: int) -> str:
+    """WebVTT time format: HH:MM:SS.mmm (dot-separated milliseconds)."""
+    s, ms_ = divmod(max(ms, 0), 1000)
+    h, s = divmod(s, 3600)
+    m, s = divmod(s, 60)
+    return f'{h:02d}:{m:02d}:{s:02d}.{ms_:03d}'
+
+
+def _format_srt_timestamp(ms: int) -> str:
+    """SubRip time format: HH:MM:SS,mmm (comma-separated milliseconds)."""
+    return _format_vtt_timestamp(ms).replace('.', ',', 1)
+
+
+def _render_vtt(segments) -> str:
+    lines = ['WEBVTT', '']
+    for seg in segments:
+        cue = (
+            f'{_format_vtt_timestamp(seg.start_ms)} --> '
+            f'{_format_vtt_timestamp(seg.end_ms)}'
+        )
+        speaker = seg.speaker_name_snapshot
+        text = f'<v {speaker}>{seg.text}' if speaker else seg.text
+        lines += [cue, text, '']
+    return '\n'.join(lines)
+
+
+def _render_srt(segments) -> str:
+    chunks = []
+    for i, seg in enumerate(segments, start=1):
+        cue = (
+            f'{_format_srt_timestamp(seg.start_ms)} --> '
+            f'{_format_srt_timestamp(seg.end_ms)}'
+        )
+        speaker = seg.speaker_name_snapshot
+        text = f'{speaker}: {seg.text}' if speaker else seg.text
+        chunks.append(f'{i}\n{cue}\n{text}\n')
+    return '\n'.join(chunks)
+
+
+def _render_txt(segments) -> str:
+    """Plain text with speaker prefixes; collapses consecutive segments
+    from the same speaker into a single paragraph for readability."""
+    lines = []
+    last_speaker = None
+    for seg in segments:
+        speaker = seg.speaker_name_snapshot
+        if speaker and speaker != last_speaker:
+            lines.append(f'\n{speaker}:')
+            last_speaker = speaker
+        lines.append(seg.text)
+    return '\n'.join(lines).strip() + '\n'
+
+
+# =============================================================================
+# Transcript edit + audit trail (organisers only)
+# =============================================================================
+#
+# Edit semantics (append-only with chained `replaced_by`):
+#
+#   Initial state:
+#     SEG_1[source=live, text="hello world", replaced_by=NULL]   ← current
+#
+#   After organiser edits to "hello, world":
+#     SEG_1[source=live, text="hello world", replaced_by=SEG_2]
+#     SEG_2[source=edit, text="hello, world", replaced_by=NULL]  ← current
+#
+#   Default queries filter `replaced_by__isnull=True` so callers see SEG_2.
+#   The history endpoint walks the chain backward (`replaces` reverse FK)
+#   to expose the full provenance for compliance review.
+#
+# Edit ingest from the live agent: once a segment has been superseded by
+# an edit (i.e. it has a non-null `replaced_by`), the live ingest path
+# in `TranscriptIngestView` short-circuits with `{status: 'locked'}` —
+# preventing late-arriving agent traffic from reverting a human correction.
+
+
+def _user_can_edit_transcript(user, transcript) -> bool:
+    """Edit gate: same predicate as the lobby's host check.
+
+    A user can edit a transcript when they own the parent event (or are
+    a course staff member, or a platform admin). We re-use `is_event_host`
+    rather than redefining the rule because keeping the two in sync is
+    the whole point of having a server-computed `is_current_user_host`
+    on event detail.
+    """
+    if not user or not user.is_authenticated:
+        return False
+
+    # Walk: transcript → video_room → content_object (Event or
+    # CourseSession). For events, the existing helper does the work.
+    video_room = transcript.video_room
+    obj = video_room.content_object
+    if obj is None:
+        return False
+
+    from events.models import Event
+    if isinstance(obj, Event):
+        return is_event_host(user, obj)
+
+    # CourseSession: edit = course staff. Mirrors the recording-list scope.
+    from learning.models import Course, CourseSession
+    if isinstance(obj, CourseSession):
+        if user.groups.filter(name='admin').exists():
+            return True
+        return Course.objects.filter(
+            id=obj.course_id,
+        ).filter(
+            models.Q(created_by=user) | models.Q(staff_assignments__user=user),
+        ).exists()
+
+    return False
+
+
+# `models` is referenced inside _user_can_edit_transcript via Q; ensure
+# the symbol resolves regardless of import order.
+from django.db import models  # noqa: E402
+
+
+class TranscriptSegmentEditView(generics.GenericAPIView):
+    """PATCH /api/v1/transcripts/{transcript_uuid}/segments/{segment_uuid}/
+
+    Organiser-only edit endpoint. Creates a NEW segment row with
+    `source='edit'`, copies the timing + speaker attribution from the
+    superseded row (those fields are immutable for compliance — the
+    audit trail records exactly what STT said vs what was changed),
+    and chains `replaced_by` so default reads see the new version.
+
+    Rejects edits on a transcript that's still STREAMING — the agent
+    might re-publish the same segment_id with a revision before the
+    edit lands, racing the human correction. Forcing FINALIZED before
+    edit is the simplest invariant; it's also when most edits happen
+    in practice (organiser reviews after the session).
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TranscriptSegmentEditSerializer
+
+    def patch(self, request, transcript_uuid, segment_uuid):
+        try:
+            transcript = Transcript.objects.get(uuid=transcript_uuid)
+        except Transcript.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if not _user_can_edit_transcript(request.user, transcript):
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            current = transcript.segments.get(
+                uuid=segment_uuid, replaced_by__isnull=True,
+            )
+        except TranscriptSegment.DoesNotExist:
+            # Either the uuid is wrong, or this segment was already
+            # superseded by another edit. We don't disambiguate to keep
+            # the API simple — the UI re-fetches the transcript on
+            # error so the next edit lands on the latest version.
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if transcript.status == Transcript.Status.STREAMING:
+            return Response(
+                {'error': 'Cannot edit segments while transcription is still in progress.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        ser = self.get_serializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        new_text = ser.validated_data['text']
+
+        # Atomic: create new + update old in a transaction so a half-
+        # written edit chain is impossible.
+        from django.db import transaction
+        with transaction.atomic():
+            new_segment = TranscriptSegment.objects.create(
+                transcript=transcript,
+                # Inherit immutable fields from the superseded version.
+                start_ms=current.start_ms,
+                end_ms=current.end_ms,
+                participant_identity=current.participant_identity,
+                speaker_user=current.speaker_user,
+                speaker_name_snapshot=current.speaker_name_snapshot,
+                confidence=current.confidence,
+                livekit_segment_id=current.livekit_segment_id,
+                # New content + provenance.
+                text=new_text,
+                is_final=True,
+                source=TranscriptSegment.Source.EDIT,
+                edited_by=request.user,
+                edited_at=timezone.now(),
+            )
+            current.replaced_by = new_segment
+            current.save(update_fields=['replaced_by', 'updated_at'])
+
+        return Response(
+            TranscriptSegmentReadSerializer(new_segment).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class TranscriptSegmentHistoryView(generics.GenericAPIView):
+    """GET /api/v1/transcripts/{transcript_uuid}/segments/{segment_uuid}/history/
+
+    Returns the full version chain for a segment in chronological order
+    (oldest first). Organisers only — non-organisers always get 404.
+
+    The query walks `livekit_segment_id` rather than the FK chain because
+    a chain of N edits produces N+1 rows that all share the same
+    `livekit_segment_id`; one indexed query is faster than recursing
+    via `replaces` relations.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, transcript_uuid, segment_uuid):
+        try:
+            transcript = Transcript.objects.get(uuid=transcript_uuid)
+        except Transcript.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if not _user_can_edit_transcript(request.user, transcript):
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Resolve the segment uuid to its livekit_segment_id (the chain key).
+        anchor = transcript.segments.filter(uuid=segment_uuid).first()
+        if anchor is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if not anchor.livekit_segment_id:
+            # Edge: a manually-created segment with no chain. Just return
+            # the row itself rather than trying to chain.
+            return Response({
+                'segments': [TranscriptSegmentHistorySerializer(anchor).data],
+            })
+
+        chain = transcript.segments.filter(
+            livekit_segment_id=anchor.livekit_segment_id,
+        ).order_by('created_at')
+
+        return Response({
+            'segments': TranscriptSegmentHistorySerializer(chain, many=True).data,
+        })

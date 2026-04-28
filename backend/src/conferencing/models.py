@@ -5,12 +5,31 @@ Replaces the scattered zoom_* fields and Zoom-specific models with
 a clean, centralized conferencing data layer.
 """
 
+import secrets
+
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.db.models import Q, UniqueConstraint
 from django.utils import timezone
 
 from common.models import BaseModel
+
+
+def generate_room_name(content_type_model: str, content_object_uuid) -> str:
+    """Generate a globally-unique LiveKit room_name for a new meeting session.
+
+    Format: ``{model}-{uuid}-{token}`` — e.g. ``event-7e08d14f-…-a4f9``.
+
+    The token suffix is critical for the Zoom-model lifecycle: each
+    meeting session gets its own VideoRoom row with its own room_name.
+    Without the suffix, re-running a meeting on the same Event would
+    collide with the unique=True constraint on `room_name`. 6 hex
+    chars = 24 bits = ~16M values; collision risk is negligible across
+    a single event's lifetime (and the unique constraint catches it
+    if it ever happens).
+    """
+    return f"{content_type_model}-{content_object_uuid}-{secrets.token_hex(3)}"
 
 
 class VideoRoom(BaseModel):
@@ -59,6 +78,20 @@ class VideoRoom(BaseModel):
             models.Index(fields=['room_id']),
             models.Index(fields=['status']),
         ]
+        # Zoom-model invariant: at most one ACTIVE meeting per content
+        # object (Event/CourseSession) at any time. Enforced as a
+        # partial unique index — concurrent host clicks racing to start
+        # a second meeting fail at the DB layer with IntegrityError,
+        # which the API translates to "rejoin existing meeting". Older
+        # ENDED rows are unconstrained (the Event may host many
+        # sessions over its lifetime; only one is live at once).
+        constraints = [
+            UniqueConstraint(
+                fields=['content_type', 'object_id'],
+                condition=Q(status='active'),
+                name='one_active_room_per_content',
+            ),
+        ]
         verbose_name = 'Video Room'
         verbose_name_plural = 'Video Rooms'
 
@@ -76,13 +109,11 @@ class VideoRoom(BaseModel):
         self.ended_at = timezone.now()
         self.save(update_fields=['status', 'ended_at', 'updated_at'])
 
-    def reopen(self):
-        self.status = self.Status.SCHEDULED
-        self.started_at = None
-        self.ended_at = None
-        self.error = ''
-        self.error_at = None
-        self.save(update_fields=['status', 'started_at', 'ended_at', 'error', 'error_at', 'updated_at'])
+    # NOTE: `reopen()` was deliberately removed in the Zoom-model
+    # redesign. Each meeting session is single-shot (SCHEDULED →
+    # ACTIVE → ENDED is terminal). To run another meeting on the same
+    # Event, the host calls POST /events/{uuid}/meetings/start/ which
+    # creates a fresh VideoRoom row.
 
     def mark_error(self, message: str):
         self.status = self.Status.ERROR
@@ -354,3 +385,204 @@ class RecordingView(BaseModel):
         unique_together = [['recording', 'user']]
         verbose_name = 'Recording View'
         verbose_name_plural = 'Recording Views'
+
+
+# =========================================================================
+# Transcripts
+# =========================================================================
+#
+# A Transcript is one-to-one with a VideoRoom: every video session can have
+# at most one canonical transcript. Segments are append-only — edits create
+# a new row with `replaced_by` pointed back to the row it supersedes, so the
+# full edit history (including the original STT output) is queryable for
+# compliance review without polluting normal reads.
+#
+# Why one transcript per VideoRoom (not per VideoRecording): the live agent
+# starts persisting segments while the room is active, before any recording
+# file exists. We anchor on the room so live captures and post-event reads
+# share a single record even if recording is disabled or fails.
+
+
+class Transcript(BaseModel):
+    """A transcript of a video session, one per VideoRoom."""
+
+    class Status(models.TextChoices):
+        # Live segments still arriving from the agent. Reads work but the
+        # transcript should be presented as in-progress (e.g. don't render
+        # the export button yet).
+        STREAMING = 'streaming', 'Streaming'
+        # Room finished, agent has flushed final segments. Read-only by
+        # default; organiser edits still produce new rows but are gated on
+        # explicit edit permission.
+        FINALIZED = 'finalized', 'Finalized'
+        # Provider error or agent crash; partial segments may still be
+        # present. Surfaces an inline notice on the playback page so users
+        # know the transcript is incomplete.
+        ERROR = 'error', 'Error'
+
+    video_room = models.OneToOneField(
+        VideoRoom,
+        on_delete=models.CASCADE,
+        related_name='transcript',
+        help_text='The video session this transcript belongs to.',
+    )
+
+    # Snapshotted at provisioning time so historical rows survive provider
+    # changes — when an org switches from Deepgram to AssemblyAI we don't
+    # want old transcripts to render with the wrong attribution.
+    provider = models.CharField(
+        max_length=32,
+        help_text="STT provider used (e.g. 'deepgram', 'openai', 'assemblyai').",
+    )
+    provider_model = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Model identifier within the provider (e.g. 'nova-3').",
+    )
+    language_code = models.CharField(
+        max_length=10,
+        default='en-US',
+        help_text='BCP-47 language code (e.g. en-US, fr-FR).',
+    )
+
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.STREAMING,
+        db_index=True,
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    finalized_at = models.DateTimeField(null=True, blank=True)
+
+    # Aggregate stats — populated on finalize. Cheap to maintain because
+    # the agent already iterates all finals. Storing here saves a sum
+    # query for the UI badge.
+    word_count = models.IntegerField(default=0)
+
+    # Surfaces on the playback page when status=ERROR so users can tell
+    # the difference between "no transcript configured" and "we tried but
+    # failed". Empty for healthy transcripts.
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'transcripts'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Transcript({self.provider}/{self.language_code}) for {self.video_room.room_name}'
+
+
+class TranscriptSegment(BaseModel):
+    """
+    A single time-anchored chunk of a transcript.
+
+    Append-only: edits create a NEW row with `source='edit'` and a
+    `replaced_by` FK on the row that's being superseded. Default queries
+    filter `replaced_by__isnull=True` to get the current version; the
+    history endpoint walks the chain via the reverse `replaces` relation.
+
+    Live revisions DO update in place (LiveKit re-publishes a segment with
+    the same `lk.segment_id` until it's finalised), keyed on
+    `(transcript_id, livekit_segment_id, source='live')`. Once a segment
+    has been edited by an organiser, the live row's text is locked.
+    """
+
+    class Source(models.TextChoices):
+        LIVE = 'live', 'Live (streaming)'
+        EDIT = 'edit', 'Organizer edit'
+        BATCH_REPAIR = 'batch_repair', 'Post-event batch re-pass'
+
+    transcript = models.ForeignKey(
+        Transcript,
+        on_delete=models.CASCADE,
+        related_name='segments',
+    )
+
+    # Timing relative to recording_start, in milliseconds. Integer (not
+    # float) because Postgres BTREE on int is faster and we never need
+    # sub-millisecond resolution for transcript scrubbing.
+    start_ms = models.IntegerField(help_text='Start offset from recording start, in ms.')
+    end_ms = models.IntegerField(help_text='End offset from recording start, in ms.')
+
+    # Content.
+    text = models.TextField()
+
+    # Preserved on the row even though normal reads filter to finals.
+    # Useful for analytics ("how often did we revise?") and for the live
+    # overlay's optimistic merge during streaming.
+    is_final = models.BooleanField(default=True)
+
+    # Speaker attribution. LiveKit participant identity is the user's
+    # uuid — we set it at JWT issuance (see meetings._build_join_response). The hard
+    # FK to User flows renames through; the snapshot preserves the name
+    # at recording time so the transcript reads correctly even if the
+    # user changes their display name later.
+    participant_identity = models.CharField(max_length=255, blank=True, db_index=True)
+    speaker_user = models.ForeignKey(
+        'accounts.User',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='transcript_segments',
+    )
+    speaker_name_snapshot = models.CharField(max_length=255, blank=True)
+
+    # Provider-supplied confidence (0.0–1.0). Optional because not every
+    # plugin reports it; Deepgram does, OpenAI Whisper does not.
+    confidence = models.FloatField(null=True, blank=True)
+
+    # Provider's stable ID for this segment within the session. Idempotency
+    # key for the live ingest endpoint: `(transcript, livekit_segment_id)`
+    # uniquely identifies the live source row. Edits create siblings with
+    # the same `livekit_segment_id` but different `source`.
+    livekit_segment_id = models.CharField(max_length=128, blank=True, db_index=True)
+
+    # Edit history — acyclic linked list of versions. The newest version
+    # has `replaced_by IS NULL`; older versions point forward through this
+    # FK. Walking backward via `replaces` (the reverse relation) yields
+    # the chronological history.
+    source = models.CharField(
+        max_length=16,
+        choices=Source.choices,
+        default=Source.LIVE,
+        db_index=True,
+    )
+    replaced_by = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='replaces',
+    )
+    edited_by = models.ForeignKey(
+        'accounts.User',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+    )
+    edited_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'transcript_segments'
+        ordering = ['transcript_id', 'start_ms']
+        indexes = [
+            # Primary access pattern: list a transcript's current segments
+            # in playback order.
+            models.Index(fields=['transcript', 'start_ms']),
+            # Idempotency lookups during live ingest.
+            models.Index(fields=['transcript', 'livekit_segment_id', 'source']),
+        ]
+        # Live ingest invariant: at most one live segment per (transcript,
+        # livekit_segment_id) — re-publishes update in place. Edit rows
+        # get `source='edit'` so they don't collide with this constraint.
+        constraints = [
+            models.UniqueConstraint(
+                fields=['transcript', 'livekit_segment_id', 'source'],
+                condition=models.Q(source='live') & ~models.Q(livekit_segment_id=''),
+                name='one_live_segment_per_lk_id',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Segment[{self.start_ms}-{self.end_ms}ms] {self.text[:40]!r}'

@@ -2,7 +2,7 @@
 Tests for the waiting-room flow.
 
 Covers:
-- POST /api/v1/events/{event_uuid}/join-video/        (attendee vs owner vs unregistered)
+- POST /api/v1/events/{event_uuid}/meetings/join/     (attendee vs owner vs unregistered)
 - POST /api/v1/video/rooms/{uuid}/admit_participant/  (owner vs foreign-organizer)
 - POST /api/v1/video/rooms/{uuid}/deny_participant/   (owner vs foreign-organizer)
 - Ensures cross-organizer admit/deny is rejected (404 via queryset filter).
@@ -19,11 +19,19 @@ from conferencing.models import VideoRoom
 
 @pytest.fixture
 def mock_video_provider():
-    """Replace the LiveKit provider with a MagicMock so tests don't hit network."""
+    """Replace the LiveKit provider with a MagicMock so tests don't hit network.
+
+    Patched at the conferencing.service entry point because both
+    `conferencing.views` (admit/deny) and `conferencing.meetings` (join)
+    import `get_video_provider` from there. Patching the source covers
+    both reads without a stack of patches per test.
+    """
     provider = MagicMock()
+    provider.is_configured.return_value = True
     provider.generate_join_token.return_value = 'mock-token'
     provider.update_participant.return_value = True
-    with patch('conferencing.views.get_video_provider', return_value=provider):
+    with patch('conferencing.views.get_video_provider', return_value=provider), \
+         patch('conferencing.meetings.get_video_provider', return_value=provider):
         yield provider
 
 
@@ -61,10 +69,10 @@ def other_organizer_video_room(db, other_organizer_event):
 
 @pytest.mark.django_db
 class TestJoinVideoWaiting:
-    """POST /events/:uuid/join-video/ — waiting flag and registration gating."""
+    """POST /events/:uuid/meetings/join/ — waiting flag and registration gating."""
 
     def url(self, event):
-        return f'/api/v1/events/{event.uuid}/join-video/'
+        return f'/api/v1/events/{event.uuid}/meetings/join/'
 
     def test_owner_bypasses_waiting(self, organizer_client, event, video_room, mock_video_provider):
         response = organizer_client.post(self.url(event))

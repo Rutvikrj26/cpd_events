@@ -53,3 +53,22 @@ export function getEventStatusStyle(status: string | undefined | null): StyleSpe
     if (!status) return FALLBACK;
     return STATUS_STYLES[status.toLowerCase()] ?? FALLBACK;
 }
+
+/**
+ * Render-ready label for an event status enum value.
+ *
+ * The backend ships lower-case enum strings (`"published"`, `"draft"`).
+ * Rendering them raw (or with the `capitalize` CSS class, which only
+ * styles the first letter and breaks for compounds like `"in_progress"`)
+ * produces "published" / "in_progress" in the UI. This single helper
+ * keeps the casing rule in one place so `EventsPage`, the dashboard
+ * Recent Activity table, and any future surface format identically.
+ */
+export function formatEventStatus(status: string | undefined | null): string {
+    if (!status) return 'Unknown';
+    return status
+        .split(/[_\s]+/)
+        .filter(Boolean)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+}

@@ -97,14 +97,26 @@ def advance_recording(
 # VideoRoom — allowed transitions.
 # ---------------------------------------------------------------------------
 
+# Zoom-model lifecycle: each VideoRoom is single-shot.
+#   SCHEDULED → ACTIVE      (first participant connects, room_started fires)
+#   ACTIVE    → ENDED       (host clicks End / last host leaves / empty timeout)
+#   SCHEDULED → ENDED       (host abandoned the room before connecting; LiveKit
+#                            empty-room timeout fires)
+#   ERROR              ↔ ACTIVE / ENDED   (recovery + cleanup paths)
+#
+# ENDED is terminal — there is no `ENDED → SCHEDULED` (that was the
+# `reopen()` path in the old design and caused the stale-transcript
+# bug). Hosts run another meeting by creating a new VideoRoom.
 ROOM_TRANSITIONS: dict[str, set[str]] = {
-    VideoRoom.Status.ACTIVE: {VideoRoom.Status.SCHEDULED, VideoRoom.Status.ENDED},
-    VideoRoom.Status.ENDED: {VideoRoom.Status.SCHEDULED, VideoRoom.Status.ACTIVE},
-    VideoRoom.Status.SCHEDULED: {VideoRoom.Status.ENDED},
+    VideoRoom.Status.ACTIVE: {VideoRoom.Status.SCHEDULED},
+    VideoRoom.Status.ENDED: {
+        VideoRoom.Status.SCHEDULED,
+        VideoRoom.Status.ACTIVE,
+        VideoRoom.Status.ERROR,
+    },
     VideoRoom.Status.ERROR: {
         VideoRoom.Status.SCHEDULED,
         VideoRoom.Status.ACTIVE,
-        VideoRoom.Status.ENDED,
     },
 }
 

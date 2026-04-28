@@ -46,6 +46,26 @@ const formatPrice = (cents: number, currency: string): string => {
     }
 };
 
+/**
+ * Formats the bundle-savings line of the pricing summary.
+ *
+ * `formatPrice` collapses 0 → "Free", which is the right rule for a price
+ * but the wrong rule for a *saving*: a "$0 saving" is not "free", and
+ * showing "Free" makes the line read as if the bundle is free of charge.
+ * A negative saving (bundle priced higher than the sum of individuals)
+ * should also surface explicitly so the organiser sees the misconfiguration
+ * — silently displaying nothing or a negative dollar amount obscures it.
+ */
+const formatBundleSaving = (savingsCents: number, currency: string): string => {
+    if (savingsCents === 0) return 'No saving';
+    if (savingsCents < 0) {
+        // Bundle costs more than the sum of individual courses — almost
+        // always a pricing-data mistake, surface it explicitly.
+        return `Bundle costs ${formatPrice(Math.abs(savingsCents), currency)} more than individual courses`;
+    }
+    return formatPrice(savingsCents, currency);
+};
+
 const ProgramManagementPage: React.FC = () => {
     const { programSlug } = useParams<{ programSlug: string }>();
     const navigate = useNavigate();
@@ -275,7 +295,7 @@ const ProgramManagementPage: React.FC = () => {
                         <StatCard label="Enrollments" value={program.enrollment_count} icon={Users} />
                         <StatCard
                             label="Bundle savings"
-                            value={formatPrice(program.bundle_savings_cents, program.currency)}
+                            value={formatBundleSaving(program.bundle_savings_cents, program.currency)}
                             icon={Layers}
                         />
                     </div>
@@ -291,7 +311,7 @@ const ProgramManagementPage: React.FC = () => {
                             />
                             <Row
                                 label="Saving vs. individual"
-                                value={formatPrice(program.bundle_savings_cents, program.currency)}
+                                value={formatBundleSaving(program.bundle_savings_cents, program.currency)}
                             />
                         </CardContent>
                     </Card>

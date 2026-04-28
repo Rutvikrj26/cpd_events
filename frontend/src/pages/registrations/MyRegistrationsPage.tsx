@@ -126,19 +126,15 @@ export const MyLearningPage = () => {
     };
 
     const canLeaveFeedback = (reg: Registration) => {
-        // Event ended = either an explicit actual_end_at, or
-        // starts_at + duration_minutes is in the past. Live events whose
-        // start has passed but end has not should NOT yet allow feedback.
-        const now = Date.now();
-        const startMs = new Date(reg.event.starts_at).getTime();
-        const durationMs = (reg.event.duration_minutes ?? 0) * 60_000;
-        const explicitEnd = reg.event.actual_end_at
-            ? new Date(reg.event.actual_end_at).getTime()
-            : null;
-        const eventEnded = explicitEnd
-            ? explicitEnd < now
-            : startMs + durationMs < now;
-        return eventEnded && reg.status !== 'cancelled';
+        // Only attendees with eligible attendance can leave feedback. The
+        // backend's discriminated `view_state.kind` is the authoritative
+        // signal: `confirmed_attended` is the *only* state where the user
+        // both showed up AND the event has ended. The legacy "did the
+        // event end?" check incorrectly opened feedback for `confirmed_missed`
+        // (event ended, attendee didn't show) and any awaiting-payment row
+        // whose start time happened to have passed.
+        const kind = (reg as any).view_state?.kind;
+        return kind === 'confirmed_attended';
     };
 
     const handleLinkRegistrations = async () => {

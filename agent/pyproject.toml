@@ -1,0 +1,77 @@
+[project]
+name = "accredit-agent"
+version = "0.1.0"
+description = "LiveKit transcription agent for the Accredit CPD platform"
+authors = [
+    {name = "Rutvik Solanki", email = "rutvikrj26@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<4.0"
+
+# Why we don't share the backend's pyproject:
+#   - livekit-agents pulls in heavy native deps (PyAudio, ffmpeg bindings,
+#     opus codec, websocket clients) that would balloon the Django web
+#     image for no benefit.
+#   - The agent runs in its own Cloud Run service with its own scaling
+#     profile — keeping its dep tree separate keeps cold-start time small
+#     (only the agent ships native audio libs).
+#   - The web service can still import `conferencing.transcription.*`
+#     because those modules use lazy imports — at the type-check level
+#     `livekit.agents` is a forward reference; nothing in Django runtime
+#     pulls a real LiveKit Agents symbol.
+dependencies = [
+    # LiveKit Agents framework. Pin minor version so the Worker /
+    # AgentSession / JobContext API surface is stable; major upgrades
+    # (1.x → 2.x) need a deliberate revisit because LiveKit historically
+    # reshapes the entrypoint API at major versions.
+    "livekit-agents>=1.0,<2.0",
+
+    # STT plugin packages. Each is a thin wrapper around the provider's
+    # client SDK plus LiveKit's STT base class. Installing all four from
+    # day one means provider switching is one env var change at runtime
+    # (see TRANSCRIPTION_PROVIDER) — no rebuild needed.
+    "livekit-plugins-google>=1.0,<2.0",
+    "livekit-plugins-deepgram>=1.0,<2.0",
+    "livekit-plugins-openai>=1.0,<2.0",
+    "livekit-plugins-assemblyai>=1.0,<2.0",
+
+    # Local Whisper provider (TRANSCRIPTION_PROVIDER=local_whisper).
+    #   - faster-whisper: CTranslate2 backend; ~4x faster + lower memory
+    #     than the reference HF Transformers implementation. Loads the
+    #     distil-whisper/distil-small.en model (~166MB) in-process.
+    #   - silero-vad: voice-activity detection. Whisper is a batched
+    #     model; we wrap it with Silero VAD via livekit's StreamAdapter
+    #     so finalised segments emit on silence boundaries instead of
+    #     fixed time windows.
+    # English-only by design — distil-small.en is monolingual; multi-
+    # language users should override WHISPER_MODEL.
+    "faster-whisper>=1.0,<2.0",
+    "livekit-plugins-silero>=1.0,<2.0",
+
+    # HTTP client for posting segments to the Django ingest endpoint.
+    # httpx over requests because livekit-agents is async-first and we
+    # don't want to mix sync HTTP into the asyncio event loop.
+    "httpx>=0.27,<1.0",
+
+    # Settings loading — same convention as Django for parity. Reads from
+    # env vars with sensible defaults; the agent doesn't need a settings
+    # module hierarchy.
+    "python-dotenv>=1.0,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "pytest-asyncio>=0.23,<1.0",
+    "ruff>=0.5,<1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Hatchling can't infer the wheel root because the project name
+# (`accredit-agent`) doesn't match a top-level dir. Point it at
+# `src/` so the wheel ships our actual code, importable as `src`.
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

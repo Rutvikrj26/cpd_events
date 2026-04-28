@@ -114,18 +114,31 @@ export const EventDetailPage = () => {
                             <div className="text-muted-foreground text-center py-8 bg-card border rounded-xl border-dashed">No sessions scheduled yet.</div>
                         ) : (
                             <div className="grid gap-4">
-                                {sessions.map(session => (
-                                    <div key={session.uuid} className="bg-card p-4 rounded-lg border flex justify-between items-center">
-                                        <div>
-                                            <h4 className="font-bold">{session.title}</h4>
-                                            <p className="text-sm text-muted-foreground">
-                                                {new Date(session.starts_at).toLocaleTimeString()} - {session.ends_at
-                                                    ? new Date(session.ends_at).toLocaleTimeString()
-                                                    : new Date(new Date(session.starts_at).getTime() + session.duration_minutes * 60000).toLocaleTimeString()}
-                                            </p>
+                                {sessions.map(session => {
+                                    // Match the rest of the app's session/event time
+                                    // formatting (hour + minute, no seconds). The bare
+                                    // toLocaleTimeString() default includes seconds —
+                                    // "7:38:47 PM" — which is wrong for human-readable
+                                    // session schedules.
+                                    const TIME_FORMAT: Intl.DateTimeFormatOptions = {
+                                        hour: 'numeric',
+                                        minute: '2-digit',
+                                    };
+                                    const startsAt = new Date(session.starts_at);
+                                    const endsAt = session.ends_at
+                                        ? new Date(session.ends_at)
+                                        : new Date(startsAt.getTime() + session.duration_minutes * 60000);
+                                    return (
+                                        <div key={session.uuid} className="bg-card p-4 rounded-lg border flex justify-between items-center">
+                                            <div>
+                                                <h4 className="font-bold">{session.title}</h4>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {startsAt.toLocaleTimeString(undefined, TIME_FORMAT)} - {endsAt.toLocaleTimeString(undefined, TIME_FORMAT)}
+                                                </p>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
