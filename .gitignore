@@ -55,6 +55,11 @@ static/
 staticfiles/
 media/
 mediafiles/
+# `media/` above ignores everything named that — including the frontend
+# `shared/media` source directory that hosts the MediaPlayer primitive.
+# Keep that one tracked.
+!frontend/src/shared/media/
+!frontend/src/shared/media/**
 
 # ----- Environment files -----
 # Ignore all env files (contain secrets)
