@@ -50,5 +50,12 @@ urlpatterns = [
     path('admin/users/invitations/', views.AdminInvitationListView.as_view(), name='admin_invitations'),
     path('admin/users/invitations/<uuid:uuid>/resend/', views.AdminInvitationResendView.as_view(), name='admin_invitation_resend'),
     path('admin/users/invitations/<uuid:uuid>/revoke/', views.AdminInvitationRevokeView.as_view(), name='admin_invitation_revoke'),
+    # Learning invitations (event/course invites — distinct from user
+    # platform-join invites above). Public GET/POST is at /public/...;
+    # host-only resend/cancel is on the row itself.
+    path('public/invitations/<uuid:uuid>/', views.PublicLearningInvitationView.as_view(), name='public_learning_invitation'),
+    path('public/invitations/<uuid:uuid>/accept/', views.PublicLearningInvitationAcceptView.as_view(), name='public_learning_invitation_accept'),
+    path('invitations/<uuid:uuid>/resend/', views.LearningInvitationResendView.as_view(), name='learning_invitation_resend'),
+    path('invitations/<uuid:uuid>/cancel/', views.LearningInvitationCancelView.as_view(), name='learning_invitation_cancel'),
     path('', include(router.urls)),
 ]

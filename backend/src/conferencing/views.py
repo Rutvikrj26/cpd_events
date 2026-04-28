@@ -49,6 +49,105 @@ from conferencing.service import get_video_provider
 logger = logging.getLogger(__name__)
 
 
+def _serve_video_with_range(request, path, *, file_name, content_type):
+    """
+    Serve a local file with HTTP Range support so the browser can seek.
+
+    Without this, `<video>.seekable` returns `[[0, 0]]` and any attempt to
+    set `currentTime` silently fails — the browser refuses to seek when
+    the response lacks `Accept-Ranges: bytes`. The default Django
+    `FileResponse` does not parse Range headers; we hand-roll a 206
+    Partial Content response when the client sends one and otherwise
+    return the whole file with `Accept-Ranges: bytes` advertised so the
+    next request can range-request.
+
+    Why a streaming generator (not `read()`): recordings can be hundreds
+    of MB. Reading the slice into memory blocks the worker and explodes
+    RSS. The 8KB chunk loop keeps memory bounded regardless of file or
+    range size.
+    """
+    import os
+    import re
+
+    from django.http import FileResponse, StreamingHttpResponse
+
+    file_size = os.path.getsize(path)
+    range_header = request.META.get('HTTP_RANGE', '').strip()
+
+    # Common headers — set on every response so the client knows seeking
+    # is supported even on the initial full-file fetch.
+    common_headers = {
+        'Accept-Ranges': 'bytes',
+        'Content-Disposition': f'inline; filename="{file_name}"',
+        'Cache-Control': 'private, max-age=300',
+    }
+
+    if not range_header:
+        response = FileResponse(open(path, 'rb'), content_type=content_type)
+        for k, v in common_headers.items():
+            response[k] = v
+        response['Content-Length'] = str(file_size)
+        return response
+
+    # Parse `bytes=START-END` (END optional). Multiple ranges are valid
+    # per RFC 7233 but rare in practice; we only handle the single-range
+    # case. Malformed headers fall through to a 416.
+    match = re.fullmatch(r'bytes=(\d*)-(\d*)', range_header)
+    if not match:
+        response = FileResponse(open(path, 'rb'), content_type=content_type)
+        for k, v in common_headers.items():
+            response[k] = v
+        response['Content-Length'] = str(file_size)
+        return response
+
+    start_str, end_str = match.group(1), match.group(2)
+    if start_str == '' and end_str == '':
+        # `bytes=-` is invalid.
+        response = StreamingHttpResponse(status=416)
+        response['Content-Range'] = f'bytes */{file_size}'
+        return response
+
+    if start_str == '':
+        # Suffix range: `bytes=-N` means the final N bytes.
+        suffix = int(end_str)
+        if suffix == 0:
+            response = StreamingHttpResponse(status=416)
+            response['Content-Range'] = f'bytes */{file_size}'
+            return response
+        start = max(0, file_size - suffix)
+        end = file_size - 1
+    else:
+        start = int(start_str)
+        end = int(end_str) if end_str else file_size - 1
+
+    # Validate.
+    if start >= file_size or end >= file_size or start > end:
+        response = StreamingHttpResponse(status=416)
+        response['Content-Range'] = f'bytes */{file_size}'
+        return response
+
+    length = end - start + 1
+    chunk_size = 8 * 1024  # 8 KiB
+
+    def stream():
+        with open(path, 'rb') as f:
+            f.seek(start)
+            remaining = length
+            while remaining > 0:
+                chunk = f.read(min(chunk_size, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    response = StreamingHttpResponse(stream(), status=206, content_type=content_type)
+    response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
+    response['Content-Length'] = str(length)
+    for k, v in common_headers.items():
+        response[k] = v
+    return response
+
+
 def is_platform_admin(user) -> bool:
     """True if the user belongs to the platform-wide 'admin' group."""
     return bool(user and user.is_authenticated and user.groups.filter(name='admin').exists())
@@ -547,9 +646,12 @@ class VideoRecordingViewSet(viewsets.ReadOnlyModelViewSet):
             )
             raise Http404('Recording file unavailable on disk')
 
-        response = FileResponse(open(path, 'rb'), content_type='video/mp4')
-        response['Content-Disposition'] = f'inline; filename="{rec_file.file_name or os.path.basename(path)}"'
-        return response
+        return _serve_video_with_range(
+            request,
+            path,
+            file_name=rec_file.file_name or os.path.basename(path),
+            content_type='video/mp4',
+        )
 
 
 @method_decorator(csrf_exempt, name='dispatch')

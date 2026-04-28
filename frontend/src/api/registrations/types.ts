@@ -12,6 +12,17 @@ export interface MinimalEvent {
     is_free?: boolean;
     duration_minutes?: number;
     actual_end_at?: string | null;
+    /** True iff at least one *published* VideoRecording exists. Visible
+     *  to all viewers; drives the public-facing recording state. */
+    has_published_recording?: boolean;
+    /** Number of published recordings — drives the "1 of N" picker. */
+    published_recordings_count?: number;
+    /** True iff the **current user** can watch any recording for this
+     *  event right now. Equals `has_published_recording` for learners,
+     *  but also true for hosts/admins when only unpublished recordings
+     *  exist (so they can preview before publishing). Drives the My
+     *  Learning "Watch Recording" button visibility. */
+    has_recording?: boolean;
 }
 
 export interface Registration {

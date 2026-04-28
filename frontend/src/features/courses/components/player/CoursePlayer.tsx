@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Award, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
+import { Progress } from '@/shared/ui/progress';
 import { useToast } from '@/shared/ui/use-toast';
 
 import {
@@ -167,6 +168,26 @@ function CoursePlayerGrantedShell({ data, courseUuid }: GrantedShellProps) {
     const [showAnnouncements, setShowAnnouncements] = useState(false);
     const [showDiscussion, setShowDiscussion] = useState(false);
     const hasAutoSelectedRef = useRef(false);
+    // Sidebar collapse — persisted across reloads so the user's preference
+    // sticks. localStorage read is wrapped in a try/catch so the player
+    // doesn't crash in privacy-mode browsers that throw on access.
+    const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+        try {
+            return localStorage.getItem('course-player:sidebar-collapsed') === '1';
+        } catch {
+            return false;
+        }
+    });
+    useEffect(() => {
+        try {
+            localStorage.setItem(
+                'course-player:sidebar-collapsed',
+                sidebarCollapsed ? '1' : '0',
+            );
+        } catch {
+            // ignore
+        }
+    }, [sidebarCollapsed]);
 
     /* ---- Auto-select first incomplete content on first hydrate ---- */
     useEffect(() => {
@@ -352,68 +373,99 @@ function CoursePlayerGrantedShell({ data, courseUuid }: GrantedShellProps) {
         return map;
     }, [completedContents]);
 
-    return (
-        <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
-            <PlayerSidebar
-                course={data.course as any}
-                progressPercent={progressPercent}
-                sessions={(data.sessions ?? []) as any}
-                modules={modules as any}
-                expandedModules={expandedModules}
-                onToggleModule={toggleModule}
-                completedContents={completedContents}
-                moduleAvailability={moduleAvailability}
-                submissions={submissions}
-                currentItem={currentItem}
-                onSelectContent={selectContent}
-                onSelectAssignment={selectAssignment}
-            />
+    /* Module title for the active item — drives the breadcrumb in PlayerHeader. */
+    const activeModuleTitle = useMemo(() => {
+        if (!currentItem) return undefined;
+        const m = modules.find(
+            (mod: any) => (mod.module?.uuid || mod.uuid) === currentItem.moduleUuid,
+        );
+        return m?.module?.title ?? undefined;
+    }, [currentItem, modules]);
 
-            <div className="flex-1 flex flex-col overflow-hidden">
-                {activeContent || activeAssignment ? (
-                    <>
-                        <PlayerHeader
-                            activeContent={activeContent}
-                            activeAssignment={activeAssignment}
-                            isCurrentContentCompleted={isCurrentContentCompleted}
-                            hasAnnouncements={data.announcements.length > 0}
-                            onOpenDiscussion={() => setShowDiscussion(true)}
-                            onOpenAnnouncements={() => setShowAnnouncements(true)}
-                            onMarkComplete={markComplete}
-                            onAdvanceToNext={advanceToNext}
-                        />
-                        <div className="flex-1 overflow-y-auto p-6">
-                            <PlayerContent
+    return (
+        <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden">
+            {/* Sticky course-level progress bar — always visible, gives the
+                learner a constant sense of momentum even when the sidebar
+                is collapsed. */}
+            <div className="border-b bg-background px-4 py-2">
+                <div className="flex items-center gap-3">
+                    <span className="truncate text-sm font-medium">
+                        {(data.course as any).title}
+                    </span>
+                    <Progress value={progressPercent} className="h-1.5 flex-1" />
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {progressPercent}%
+                    </span>
+                </div>
+            </div>
+
+            <div className="flex flex-1 overflow-hidden">
+                <PlayerSidebar
+                    course={data.course as any}
+                    progressPercent={progressPercent}
+                    sessions={(data.sessions ?? []) as any}
+                    modules={modules as any}
+                    expandedModules={expandedModules}
+                    onToggleModule={toggleModule}
+                    completedContents={completedContents}
+                    moduleAvailability={moduleAvailability}
+                    submissions={submissions}
+                    currentItem={currentItem}
+                    collapsed={sidebarCollapsed}
+                    onSelectContent={selectContent}
+                    onSelectAssignment={selectAssignment}
+                />
+
+                <div className="flex flex-1 flex-col overflow-hidden">
+                    {activeContent || activeAssignment ? (
+                        <>
+                            <PlayerHeader
                                 activeContent={activeContent}
                                 activeAssignment={activeAssignment}
-                                isLocked={isLocked}
-                                contentProgressMap={contentProgressMap}
-                                latestSubmissionForActive={latestSubmissionForActive}
-                                onQuizComplete={handleQuizComplete}
+                                isCurrentContentCompleted={isCurrentContentCompleted}
+                                hasAnnouncements={data.announcements.length > 0}
+                                moduleTitle={activeModuleTitle}
+                                sidebarCollapsed={sidebarCollapsed}
+                                onToggleSidebar={() => setSidebarCollapsed((c) => !c)}
+                                onOpenDiscussion={() => setShowDiscussion(true)}
+                                onOpenAnnouncements={() => setShowAnnouncements(true)}
+                                onMarkComplete={markComplete}
+                                onAdvanceToNext={advanceToNext}
                             />
+                            <div className="flex-1 overflow-y-auto p-6">
+                                <PlayerContent
+                                    activeContent={activeContent}
+                                    activeAssignment={activeAssignment}
+                                    isLocked={isLocked}
+                                    contentProgressMap={contentProgressMap}
+                                    latestSubmissionForActive={latestSubmissionForActive}
+                                    onQuizComplete={handleQuizComplete}
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <div className="mx-auto max-w-4xl">
+                                {(data.course as any).format === 'live' &&
+                                (data.sessions ?? []).length === 0 ? (
+                                    <div className="py-12 text-center">
+                                        <Award className="mx-auto mb-4 h-16 w-16 text-muted-foreground/50" />
+                                        <h3 className="mb-2 text-lg font-medium">
+                                            No sessions scheduled yet
+                                        </h3>
+                                        <p className="text-muted-foreground">
+                                            Live sessions will appear here once the instructor schedules them.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="py-12 text-center text-muted-foreground">
+                                        Select a module item from the sidebar to begin.
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </>
-                ) : (
-                    <div className="flex-1 overflow-y-auto p-6">
-                        <div className="max-w-4xl mx-auto">
-                            {(data.course as any).format === 'live' && (data.sessions ?? []).length === 0 ? (
-                                <div className="text-center py-12">
-                                    <Award className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                                    <h3 className="text-lg font-medium mb-2">
-                                        No sessions scheduled yet
-                                    </h3>
-                                    <p className="text-muted-foreground">
-                                        Live sessions will appear here once the instructor schedules them.
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="text-center py-12 text-muted-foreground">
-                                    Select a module item from the sidebar to begin.
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             <PlayerDialogs
@@ -428,3 +480,5 @@ function CoursePlayerGrantedShell({ data, courseUuid }: GrantedShellProps) {
         </div>
     );
 }
+
+

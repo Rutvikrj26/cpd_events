@@ -44,6 +44,7 @@ import { ConfirmEmailChangePage } from "@/pages/auth/ConfirmEmailChangePage";
 import { NotFoundPage } from './pages/NotFoundPage';
 
 // Legal (lazy)
+const AcceptInvitePage = lazyNamed(() => import('./pages/invitations/AcceptInvitePage'), 'AcceptInvitePage');
 const TermsPage = lazyNamed(() => import('./pages/public/TermsPage'), 'TermsPage');
 const PrivacyPage = lazyNamed(() => import('./pages/public/PrivacyPage'), 'PrivacyPage');
 const CookiePolicyPage = lazyNamed(() => import('./pages/public/CookiePolicyPage'), 'CookiePolicyPage');
@@ -73,7 +74,6 @@ const MyLearningPage = lazyNamed(() => import('./pages/registrations/MyRegistrat
 const CertificatesPage = lazyNamed(() => import('./pages/certificates/CertificatesPage'), 'CertificatesPage');
 const Notifications = lazyNamed(() => import('./pages/dashboard/Notifications'), 'Notifications');
 const ProfileSettings = lazyNamed(() => import('./pages/dashboard/ProfileSettings'), 'ProfileSettings');
-const MyEvents = lazyNamed(() => import('./pages/dashboard/attendee/MyEvents'), 'MyEvents');
 const CPDTracking = lazyNamed(() => import('./pages/dashboard/attendee/CPDTracking'), 'CPDTracking');
 const CoursePlayerPage = lazyNamed(() => import('./pages/courses/CoursePlayerPage'), 'CoursePlayerPage');
 const MyBadgesPage = lazyNamed(() => import('./pages/badges/MyBadgesPage'), 'MyBadgesPage');
@@ -144,6 +144,10 @@ export default function App() {
               <Route path="/badges/verify/:code" element={<PublicBadgePage />} />
 
               {/* Public event, course & program pages */}
+              {/* Public invitation accept page — auth state handled
+                  inside the page so we can render the sign-in CTAs
+                  for unauthenticated invitees. */}
+              <Route path="/invite/:uuid" element={<AcceptInvitePage />} />
               <Route path="/discover/events" element={<EventDiscovery />} />
               <Route path="/discover/courses" element={<CourseCatalogPage />} />
               <Route path="/events/:id/details" element={<EventDetail />} />
@@ -226,7 +230,6 @@ export default function App() {
                   <Route path="/accreditations" element={<MyAccreditationsPage />} />
                   <Route path="/my-programs" element={<MyProgramsPage />} />
                   <Route path="/certificates" element={<CertificatesPage />} />
-                  <Route path="/my-events" element={<MyEvents />} />
                   <Route path="/courses" element={<CourseCatalogPage />} />
                   <Route path="/learn/:courseUuid" element={<CoursePlayerPage />} />
                   <Route path="/badges" element={<MyBadgesPage />} />

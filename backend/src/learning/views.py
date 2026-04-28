@@ -652,6 +652,70 @@ class CourseViewSet(viewsets.ModelViewSet):
         course.publish()
         return Response(CourseSerializer(course).data)
 
+    @action(detail=True, methods=['post'], url_path='invite')
+    def invite(self, request, uuid=None):
+        """Bulk-invite learners to this course by email or contact_uuid.
+
+        See `accounts.services.create_invitations` for resolution rules.
+        Gated by `course.can_manage` — owners + assigned staff + admins.
+        """
+        from rest_framework.exceptions import PermissionDenied
+        from accounts.serializers import (
+            InviteCreateSerializer,
+            LearningInvitationSerializer,
+        )
+        from accounts.services import create_invitations
+        from accounts.models import LearningInvitation
+
+        course = self.get_object()
+        if not course.can_manage(request.user):
+            raise PermissionDenied("You do not have permission to invite learners to this course.")
+
+        ser = InviteCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        result = create_invitations(
+            inviter=request.user,
+            target_type=LearningInvitation.TargetType.COURSE,
+            target=course,
+            invitees=ser.validated_data['invitees'],
+            personal_message=ser.validated_data.get('personal_message', ''),
+            comp=ser.validated_data.get('comp', False),
+        )
+
+        created_uuids = [r.invitation_uuid for r in result.created if r.invitation_uuid]
+        refreshed_uuids = [r.invitation_uuid for r in result.refreshed if r.invitation_uuid]
+        invitation_qs = LearningInvitation.objects.filter(
+            uuid__in=created_uuids + refreshed_uuids,
+        ).select_related('event', 'course', 'invited_by', 'contact')
+
+        return Response({
+            'invitations': LearningInvitationSerializer(invitation_qs, many=True).data,
+            'created': [{'email': r.email, 'invitation_uuid': r.invitation_uuid} for r in result.created],
+            'refreshed': [{'email': r.email, 'invitation_uuid': r.invitation_uuid} for r in result.refreshed],
+            'skipped': [{'email': r.email, 'reason': r.status, 'detail': r.reason} for r in result.skipped],
+        })
+
+    @action(detail=True, methods=['get'], url_path='invitations')
+    def invitations(self, request, uuid=None):
+        """List invitations for a course (manage permission required)."""
+        from rest_framework.exceptions import PermissionDenied
+        from accounts.models import LearningInvitation
+        from accounts.serializers import LearningInvitationSerializer
+
+        course = self.get_object()
+        if not course.can_manage(request.user):
+            raise PermissionDenied("You do not have permission to view invitations for this course.")
+        qs = (
+            LearningInvitation.objects
+            .filter(course=course)
+            .select_related('invited_by', 'contact')
+            .order_by('-created_at')
+        )
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return Response(LearningInvitationSerializer(qs, many=True).data)
+
     @action(detail=False, methods=['get'])
     def reports(self, request):
         """Summary, trends, and recent activity for the requester's courses."""

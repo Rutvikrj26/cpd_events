@@ -1099,11 +1099,38 @@ class CourseEnrollment(BaseModel):
 
     # Relationships
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="enrollments")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="course_enrollments")
+    # `user` is nullable so we can pre-create a guest enrollment from a
+    # `LearningInvitation` accept BEFORE the invitee has signed up. The
+    # signup flow (or the user's first authenticated request) calls
+    # `link_pending_for_user` to claim guest rows by email.
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="course_enrollments",
+    )
+    # Email used at invitation time (only set when user is NULL — guest
+    # enrollment). Lower-cased, indexed for the link query.
+    invitation_email = models.EmailField(
+        null=True, blank=True, db_index=True,
+        help_text="Email the invite was sent to. Set when user=NULL; cleared on link.",
+    )
 
     # Status
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True)
     access_type = models.CharField(max_length=20, choices=AccessType.choices, default=AccessType.LIFETIME)
+
+    # Comp-seat audit trail. See Registration.was_comped for the same
+    # reasoning — duplicating onto the enrollment lets revenue reports
+    # segregate comp seats without joining to invitations.
+    was_comped = models.BooleanField(default=False)
+    comped_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="course_enrollments_comped",
+    )
 
     # Billing
     stripe_checkout_session_id = models.CharField(max_length=255, blank=True, null=True, help_text="Stripe Checkout Session ID")
@@ -1155,17 +1182,51 @@ class CourseEnrollment(BaseModel):
     class Meta:
         db_table = "course_enrollments"
         ordering = ["-enrolled_at"]
-        unique_together = ["course", "user"]
+        # Two partial uniques cover both row shapes:
+        #   - Linked rows are unique on (course, user).
+        #   - Guest rows are unique on (course, invitation_email).
+        # Plain `unique_together = ["course", "user"]` would treat
+        # multiple guest rows with NULL user as duplicates only on some
+        # backends; conditional constraints are explicit and portable.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["course", "user"],
+                condition=models.Q(user__isnull=False),
+                name="unique_user_per_course",
+            ),
+            models.UniqueConstraint(
+                fields=["course", "invitation_email"],
+                condition=models.Q(user__isnull=True, invitation_email__isnull=False),
+                name="unique_guest_invite_per_course",
+            ),
+        ]
         indexes = [
             models.Index(fields=["status"]),
             models.Index(fields=["course", "status"]),
             models.Index(fields=["user", "status"]),
+            models.Index(fields=["invitation_email"]),
         ]
         verbose_name = "Course Enrollment"
         verbose_name_plural = "Course Enrollments"
 
     def __str__(self):
-        return f"{self.user.email} - {self.course.title}"
+        # Guest enrollments (user=NULL) fall back to the invitation email.
+        ident = self.user.email if self.user_id else (self.invitation_email or "<guest>")
+        return f"{ident} - {self.course.title}"
+
+    @classmethod
+    def link_pending_for_user(cls, user):
+        """Link guest enrollments (user=NULL) by matching invitation_email.
+
+        Called from the same signup-time flow that runs
+        `Registration.link_registrations_for_user`. Returns the count
+        linked. Idempotent: re-running on a fully-linked account does
+        nothing.
+        """
+        return cls.objects.filter(
+            user__isnull=True,
+            invitation_email__iexact=user.email,
+        ).update(user=user, invitation_email=None)
 
     def save(self, *args, **kwargs):
         # Invariant: status=COMPLETED ⟺ progress_percent=100 + completed_at set.

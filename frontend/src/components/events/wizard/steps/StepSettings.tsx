@@ -430,11 +430,11 @@ export const StepSettings = () => {
                                 <div className="space-y-0.5">
                                     <Label className="text-sm">Auto-publish recording</Label>
                                     <p className="text-xs text-muted-foreground">
-                                        When off, the recording stays unpublished after processing — visible only to you until you publish it from the event page.
+                                        Off by default — recordings stay private until you publish them from the event page. Turn on to publish automatically as soon as processing completes.
                                     </p>
                                 </div>
                                 <Switch
-                                    checked={formData.video_settings?.auto_publish_recording !== false}
+                                    checked={formData.video_settings?.auto_publish_recording === true}
                                     onCheckedChange={(checked) =>
                                         updateFormData({
                                             video_settings: {

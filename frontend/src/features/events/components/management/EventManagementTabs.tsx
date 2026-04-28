@@ -11,6 +11,7 @@ import { calculateFeedbackSummary } from '@/api/feedback';
 import { toast } from 'sonner';
 import { EventOverviewTab } from './EventOverviewTab';
 import { EventAttendeesTab } from './EventAttendeesTab';
+import { InvitationsListTab } from '@/shared/components/invitations/InvitationsListTab';
 import { EventAttendanceTab } from './EventAttendanceTab';
 import { EventFeedbackTab } from './EventFeedbackTab';
 import { EventCertificatesTab } from './EventCertificatesTab';
@@ -82,6 +83,11 @@ export function EventManagementTabs({ event, isEventHost }: EventManagementTabsP
                     <TabsTrigger value="registrations" className={TRIGGER}>
                         Registrations
                     </TabsTrigger>
+                    {isEventHost && (
+                        <TabsTrigger value="invitations" className={TRIGGER}>
+                            Invitations
+                        </TabsTrigger>
+                    )}
                     <TabsTrigger value="registration-form" className={TRIGGER}>
                         Registration form
                     </TabsTrigger>
@@ -120,6 +126,19 @@ export function EventManagementTabs({ event, isEventHost }: EventManagementTabsP
                         onExportCsv={handleExportCsv}
                     />
                 </TabsContent>
+
+                {isEventHost && (
+                    <TabsContent value="invitations" className="mt-0">
+                        <InvitationsListTab
+                            target={{
+                                type: 'event',
+                                uuid: event.uuid,
+                                title: event.title,
+                                isPaid: Number(event.price ?? 0) > 0,
+                            }}
+                        />
+                    </TabsContent>
+                )}
 
                 <TabsContent value="registration-form" className="mt-0">
                     <RegistrationFormBuilder eventUuid={event.uuid} />

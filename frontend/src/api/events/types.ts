@@ -68,6 +68,20 @@ export interface Event {
     is_current_user_host?: boolean; // Server-computed: owner | listed speaker | platform admin
     video_enabled?: boolean;        // Server-computed from video_settings.enabled
     transcription_enabled?: boolean; // Server-computed from video_settings.transcription_enabled
+    /**
+     * Most-recent AVAILABLE recording for this event (if any). Populated by
+     * `EventDetailSerializer.get_latest_recording`. Includes unpublished
+     * rows so hosts/admins can preview before publishing.
+     */
+    latest_recording?: {
+        uuid: string;
+        status: string;
+        storage_path?: string;
+        duration_seconds?: number;
+        duration_display?: string;
+        recording_end?: string | null;
+        is_published: boolean;
+    } | null;
     owner_name?: string; // List view
     organizer_name?: string; // Public list view
     owner?: { uuid: string; display_name: string }; // Detail view
