@@ -11,6 +11,7 @@ from rest_framework import generics, status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 
 from common.pagination import SmallPagination
 from common.permissions import IsOrganizerOrAdmin
@@ -384,6 +385,17 @@ class EventRegistrationViewSet(SoftDeleteModelViewSet):
 # =============================================================================
 
 
+class PublicRegistrationAnonThrottle(AnonRateThrottle):
+    """Per-IP throttle for the anonymous registration form.
+
+    Tighter than the default `anon` rate because each successful POST
+    can fan out into a magic-link email send. The DRF default behaviour
+    only throttles the IP, not (IP, email); per-email is enforced at the
+    view layer via the existing duplicate-registration guard.
+    """
+    scope = "public_register"
+
+
 @roles('public', route_name='public_registration')
 class PublicRegistrationView(generics.CreateAPIView):
     """
@@ -394,6 +406,7 @@ class PublicRegistrationView(generics.CreateAPIView):
 
     serializer_class = serializers.RegistrationCreateSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [PublicRegistrationAnonThrottle]
 
     def create(self, request, event_uuid=None):
         import logging
@@ -429,9 +442,46 @@ class PublicRegistrationView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
 
         user = request.user if request.user.is_authenticated else None
+        validated = serializer.validated_data
+        attendees = validated.get('attendees')
 
         try:
-            result = registration_service.register_participant(event=event, data=serializer.validated_data, user=user)
+            if attendees:
+                # Multi-attendee — propagate global custom fields onto every row.
+                custom = validated.get('custom_field_responses') or {}
+                attendee_dicts = [
+                    {**a, 'custom_field_responses': custom}
+                    for a in attendees
+                ]
+                result = registration_service.register_attendees(
+                    event=event, attendees=attendee_dicts, user=user,
+                )
+                registrations = result['registrations']
+                first = registrations[0]
+                response_data = {
+                    'registration_uuid': str(first.uuid),
+                    'uuid': str(first.uuid),
+                    'registration_uuids': [str(r.uuid) for r in registrations],
+                    'status': result['status'],
+                    'requires_payment': result.get('requires_payment', False),
+                    'anonymous': result.get('anonymous', False),
+                    'checkout_url': result.get('checkout_url'),
+                    'checkout_session_id': result.get('checkout_session_id'),
+                    'amount': float(sum((r.total_amount or 0) for r in registrations)),
+                    'ticket_price': float(first.amount_paid) if first.amount_paid else None,
+                    'tax_amount': float(sum((r.tax_amount or 0) for r in registrations)),
+                    'total_amount': float(sum((r.total_amount or 0) for r in registrations)),
+                    'currency': event.currency,
+                    'waitlist_position': None,
+                    'event_slug': event.slug,
+                    'event_uuid': str(event.uuid),
+                    'email': first.email,
+                    'attendee_count': len(registrations),
+                    'message': result.get('message', f"Registered {len(registrations)} attendees."),
+                }
+                return Response(response_data, status=status.HTTP_201_CREATED)
+
+            result = registration_service.register_participant(event=event, data=validated, user=user)
 
             reg = result['registration']
             response_data = {
@@ -439,6 +489,7 @@ class PublicRegistrationView(generics.CreateAPIView):
                 'uuid': str(reg.uuid),
                 'status': result['status'],
                 'requires_payment': result.get('requires_payment', False),
+                'anonymous': result.get('anonymous', False),
                 'checkout_url': result.get('checkout_url'),
                 'checkout_session_id': result.get('checkout_session_id'),
                 'amount': float(reg.total_amount) if reg.total_amount else None,
@@ -447,6 +498,9 @@ class PublicRegistrationView(generics.CreateAPIView):
                 'total_amount': float(reg.total_amount) if reg.total_amount else None,
                 'currency': event.currency,
                 'waitlist_position': getattr(reg, 'waitlist_position', None),
+                'event_slug': event.slug,
+                'event_uuid': str(event.uuid),
+                'email': reg.email,
                 'message': result.get('message', 'Registration successful.'),
             }
             return Response(response_data, status=status.HTTP_201_CREATED)
@@ -460,10 +514,14 @@ class PublicRegistrationView(generics.CreateAPIView):
             if isinstance(detail, dict) and 'code' in detail:
                 code = str(detail['code'])
                 msg = str(detail.get('message') or detail.get('code'))
-                http_status = (
-                    status.HTTP_401_UNAUTHORIZED if code == 'LOGIN_REQUIRED'
-                    else status.HTTP_400_BAD_REQUEST
-                )
+                if code == 'LOGIN_REQUIRED':
+                    http_status = status.HTTP_401_UNAUTHORIZED
+                elif code == 'EMAIL_HAS_ACCOUNT':
+                    # 409 Conflict: the email collides with a known account.
+                    # Frontend renders an inline auth challenge.
+                    http_status = status.HTTP_409_CONFLICT
+                else:
+                    http_status = status.HTTP_400_BAD_REQUEST
                 return error_response(msg, code=code, status_code=http_status)
 
             msg = str(detail[0]) if isinstance(detail, list) else str(detail)

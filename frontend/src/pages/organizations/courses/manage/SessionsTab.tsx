@@ -12,18 +12,11 @@ import {
 } from '@/shared/ui/table';
 import { Badge } from '@/shared/ui/badge';
 import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from '@/shared/ui/tooltip';
-import {
     Dialog,
     DialogContent,
     DialogDescription,
     DialogHeader,
     DialogTitle,
-    DialogFooter,
 } from '@/shared/ui/dialog';
 import {
     AlertDialog,
@@ -35,17 +28,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/shared/ui/alert-dialog';
-import { Input } from '@/shared/ui/input';
-import { Label } from '@/shared/ui/label';
-import { Textarea } from '@/shared/ui/textarea';
-import { Switch } from '@/shared/ui/switch';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/shared/ui/select';
+import { SessionFormDialog, SessionFormValue } from '@/shared/ui/SessionFormDialog';
 import {
     getCourseSessions,
     createCourseSession,
@@ -62,17 +45,6 @@ interface SessionsTabProps {
     courseUuid: string;
 }
 
-interface SessionFormData {
-    title: string;
-    description: string;
-    starts_at: string;
-    duration_minutes: number;
-    session_type: 'live' | 'recorded' | 'hybrid';
-    delivery_mode: 'online' | 'in_person' | 'hybrid';
-    is_mandatory: boolean;
-    minimum_attendance_percent: number;
-}
-
 export function SessionsTab({ courseUuid }: SessionsTabProps) {
     const [sessions, setSessions] = useState<CourseSession[]>([]);
     const [loading, setLoading] = useState(true);
@@ -80,18 +52,6 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
     const [reconcileSession, setReconcileSession] = useState<CourseSession | null>(null);
     const [editingSession, setEditingSession] = useState<CourseSession | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
-
-    // Form State
-    const [formData, setFormData] = useState<SessionFormData>({
-        title: '',
-        description: '',
-        starts_at: '',
-        duration_minutes: 60,
-        session_type: 'live',
-        delivery_mode: 'online',
-        is_mandatory: false,
-        minimum_attendance_percent: 80,
-    });
 
     const fetchSessions = useCallback(async () => {
         try {
@@ -114,49 +74,38 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
 
     const handleOpenAdd = () => {
         setEditingSession(null);
-        setFormData({
-            title: '',
-            description: '',
-            starts_at: '',
-            duration_minutes: 60,
-            session_type: 'live',
-            delivery_mode: 'online',
-            is_mandatory: false,
-            minimum_attendance_percent: 80,
-        });
         setManageDialogOpen(true);
     };
 
     const handleOpenEdit = (session: CourseSession) => {
         setEditingSession(session);
-        setFormData({
-            title: session.title,
-            description: session.description || '',
-            starts_at: session.starts_at,
-            duration_minutes: session.duration_minutes,
-            session_type: session.session_type,
-            delivery_mode: session.delivery_mode || 'online',
-            is_mandatory: session.is_mandatory,
-            minimum_attendance_percent: session.minimum_attendance_percent,
-        });
         setManageDialogOpen(true);
     };
 
-    const handleSave = async () => {
-        if (!formData.title || !formData.starts_at) {
-            toast.error('Please fill in required fields (Title, Start Time)');
-            return;
-        }
+    const editingValue = React.useMemo<SessionFormValue | null>(() => {
+        if (!editingSession) return null;
+        return {
+            title: editingSession.title,
+            description: editingSession.description || '',
+            starts_at: editingSession.starts_at,
+            duration_minutes: editingSession.duration_minutes,
+            session_type: editingSession.session_type,
+            is_mandatory: editingSession.is_mandatory,
+            delivery_mode: editingSession.delivery_mode || 'online',
+            minimum_attendance_percent: editingSession.minimum_attendance_percent,
+        };
+    }, [editingSession]);
 
+    const handleSave = async (form: SessionFormValue) => {
         const payload: CourseSessionCreateRequest = {
-            title: formData.title,
-            description: formData.description,
-            starts_at: formData.starts_at,
-            duration_minutes: formData.duration_minutes,
-            session_type: formData.session_type,
-            delivery_mode: formData.delivery_mode,
-            is_mandatory: formData.is_mandatory,
-            minimum_attendance_percent: formData.minimum_attendance_percent,
+            title: form.title,
+            description: form.description,
+            starts_at: form.starts_at,
+            duration_minutes: form.duration_minutes,
+            session_type: form.session_type,
+            delivery_mode: form.delivery_mode || 'online',
+            is_mandatory: form.is_mandatory,
+            minimum_attendance_percent: form.minimum_attendance_percent ?? 80,
         };
 
         try {
@@ -167,7 +116,6 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
                 await createCourseSession(courseUuid, payload);
                 toast.success('Session created');
             }
-            setManageDialogOpen(false);
             fetchSessions();
         } catch (error: any) {
             console.error('Failed to save session:', error);
@@ -326,112 +274,19 @@ export function SessionsTab({ courseUuid }: SessionsTabProps) {
             )}
 
             {/* Manage Dialog (Add/Edit) */}
-            <Dialog open={manageDialogOpen} onOpenChange={setManageDialogOpen}>
-                <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>{editingSession ? 'Edit' : 'Schedule'} Session</DialogTitle>
-                        <DialogDescription>
-                            Configure the session details.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1">
-                        <div className="space-y-2">
-                            <Label htmlFor="title">Title</Label>
-                            <Input
-                                id="title"
-                                value={formData.title}
-                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                placeholder="e.g. Introduction & Key Concepts"
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="starts_at">Start Time</Label>
-                                <Input
-                                    id="starts_at"
-                                    type="datetime-local"
-                                    value={formData.starts_at}
-                                    onChange={(e) => setFormData({ ...formData, starts_at: e.target.value })}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="duration">Duration (min)</Label>
-                                <Input
-                                    id="duration"
-                                    type="number"
-                                    min="15"
-                                    value={formData.duration_minutes}
-                                    onChange={(e) => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) || 0 })}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="description">Description (Optional)</Label>
-                            <Textarea
-                                id="description"
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Session Type</Label>
-                            <Select
-                                value={formData.session_type}
-                                onValueChange={(val: any) => setFormData({ ...formData, session_type: val })}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="live">Live</SelectItem>
-                                    <SelectItem value="hybrid">Hybrid (In-person + Online)</SelectItem>
-                                    <SelectItem value="recorded">Recorded / Webinar</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Delivery Mode</Label>
-                            <Select
-                                value={formData.delivery_mode}
-                                onValueChange={(val: any) => setFormData({ ...formData, delivery_mode: val })}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="online">Online</SelectItem>
-                                    <SelectItem value="in_person">In Person</SelectItem>
-                                    <SelectItem value="hybrid">Hybrid (in-person + remote)</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted-foreground">
-                                In-person sessions skip video room provisioning.
-                            </p>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-2">
-                            <div className="space-y-0.5">
-                                <Label>Mandatory Session</Label>
-                                <p className="text-xs text-muted-foreground">Learners must attend to complete</p>
-                            </div>
-                            <Switch
-                                checked={formData.is_mandatory}
-                                onCheckedChange={(checked) => setFormData({ ...formData, is_mandatory: checked })}
-                            />
-                        </div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setManageDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={handleSave}>Save Session</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <SessionFormDialog
+                open={manageDialogOpen}
+                onOpenChange={(open) => {
+                    setManageDialogOpen(open);
+                    if (!open) setEditingSession(null);
+                }}
+                value={editingValue}
+                onSave={handleSave}
+                showDeliveryMode
+                showMinAttendance
+                mandatoryLabel="Mandatory Session"
+                mandatoryHelp="Learners must attend to complete"
+            />
 
             {/* Reconciliation Dialog */}
             <Dialog open={!!reconcileSession} onOpenChange={(open) => !open && setReconcileSession(null)}>

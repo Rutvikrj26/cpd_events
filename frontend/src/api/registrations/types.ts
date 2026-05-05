@@ -49,13 +49,28 @@ export interface Registration {
     created_at: string;
 }
 
-export interface RegistrationCreateRequest {
+export interface AttendeeInput {
     email: string;
     full_name: string;
     professional_title?: string;
     organization_name?: string;
+    allow_public_verification?: boolean;
+}
+
+/**
+ * Two valid shapes:
+ *  - single-attendee (legacy): top-level email/full_name/...
+ *  - multi-attendee: top-level ``attendees`` array. The single-attendee
+ *    fields are ignored when ``attendees`` is present.
+ */
+export interface RegistrationCreateRequest {
+    email?: string;
+    full_name?: string;
+    professional_title?: string;
+    organization_name?: string;
     custom_field_responses?: Record<string, any>;
     allow_public_verification?: boolean;
+    attendees?: AttendeeInput[];
 }
 
 /**
@@ -65,11 +80,17 @@ export interface RegistrationCreateRequest {
 export interface RegistrationResponse extends Registration {
     registration_uuid?: string;
     requires_payment?: boolean;
+    /** True when the registration was created without an authenticated user.
+     *  The frontend uses this to route to the "check your email" page. */
+    anonymous?: boolean;
     checkout_url?: string;
     checkout_session_id?: string;
     amount?: number;
     ticket_price?: number;
     currency?: string;
+    event_slug?: string;
+    event_uuid?: string;
+    email?: string;
     message?: string;
 }
 

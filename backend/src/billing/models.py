@@ -86,7 +86,16 @@ class CoursePurchase(BaseModel):
         REFUNDED = "refunded", "Refunded"
         FAILED = "failed", "Failed"
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="purchases")
+    # Nullable so anonymous paid registrations still get a canonical
+    # receipt row at fulfilment time. The user is back-filled when the
+    # registrant claims their account (see
+    # ``CoursePurchase.link_for_user``).
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="purchases",
+    )
     course = models.ForeignKey("learning.Course", on_delete=models.SET_NULL, null=True, blank=True, related_name="purchases")
     event = models.ForeignKey("events.Event", on_delete=models.SET_NULL, null=True, blank=True, related_name="purchases")
     program = models.ForeignKey(
@@ -132,7 +141,8 @@ class CoursePurchase(BaseModel):
 
     def __str__(self):
         item = self.course or self.event or self.program
-        return f"{self.user.email} purchased {item}"
+        actor = self.user.email if self.user_id else "(anonymous)"
+        return f"{actor} purchased {item}"
 
     @property
     def is_completed(self):
@@ -141,6 +151,26 @@ class CoursePurchase(BaseModel):
     def has_access(self):
         """Check if this purchase grants access."""
         return self.status == self.Status.COMPLETED
+
+    @classmethod
+    def link_for_user(cls, user) -> int:
+        """Back-fill the user FK on purchases tied to that user's registrations.
+
+        Called from the magic-link claim accept flow after
+        ``Registration.link_registrations_for_user`` has attached guest
+        registrations to the new account. Returns the count of purchases
+        updated so callers can log it.
+        """
+        from registrations.models import Registration
+
+        purchase_ids = list(
+            Registration.objects
+            .filter(user=user, purchase__isnull=False, purchase__user__isnull=True)
+            .values_list("purchase_id", flat=True)
+        )
+        if not purchase_ids:
+            return 0
+        return cls.objects.filter(id__in=purchase_ids, user__isnull=True).update(user=user)
 
 
 # =============================================================================

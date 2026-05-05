@@ -197,6 +197,13 @@ REST_FRAMEWORK = {
         'anon': '1000/min',
         'user': '10000/min',
         'auth': '100/hour',
+        # Magic-link verify/accept and sign-in-link request. Per-IP cap
+        # tuned to keep the email send-and-spam vector low while letting
+        # legitimate users retry a failed claim a few times.
+        'magic_link': '30/hour',
+        # Anonymous public registration (event registration form).
+        # Tighter than `anon` to mitigate the email-send-via-claim vector.
+        'public_register': '20/hour',
     },
     # Rendering
     'DEFAULT_RENDERER_CLASSES': [

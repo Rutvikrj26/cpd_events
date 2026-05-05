@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
@@ -233,11 +235,13 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
 
                             <div className="space-y-2">
                                 <Label htmlFor="description">Full Description</Label>
-                                <Textarea
-                                    id="description"
-                                    value={formData.description}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    rows={6}
+                                {/* Rich-text editor — the field stores HTML, which a
+                                    plain Textarea showed as raw markup. Matches the
+                                    Create Course wizard's editor for consistency. */}
+                                <ReactQuill
+                                    theme="snow"
+                                    value={formData.description || ''}
+                                    onChange={(content: string) => setFormData({ ...formData, description: content })}
                                     placeholder="Detailed course description..."
                                 />
                             </div>
@@ -551,13 +555,19 @@ export function SettingsTab({ course, onCourseUpdated, organizationSlug }: Setti
     );
 }
 
+interface StaffCandidate {
+    uuid: string;
+    email: string;
+    full_name?: string;
+}
+
 function CourseStaffCard({ courseUuid }: { courseUuid: string }) {
     const [staff, setStaff] = useState<CourseStaffMember[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [searching, setSearching] = useState(false);
+    const [candidates, setCandidates] = useState<StaffCandidate[]>([]);
     const [adding, setAdding] = useState(false);
+    const [open, setOpen] = useState(false);
     const { toast } = useToast();
 
     const loadStaff = useCallback(async () => {
@@ -571,24 +581,36 @@ function CourseStaffCard({ courseUuid }: { courseUuid: string }) {
         }
     }, [courseUuid]);
 
-    useEffect(() => { loadStaff(); }, [loadStaff]);
-
-    const handleSearch = async (query: string) => {
-        setSearchQuery(query);
-        if (query.length < 2) { setSearchResults([]); return; }
-        setSearching(true);
+    // Pre-load eligible staff candidates once. Eligible = active users
+    // in the instructor/organizer/admin groups, minus anyone already
+    // assigned to this course. The dedicated candidates endpoint is
+    // gated on course.can_manage (vs. /admin/users/ which is platform-
+    // admin-only), so course owners can use the picker without needing
+    // global admin rights.
+    const loadCandidates = useCallback(async () => {
         try {
-            const response = await client.get('/admin/users/', { params: { search: query, role: 'instructor' } });
+            const response = await client.get(`/courses/${courseUuid}/staff/candidates/`);
             const users = Array.isArray(response.data) ? response.data : (response.data.results || []);
-            // Filter out already-assigned users
-            const assignedEmails = new Set(staff.map(s => s.user_email));
-            setSearchResults(users.filter((u: any) => !assignedEmails.has(u.email)));
+            setCandidates(users);
         } catch {
-            setSearchResults([]);
-        } finally {
-            setSearching(false);
+            setCandidates([]);
         }
-    };
+    }, [courseUuid]);
+
+    useEffect(() => { loadStaff(); }, [loadStaff]);
+    useEffect(() => { loadCandidates(); }, [loadCandidates]);
+
+    const assignedEmails = React.useMemo(() => new Set(staff.map(s => s.user_email)), [staff]);
+
+    const visibleCandidates = React.useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        const pool = candidates.filter(u => !assignedEmails.has(u.email));
+        if (!q) return pool.slice(0, 10);
+        const filtered = pool.filter(u =>
+            (u.full_name || '').toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
+        );
+        return filtered.slice(0, 10);
+    }, [candidates, assignedEmails, searchQuery]);
 
     const handleAdd = async (userUuid: string) => {
         setAdding(true);
@@ -596,7 +618,7 @@ function CourseStaffCard({ courseUuid }: { courseUuid: string }) {
             await addCourseStaff(courseUuid, { user_uuid: userUuid });
             toast({ title: 'Staff member added' });
             setSearchQuery('');
-            setSearchResults([]);
+            setOpen(false);
             await loadStaff();
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Failed to add', description: error?.response?.data?.detail || 'Try again' });
@@ -624,29 +646,44 @@ function CourseStaffCard({ courseUuid }: { courseUuid: string }) {
                 <CardDescription>Assign course managers who can edit curriculum and grade submissions.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                {/* Search to add */}
+                {/* Auto-select staff picker — dropdown opens on focus, shows
+                    pre-loaded eligible users; typing filters client-side. */}
                 <div className="relative">
                     <Input
-                        placeholder="Search users by name or email..."
+                        placeholder="Select or search staff..."
                         value={searchQuery}
-                        onChange={(e) => handleSearch(e.target.value)}
+                        onFocus={() => setOpen(true)}
+                        onBlur={() => {
+                            // Defer close so a click on a result registers first.
+                            setTimeout(() => setOpen(false), 150);
+                        }}
+                        onChange={(e) => { setSearchQuery(e.target.value); setOpen(true); }}
                     />
-                    {searchResults.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                            {searchResults.map((user: any) => (
-                                <button
-                                    key={user.uuid}
-                                    className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted text-left"
-                                    onClick={() => handleAdd(user.uuid)}
-                                    disabled={adding}
-                                >
-                                    <div>
-                                        <span className="font-medium">{user.full_name || user.email}</span>
-                                        <span className="text-muted-foreground ml-2">{user.email}</span>
-                                    </div>
-                                    <UserPlus className="h-4 w-4 text-muted-foreground" />
-                                </button>
-                            ))}
+                    {open && (
+                        <div className="absolute z-10 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                            {visibleCandidates.length === 0 ? (
+                                <div className="px-3 py-2 text-sm text-muted-foreground">
+                                    {candidates.length === 0
+                                        ? 'No eligible users found. Invite an instructor or organizer first.'
+                                        : 'No matches.'}
+                                </div>
+                            ) : (
+                                visibleCandidates.map((user) => (
+                                    <button
+                                        key={user.uuid}
+                                        type="button"
+                                        className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted text-left"
+                                        onMouseDown={(e) => { e.preventDefault(); handleAdd(user.uuid); }}
+                                        disabled={adding}
+                                    >
+                                        <div className="min-w-0">
+                                            <span className="font-medium truncate">{user.full_name || user.email}</span>
+                                            <span className="text-muted-foreground ml-2 text-xs">{user.email}</span>
+                                        </div>
+                                        <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    </button>
+                                ))
+                            )}
                         </div>
                     )}
                 </div>

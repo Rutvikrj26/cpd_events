@@ -22,6 +22,8 @@ REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
     'user': '10000/day',
     'import': '10000/day',
     'auth': '10000/day',
+    'magic_link': '10000/day',
+    'public_register': '10000/day',
 }
 
 

@@ -17,8 +17,8 @@ export const StepReview = () => {
                 <p className="text-sm text-muted-foreground">Please verify your event details before finalizing.</p>
             </div>
 
-            <div className="grid gap-6">
-                <Card className="bg-muted/50 border-border shadow-sm">
+            <div className="grid gap-6 min-w-0">
+                <Card className="bg-muted/50 border-border shadow-sm w-full max-w-full overflow-hidden">
                     {/* Image Preview */}
                     {(formData._imageFile || formData.featured_image_url) && (
                         <div className="relative w-full h-48 sm:h-64 overflow-hidden rounded-t-lg bg-muted">
@@ -33,12 +33,18 @@ export const StepReview = () => {
                             />
                         </div>
                     )}
-                    <CardContent className="p-6 space-y-6">
-                        <div>
-                            <h3 className="text-2xl font-bold text-foreground mb-2">{formData.title || 'Untitled Event'}</h3>
+                    <CardContent className="p-6 space-y-6 min-w-0 max-w-full">
+                        <div className="min-w-0">
+                            <h3 className="text-2xl font-bold text-foreground mb-2 break-words">{formData.title || 'Untitled Event'}</h3>
                             {hasVisibleContent(formData.description) ? (
+                                // The rich-text can contain wide elements
+                                // (tables, embedded images with large
+                                // intrinsic widths, code blocks, unbroken
+                                // URLs). Clamp every common offender so a
+                                // wide payload can't push the card past the
+                                // viewport.
                                 <div
-                                    className="text-muted-foreground prose prose-sm dark:prose-invert max-w-none"
+                                    className="text-muted-foreground prose prose-sm dark:prose-invert max-w-none break-words [&_img]:max-w-full [&_img]:h-auto [&_table]:max-w-full [&_table]:block [&_table]:overflow-x-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto"
                                     dangerouslySetInnerHTML={{ __html: sanitizeHtml(formData.description) }}
                                 />
                             ) : (
@@ -57,11 +63,25 @@ export const StepReview = () => {
                             </div>
                             <div className="flex items-center gap-2 text-foreground">
                                 <Calendar className="h-4 w-4 text-primary" />
-                                <span>{formData.starts_at ? new Date(formData.starts_at).toLocaleString() : 'Date not set'}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-foreground">
-                                <Clock className="h-4 w-4 text-primary" />
-                                <span>{formData.duration_minutes} Minutes</span>
+                                <span>
+                                    {(() => {
+                                        if (!formData.starts_at || !formData.duration_minutes) return 'Date not set';
+                                        const start = new Date(formData.starts_at);
+                                        const end = new Date(start.getTime() + formData.duration_minutes * 60000);
+                                        const sameDay =
+                                            start.getFullYear() === end.getFullYear() &&
+                                            start.getMonth() === end.getMonth() &&
+                                            start.getDate() === end.getDate();
+                                        const startFmt: Intl.DateTimeFormatOptions = {
+                                            weekday: 'short', month: 'short', day: 'numeric',
+                                            hour: 'numeric', minute: '2-digit',
+                                        };
+                                        const endFmt = sameDay
+                                            ? { hour: 'numeric', minute: '2-digit' } as const
+                                            : startFmt;
+                                        return `${start.toLocaleString(undefined, startFmt)} → ${end.toLocaleString(undefined, endFmt)}`;
+                                    })()}
+                                </span>
                             </div>
                             {formData.max_attendees && (
                                 <div className="flex items-center gap-2 text-foreground">

@@ -276,27 +276,55 @@ class RegistrationDetailSerializer(SoftDeleteModelSerializer):
         read_only_fields = fields
 
 
+class AttendeeInputSerializer(serializers.Serializer):
+    """One attendee row in a multi-attendee registration submission."""
+
+    email = serializers.EmailField()
+    full_name = serializers.CharField(max_length=255)
+    professional_title = serializers.CharField(required=False, max_length=255, allow_blank=True)
+    organization_name = serializers.CharField(required=False, max_length=255, allow_blank=True)
+    allow_public_verification = serializers.BooleanField(default=True)
+
+
 class RegistrationCreateSerializer(serializers.Serializer):
     """
-    Register for an event.
+    Register for an event. Supports either:
 
-    For authenticated users: email optional (uses account email)
-    For guests: email required
+    - Single-attendee (legacy): top-level email/full_name/professional_title/...
+    - Multi-attendee:           top-level ``attendees`` list (1..25 entries).
+
+    For authenticated users: email optional in the single-attendee shape.
+    For guests: email always required (per attendee in multi-attendee).
     """
 
+    # Single-attendee fields (all optional — only validated when
+    # ``attendees`` is omitted).
     email = serializers.EmailField(required=False)
     full_name = serializers.CharField(required=False, max_length=255)
     professional_title = serializers.CharField(required=False, max_length=255, allow_blank=True)
     organization_name = serializers.CharField(required=False, max_length=255, allow_blank=True)
-    custom_field_responses = serializers.DictField(required=False)
     allow_public_verification = serializers.BooleanField(default=True)
-    # Promo codes are entered at Stripe Checkout (allow_promotion_codes=True),
-    # so we no longer accept them in the registration payload.
+
+    # Multi-attendee field. When present, the single-attendee fields are ignored.
+    attendees = serializers.ListField(
+        child=AttendeeInputSerializer(),
+        required=False,
+        min_length=1,
+        max_length=25,
+    )
+
+    # Custom fields are global per submission (event-level fields apply to
+    # all attendees uniformly).
+    custom_field_responses = serializers.DictField(required=False)
 
     def validate(self, attrs):
         request = self.context.get('request')
+        attendees = attrs.get('attendees')
 
-        # Guest registration requires email
+        if attendees:
+            return attrs  # AttendeeInputSerializer enforces email + full_name per row.
+
+        # Single-attendee shape — guest mode still requires email + full_name.
         if not request or not request.user.is_authenticated:
             if not attrs.get('email'):
                 raise serializers.ValidationError({'email': 'Email required for guest registration.'})

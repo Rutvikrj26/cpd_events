@@ -1156,6 +1156,50 @@ class CourseStaffViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You do not have permission to manage course staff.")
         instance.delete()
 
+    @action(detail=False, methods=['get'], url_path='candidates')
+    def candidates(self, request, course_uuid=None):
+        """GET /courses/{uuid}/staff/candidates/?q=<query>
+
+        Eligible users for course-staff assignment: anyone in the
+        instructor / organizer / admin Groups, excluding already-assigned
+        users on this course. Returns up to 50 results, narrowable with
+        an optional ``q`` substring filter against email + full_name.
+
+        Powers the staff-picker dropdown — gated on
+        ``course.can_manage`` so course owners can use it without
+        needing platform-admin rights (the global `/admin/users/` list
+        is admin-only).
+        """
+        from django.contrib.auth import get_user_model
+        from django.db.models import Q
+
+        course = get_object_or_404(Course, uuid=course_uuid)
+        if not course.can_manage(request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to manage course staff.")
+
+        UserModel = get_user_model()
+        already_assigned = CourseStaff.objects.filter(course=course).values_list('user_id', flat=True)
+        qs = (
+            UserModel.objects
+            .filter(deleted_at__isnull=True, is_active=True)
+            .filter(groups__name__in=['instructor', 'organizer', 'admin'])
+            .exclude(id__in=already_assigned)
+            .exclude(id=request.user.id)  # the requester is implicitly the owner; don't list them
+            .distinct()
+            .order_by('full_name', 'email')
+        )
+
+        q = (request.query_params.get('q') or '').strip()
+        if q:
+            qs = qs.filter(Q(email__icontains=q) | Q(full_name__icontains=q))
+
+        users = qs[:50]
+        return Response([
+            {'uuid': str(u.uuid), 'email': u.email, 'full_name': u.full_name}
+            for u in users
+        ])
+
 
 @roles('learner', 'organizer', 'instructor', 'admin', route_name='course_enrollments')
 class CourseEnrollmentViewSet(viewsets.ModelViewSet):

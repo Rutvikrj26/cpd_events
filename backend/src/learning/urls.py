@@ -131,6 +131,14 @@ urlpatterns = [
         CourseStaffViewSet.as_view({'get': 'list', 'post': 'create'}),
         name='course-staff-list',
     ),
+    # Eligible-staff picker (course owner-gated). Manually registered
+    # because CourseStaffViewSet isn't behind a router that auto-wires
+    # @action url_paths.
+    path(
+        'courses/<uuid:course_uuid>/staff/candidates/',
+        CourseStaffViewSet.as_view({'get': 'candidates'}),
+        name='course-staff-candidates',
+    ),
     path(
         'courses/<uuid:course_uuid>/staff/<uuid:uuid>/',
         CourseStaffViewSet.as_view({'delete': 'destroy'}),

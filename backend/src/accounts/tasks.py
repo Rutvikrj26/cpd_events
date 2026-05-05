@@ -131,6 +131,77 @@ def send_invitation_email(invitation_id):
 
 
 @task()
+def send_magic_link_email(magic_link_id):
+    """Send a magic-link email — claim or sign-in.
+
+    The link points at the frontend `/magic-link/:uuid?t=<signed>` page.
+    The signed token is regenerated each send so a stale email can still
+    be re-verified — token rotation only happens when the link is
+    cancelled and re-issued.
+    """
+    from accounts.models import MagicLink
+    from accounts.services import sign_magic_link_token
+
+    try:
+        link = MagicLink.objects.select_related('registration', 'registration__event').get(id=magic_link_id)
+    except MagicLink.DoesNotExist:
+        logger.error("MagicLink %s not found for send", magic_link_id)
+        return
+
+    frontend_base = (getattr(settings, 'FRONTEND_BASE_URL', '') or '').rstrip('/')
+    if not frontend_base:
+        # Some envs use FRONTEND_URL instead. Fall back.
+        frontend_base = (getattr(settings, 'FRONTEND_URL', '') or 'http://localhost:5173').rstrip('/')
+    token = sign_magic_link_token(link)
+    accept_url = f"{frontend_base}/magic-link/{link.uuid}?t={token}"
+
+    is_claim = link.purpose == MagicLink.Purpose.REGISTRATION_CLAIM
+    if is_claim:
+        registration = link.registration
+        event = registration.event if registration else None
+        was_paid = bool(
+            registration
+            and registration.payment_status == registration.PaymentStatus.PAID
+        )
+        subject = f"You're registered: {event.title}" if event else "You're registered"
+        template_name = 'emails/magic_link_claim.html'
+        context = {
+            'accept_url': accept_url,
+            'expires_at': link.expires_at,
+            'event_title': event.title if event else '',
+            'event_starts_at': getattr(event, 'starts_at', None) if event else None,
+            'recipient_name': (registration.full_name if registration else '') or link.email,
+            'was_paid': was_paid,
+        }
+    else:
+        subject = "Sign in to Accredit"
+        template_name = 'emails/magic_link_sign_in.html'
+        context = {
+            'accept_url': accept_url,
+            'expires_at': link.expires_at,
+        }
+
+    try:
+        html_message = render_to_string(template_name, context)
+        plain_message = strip_tags(html_message)
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[link.email],
+            html_message=html_message,
+        )
+        logger.info(
+            "Magic link email sent: link=%s purpose=%s email=%s",
+            link.uuid, link.purpose, link.email,
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to send magic link email %s: %s", magic_link_id, exc, exc_info=True,
+        )
+
+
+@task()
 def cleanup_expired_tokens():
     """Remove expired email verification and password reset tokens."""
     now = timezone.now()

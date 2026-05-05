@@ -1052,9 +1052,18 @@ class AdminUserListView(generics.ListAPIView):
                 models.Q(email__icontains=search) |
                 models.Q(full_name__icontains=search)
             )
+        # Either ?role=foo (single Group) or ?roles=foo,bar (Group set).
+        # Both forms are supported so existing single-role callers keep
+        # working while new flows (e.g. course-staff picker) can ask for
+        # the union of instructor+organizer in one round trip.
         role = self.request.query_params.get("role")
         if role:
             qs = qs.filter(groups__name=role)
+        roles = self.request.query_params.get("roles")
+        if roles:
+            names = [r.strip() for r in roles.split(",") if r.strip()]
+            if names:
+                qs = qs.filter(groups__name__in=names)
         is_active = self.request.query_params.get("is_active")
         if is_active is not None:
             qs = qs.filter(is_active=is_active.lower() == "true")
@@ -1947,3 +1956,270 @@ def _user_can_manage_invitation(user, invitation) -> bool:
     if invitation.course:
         return invitation.course.can_manage(user)
     return False
+
+
+# =============================================================================
+# Magic-link views — self-claim + email-link sign-in
+# =============================================================================
+#
+# Three public endpoints back the new flow:
+#
+#   POST /public/magic-link/verify/?t=<token>
+#       Look up a link by uuid + signed token. Returns purpose, email,
+#       status, and whether a User already exists for that email so the
+#       frontend can branch (CLAIM with existing user → "sign in instead";
+#       CLAIM with no user → "set a password"; SIGN_IN → auto-accept).
+#
+#   POST /public/magic-link/accept/?t=<token>
+#       Mutate. For CLAIM: requires `{password}`, creates/updates the User,
+#       sweeps guest registrations, returns a JWT pair. For SIGN_IN: pure
+#       auth, returns a JWT pair. Auto-rejects when an authenticated caller
+#       presents a link for a different email.
+#
+#   POST /auth/sign-in-link/
+#       Issue a fresh sign-in link by email. Anti-enumeration: returns
+#       success regardless of whether the email matches a User.
+
+
+class MagicLinkAnonThrottle(AnonRateThrottle):
+    """Per-IP throttle for magic-link verify/accept and sign-in-link request."""
+    scope = "magic_link"
+
+
+class MagicLinkVerifyView(generics.GenericAPIView):
+    """POST /api/v1/public/magic-link/verify/?t=<token>.
+
+    Lookup only — no state mutation. Frontend calls this on page load to
+    render the right UI. Returns 404 for any invalid/missing/tampered
+    token (uniform error: never leak which links exist).
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [MagicLinkAnonThrottle]
+
+    def post(self, request, uuid):
+        from accounts.services import verify_magic_link_token
+
+        token = request.query_params.get('t') or request.data.get('t', '')
+        link = verify_magic_link_token(uuid, token)
+        if link is None:
+            return error_response(
+                'This link is invalid or has expired.',
+                code='INVALID_TOKEN',
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        if link.is_expired or link.status == link.Status.EXPIRED:
+            return Response(
+                {'status': 'expired', 'purpose': link.purpose, 'email': link.email},
+                status=status.HTTP_410_GONE,
+            )
+        if link.status == link.Status.CANCELLED:
+            return Response(
+                {'status': 'cancelled', 'purpose': link.purpose, 'email': link.email},
+                status=status.HTTP_410_GONE,
+            )
+        if link.status == link.Status.ACCEPTED:
+            return Response(
+                {'status': 'accepted', 'purpose': link.purpose, 'email': link.email},
+                status=status.HTTP_410_GONE,
+            )
+
+        user_exists = User.objects.filter(email__iexact=link.email).exists()
+
+        registration_summary = None
+        if link.registration_id and link.registration:
+            reg = link.registration
+            event = getattr(reg, 'event', None)
+            registration_summary = {
+                'uuid': str(reg.uuid),
+                'status': reg.status,
+                'payment_status': reg.payment_status,
+                'event_title': event.title if event else '',
+                'event_uuid': str(event.uuid) if event else '',
+                'event_slug': getattr(event, 'slug', None) if event else None,
+                'event_starts_at': event.starts_at.isoformat() if event and event.starts_at else None,
+                'total_amount': str(reg.total_amount),
+                'currency': event.currency if event else '',
+            }
+
+        return Response({
+            'status': link.status,
+            'purpose': link.purpose,
+            'email': link.email,
+            'expires_at': link.expires_at.isoformat(),
+            'user_exists': user_exists,
+            'registration_summary': registration_summary,
+        })
+
+
+class MagicLinkAcceptView(generics.GenericAPIView):
+    """POST /api/v1/public/magic-link/accept/?t=<token>.
+
+    Mutating endpoint. For CLAIM: takes `{password}`, creates or updates
+    the User (passwordless first time), sweeps any guest registrations
+    matching the email into that User, and returns a JWT pair. For
+    SIGN_IN: empty body, returns a JWT pair.
+
+    Trust posture: the client controls a token signed with our key AND
+    the corresponding email-delivered secret. Same level as
+    `EmailVerificationView`, which already issues JWTs on similar
+    authority.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [MagicLinkAnonThrottle]
+
+    def post(self, request, uuid):
+        from accounts.models import MagicLink
+        from accounts.services import (
+            accept_registration_claim,
+            accept_sign_in,
+            verify_magic_link_token,
+        )
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        token = request.query_params.get('t') or request.data.get('t', '')
+        link = verify_magic_link_token(uuid, token)
+        if link is None:
+            return error_response(
+                'This link is invalid or has expired.',
+                code='INVALID_TOKEN',
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        if link.is_expired:
+            return error_response(
+                'This link has expired.',
+                code='LINK_EXPIRED',
+                status_code=status.HTTP_410_GONE,
+            )
+        if link.status == link.Status.CANCELLED:
+            return error_response(
+                'This link has been cancelled.',
+                code='LINK_CANCELLED',
+                status_code=status.HTTP_410_GONE,
+            )
+        if link.status == link.Status.ACCEPTED:
+            return error_response(
+                'This link has already been used.',
+                code='LINK_ALREADY_ACCEPTED',
+                status_code=status.HTTP_410_GONE,
+            )
+
+        # If an authenticated caller hits an accept link for a different
+        # email, surface it as a 409 — don't silently swap accounts.
+        # Mirrors the LearningInvitation accept handler at line 1830.
+        if request.user and request.user.is_authenticated and request.user.email.lower() != link.email.lower():
+            return Response(
+                {
+                    'wrong_email': True,
+                    'link_email': link.email,
+                    'current_email': request.user.email,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        if link.purpose == MagicLink.Purpose.REGISTRATION_CLAIM:
+            password = (request.data.get('password') or '').strip()
+            if len(password) < 8:
+                return error_response(
+                    'Password must be at least 8 characters.',
+                    code='PASSWORD_TOO_SHORT',
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            result = accept_registration_claim(link, password)
+        elif link.purpose == MagicLink.Purpose.SIGN_IN:
+            try:
+                result = accept_sign_in(link)
+            except ValueError:
+                # Defensive: a User got deleted between issue and click.
+                return error_response(
+                    'No account exists for this link.',
+                    code='NO_ACCOUNT',
+                    status_code=status.HTTP_410_GONE,
+                )
+        else:
+            return error_response(
+                'Unknown link purpose.',
+                code='INVALID_PURPOSE',
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        refresh = RefreshToken.for_user(result.user)
+        return Response({
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': {
+                'uuid': str(result.user.uuid),
+                'email': result.user.email,
+                'full_name': result.user.full_name,
+                'roles': result.user.role_names,
+            },
+            'redirect_url': result.redirect_url,
+            'purpose': result.purpose,
+        })
+
+
+class EmailSignInRequestView(generics.GenericAPIView):
+    """POST /api/v1/auth/sign-in-link/.
+
+    Issues a SIGN_IN magic link by email. Always returns 202 with the
+    same body regardless of whether the email matches a User — this is
+    the standard anti-enumeration pattern (see also
+    `ResendVerificationEmailView`).
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [MagicLinkAnonThrottle]
+
+    def post(self, request):
+        from accounts.services import create_sign_in_link
+        from accounts.tasks import send_magic_link_email
+
+        email = (request.data.get('email') or '').strip().lower()
+        generic_response = {
+            'message': 'If an account exists for that email, we have sent a sign-in link. The link expires in 30 minutes.',
+        }
+        if not email:
+            return error_response(
+                'Email is required.',
+                code='EMAIL_REQUIRED',
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        link = create_sign_in_link(email)
+        if link is not None:
+            send_magic_link_email(link.id)
+
+        return Response(generic_response, status=status.HTTP_202_ACCEPTED)
+
+
+class FindMyRegistrationView(generics.GenericAPIView):
+    """POST /api/v1/auth/find-my-registration/.
+
+    Eventbrite-parity rescue surface for users who lost their access
+    email. Re-issues a CLAIM magic link for every pending guest
+    registration matching the supplied email. Anti-enumeration: returns
+    the same 202 + body whether or not any registration matched, and
+    silent-skips when the email is already attached to a User account
+    (those users go through /login or sign-in-link instead).
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [MagicLinkAnonThrottle]
+
+    def post(self, request):
+        from accounts.services import reissue_claims_for_email
+
+        email = (request.data.get('email') or '').strip().lower()
+        generic_response = {
+            'message': "If we have a registration for that email, we've sent a fresh access link. The link expires in 90 days.",
+        }
+        if not email:
+            return error_response(
+                'Email is required.',
+                code='EMAIL_REQUIRED',
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        reissue_claims_for_email(email)
+        return Response(generic_response, status=status.HTTP_202_ACCEPTED)

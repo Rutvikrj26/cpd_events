@@ -17,6 +17,10 @@ declare global {
     interface Window {
         google: typeof google;
         initGoogleMapsCallback?: () => void;
+        // Google calls this exact symbol on any Maps-JS auth failure
+        // (InvalidKey, ExpiredKey, RefererNotAllowed, etc.). The component
+        // listens to it via the `mapsAuthFailureListeners` set below.
+        gm_authFailure?: () => void;
     }
 }
 
@@ -24,8 +28,27 @@ let isScriptLoaded = false;
 let isScriptLoading = false;
 const callbacks: (() => void)[] = [];
 
+// Each mounted LocationAutocomplete subscribes to auth-failure events
+// here. Using a module-level set means a single global gm_authFailure
+// hook fans out to every instance, which matches how Google's loader
+// only respects the first registration of that symbol.
+const mapsAuthFailureListeners = new Set<() => void>();
+let gm_authFailureInstalled = false;
+function installGmAuthFailureHook() {
+    if (gm_authFailureInstalled) return;
+    gm_authFailureInstalled = true;
+    window.gm_authFailure = () => {
+        for (const cb of mapsAuthFailureListeners) cb();
+    };
+}
+
 function loadGoogleMapsScript(apiKey: string): Promise<void> {
     return new Promise((resolve, reject) => {
+        // The auth-failure hook must be in place BEFORE the loader runs
+        // — Google snapshots `window.gm_authFailure` at load time and
+        // late registrations are ignored.
+        installGmAuthFailureHook();
+
         if (isScriptLoaded) {
             resolve();
             return;
@@ -47,7 +70,9 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
         };
 
         const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMapsCallback`;
+        // `loading=async` is Google's recommended pattern for the JS API
+        // loader (silences the perf warning and improves first-paint).
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async&callback=initGoogleMapsCallback`;
         script.async = true;
         script.defer = true;
         script.onerror = () => {
@@ -69,6 +94,7 @@ export function LocationAutocomplete({
     const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [authFailed, setAuthFailed] = useState(false);
     const [inputValue, setInputValue] = useState(value);
 
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -86,11 +112,23 @@ export function LocationAutocomplete({
 
         autocompleteRef.current.addListener('place_changed', () => {
             const place = autocompleteRef.current?.getPlace();
-            if (place) {
-                const address = place.formatted_address || place.name || '';
-                setInputValue(address);
-                onChange(address, place);
+            // When Maps-JS auth is broken, `getPlace()` can return a stub
+            // with only the typed string and no `formatted_address` /
+            // `geometry`. Treat that as a failed pick: surface the
+            // free-text value to the parent and force the pac dropdown
+            // closed so the UI doesn't appear stuck.
+            if (!place || (!place.formatted_address && !place.geometry)) {
+                const typed = inputRef.current?.value ?? '';
+                setInputValue(typed);
+                onChange(typed);
+                document.querySelectorAll('.pac-container').forEach((el) => {
+                    (el as HTMLElement).style.display = 'none';
+                });
+                return;
             }
+            const address = place.formatted_address || place.name || '';
+            setInputValue(address);
+            onChange(address, place);
         });
     }, [onChange]);
 
@@ -101,6 +139,22 @@ export function LocationAutocomplete({
             return;
         }
 
+        const onAuthFailure = () => {
+            // ExpiredKey / InvalidKey / RefererNotAllowed → the JS SDK is
+            // unusable. Drop to the manual-entry fallback so the form
+            // stays functional. The user can still save the address as
+            // free text; the backend never required structured place
+            // data.
+            setAuthFailed(true);
+            setIsLoading(false);
+            setError('Map autocomplete is unavailable — using manual entry.');
+            // Hide any pac dropdown that might have already rendered.
+            document.querySelectorAll('.pac-container').forEach((el) => {
+                (el as HTMLElement).style.display = 'none';
+            });
+        };
+        mapsAuthFailureListeners.add(onAuthFailure);
+
         loadGoogleMapsScript(apiKey)
             .then(() => {
                 setIsLoading(false);
@@ -110,14 +164,19 @@ export function LocationAutocomplete({
                 setError(err.message);
                 setIsLoading(false);
             });
+
+        return () => {
+            mapsAuthFailureListeners.delete(onAuthFailure);
+        };
     }, [apiKey, initAutocomplete]);
 
     useEffect(() => {
         setInputValue(value);
     }, [value]);
 
-    // Fallback to regular input if no API key
-    if (!apiKey) {
+    // Fallback to regular input when (a) no API key configured, or
+    // (b) Google fired gm_authFailure (expired/invalid/restricted key).
+    if (!apiKey || authFailed) {
         return (
             <div className={`relative ${className}`}>
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -131,8 +190,8 @@ export function LocationAutocomplete({
                     disabled={disabled}
                     className="pl-9"
                 />
-                {error && (
-                    <p className="text-xs text-warning mt-1">
+                {(error || authFailed) && (
+                    <p className="text-xs text-muted-foreground mt-1">
                         Using manual entry (autocomplete unavailable)
                     </p>
                 )}

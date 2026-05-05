@@ -1,29 +1,22 @@
+/**
+ * SessionScheduler — inline list of course session drafts (used in
+ * CreateCoursePage). The list rendering stays here; the add/edit
+ * dialog is the shared SessionFormDialog so courses inherit the same
+ * rich-text + DateTimePicker UX as events.
+ *
+ * Course-creation drafts use a temporary client-side id (`SessionDraft.id`)
+ * to track unsaved rows; we translate to/from the shared
+ * `SessionFormValue` shape at the dialog boundary.
+ */
+
 import React, { useState } from 'react';
 import { Plus, Trash2, Calendar, Clock, Edit2, GripVertical } from 'lucide-react';
+
 import { Button } from '@/shared/ui/button';
-import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
-import { Textarea } from '@/shared/ui/textarea';
-import { Switch } from '@/shared/ui/switch';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-} from '@/shared/ui/dialog';
-import {
-    Card,
-    CardContent,
-} from '@/shared/ui/card';
+import { Card, CardContent } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/shared/ui/select';
+import { SessionFormDialog, SessionFormValue } from '@/shared/ui/SessionFormDialog';
 
 export interface SessionDraft {
     id: string; // temporary client ID
@@ -46,54 +39,57 @@ interface SessionSchedulerProps {
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
-const defaultSession = (): SessionDraft => ({
-    id: generateId(),
-    title: '',
-    description: '',
-    starts_at: '',
-    duration_minutes: 60,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    session_type: 'live',
-    cpd_credits: 0,
-    is_mandatory: true,
-    minimum_attendance_percent: 80,
+const draftFromForm = (existing: SessionDraft | null, form: SessionFormValue): SessionDraft => ({
+    id: existing?.id ?? generateId(),
+    title: form.title,
+    description: form.description,
+    starts_at: form.starts_at,
+    duration_minutes: form.duration_minutes,
+    timezone: existing?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC',
+    session_type: form.session_type,
+    cpd_credits: form.cpd_credits ?? 0,
+    is_mandatory: form.is_mandatory,
+    minimum_attendance_percent: form.minimum_attendance_percent ?? 80,
+});
+
+const formFromDraft = (s: SessionDraft): SessionFormValue => ({
+    title: s.title,
+    description: s.description,
+    starts_at: s.starts_at,
+    duration_minutes: s.duration_minutes,
+    session_type: s.session_type,
+    is_mandatory: s.is_mandatory,
+    cpd_credits: s.cpd_credits,
+    minimum_attendance_percent: s.minimum_attendance_percent,
 });
 
 export function SessionScheduler({ sessions, onChange, disabled }: SessionSchedulerProps) {
-    const [editingSession, setEditingSession] = useState<SessionDraft | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
 
+    const editingSession = editingId ? sessions.find((s) => s.id === editingId) : null;
+
     const handleAdd = () => {
-        const newSession = defaultSession();
-        setEditingSession(newSession);
+        setEditingId(null);
         setIsDialogOpen(true);
     };
 
     const handleEdit = (session: SessionDraft) => {
-        setEditingSession({ ...session });
+        setEditingId(session.id);
         setIsDialogOpen(true);
     };
 
     const handleDelete = (id: string) => {
-        onChange(sessions.filter(s => s.id !== id));
+        onChange(sessions.filter((s) => s.id !== id));
     };
 
-    const handleSave = () => {
-        if (!editingSession || !editingSession.title || !editingSession.starts_at) return;
-
-        const exists = sessions.find(s => s.id === editingSession.id);
-        if (exists) {
-            onChange(sessions.map(s => s.id === editingSession.id ? editingSession : s));
+    const handleSave = (form: SessionFormValue) => {
+        if (editingSession) {
+            onChange(sessions.map((s) => (s.id === editingSession.id ? draftFromForm(editingSession, form) : s)));
         } else {
-            onChange([...sessions, editingSession]);
+            onChange([...sessions, draftFromForm(null, form)]);
         }
-        setIsDialogOpen(false);
-        setEditingSession(null);
-    };
-
-    const handleCancel = () => {
-        setIsDialogOpen(false);
-        setEditingSession(null);
+        setEditingId(null);
     };
 
     const formatDateTime = (isoString: string) => {
@@ -109,13 +105,7 @@ export function SessionScheduler({ sessions, onChange, disabled }: SessionSchedu
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <Label className="text-base font-medium">Live Sessions</Label>
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAdd}
-                    disabled={disabled}
-                >
+                <Button type="button" variant="outline" size="sm" onClick={handleAdd} disabled={disabled}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Session
                 </Button>
@@ -135,9 +125,7 @@ export function SessionScheduler({ sessions, onChange, disabled }: SessionSchedu
                                 <div className="flex items-start gap-3">
                                     <div className="flex items-center gap-2 text-muted-foreground">
                                         <GripVertical className="h-4 w-4" />
-                                        <span className="w-6 text-center font-mono text-sm">
-                                            {index + 1}
-                                        </span>
+                                        <span className="w-6 text-center font-mono text-sm">{index + 1}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
@@ -189,148 +177,19 @@ export function SessionScheduler({ sessions, onChange, disabled }: SessionSchedu
                 </div>
             )}
 
-            {/* Edit/Create Dialog */}
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>
-                            {sessions.find(s => s.id === editingSession?.id)
-                                ? 'Edit Session'
-                                : 'Add Session'}
-                        </DialogTitle>
-                    </DialogHeader>
-
-                    {editingSession && (
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="session-title">Session Title *</Label>
-                                <Input
-                                    id="session-title"
-                                    placeholder="e.g., Week 1: Introduction"
-                                    value={editingSession.title}
-                                    onChange={(e) =>
-                                        setEditingSession({ ...editingSession, title: e.target.value })
-                                    }
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="session-desc">Description</Label>
-                                <Textarea
-                                    id="session-desc"
-                                    placeholder="Brief description of this session"
-                                    value={editingSession.description}
-                                    onChange={(e) =>
-                                        setEditingSession({ ...editingSession, description: e.target.value })
-                                    }
-                                    rows={2}
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="session-start">Start Date & Time *</Label>
-                                    <Input
-                                        id="session-start"
-                                        type="datetime-local"
-                                        value={editingSession.starts_at}
-                                        onChange={(e) =>
-                                            setEditingSession({ ...editingSession, starts_at: e.target.value })
-                                        }
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="session-duration">Duration (minutes)</Label>
-                                    <Input
-                                        id="session-duration"
-                                        type="number"
-                                        min={15}
-                                        step={15}
-                                        value={editingSession.duration_minutes}
-                                        onChange={(e) =>
-                                            setEditingSession({
-                                                ...editingSession,
-                                                duration_minutes: parseInt(e.target.value) || 60,
-                                            })
-                                        }
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="session-type">Session Type</Label>
-                                <Select
-                                    value={editingSession.session_type}
-                                    onValueChange={(value: 'live' | 'recorded' | 'hybrid') =>
-                                        setEditingSession({ ...editingSession, session_type: value })
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="live">Live Session</SelectItem>
-                                        <SelectItem value="recorded">Recorded</SelectItem>
-                                        <SelectItem value="hybrid">Hybrid</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-3 pt-2">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <Label>Required for Completion</Label>
-                                        <p className="text-xs text-muted-foreground">
-                                            Students must attend to complete course
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        checked={editingSession.is_mandatory}
-                                        onCheckedChange={(checked) =>
-                                            setEditingSession({ ...editingSession, is_mandatory: checked })
-                                        }
-                                    />
-                                </div>
-                            </div>
-
-                            {editingSession.is_mandatory && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="min-attendance">Minimum Attendance %</Label>
-                                    <Input
-                                        id="min-attendance"
-                                        type="number"
-                                        min={0}
-                                        max={100}
-                                        value={editingSession.minimum_attendance_percent}
-                                        onChange={(e) =>
-                                            setEditingSession({
-                                                ...editingSession,
-                                                minimum_attendance_percent: parseInt(e.target.value) || 80,
-                                            })
-                                        }
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        Students must attend at least this percentage
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={handleCancel}>
-                            Cancel
-                        </Button>
-                        <Button
-                            type="button"
-                            onClick={handleSave}
-                            disabled={!editingSession?.title || !editingSession?.starts_at}
-                        >
-                            {sessions.find(s => s.id === editingSession?.id) ? 'Save Changes' : 'Add Session'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <SessionFormDialog
+                open={isDialogOpen}
+                onOpenChange={(v) => {
+                    setIsDialogOpen(v);
+                    if (!v) setEditingId(null);
+                }}
+                value={editingSession ? formFromDraft(editingSession) : null}
+                onSave={handleSave}
+                showCpdCredits
+                showMinAttendance
+                mandatoryLabel="Required for Completion"
+                mandatoryHelp="Students must attend to complete the course"
+            />
         </div>
     );
 }

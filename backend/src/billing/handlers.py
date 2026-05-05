@@ -197,34 +197,59 @@ def handle_checkout_session_expired(event):
             )
 
 
+def _registration_uuids_from_metadata(metadata, session_data) -> list[str]:
+    """Extract one or more Registration UUIDs from a Stripe webhook payload.
+
+    Three shapes supported:
+      - new multi-attendee:    ``metadata.registration_uuids = "uuid1,uuid2,..."``
+      - new multi-overflow:    plus ``metadata.registration_uuids_2 = "..."``
+      - legacy single:         ``metadata.registration_uuid = "uuid"``
+                               or ``session_data.client_reference_id``
+    """
+    uuids: list[str] = []
+    primary = (metadata or {}).get("registration_uuids")
+    secondary = (metadata or {}).get("registration_uuids_2")
+    if primary:
+        uuids.extend(u.strip() for u in primary.split(",") if u.strip())
+    if secondary:
+        uuids.extend(u.strip() for u in secondary.split(",") if u.strip())
+    if uuids:
+        return uuids
+    legacy = (metadata or {}).get("registration_uuid") or session_data.get("client_reference_id")
+    return [legacy] if legacy else []
+
+
 def _fulfil_event_registration(session_data):
     from registrations.models import Registration
 
     metadata = session_data.get("metadata") or {}
-    reg_uuid = metadata.get("registration_uuid") or session_data.get("client_reference_id")
-    if not reg_uuid:
+    reg_uuids = _registration_uuids_from_metadata(metadata, session_data)
+    if not reg_uuids:
         logger.error(
             "stripe.checkout.event_registration.missing_uuid",
             extra={"session_id": session_data.get("id")},
         )
         return
 
-    reg = (
-        Registration.objects
-        .select_related("event", "user")
-        .filter(uuid=reg_uuid)
-        .first()
+    registrations = list(
+        Registration.objects.select_related("event", "user").filter(uuid__in=reg_uuids)
     )
-    if not reg:
+    if not registrations:
         logger.error(
             "stripe.checkout.event_registration.not_found",
-            extra={"registration_uuid": reg_uuid},
+            extra={"registration_uuids": reg_uuids},
         )
         return
 
-    # Canonical receipt — written before we touch the Registration so that
-    # the unique ``stripe_checkout_session_id`` on CoursePurchase is the
-    # serialisation point for concurrent webhook deliveries.
+    # All registrations in one session must point at the same event —
+    # the checkout service guarantees this. We use the first to seed
+    # the receipt row.
+    reg = registrations[0]
+
+    # Canonical receipt — written before we touch the Registrations so
+    # that the unique ``stripe_checkout_session_id`` on CoursePurchase is
+    # the serialisation point for concurrent webhook deliveries. The
+    # purchase aggregates the whole batch (one CoursePurchase, N regs).
     purchase, session_data = _upsert_purchase_from_session(
         session_data, user=reg.user, event=reg.event,
     )
@@ -233,75 +258,102 @@ def _fulfil_event_registration(session_data):
     # short-circuit on ``payment_status == PAID`` — that would skip downstream
     # side effects (promo recording, confirmation email) when reconciliation
     # or a webhook retry arrives after a prior run already set the row to PAID.
+    #
+    # Multi-attendee: amounts are aggregated on the CoursePurchase, but each
+    # Registration carries its per-ticket subtotal. We split the receipt
+    # totals proportionally across N registrations so per-row reporting
+    # stays meaningful.
+    n = len(registrations)
+    per_total = _cents_to_decimal(purchase.amount_cents // n) if n else Decimal("0")
+    per_tax = _cents_to_decimal(purchase.tax_cents // n) if n else Decimal("0")
+    per_subtotal = _cents_to_decimal(purchase.subtotal_cents // n) if n else Decimal("0")
+    new_pi = purchase.stripe_payment_intent_id
+    new_session_id = purchase.stripe_checkout_session_id
+
     with transaction.atomic():
-        reg = Registration.objects.select_for_update().get(pk=reg.pk)
-        new_total = _cents_to_decimal(purchase.amount_cents)
-        new_tax = _cents_to_decimal(purchase.tax_cents)
-        new_subtotal = _cents_to_decimal(purchase.subtotal_cents)
-        new_pi = purchase.stripe_payment_intent_id or reg.payment_intent_id or ""
-        new_session_id = purchase.stripe_checkout_session_id or reg.stripe_checkout_session_id
-        new_status = (
-            Registration.Status.CONFIRMED
-            if reg.status == Registration.Status.PENDING
-            else reg.status
+        locked = list(
+            Registration.objects.select_for_update().filter(pk__in=[r.pk for r in registrations])
         )
+        for r in locked:
+            new_status = (
+                Registration.Status.CONFIRMED
+                if r.status == Registration.Status.PENDING
+                else r.status
+            )
+            dirty = []
+            if r.total_amount != per_total:
+                r.total_amount = per_total
+                dirty.append("total_amount")
+            if r.amount_paid != per_subtotal:
+                r.amount_paid = per_subtotal
+                dirty.append("amount_paid")
+            if r.tax_amount != per_tax:
+                r.tax_amount = per_tax
+                dirty.append("tax_amount")
+            if r.payment_status != Registration.PaymentStatus.PAID:
+                r.payment_status = Registration.PaymentStatus.PAID
+                dirty.append("payment_status")
+            if (new_pi or "") and r.payment_intent_id != (new_pi or ""):
+                r.payment_intent_id = new_pi or ""
+                dirty.append("payment_intent_id")
+            if new_session_id and r.stripe_checkout_session_id != new_session_id:
+                r.stripe_checkout_session_id = new_session_id
+                dirty.append("stripe_checkout_session_id")
+            if r.status != new_status:
+                r.status = new_status
+                dirty.append("status")
+            if r.purchase_id != purchase.pk:
+                r.purchase = purchase
+                dirty.append("purchase")
+            if dirty:
+                dirty.append("updated_at")
+                r.save(update_fields=dirty)
+        # Refresh the local list so post-atomic side-effects see fresh state.
+        registrations = locked
 
-        dirty = []
-        if reg.total_amount != new_total:
-            reg.total_amount = new_total
-            dirty.append("total_amount")
-        if reg.amount_paid != new_subtotal:
-            reg.amount_paid = new_subtotal
-            dirty.append("amount_paid")
-        if reg.tax_amount != new_tax:
-            reg.tax_amount = new_tax
-            dirty.append("tax_amount")
-        if reg.payment_status != Registration.PaymentStatus.PAID:
-            reg.payment_status = Registration.PaymentStatus.PAID
-            dirty.append("payment_status")
-        if reg.payment_intent_id != new_pi:
-            reg.payment_intent_id = new_pi
-            dirty.append("payment_intent_id")
-        if reg.stripe_checkout_session_id != new_session_id:
-            reg.stripe_checkout_session_id = new_session_id
-            dirty.append("stripe_checkout_session_id")
-        if reg.status != new_status:
-            reg.status = new_status
-            dirty.append("status")
-        if reg.purchase_id != purchase.pk:
-            reg.purchase = purchase
-            dirty.append("purchase")
-
-        if dirty:
-            dirty.append("updated_at")
-            reg.save(update_fields=dirty)
-
-    # Record any applied promotion codes from the session payload. Idempotent
-    # via the partial uniques on (purchase, promo_code) and (registration, promo_code).
+    # Promo-code recording. Tied to the receipt; we only need to call once.
     try:
         from promo_codes.services import record_usage_from_checkout_session
 
         record_usage_from_checkout_session(
-            session_data, purchase=purchase, registration=reg, user=reg.user,
+            session_data, purchase=purchase, registration=registrations[0], user=registrations[0].user,
         )
     except Exception as exc:
         logger.warning(
             "stripe.checkout.event_registration.promo_usage_failed",
-            extra={"registration_uuid": reg_uuid, "error": str(exc)},
+            extra={"registration_uuids": [str(r.uuid) for r in registrations], "error": str(exc)},
         )
 
-    # Send the confirmation email. The task checks the EmailLog table for an
-    # existing REGISTRATION_CONFIRM row, so re-invocations from reconciliation
-    # or webhook retries are no-ops.
-    if reg.status == Registration.Status.CONFIRMED:
-        try:
-            from registrations.tasks import send_registration_confirmation
+    # Confirmation emails — one per attendee.
+    for r in registrations:
+        if r.status == Registration.Status.CONFIRMED:
+            try:
+                from registrations.tasks import send_registration_confirmation
 
-            send_registration_confirmation.delay(reg.id)
-        except Exception as exc:
-            logger.warning(
-                "stripe.checkout.event_registration.email_failed",
-                extra={"registration_uuid": reg_uuid, "error": str(exc)},
+                send_registration_confirmation.delay(r.id)
+            except Exception as exc:
+                logger.warning(
+                    "stripe.checkout.event_registration.email_failed",
+                    extra={"registration_uuid": str(r.uuid), "error": str(exc)},
+                )
+
+    # Anonymous-paid claim hooks — one CLAIM link per anonymous attendee.
+    # Issued *after* the atomic block so a webhook retry sees a fully-
+    # fulfilled row (PAID + CONFIRMED) before deciding whether to send.
+    # Idempotent: the unique partial index on MagicLink(registration,
+    # purpose=CLAIM, status=PENDING) collapses concurrent retries.
+    for r in registrations:
+        if r.user_id is None and r.payment_status == Registration.PaymentStatus.PAID:
+            try:
+                from accounts.services import create_registration_claim
+                from accounts.tasks import send_magic_link_email
+
+                link = create_registration_claim(r)
+                send_magic_link_email(link.id)
+            except Exception as exc:
+                logger.warning(
+                "stripe.checkout.event_registration.claim_link_failed",
+                extra={"registration_uuid": str(r.uuid), "error": str(exc)},
             )
 
 

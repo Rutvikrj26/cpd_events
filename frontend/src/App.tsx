@@ -45,6 +45,9 @@ import { NotFoundPage } from './pages/NotFoundPage';
 
 // Legal (lazy)
 const AcceptInvitePage = lazyNamed(() => import('./pages/invitations/AcceptInvitePage'), 'AcceptInvitePage');
+const MagicLinkPage = lazyNamed(() => import('./pages/auth/MagicLinkPage'), 'MagicLinkPage');
+const RegistrationPending = lazyNamed(() => import('./pages/public/RegistrationPending'), 'RegistrationPending');
+const FindMyRegistration = lazyNamed(() => import('./pages/public/FindMyRegistration'), 'FindMyRegistration');
 const TermsPage = lazyNamed(() => import('./pages/public/TermsPage'), 'TermsPage');
 const PrivacyPage = lazyNamed(() => import('./pages/public/PrivacyPage'), 'PrivacyPage');
 const CookiePolicyPage = lazyNamed(() => import('./pages/public/CookiePolicyPage'), 'CookiePolicyPage');
@@ -148,10 +151,18 @@ export default function App() {
                   inside the page so we can render the sign-in CTAs
                   for unauthenticated invitees. */}
               <Route path="/invite/:uuid" element={<AcceptInvitePage />} />
+              {/* Magic-link entry: registration claim or email sign-in.
+                  Distinct from /invite/ so the org-initiated invite
+                  flow stays cleanly separated from self-service auth. */}
+              <Route path="/magic-link/:uuid" element={<MagicLinkPage />} />
               <Route path="/discover/events" element={<EventDiscovery />} />
               <Route path="/discover/courses" element={<CourseCatalogPage />} />
               <Route path="/events/:id/details" element={<EventDetail />} />
               <Route path="/events/:id/register" element={<EventRegistration />} />
+              {/* Anonymous registration confirmation — "check your email". */}
+              <Route path="/events/:slug/registration-pending" element={<RegistrationPending />} />
+              {/* "Lost the email" rescue surface. */}
+              <Route path="/find-my-registration" element={<FindMyRegistration />} />
               {/* Guest pre-event lobby (no auth required) — landed on from
                   the join URL we embed in reminder/confirmation emails. */}
               <Route path="/r/:registrationUuid/lobby" element={<EventLobbyPage />} />

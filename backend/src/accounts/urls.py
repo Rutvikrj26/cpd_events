@@ -57,5 +57,12 @@ urlpatterns = [
     path('public/invitations/<uuid:uuid>/accept/', views.PublicLearningInvitationAcceptView.as_view(), name='public_learning_invitation_accept'),
     path('invitations/<uuid:uuid>/resend/', views.LearningInvitationResendView.as_view(), name='learning_invitation_resend'),
     path('invitations/<uuid:uuid>/cancel/', views.LearningInvitationCancelView.as_view(), name='learning_invitation_cancel'),
+    # Magic links (registration claim + email sign-in). Public verify/accept;
+    # sign-in-link request lives under /auth/ so it sits next to other
+    # auth endpoints in the API surface.
+    path('public/magic-link/<uuid:uuid>/verify/', views.MagicLinkVerifyView.as_view(), name='magic_link_verify'),
+    path('public/magic-link/<uuid:uuid>/accept/', views.MagicLinkAcceptView.as_view(), name='magic_link_accept'),
+    path('auth/sign-in-link/', views.EmailSignInRequestView.as_view(), name='email_sign_in_request'),
+    path('auth/find-my-registration/', views.FindMyRegistrationView.as_view(), name='find_my_registration'),
     path('', include(router.urls)),
 ]

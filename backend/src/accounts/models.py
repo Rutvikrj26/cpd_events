@@ -937,3 +937,114 @@ class UserRoleChange(BaseModel):
 
     def __str__(self):
         return f"{self.user.email}: {self.from_roles} -> {self.to_roles}"
+
+
+class MagicLink(BaseModel):
+    """Email-controlled signed link for self-service auth flows.
+
+    Backs two distinct surfaces:
+      - REGISTRATION_CLAIM: issued when an anonymous user creates a
+        registration (free or paid). Click → set a password → log in
+        + sweep guest registrations into the new account.
+      - SIGN_IN: issued when a user clicks "Email me a sign-in link"
+        on /login. Click → log in (the user must already exist).
+
+    Why this lives separate from `LearningInvitation`:
+      LearningInvitation.invited_by is non-null PROTECT and the accept
+      handler stamps `Registration.source=INVITE` + `registered_by`.
+      Both invariants assume an organizer. Reusing it for self-claims
+      would either force a placeholder organizer or silently corrupt
+      provenance on already-paid registrations.
+
+    Access semantics:
+      A CLAIM doesn't structurally "grant" the registration — the
+      `Registration.link_registrations_for_user` sweep at user creation
+      handles that via lowercased email match. The `registration` FK
+      here is for audit / idempotent recreation, not access control.
+    """
+
+    class Purpose(models.TextChoices):
+        REGISTRATION_CLAIM = 'registration_claim', 'Registration claim'
+        SIGN_IN = 'sign_in', 'Email sign-in'
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        ACCEPTED = 'accepted', 'Accepted'
+        EXPIRED = 'expired', 'Expired'
+        CANCELLED = 'cancelled', 'Cancelled'
+
+    purpose = models.CharField(max_length=32, choices=Purpose.choices, db_index=True)
+    email = LowercaseEmailField(db_index=True, help_text="Recipient (canonical, lowercase)")
+
+    token = models.CharField(
+        max_length=64, unique=True, db_index=True,
+        help_text="Random secret stored once. Signed via TimestampSigner on render.",
+    )
+    expires_at = models.DateTimeField()
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True,
+    )
+
+    registration = models.ForeignKey(
+        'registrations.Registration',
+        null=True, blank=True,
+        on_delete=models.CASCADE,
+        related_name='magic_links',
+        help_text="REGISTRATION_CLAIM only. Audit / idempotency — access is via email match.",
+    )
+
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='magic_links_accepted',
+    )
+
+    last_sent_at = models.DateTimeField(default=timezone.now)
+    send_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'magic_links'
+        ordering = ['-created_at']
+        verbose_name = 'Magic Link'
+        verbose_name_plural = 'Magic Links'
+        indexes = [
+            models.Index(fields=['email', 'purpose', 'status']),
+        ]
+        constraints = [
+            # One pending CLAIM per registration. Stripe webhook retries
+            # collide on this and fall through to a refresh path instead
+            # of duplicating rows.
+            models.UniqueConstraint(
+                fields=['registration'],
+                condition=models.Q(purpose='registration_claim', status='pending'),
+                name='one_pending_claim_per_registration',
+            ),
+        ]
+
+    def __str__(self):
+        return f"MagicLink({self.purpose}, {self.email}, {self.status})"
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() >= self.expires_at
+
+    def mark_accepted(self, user) -> None:
+        """Idempotent. Caller is responsible for downstream side effects."""
+        if self.status != self.Status.ACCEPTED:
+            self.status = self.Status.ACCEPTED
+            self.accepted_at = timezone.now()
+            self.accepted_by = user
+            self.save(update_fields=['status', 'accepted_at', 'accepted_by', 'updated_at'])
+
+    def mark_cancelled(self) -> None:
+        if self.status == self.Status.PENDING:
+            self.status = self.Status.CANCELLED
+            self.save(update_fields=['status', 'updated_at'])
+
+    @classmethod
+    def generate_token(cls) -> str:
+        """64-char URL-safe random secret. Stored once, signed on render."""
+        import secrets
+        return secrets.token_urlsafe(48)

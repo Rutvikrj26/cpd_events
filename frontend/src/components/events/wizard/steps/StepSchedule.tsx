@@ -7,9 +7,30 @@ import { Switch } from '@/shared/ui/switch';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
-import { Input } from '@/shared/ui/input';
 import { SessionEditor } from '../SessionEditor';
 import { SessionFormData } from '@/api/events/types';
+
+// The wizard form state stores `starts_at` + `duration_minutes` (matching
+// the backend write contract). The picker UX exposes start + end. These
+// helpers keep the conversion in one place.
+function endsAtFromForm(startsAt: string | undefined, durationMinutes: number | undefined): string {
+    if (!startsAt || !durationMinutes) return '';
+    const start = new Date(startsAt);
+    if (isNaN(start.getTime())) return '';
+    const end = new Date(start.getTime() + durationMinutes * 60000);
+    // datetime-local expects "YYYY-MM-DDTHH:mm" in local time. The
+    // DateTimePicker component normalises whichever string it gets back
+    // through its own onDateTimeChange path, so an ISO string is fine
+    // here too.
+    return end.toISOString();
+}
+
+function durationMinutesFromRange(startsAt: string, endsAt: string): number {
+    const start = new Date(startsAt).getTime();
+    const end = new Date(endsAt).getTime();
+    if (isNaN(start) || isNaN(end)) return 0;
+    return Math.max(0, Math.round((end - start) / 60000));
+}
 
 export const StepSchedule = () => {
     const { formData, updateFormData } = useEventWizard();
@@ -21,28 +42,40 @@ export const StepSchedule = () => {
     // Get sessions from form data
     const sessions = formData._sessions || [];
 
-    // Calculate end time from start + duration (derived, not stored)
-    const calculatedEndTime = useMemo(() => {
-        if (!formData.starts_at || !formData.duration_minutes) return null;
-        const start = new Date(formData.starts_at);
-        if (isNaN(start.getTime())) return null;
-        return new Date(start.getTime() + formData.duration_minutes * 60000);
-    }, [formData.starts_at, formData.duration_minutes]);
+    // Derived end-time string for the picker. We don't persist `ends_at`;
+    // the form state continues to write `duration_minutes` so the API
+    // contract is unchanged. End is recomputed on every render from
+    // (starts_at, duration_minutes).
+    const endsAtValue = useMemo(
+        () => endsAtFromForm(formData.starts_at, formData.duration_minutes),
+        [formData.starts_at, formData.duration_minutes],
+    );
 
-    // Parse duration into hours and minutes for display
-    const durationHours = Math.floor((formData.duration_minutes || 0) / 60);
-    const durationMins = (formData.duration_minutes || 0) % 60;
+    const calculatedEndTime = useMemo(() => {
+        if (!endsAtValue) return null;
+        const d = new Date(endsAtValue);
+        return isNaN(d.getTime()) ? null : d;
+    }, [endsAtValue]);
 
     const handleStartChange = (value: string) => {
+        // Preserve duration when start moves: the user shifted the event,
+        // they didn't redefine its length. We only re-derive duration
+        // when the END picker changes.
         updateFormData({ starts_at: value });
     };
 
-    const handleDurationChange = (hours: number, mins: number) => {
-        const totalMinutes = (hours * 60) + mins;
-        if (totalMinutes >= 0) {
-            updateFormData({ duration_minutes: totalMinutes });
-        }
+    const handleEndChange = (value: string) => {
+        if (!formData.starts_at || !value) return;
+        const minutes = durationMinutesFromRange(formData.starts_at, value);
+        updateFormData({ duration_minutes: minutes });
     };
+
+    // Validation surfaces — both shown inline under the End picker.
+    const endsBeforeStart = useMemo(() => {
+        if (!formData.starts_at || !endsAtValue) return false;
+        return new Date(endsAtValue).getTime() < new Date(formData.starts_at).getTime();
+    }, [formData.starts_at, endsAtValue]);
+    const tooShort = (formData.duration_minutes || 0) < 15;
 
     const handleMultiSessionToggle = (enabled: boolean) => {
         updateFormData({ is_multi_session: enabled });
@@ -110,7 +143,7 @@ export const StepSchedule = () => {
                 <p className="text-sm text-muted-foreground">When will your event take place?</p>
             </div>
 
-            <div className="grid gap-6">
+            <div className="grid gap-6 sm:grid-cols-2">
                 {/* Start Date/Time */}
                 <div className="space-y-2">
                     <DateTimePicker
@@ -120,39 +153,22 @@ export const StepSchedule = () => {
                     />
                 </div>
 
-                {/* Duration Input */}
+                {/* End Date/Time */}
                 <div className="space-y-2">
-                    <Label>Duration</Label>
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                            <Input
-                                type="number"
-                                min={0}
-                                max={24}
-                                value={durationHours}
-                                onChange={(e) => handleDurationChange(parseInt(e.target.value) || 0, durationMins)}
-                                className="w-20 text-center"
-                            />
-                            <span className="text-muted-foreground">hours</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Input
-                                type="number"
-                                min={0}
-                                max={59}
-                                step={5}
-                                value={durationMins}
-                                onChange={(e) => handleDurationChange(durationHours, parseInt(e.target.value) || 0)}
-                                className="w-20 text-center"
-                            />
-                            <span className="text-muted-foreground">minutes</span>
-                        </div>
-                    </div>
-                    {(formData.duration_minutes || 0) < 15 && (
-                        <p className="text-xs text-red-500">Minimum 15 minutes required</p>
-                    )}
+                    <DateTimePicker
+                        label="End Date & Time"
+                        value={endsAtValue}
+                        onDateTimeChange={handleEndChange}
+                    />
+                    {endsBeforeStart ? (
+                        <p className="text-xs text-red-500">End must be after start.</p>
+                    ) : tooShort && (formData.duration_minutes || 0) > 0 ? (
+                        <p className="text-xs text-red-500">Event must run at least 15 minutes.</p>
+                    ) : null}
                 </div>
+            </div>
 
+            <div className="grid gap-6">
                 {/* Calculated End Time & Summary */}
                 <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-lg border border-info">
                     <div className="h-12 w-12 rounded-full bg-neutral-card shadow-sm flex items-center justify-center text-blue-600">
@@ -161,20 +177,34 @@ export const StepSchedule = () => {
                     <div className="flex-1">
                         <p className="text-sm font-medium text-muted-foreground">Event Time</p>
                         <p className="text-lg font-semibold text-foreground">
-                            {formData.starts_at && calculatedEndTime ? (
-                                <>
-                                    {new Date(formData.starts_at).toLocaleString(undefined, {
-                                        weekday: 'short',
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: 'numeric',
-                                        minute: '2-digit'
-                                    })}
-                                    {' → '}
-                                    {calculatedEndTime.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
-                                </>
-                            ) : (
-                                <span className="text-muted-foreground">Set start time and duration</span>
+                            {formData.starts_at && calculatedEndTime ? (() => {
+                                const start = new Date(formData.starts_at);
+                                const sameDay =
+                                    start.getFullYear() === calculatedEndTime.getFullYear() &&
+                                    start.getMonth() === calculatedEndTime.getMonth() &&
+                                    start.getDate() === calculatedEndTime.getDate();
+                                const startFmt: Intl.DateTimeFormatOptions = {
+                                    weekday: 'short',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                };
+                                // Same-day events: collapse the end side to time-only
+                                // (showing the date twice is noise). Multi-day: show
+                                // the full end date so the range reads correctly.
+                                const endFmt: Intl.DateTimeFormatOptions = sameDay
+                                    ? { hour: 'numeric', minute: '2-digit' }
+                                    : startFmt;
+                                return (
+                                    <>
+                                        {start.toLocaleString(undefined, startFmt)}
+                                        {' → '}
+                                        {calculatedEndTime.toLocaleString(undefined, endFmt)}
+                                    </>
+                                );
+                            })() : (
+                                <span className="text-muted-foreground">Set start and end time</span>
                             )}
                         </p>
                     </div>

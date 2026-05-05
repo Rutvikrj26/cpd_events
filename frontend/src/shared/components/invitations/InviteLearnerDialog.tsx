@@ -83,9 +83,14 @@ export function InviteLearnerDialog({
         if (!canSubmit) return;
         setSubmitting(true);
         const payload = {
+            // Always send email alongside contact_uuid: the chip already
+            // carries it, and the backend uses it as a fallback if the
+            // contact_uuid no longer resolves (stale chip, contact
+            // deleted between dialog open and submit, etc.). The
+            // backend prefers contact_uuid when both are present.
             invitees: validChips.map((c) => ({
                 contact_uuid: c.contact_uuid,
-                email: c.contact_uuid ? undefined : c.email,
+                email: c.email,
                 full_name: c.full_name,
             })),
             personal_message: message,

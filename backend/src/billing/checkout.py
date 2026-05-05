@@ -199,6 +199,119 @@ class CheckoutService:
         return CheckoutResult(url=session.url, session_id=session.id)
 
     # ------------------------------------------------------------------
+    # Multi-attendee event purchase (single-buyer)
+    # ------------------------------------------------------------------
+    def for_event_registrations(
+        self,
+        registrations,
+        *,
+        success_url: str | None = None,
+        cancel_url: str | None = None,
+    ) -> CheckoutResult:
+        """One Stripe Checkout Session covering N event registrations.
+
+        Used by multi-attendee single-buyer flows. All registrations
+        must be for the same event. The returned session has
+        ``quantity = N`` on a single line_item; Stripe ``automatic_tax``
+        applies tax to the full subtotal. Webhook fulfilment reads
+        ``metadata.registration_uuids`` (comma-separated) to fan out
+        across all rows.
+        """
+        from events.models import Event
+
+        registrations = list(registrations)
+        if not registrations:
+            raise ValueError("for_event_registrations: empty list")
+        if len(registrations) == 1:
+            return self.for_event_registration(registrations[0], success_url=success_url, cancel_url=cancel_url)
+
+        event: Event = registrations[0].event
+        if any(r.event_id != event.pk for r in registrations):
+            raise ValueError("All registrations must be for the same event")
+        if event.price <= 0:
+            raise ValueError("Free events should not use Checkout — fulfil directly.")
+
+        stripe = get_stripe()
+        # Buyer = the authenticated owner of any registration in the
+        # batch, if any (in multi-attendee, the buyer might or might not
+        # also be an attendee). For pure-anonymous batches we send
+        # `customer_email` instead, picking the first attendee's address.
+        buyer = next((r.user for r in registrations if r.user_id is not None), None)
+        customer_id = get_or_create_stripe_customer(buyer) if buyer else None
+        buyer_email = buyer.email if buyer else registrations[0].email
+
+        success_url, cancel_url = _resolve_redirect_urls("event", success_url, cancel_url)
+
+        # Stripe metadata values are string-typed and capped at 500
+        # chars. UUIDs are 36 chars + comma; comfortably fits up to ~13
+        # entries. RegistrationService caps at 25 — split across two
+        # metadata keys (`registration_uuids` + `registration_uuids_2`)
+        # in the rare case we exceed one slot.
+        all_uuids = [str(r.uuid) for r in registrations]
+        joined = ",".join(all_uuids)
+        meta = {
+            "kind": "event_registration",
+            "event_uuid": str(event.uuid),
+            "user_id": str(buyer.pk) if buyer else "",
+            "env": _env_tag(),
+            "attendee_count": str(len(registrations)),
+        }
+        if len(joined) <= 480:
+            meta["registration_uuids"] = joined
+        else:
+            mid = len(all_uuids) // 2
+            meta["registration_uuids"] = ",".join(all_uuids[:mid])
+            meta["registration_uuids_2"] = ",".join(all_uuids[mid:])
+        # ``client_reference_id`` carries one row's UUID so the existing
+        # legacy single-handler path still resolves a registration if a
+        # webhook arrives stale-shaped. The handler prefers
+        # ``registration_uuids`` if present.
+        client_ref = all_uuids[0]
+
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            line_items=[{
+                "price_data": {
+                    "currency": event.currency.lower(),
+                    "product_data": {
+                        "name": event.title,
+                        "description": (event.short_description or "")[:500] or None,
+                        "metadata": {"event_uuid": str(event.uuid)},
+                    },
+                    "unit_amount": int(event.price * 100),
+                    "tax_behavior": "exclusive",
+                },
+                "quantity": len(registrations),
+            }],
+            customer=customer_id,
+            customer_email=None if customer_id else buyer_email,
+            client_reference_id=client_ref,
+            metadata=meta,
+            automatic_tax={"enabled": True},
+            allow_promotion_codes=True,
+            customer_update={"address": "auto", "name": "auto"} if customer_id else None,
+            billing_address_collection="required",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            expires_at=None,
+            expand=SESSION_EXPAND,
+            # Idempotency: same set of registration UUIDs → same session.
+            # Sort to stabilise the key against client-side ordering noise.
+            idempotency_key=f"checkout:event_regs:{':'.join(sorted(all_uuids))}:v1",
+        )
+
+        # Stamp every registration with the session id so the existing
+        # single-handler legacy path can still find the row by session.
+        for reg in registrations:
+            reg.stripe_checkout_session_id = session.id
+            reg.save(update_fields=["stripe_checkout_session_id", "updated_at"])
+        logger.info(
+            "stripe.checkout.event_registrations",
+            extra={"session_id": session.id, "count": len(registrations)},
+        )
+        return CheckoutResult(url=session.url, session_id=session.id)
+
+    # ------------------------------------------------------------------
     # Course purchase
     # ------------------------------------------------------------------
     def for_course_enrollment(

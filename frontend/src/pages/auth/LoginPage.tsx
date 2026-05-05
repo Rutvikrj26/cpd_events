@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { signInWithFirebase } from "@/api/accounts";
 import { getGoogleIdToken, isFirebaseConfigured } from "@/lib/firebase";
 import { useDocumentTitle } from "@/shared/hooks/useDocumentTitle";
+import { requestSignInLink } from "@/api/magic-link";
 
 const formSchema = z.object({
   email: z.string().email({
@@ -39,7 +40,12 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
+  const [magicLinkOpen, setMagicLinkOpen] = React.useState(false);
+  const [magicLinkEmail, setMagicLinkEmail] = React.useState('');
+  const [magicLinkSubmitting, setMagicLinkSubmitting] = React.useState(false);
+  const [magicLinkSent, setMagicLinkSent] = React.useState(false);
   const returnUrl = searchParams.get('returnUrl');
+  const prefillEmail = searchParams.get('email') || '';
   const oauthError = searchParams.get('error');
   const firebaseReady = isFirebaseConfigured();
   const registrationMode = deployment?.registration_mode ?? 'open';
@@ -56,11 +62,35 @@ export function LoginPage() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema) as any,
     defaultValues: {
-      email: "",
+      email: prefillEmail,
       password: "",
       remember: false,
     },
   });
+
+  React.useEffect(() => {
+    // Sync prefill if the query param changes after mount.
+    if (prefillEmail) {
+      form.setValue('email', prefillEmail);
+      setMagicLinkEmail(prefillEmail);
+    }
+  }, [prefillEmail, form]);
+
+  async function onMagicLinkRequest(e: React.FormEvent) {
+    e.preventDefault();
+    if (!magicLinkEmail) return;
+    setMagicLinkSubmitting(true);
+    try {
+      await requestSignInLink(magicLinkEmail);
+      setMagicLinkSent(true);
+    } catch (err: any) {
+      // Anti-enumeration: server always returns 202; only network/proxy
+      // errors land here.
+      toast.error('Could not request sign-in link. Try again in a moment.');
+    } finally {
+      setMagicLinkSubmitting(false);
+    }
+  }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
@@ -260,6 +290,55 @@ export function LoginPage() {
           </Button>
         </form>
       </Form>
+
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-background px-2 text-muted-foreground">or</span>
+        </div>
+      </div>
+
+      {magicLinkSent ? (
+        <div className="rounded-md border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          If an account exists for that email, we've sent a sign-in link.
+          The link expires in 30 minutes.
+        </div>
+      ) : magicLinkOpen ? (
+        <form onSubmit={onMagicLinkRequest} className="space-y-3">
+          <Input
+            type="email"
+            inputMode="email"
+            placeholder="name@company.com"
+            value={magicLinkEmail}
+            onChange={(e) => setMagicLinkEmail(e.target.value)}
+            required
+            disabled={magicLinkSubmitting}
+            aria-label="Email for sign-in link"
+          />
+          <Button type="submit" variant="outline" className="w-full" disabled={magicLinkSubmitting}>
+            {magicLinkSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Send sign-in link
+          </Button>
+        </form>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => setMagicLinkOpen(true)}
+        >
+          Email me a sign-in link
+        </Button>
+      )}
+
+      <p className="text-center text-xs text-muted-foreground">
+        Registered for an event but never set a password?{' '}
+        <Link to="/find-my-registration" className="underline underline-offset-2">
+          Find my registration
+        </Link>
+      </p>
     </div>
   );
 }

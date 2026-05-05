@@ -47,12 +47,15 @@ class EventDuration:
 
     - DEFAULT: Default event duration when creating new events
     - MIN: Minimum allowed event duration
-    - MAX: Maximum allowed event duration (8 hours)
+    - MAX: Maximum allowed event duration (30 days). The cap exists to
+      catch obvious typos (a year-long "event" is almost certainly an
+      input error), not to enforce a single-day shape — multi-day
+      conferences and workshops are valid.
     """
 
     DEFAULT: int = _validate_positive(60, 'EventDuration.DEFAULT')
     MIN: int = _validate_positive(15, 'EventDuration.MIN')
-    MAX: int = _validate_positive(480, 'EventDuration.MAX')  # 8 hours
+    MAX: int = _validate_positive(60 * 24 * 30, 'EventDuration.MAX')  # 30 days
 
 
 # =============================================================================

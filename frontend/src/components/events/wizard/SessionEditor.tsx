@@ -1,25 +1,17 @@
-import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/shared/ui/dialog';
-import { Button } from '@/shared/ui/button';
-import { Input } from '@/shared/ui/input';
-import { Label } from '@/shared/ui/label';
-import { Textarea } from '@/shared/ui/textarea';
-import ReactQuill from 'react-quill-new';
-import 'react-quill-new/dist/quill.snow.css';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
-import { Switch } from '@/shared/ui/switch';
-import { DateTimePicker } from '@/shared/ui/date-time-picker';
-import { SessionFormData } from '@/api/events/types';
+/**
+ * SessionEditor — thin wrapper around SessionFormDialog scoped to event sessions.
+ *
+ * Translates between SessionFormData (event-session row, used elsewhere
+ * in the wizard for ordering and persistence) and the shared
+ * SessionFormValue. Event sessions enable speaker_names; everything
+ * else (delivery_mode, min attendance, cpd credits) is course-only and
+ * stays hidden here.
+ */
 
-function isEmptyRichText(html: string | null | undefined): boolean {
-    if (!html) return true;
-    const plain = html
-        .replace(/<br\s*\/?>/gi, '')
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, '')
-        .trim();
-    return plain.length === 0;
-}
+import React from 'react';
+
+import { SessionFormDialog, SessionFormValue } from '@/shared/ui/SessionFormDialog';
+import { SessionFormData } from '@/api/events/types';
 
 interface SessionEditorProps {
     open: boolean;
@@ -30,169 +22,56 @@ interface SessionEditorProps {
     sessionCount: number;
 }
 
-const defaultSession: SessionFormData = {
-    title: '',
-    description: '',
-    speaker_names: '',
-    order: 0,
-    starts_at: '',
-    duration_minutes: 60,
-    session_type: 'live',
-    is_mandatory: true,
-    is_published: true,
-};
-
 export const SessionEditor = ({
     open,
     onOpenChange,
     session,
     onSave,
     eventStartsAt,
-    sessionCount
+    sessionCount,
 }: SessionEditorProps) => {
-    const [formData, setFormData] = React.useState<SessionFormData>(defaultSession);
-    const isEditing = !!session?.uuid || (session && session.order !== undefined);
-
-    // Initialize form when session prop changes
-    React.useEffect(() => {
-        if (session) {
-            setFormData(session);
-        } else {
-            // New session - default starts_at to event start time
-            setFormData({
-                ...defaultSession,
-                starts_at: eventStartsAt || '',
-                order: sessionCount,
-            });
-        }
-    }, [session, eventStartsAt, sessionCount, open]);
-
-    const handleChange = (field: keyof SessionFormData, value: any) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const cleaned = {
-            ...formData,
-            description: isEmptyRichText(formData.description) ? '' : formData.description,
+    const value = React.useMemo<SessionFormValue | null>(() => {
+        if (!session) return null;
+        return {
+            title: session.title,
+            description: session.description || '',
+            starts_at: session.starts_at,
+            duration_minutes: session.duration_minutes,
+            session_type: session.session_type,
+            is_mandatory: session.is_mandatory,
+            speaker_names: session.speaker_names || '',
         };
-        onSave(cleaned);
-        onOpenChange(false);
+    }, [session]);
+
+    const handleSave = (next: SessionFormValue) => {
+        onSave({
+            // Preserve fields the wizard manages outside this dialog —
+            // order, is_published, uuid for existing rows.
+            ...(session || {}),
+            order: session?.order ?? sessionCount,
+            is_published: session?.is_published ?? true,
+            title: next.title,
+            description: next.description,
+            starts_at: next.starts_at,
+            duration_minutes: next.duration_minutes,
+            session_type: next.session_type,
+            is_mandatory: next.is_mandatory,
+            speaker_names: next.speaker_names || '',
+        });
     };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                    <DialogTitle>{isEditing ? 'Edit Session' : 'Add Session'}</DialogTitle>
-                    <DialogDescription>
-                        {isEditing ? 'Update the session details below.' : 'Add a new session to your event agenda.'}
-                    </DialogDescription>
-                </DialogHeader>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Title */}
-                    <div className="space-y-2">
-                        <Label htmlFor="title">Session Title *</Label>
-                        <Input
-                            id="title"
-                            value={formData.title}
-                            onChange={(e) => handleChange('title', e.target.value)}
-                            placeholder="e.g., Welcome & Keynote"
-                            required
-                        />
-                    </div>
-
-                    {/* Description */}
-                    <div className="space-y-2">
-                        <Label htmlFor="description">Description</Label>
-                        <ReactQuill
-                            theme="snow"
-                            value={formData.description || ''}
-                            onChange={(content: string) => handleChange('description', content)}
-                            placeholder="Brief description of this session..."
-                            className="mb-4"
-                        />
-                    </div>
-
-                    {/* Speaker Names */}
-                    <div className="space-y-2">
-                        <Label htmlFor="speaker_names">Speaker(s)</Label>
-                        <Input
-                            id="speaker_names"
-                            value={formData.speaker_names || ''}
-                            onChange={(e) => handleChange('speaker_names', e.target.value)}
-                            placeholder="e.g., Dr. Jane Smith, Prof. John Doe"
-                        />
-                        <p className="text-xs text-muted-foreground">Separate multiple speakers with commas</p>
-                    </div>
-
-                    {/* Timing Row */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <DateTimePicker
-                                label="Start Time *"
-                                value={formData.starts_at}
-                                onDateTimeChange={(value) => handleChange('starts_at', value)}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="duration">Duration (minutes) *</Label>
-                            <Input
-                                id="duration"
-                                type="number"
-                                min={5}
-                                max={480}
-                                value={formData.duration_minutes}
-                                onChange={(e) => handleChange('duration_minutes', parseInt(e.target.value) || 60)}
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    {/* Session Type */}
-                    <div className="space-y-2">
-                        <Label htmlFor="session_type">Session Type</Label>
-                        <Select
-                            value={formData.session_type}
-                            onValueChange={(value: 'live' | 'recorded' | 'hybrid') => handleChange('session_type', value)}
-                        >
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="live">Live Session</SelectItem>
-                                <SelectItem value="recorded">Recorded / On-demand</SelectItem>
-                                <SelectItem value="hybrid">Hybrid</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* Toggles */}
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                                <Label>Required for Certificate</Label>
-                                <p className="text-xs text-muted-foreground">Attendees must complete this session</p>
-                            </div>
-                            <Switch
-                                checked={formData.is_mandatory}
-                                onCheckedChange={(checked) => handleChange('is_mandatory', checked)}
-                            />
-                        </div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={!formData.title || !formData.starts_at}>
-                            {isEditing ? 'Update Session' : 'Add Session'}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+        <SessionFormDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            value={value}
+            onSave={handleSave}
+            parentStartsAt={eventStartsAt}
+            showSpeakerNames
+            mandatoryLabel="Required for Certificate"
+            mandatoryHelp="Attendees must complete this session"
+        />
     );
 };
+
+export default SessionEditor;

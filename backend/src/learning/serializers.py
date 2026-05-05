@@ -3,7 +3,10 @@ Serializers for learning API.
 """
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils.text import slugify
 from rest_framework import serializers
+
+from common.utils import generate_unique_slug
 
 from badges.models import BadgeTemplate
 from certificates.models import CertificateTemplate
@@ -600,36 +603,59 @@ class CourseListSerializer(serializers.ModelSerializer):
 
 
 def _validate_certificate_settings(attrs, instance=None):
+    """Drafts can have `certificates_enabled=True` without a template.
+
+    Picking the template is part of finishing the course, not part of
+    creating it — forcing it at create time blocks the very first
+    "save my draft" round-trip from the wizard. The publish-time path
+    (`Course.validate_for_publish`) is the authoritative gate that
+    rejects publishes when a required template is missing.
+    """
     certificates_enabled = attrs.get('certificates_enabled')
     certificate_template = attrs.get('certificate_template')
+    new_status = attrs.get('status')
 
     if instance is not None:
         if certificates_enabled is None:
             certificates_enabled = instance.certificates_enabled
         if certificate_template is None:
             certificate_template = instance.certificate_template
+        if new_status is None:
+            new_status = instance.status
 
-    if certificates_enabled and not certificate_template:
+    if (
+        new_status == Course.Status.PUBLISHED
+        and certificates_enabled
+        and not certificate_template
+    ):
         raise serializers.ValidationError(
-            {'certificate_template': 'Select a certificate template when certificates are enabled.'}
+            {'certificate_template': 'Select a certificate template before publishing.'}
         )
 
     return attrs
 
 
 def _validate_badge_settings(attrs, instance=None):
+    """Same draft-vs-published policy as certificates above."""
     badges_enabled = attrs.get('badges_enabled')
     badge_template = attrs.get('badge_template')
+    new_status = attrs.get('status')
 
     if instance is not None:
         if badges_enabled is None:
             badges_enabled = instance.badges_enabled
         if badge_template is None:
             badge_template = instance.badge_template
+        if new_status is None:
+            new_status = instance.status
 
-    if badges_enabled and not badge_template:
+    if (
+        new_status == Course.Status.PUBLISHED
+        and badges_enabled
+        and not badge_template
+    ):
         raise serializers.ValidationError(
-            {'badge_template': 'Select a badge template when badges are enabled.'}
+            {'badge_template': 'Select a badge template before publishing.'}
         )
 
     return attrs
@@ -637,6 +663,14 @@ def _validate_badge_settings(attrs, instance=None):
 
 class CourseCreateSerializer(serializers.ModelSerializer):
     """Create/update course."""
+
+    # `Course.slug` has `max_length=100` at the DB layer, but the wizard
+    # auto-generates the slug from the (potentially long) title client-
+    # side and a long title would hit the cap. Accept any slug here, and
+    # truncate to fit in `validate_slug` below — same end result with no
+    # 400. If the client omits the slug entirely, `create()` derives one
+    # from the title (mirrors the events serializer).
+    slug = serializers.CharField(required=False, allow_blank=True, max_length=200)
 
     certificate_template = serializers.SlugRelatedField(
         slug_field='uuid',
@@ -698,6 +732,17 @@ class CourseCreateSerializer(serializers.ModelSerializer):
         attrs = _apply_format_defaults(attrs, self.instance)
         attrs = _validate_publish_transition(attrs, self.instance)
         return attrs
+
+    def create(self, validated_data):
+        # Derive a unique slug from the supplied slug (truncated) or the
+        # title. Mirrors the events flow at events/serializers.py — this
+        # keeps the wizard from hitting the slug max_length=100 ceiling
+        # when the title is long.
+        title = validated_data.get('title', '')
+        raw_slug = (validated_data.pop('slug', '') or '').strip()
+        base = slugify(raw_slug or title)[:80]
+        validated_data['slug'] = generate_unique_slug(Course, base)
+        return super().create(validated_data)
 
 
 def _apply_format_defaults(attrs, instance=None):

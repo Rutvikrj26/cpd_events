@@ -210,12 +210,48 @@ const CreateCoursePage = () => {
             navigate(`/courses/manage/${course.slug}`);
         } catch (error: any) {
             console.error('Failed to create course:', error);
-            setSubmitError(
-                error.response?.data?.message ||
-                    'Failed to create course. Please try again.',
-            );
+            // DRF returns validation errors keyed by field name
+            // (e.g. `{"slug": ["..."]}`) — looking only at `.message`
+            // would always swallow that into a generic fallback. Walk
+            // the response and surface every field-level message.
+            const message = extractApiErrorMessage(error) || 'Failed to create course. Please try again.';
+            setSubmitError(message);
+            // Surface via toast too — the inline Alert lives at the top
+            // of the page; if the user is scrolled near the submit
+            // button they wouldn't otherwise see it appear.
+            toast({ variant: 'destructive', title: 'Could not create course', description: message });
+            // And scroll the inline alert into view for the user who
+            // wants to read the full multi-line message.
+            window.requestAnimationFrame(() => {
+                document.getElementById('create-course-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
         }
     };
+
+    function extractApiErrorMessage(error: any): string | null {
+        const data = error?.response?.data;
+        if (!data) return null;
+        if (typeof data === 'string') return data;
+        // Common shapes the backend uses across endpoints.
+        if (data.message) return String(data.message);
+        if (data.error?.message) return String(data.error.message);
+        if (data.detail) return String(data.detail);
+        // DRF ValidationError default shape: {field: [msg, ...]} or
+        // {field: msg}. Flatten into "field: message" lines.
+        if (typeof data === 'object') {
+            const lines: string[] = [];
+            for (const [field, val] of Object.entries(data)) {
+                const text = Array.isArray(val) ? val.join(' ') : String(val);
+                if (field === 'non_field_errors' || field === 'detail') {
+                    lines.push(text);
+                } else {
+                    lines.push(`${field}: ${text}`);
+                }
+            }
+            if (lines.length) return lines.join('\n');
+        }
+        return null;
+    }
 
     const isSubmitting =
         createCourse.isPending ||
@@ -240,7 +276,7 @@ const CreateCoursePage = () => {
             </div>
 
             {submitError && (
-                <Alert variant="destructive" className="mb-6">
+                <Alert id="create-course-error" variant="destructive" className="mb-6 whitespace-pre-line">
                     <AlertTitle>Error</AlertTitle>
                     <AlertDescription>{submitError}</AlertDescription>
                 </Alert>

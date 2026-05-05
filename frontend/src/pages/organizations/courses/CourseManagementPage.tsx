@@ -29,13 +29,19 @@ export function CourseManagementPage() {
     const showCurriculum = course?.format !== 'live';
 
     const requestedTab = searchParams.get('tab') || (isStaffOnly ? (showCurriculum ? 'curriculum' : 'sessions') : 'overview');
+    // Must include every tab name rendered as a TabsTrigger below — any
+    // missing entry makes the controlled `value` prop fall back to the
+    // first available tab when that URL slug is requested, which silently
+    // shows the wrong panel. Keep this in sync with the JSX.
     const availableTabs = [
         ...(isStaffOnly ? [] : ['overview']),
-        'enrollments',
-        ...(showCurriculum ? ['curriculum'] : []),
-        'announcements',
-        'submissions',
         ...(showSessions ? ['sessions'] : []),
+        ...(showCurriculum ? ['curriculum'] : []),
+        'enrollments',
+        'invitations',
+        'announcements',
+        'discussion',
+        'submissions',
         'certificates',
         ...(isStaffOnly ? [] : ['settings']),
     ];

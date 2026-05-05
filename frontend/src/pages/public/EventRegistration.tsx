@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, Calendar, CheckCircle, Loader2 } from "lucide-react";
+import { AlertCircle, Calendar, CheckCircle, Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -19,6 +19,26 @@ import { splitFullName } from "@/lib/initials";
 
 type Step = "form" | "success";
 
+interface AttendeeForm {
+    email: string;
+    firstName: string;
+    lastName: string;
+    professionalTitle: string;
+    organizationName: string;
+    allowPublicVerification: boolean;
+}
+
+const MAX_ATTENDEES = 25;
+
+const emptyAttendee = (): AttendeeForm => ({
+    email: "",
+    firstName: "",
+    lastName: "",
+    professionalTitle: "",
+    organizationName: "",
+    allowPublicVerification: true,
+});
+
 export function EventRegistration() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -30,14 +50,20 @@ export function EventRegistration() {
     const [error, setError] = useState<string | null>(null);
     const [step, setStep] = useState<Step>("form");
 
-    const [formData, setFormData] = useState({
-        email: user?.email || "",
-        firstName: "",
-        lastName: "",
-        professionalTitle: "",
-        organizationName: "",
-        allowPublicVerification: true,
-    });
+    // The form starts with one attendee (the buyer when authenticated, a
+    // blank row otherwise). "+ Add another attendee" appends rows up to
+    // MAX_ATTENDEES; multi-row submissions go through the multi-attendee
+    // backend path.
+    const [attendees, setAttendees] = useState<AttendeeForm[]>([
+        { ...emptyAttendee(), email: user?.email || "" },
+    ]);
+
+    const updateAttendee = (idx: number, patch: Partial<AttendeeForm>) =>
+        setAttendees((prev) => prev.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
+    const addAttendee = () =>
+        setAttendees((prev) => (prev.length < MAX_ATTENDEES ? [...prev, emptyAttendee()] : prev));
+    const removeAttendee = (idx: number) =>
+        setAttendees((prev) => prev.filter((_, i) => i !== idx));
 
     const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
 
@@ -51,31 +77,16 @@ export function EventRegistration() {
                 setEvent(data);
                 if (user) {
                     const { first, last } = splitFullName(user.full_name);
-                    setFormData((prev) => ({
-                        ...prev,
-                        email: user.email,
-                        firstName: first,
-                        lastName: last,
-                    }));
-                    // Restore form state if the user was bounced to login by
-                    // the LOGIN_REQUIRED guard on a prior submit attempt.
-                    try {
-                        const cached = sessionStorage.getItem(`event-registration:${data.uuid}`);
-                        if (cached) {
-                            const parsed = JSON.parse(cached);
-                            if (parsed?.formData) {
-                                setFormData((prev) => ({
-                                    ...prev,
-                                    ...parsed.formData,
-                                    email: user.email,  // canonical from auth
-                                }));
-                            }
-                            if (parsed?.customFieldValues) {
-                                setCustomFieldValues(parsed.customFieldValues);
-                            }
-                            sessionStorage.removeItem(`event-registration:${data.uuid}`);
-                        }
-                    } catch {/* sessionStorage unavailable — silent */}
+                    setAttendees((prev) => {
+                        const next = [...prev];
+                        next[0] = {
+                            ...next[0],
+                            email: user.email,
+                            firstName: first,
+                            lastName: last,
+                        };
+                        return next;
+                    });
                 }
             } catch (e) {
                 setError("Event not found or registration is closed.");
@@ -90,33 +101,42 @@ export function EventRegistration() {
         e.preventDefault();
         if (!event?.uuid) return;
 
-        // Paid events require auth (backend raises LOGIN_REQUIRED). Pre-empt
-        // the round-trip and route the guest to /login with a return URL so
-        // they land back on this page after authenticating.
-        if (isPaidEvent && !user) {
-            try {
-                sessionStorage.setItem(
-                    `event-registration:${event.uuid}`,
-                    JSON.stringify({ formData, customFieldValues }),
-                );
-            } catch {/* private mode / quota — fall through, user will retype */}
-            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-            navigate(`/login?returnUrl=${returnUrl}`);
-            return;
-        }
-
         setSubmitting(true);
         setError(null);
 
         try {
-            const payload: RegistrationCreateRequest = {
-                email: formData.email,
-                full_name: `${formData.firstName} ${formData.lastName}`.trim(),
-                professional_title: formData.professionalTitle || undefined,
-                organization_name: formData.organizationName || undefined,
-                allow_public_verification: formData.allowPublicVerification,
-                custom_field_responses: customFieldValues,
-            };
+            // Multi-attendee shape when there's more than one row, OR
+            // when a guest is registering even a single attendee — using
+            // the unified shape for guests keeps the response branching
+            // predictable. Single authenticated attendee still uses the
+            // legacy shape for backward compat.
+            const useMultiShape = attendees.length > 1 || !user;
+            const buyerEmail = attendees[0]?.email || "";
+
+            let payload: RegistrationCreateRequest;
+            if (useMultiShape) {
+                payload = {
+                    attendees: attendees.map((a) => ({
+                        email: a.email,
+                        full_name: `${a.firstName} ${a.lastName}`.trim(),
+                        professional_title: a.professionalTitle || undefined,
+                        organization_name: a.organizationName || undefined,
+                        allow_public_verification: a.allowPublicVerification,
+                    })),
+                    custom_field_responses: customFieldValues,
+                } as any;
+            } else {
+                const a = attendees[0];
+                payload = {
+                    email: a.email,
+                    full_name: `${a.firstName} ${a.lastName}`.trim(),
+                    professional_title: a.professionalTitle || undefined,
+                    organization_name: a.organizationName || undefined,
+                    allow_public_verification: a.allowPublicVerification,
+                    custom_field_responses: customFieldValues,
+                };
+            }
+
             const response = await registerForEvent(event.uuid, payload);
 
             if (response.requires_payment && response.checkout_url) {
@@ -124,18 +144,36 @@ export function EventRegistration() {
                 window.location.href = response.checkout_url;
                 return;
             }
+            // Anonymous free flow: send them to the "check your email" page.
+            // For multi-attendee, we surface the buyer's email; each
+            // attendee has received their own claim link.
+            if (response.anonymous) {
+                navigate(
+                    `/events/${event.slug || event.uuid}/registration-pending?email=${encodeURIComponent(buyerEmail)}`,
+                    { replace: true },
+                );
+                return;
+            }
             if (response.status === "waitlisted") {
                 toast.info("You've been added to the waitlist.");
             } else {
-                toast.success("Registration successful!");
+                toast.success(
+                    attendees.length > 1
+                        ? `Registered ${attendees.length} attendees.`
+                        : "Registration successful!",
+                );
             }
             setStep("success");
         } catch (err: any) {
             const code = err?.response?.data?.error?.code;
-            // Server-side guard for the same case (e.g. price changed mid-flow)
-            if (code === "LOGIN_REQUIRED") {
-                const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-                navigate(`/login?returnUrl=${returnUrl}`);
+            if (code === "EMAIL_HAS_ACCOUNT") {
+                setError("EMAIL_HAS_ACCOUNT");
+                toast.error("An email in this submission already has an account.");
+                return;
+            }
+            if (code === "DUPLICATE_EMAIL_IN_BATCH") {
+                setError(err?.response?.data?.error?.message || "Each attendee must have a distinct email.");
+                toast.error("Duplicate attendee email.");
                 return;
             }
             const message =
@@ -270,70 +308,118 @@ export function EventRegistration() {
                         <CardTitle>Attendee details</CardTitle>
                         <CardDescription>
                             {isPaidEvent
-                                ? `After you submit we'll take you to secure checkout (${formatPrice(event?.price, event?.currency || "USD")}). Promo codes are entered there.`
+                                ? `After you submit we'll take you to secure checkout (${formatPrice(
+                                      Number(event?.price || 0) * attendees.length,
+                                      event?.currency || "USD",
+                                  )}${attendees.length > 1 ? ` for ${attendees.length} attendees` : ""}). Promo codes are entered there.`
                                 : "Fill in your details to complete free registration."}
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <Label htmlFor="firstName">First name</Label>
-                                    <Input
-                                        id="firstName"
-                                        required
-                                        value={formData.firstName}
-                                        onChange={(e) =>
-                                            setFormData((p) => ({ ...p, firstName: e.target.value }))
-                                        }
-                                    />
-                                </div>
-                                <div>
-                                    <Label htmlFor="lastName">Last name</Label>
-                                    <Input
-                                        id="lastName"
-                                        required
-                                        value={formData.lastName}
-                                        onChange={(e) =>
-                                            setFormData((p) => ({ ...p, lastName: e.target.value }))
-                                        }
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <Label htmlFor="email">Email</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    required
-                                    value={formData.email}
-                                    onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
-                                    disabled={Boolean(user)}
-                                />
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <Label htmlFor="professionalTitle">Professional title</Label>
-                                    <Input
-                                        id="professionalTitle"
-                                        value={formData.professionalTitle}
-                                        onChange={(e) =>
-                                            setFormData((p) => ({ ...p, professionalTitle: e.target.value }))
-                                        }
-                                        placeholder="MD, PhD, etc."
-                                    />
-                                </div>
-                                <div>
-                                    <Label htmlFor="organizationName">Organization</Label>
-                                    <Input
-                                        id="organizationName"
-                                        value={formData.organizationName}
-                                        onChange={(e) =>
-                                            setFormData((p) => ({ ...p, organizationName: e.target.value }))
-                                        }
-                                    />
-                                </div>
-                            </div>
+                            {attendees.map((attendee, idx) => {
+                                const isFirst = idx === 0;
+                                const idPrefix = `att-${idx}`;
+                                const emailDisabled = isFirst && Boolean(user);
+                                return (
+                                    <div key={idx} className="space-y-3 rounded-md border p-4">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-sm font-semibold">
+                                                {attendees.length > 1
+                                                    ? `Attendee ${idx + 1}`
+                                                    : "Your details"}
+                                            </h3>
+                                            {!isFirst && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => removeAttendee(idx)}
+                                                    aria-label={`Remove attendee ${idx + 1}`}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <Label htmlFor={`${idPrefix}-firstName`}>First name</Label>
+                                                <Input
+                                                    id={`${idPrefix}-firstName`}
+                                                    required
+                                                    value={attendee.firstName}
+                                                    onChange={(e) => updateAttendee(idx, { firstName: e.target.value })}
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label htmlFor={`${idPrefix}-lastName`}>Last name</Label>
+                                                <Input
+                                                    id={`${idPrefix}-lastName`}
+                                                    required
+                                                    value={attendee.lastName}
+                                                    onChange={(e) => updateAttendee(idx, { lastName: e.target.value })}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <Label htmlFor={`${idPrefix}-email`}>Email</Label>
+                                            <Input
+                                                id={`${idPrefix}-email`}
+                                                type="email"
+                                                required
+                                                value={attendee.email}
+                                                onChange={(e) => updateAttendee(idx, { email: e.target.value })}
+                                                disabled={emailDisabled}
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <Label htmlFor={`${idPrefix}-title`}>Professional title</Label>
+                                                <Input
+                                                    id={`${idPrefix}-title`}
+                                                    value={attendee.professionalTitle}
+                                                    onChange={(e) => updateAttendee(idx, { professionalTitle: e.target.value })}
+                                                    placeholder="MD, PhD, etc."
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label htmlFor={`${idPrefix}-org`}>Organization</Label>
+                                                <Input
+                                                    id={`${idPrefix}-org`}
+                                                    value={attendee.organizationName}
+                                                    onChange={(e) => updateAttendee(idx, { organizationName: e.target.value })}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex items-start gap-2">
+                                            <Checkbox
+                                                id={`${idPrefix}-verify`}
+                                                checked={attendee.allowPublicVerification}
+                                                onCheckedChange={(checked) =>
+                                                    updateAttendee(idx, { allowPublicVerification: Boolean(checked) })
+                                                }
+                                            />
+                                            <div className="text-sm">
+                                                <Label htmlFor={`${idPrefix}-verify`} className="cursor-pointer">
+                                                    Allow public certificate verification
+                                                </Label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {attendees.length < MAX_ATTENDEES && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={addAttendee}
+                                >
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    Add another attendee
+                                </Button>
+                            )}
 
                             {event?.custom_fields?.length ? (
                                 <>
@@ -346,34 +432,31 @@ export function EventRegistration() {
                                 </>
                             ) : null}
 
-                            <Separator className="my-4" />
-                            <div className="flex items-start gap-2">
-                                <Checkbox
-                                    id="verify"
-                                    checked={formData.allowPublicVerification}
-                                    onCheckedChange={(checked) =>
-                                        setFormData((p) => ({
-                                            ...p,
-                                            allowPublicVerification: Boolean(checked),
-                                        }))
-                                    }
-                                />
-                                <div className="text-sm">
-                                    <Label htmlFor="verify" className="cursor-pointer">
-                                        Allow public certificate verification
-                                    </Label>
-                                    <p className="text-muted-foreground">
-                                        Your certificate can be looked up by its public code.
-                                    </p>
+                            {error === "EMAIL_HAS_ACCOUNT" ? (
+                                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+                                    <div className="flex items-start gap-2 text-amber-900">
+                                        <AlertCircle className="h-4 w-4 mt-0.5" />
+                                        <div className="space-y-2">
+                                            <p>
+                                                An account already exists for one of the emails in this submission.
+                                                Sign in to register, or use a different email.
+                                            </p>
+                                            <Button asChild size="sm" variant="outline">
+                                                <Link
+                                                    to={`/login?email=${encodeURIComponent(attendees[0]?.email || '')}&returnUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`}
+                                                >
+                                                    Sign in to continue
+                                                </Link>
+                                            </Button>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-
-                            {error && (
+                            ) : error ? (
                                 <div className="flex items-start gap-2 text-sm text-destructive">
                                     <AlertCircle className="h-4 w-4 mt-0.5" />
                                     <span>{error}</span>
                                 </div>
-                            )}
+                            ) : null}
 
                             <div className="flex items-center justify-end gap-3 pt-2">
                                 <Button
@@ -390,7 +473,12 @@ export function EventRegistration() {
                                             {isPaidEvent ? "Starting checkout…" : "Registering…"}
                                         </>
                                     ) : isPaidEvent ? (
-                                        `Continue to checkout — ${formatPrice(event?.price, event?.currency || "USD")}`
+                                        `Continue to checkout — ${formatPrice(
+                                            Number(event?.price || 0) * attendees.length,
+                                            event?.currency || "USD",
+                                        )}`
+                                    ) : attendees.length > 1 ? (
+                                        `Register ${attendees.length} attendees`
                                     ) : (
                                         "Register"
                                     )}

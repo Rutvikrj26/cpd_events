@@ -473,9 +473,13 @@ export function EventDetail() {
       </div>
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Grid items default to `min-width: auto`; on a long unbroken
+            description that lets the left column push past its track and
+            the page picks up a horizontal scrollbar. `min-w-0` on the
+            grid + the column anchors widths to the grid template. */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
           {/* Main Content */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className="lg:col-span-2 space-y-8 min-w-0">
             {/* Featured Image or Placeholder */}
             <div className="aspect-video w-full overflow-hidden rounded-xl border border-border shadow-sm bg-muted flex items-center justify-center">
               {event.featured_image_url ? (
@@ -507,16 +511,21 @@ export function EventDetail() {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="about" className="pt-6 space-y-6">
-                <div>
+              <TabsContent value="about" className="pt-6 space-y-6 min-w-0">
+                <div className="min-w-0">
                   <h3 className="text-xl font-semibold text-foreground mb-3">Event Description</h3>
                   {hasVisibleContent(event.description) ? (
+                    // The rich-text can carry long unbroken strings (URLs,
+                    // identifiers, certificate codes) and wide embedded
+                    // elements (tables, images, code blocks). Constrain
+                    // every common offender so the page never picks up a
+                    // horizontal scrollbar.
                     <div
-                      className="text-muted-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+                      className="text-muted-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none break-words [&_img]:max-w-full [&_img]:h-auto [&_table]:max-w-full [&_table]:block [&_table]:overflow-x-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto"
                       dangerouslySetInnerHTML={{ __html: sanitizeHtml(event.description) }}
                     />
                   ) : event.short_description ? (
-                    <p className="text-muted-foreground leading-relaxed">{event.short_description}</p>
+                    <p className="text-muted-foreground leading-relaxed break-words">{event.short_description}</p>
                   ) : (
                     <p className="text-muted-foreground leading-relaxed italic">No description available.</p>
                   )}
@@ -564,39 +573,62 @@ export function EventDetail() {
 
                   {/* Event Date & Time Overview */}
                   <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 p-6 rounded-xl border border-info">
-                    <div className="flex flex-col md:flex-row md:items-center gap-6">
-                      {/* Date Block */}
-                      <div className="flex items-center gap-4">
+                    {(() => {
+                      const startDate = new Date(event.starts_at);
+                      const endDate = event.ends_at ? new Date(event.ends_at) : null;
+                      const isMultiDay = !!endDate && (
+                        startDate.getFullYear() !== endDate.getFullYear() ||
+                        startDate.getMonth() !== endDate.getMonth() ||
+                        startDate.getDate() !== endDate.getDate()
+                      );
+                      const timeFmt: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
+
+                      const DateBlock = ({ d }: { d: Date }) => (
                         <div className="bg-neutral-card rounded-xl p-4 shadow-sm text-center min-w-[80px]">
-                          <div className="text-3xl font-bold text-primary">
-                            {new Date(event.starts_at).getDate()}
-                          </div>
+                          <div className="text-3xl font-bold text-primary">{d.getDate()}</div>
                           <div className="text-sm text-muted-foreground uppercase">
-                            {new Date(event.starts_at).toLocaleDateString(undefined, { month: 'short' })}
+                            {d.toLocaleDateString(undefined, { month: 'short' })}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(event.starts_at).getFullYear()}
-                          </div>
+                          <div className="text-xs text-muted-foreground">{d.getFullYear()}</div>
                         </div>
-                        <div>
-                          <div className="text-lg font-semibold text-foreground">
-                            {new Date(event.starts_at).toLocaleDateString(undefined, { weekday: 'long' })}
-                          </div>
-                          <div className="flex items-center gap-2 text-muted-foreground mt-1">
-                            <Clock className="h-4 w-4" />
-                            <span>
-                              {new Date(event.starts_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
-                              {' - '}
-                              {new Date(event.ends_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          {event.timezone && (
-                            <div className="text-sm text-muted-foreground mt-1">
-                              {event.timezone}
+                      );
+
+                      return (
+                        <div className="flex flex-col md:flex-row md:items-center gap-6">
+                          {/* Date Block(s) — show start → end pair when multi-day. */}
+                          <div className="flex items-center gap-4">
+                            <DateBlock d={startDate} />
+                            {isMultiDay && endDate && (
+                              <>
+                                <span className="text-muted-foreground text-2xl">→</span>
+                                <DateBlock d={endDate} />
+                              </>
+                            )}
+                            <div>
+                              <div className="text-lg font-semibold text-foreground">
+                                {isMultiDay && endDate
+                                  ? `${startDate.toLocaleDateString(undefined, { weekday: 'long' })} – ${endDate.toLocaleDateString(undefined, { weekday: 'long' })}`
+                                  : startDate.toLocaleDateString(undefined, { weekday: 'long' })}
+                              </div>
+                              <div className="flex items-center gap-2 text-muted-foreground mt-1">
+                                <Clock className="h-4 w-4" />
+                                <span>
+                                  {startDate.toLocaleTimeString(undefined, timeFmt)}
+                                  {' → '}
+                                  {endDate
+                                    ? (isMultiDay
+                                        ? endDate.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', ...timeFmt })
+                                        : endDate.toLocaleTimeString(undefined, timeFmt))
+                                    : '—'}
+                                </span>
+                              </div>
+                              {event.timezone && (
+                                <div className="text-sm text-muted-foreground mt-1">
+                                  {event.timezone}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </div>
+                          </div>
 
                       {/* Duration & Format */}
                       <div className="md:ml-auto flex flex-wrap gap-4">
@@ -621,6 +653,8 @@ export function EventDetail() {
                         </div>
                       </div>
                     </div>
+                      );
+                    })()}
 
                     {/* Location if available */}
                     {event.location && (
@@ -650,17 +684,39 @@ export function EventDetail() {
                           return (
                             <div key={session.uuid || index} className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-md transition-shadow">
                               <div className="flex">
-                                {/* Time sidebar */}
-                                <div className="w-24 shrink-0 bg-muted/50 p-4 flex flex-col items-center justify-center text-center border-r border-border">
-                                  <div className="text-lg font-bold text-foreground">
-                                    {startTime.toLocaleTimeString(undefined, timeFormat)}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {session.duration_minutes >= 60
-                                      ? `${Math.floor(session.duration_minutes / 60)}h${session.duration_minutes % 60 > 0 ? ` ${session.duration_minutes % 60}m` : ''}`
-                                      : `${session.duration_minutes}m`}
-                                  </div>
-                                </div>
+                                {/* Time sidebar — surface the session's date as
+                                    well when the event spans multiple days, otherwise
+                                    "10:00 AM" is ambiguous between Day 1 and Day 2. */}
+                                {(() => {
+                                  const eventStart = new Date(event.starts_at);
+                                  const sameDayAsEventStart =
+                                    eventStart.getFullYear() === startTime.getFullYear() &&
+                                    eventStart.getMonth() === startTime.getMonth() &&
+                                    eventStart.getDate() === startTime.getDate();
+                                  const eventEnd = event.ends_at ? new Date(event.ends_at) : null;
+                                  const isEventMultiDay = !!eventEnd && (
+                                    eventStart.getFullYear() !== eventEnd.getFullYear() ||
+                                    eventStart.getMonth() !== eventEnd.getMonth() ||
+                                    eventStart.getDate() !== eventEnd.getDate()
+                                  );
+                                  return (
+                                    <div className="w-24 shrink-0 bg-muted/50 p-4 flex flex-col items-center justify-center text-center border-r border-border">
+                                      {isEventMultiDay && (
+                                        <div className={`text-[11px] uppercase tracking-wide ${sameDayAsEventStart ? 'text-muted-foreground' : 'text-primary font-semibold'}`}>
+                                          {startTime.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                                        </div>
+                                      )}
+                                      <div className="text-lg font-bold text-foreground">
+                                        {startTime.toLocaleTimeString(undefined, timeFormat)}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {session.duration_minutes >= 60
+                                          ? `${Math.floor(session.duration_minutes / 60)}h${session.duration_minutes % 60 > 0 ? ` ${session.duration_minutes % 60}m` : ''}`
+                                          : `${session.duration_minutes}m`}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
 
                                 {/* Main content */}
                                 <div className="flex-1 p-4">
@@ -670,8 +726,15 @@ export function EventDetail() {
                                       {session.speaker_names && (
                                         <p className="text-sm text-info mt-1">{session.speaker_names}</p>
                                       )}
-                                      {session.description && (
-                                        <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{session.description}</p>
+                                      {session.description && hasVisibleContent(session.description) && (
+                                        // Rich-text payload — sanitize and render as
+                                        // HTML, the same path the event description uses.
+                                        // line-clamp-2 keeps the row compact; click-to-
+                                        // expand can be a follow-up.
+                                        <div
+                                          className="text-sm text-muted-foreground mt-2 line-clamp-2 prose prose-sm dark:prose-invert max-w-none break-words [&_p]:m-0 [&_strong]:!bg-transparent [&_span]:!bg-transparent"
+                                          dangerouslySetInnerHTML={{ __html: sanitizeHtml(session.description) }}
+                                        />
                                       )}
                                     </div>
                                     {session.is_mandatory && (
