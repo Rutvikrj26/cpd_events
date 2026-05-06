@@ -149,7 +149,7 @@ async def entrypoint(ctx: JobContext) -> None:
     # → one INSERT per POST → fan-out load on the DB. We accumulate
     # segments here and drain them in a single batch every
     # SEGMENT_FLUSH_INTERVAL seconds. Backend's
-    # `update_or_create((transcript, livekit_segment_id))` makes the
+    # `update_or_create((transcript, provider_segment_id))` makes the
     # batched POSTs idempotent — duplicates become no-ops if the
     # connection retries.
     SEGMENT_FLUSH_INTERVAL = 1.0  # seconds; max one drain per second
@@ -170,7 +170,7 @@ async def entrypoint(ctx: JobContext) -> None:
         # post-event panel orders by start_ms which is sufficient.
         elapsed_ms = int((time.monotonic() - session_started_at) * 1000)
         pending_segments.append(IngestSegment(
-            livekit_segment_id=f'sess-{elapsed_ms}-{abs(hash(text)) % 10_000_000:07d}',
+            provider_segment_id=f'sess-{elapsed_ms}-{abs(hash(text)) % 10_000_000:07d}',
             start_ms=elapsed_ms,
             end_ms=elapsed_ms,
             text=text,
@@ -311,7 +311,7 @@ async def _forward_segment(
         await INGEST.post_segment(
             transcript_uuid,
             IngestSegment(
-                livekit_segment_id=seg.id or '',
+                provider_segment_id=seg.id or '',
                 start_ms=start_ms,
                 end_ms=end_ms,
                 text=seg.text or '',

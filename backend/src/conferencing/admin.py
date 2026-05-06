@@ -53,8 +53,8 @@ class TranscriptSegmentAdmin(admin.ModelAdmin):
     list_filter = ['source', 'is_final']
     # Don't put `text` in search_fields without the trgm GIN — full-table
     # ILIKE on a million-row transcript table will lock up the admin.
-    # Search by livekit_segment_id + speaker; use the public search
+    # Search by provider_segment_id + speaker; use the public search
     # endpoint (which uses GIN) for content lookups.
-    search_fields = ['livekit_segment_id', 'speaker_name_snapshot']
+    search_fields = ['provider_segment_id', 'speaker_name_snapshot']
     raw_id_fields = ['transcript', 'replaced_by', 'edited_by', 'speaker_user']
-    readonly_fields = ['uuid', 'livekit_segment_id', 'source']
+    readonly_fields = ['uuid', 'provider_segment_id', 'source']

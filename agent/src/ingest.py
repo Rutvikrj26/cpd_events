@@ -50,7 +50,7 @@ class IngestSegment:
     its own when populated.
     """
 
-    livekit_segment_id: str
+    provider_segment_id: str
     start_ms: int
     end_ms: int
     text: str
@@ -61,7 +61,7 @@ class IngestSegment:
 
     def to_payload(self) -> dict[str, Any]:
         d: dict[str, Any] = {
-            'livekit_segment_id': self.livekit_segment_id,
+            'provider_segment_id': self.provider_segment_id,
             'start_ms': self.start_ms,
             'end_ms': self.end_ms,
             'text': self.text,

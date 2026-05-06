@@ -148,7 +148,7 @@ class VideoStatusSerializer(serializers.Serializer):
 #                                        Adds source/edited_by/edited_at.
 #
 #   TranscriptSegmentIngestSerializer — agent-only WRITE shape. Validates
-#                                       livekit_segment_id is non-empty
+#                                       provider_segment_id is non-empty
 #                                       (the unique-constraint condition)
 #                                       and clamps confidence to [0, 1].
 #
@@ -206,7 +206,7 @@ class TranscriptSegmentHistorySerializer(TranscriptSegmentReadSerializer):
 class TranscriptSegmentIngestSerializer(serializers.Serializer):
     """Validates a single segment posted by the agent."""
 
-    livekit_segment_id = serializers.CharField(max_length=128)
+    provider_segment_id = serializers.CharField(max_length=128)
     start_ms = serializers.IntegerField(min_value=0)
     end_ms = serializers.IntegerField(min_value=0)
     text = serializers.CharField(allow_blank=False, max_length=10_000)

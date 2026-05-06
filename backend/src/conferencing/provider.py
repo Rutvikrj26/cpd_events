@@ -42,6 +42,18 @@ class WebhookEvent:
     metadata: dict = field(default_factory=dict)
 
 
+@dataclass
+class RegistrantInfo:
+    """Result of registering an attendee with the provider's built-in
+    registration system (Zoom). LiveKit has no equivalent — its provider
+    returns an empty RegistrantInfo (caller treats empty registrant_id as
+    "no provider-side registration; deliver invite locally")."""
+
+    registrant_id: str = ""
+    join_url: str = ""
+    email: str = ""
+
+
 class VideoProvider(ABC):
     """Abstract base class for video conferencing providers."""
 
@@ -130,3 +142,60 @@ class VideoProvider(ABC):
     @abstractmethod
     def parse_webhook(self, body: bytes, auth_header: str) -> WebhookEvent:
         """Parse and verify a webhook payload. Returns WebhookEvent."""
+
+    # ------------------------------------------------------------------
+    # Optional / provider-specific extensions
+    #
+    # These have default implementations so existing providers (LiveKit)
+    # don't need explicit overrides, but Zoom uses each one. Providers
+    # without these capabilities can leave the defaults in place.
+    # ------------------------------------------------------------------
+
+    def register_attendee(
+        self, room_name: str, email: str, full_name: str,
+    ) -> RegistrantInfo:
+        """Register an attendee on the provider side (Zoom registration API).
+
+        Default implementation is a no-op returning an empty RegistrantInfo
+        — providers without server-side registration (LiveKit) don't need
+        to override this. Callers that get an empty registrant_id back
+        should fall back to delivering the invite themselves.
+        """
+        return RegistrantInfo(email=email)
+
+    def get_webhook_dedup_key(self, headers: dict | None) -> str:
+        """Extract the provider's per-delivery dedup key from request headers.
+
+        LiveKit emits ``X-LiveKit-Id``; Zoom emits ``x-zm-trackingid``.
+        Returning an empty string disables dedup at the header level
+        (caller still uses the payload's webhook_id when present).
+        """
+        return ""
+
+    def client_join_url(
+        self,
+        room_name: str,
+        *,
+        token: str = "",
+        registrant_join_url: str = "",
+    ) -> str:
+        """Return the URL the client should open to join the meeting.
+
+        For LiveKit this is the WS URL the JS SDK connects to (the JWT
+        carries the room name). For Zoom this is the registrant's
+        personalized join URL when available, else the meeting's generic
+        join URL. The default returns the registrant URL when present,
+        empty otherwise — providers should override if they synthesize
+        URLs at runtime.
+        """
+        return registrant_join_url
+
+    def recording_output_template(self) -> str:
+        """Return the path template the provider writes recordings to.
+
+        Used by code that creates VideoRecording rows so the file path
+        is provider-specific (LiveKit Egress writes to a local mount;
+        Zoom recordings are downloaded post-meeting and written
+        wherever the download task chooses). Default is empty —
+        providers without local-disk semantics return ''."""
+        return ""

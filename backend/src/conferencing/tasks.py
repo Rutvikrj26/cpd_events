@@ -6,6 +6,7 @@ These tasks handle webhook processing, room creation, and attendance tracking.
 
 import logging
 import traceback
+from datetime import datetime, timezone as _stdlib_tz
 
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
@@ -240,6 +241,14 @@ def _on_room_finished(video_room):
     """
     Apply room_finished: stop in-flight recordings, transition VideoRoom →
     ENDED, mark linked content completed.
+
+    For Zoom rooms we additionally enqueue ``sync_zoom_attendance`` to
+    reconcile the per-meeting attendance report with the records we
+    already created from participant_joined/left webhooks. The report
+    API is authoritative — it dedupes networks/rejoin segments into a
+    single per-participant total — but it can lag the meeting.ended
+    webhook by ~1 minute, so the task itself is tolerant of an empty
+    response and idempotent on re-run.
     """
     from conferencing.state_machine import advance_room
     from conferencing.models import VideoRoom
@@ -257,6 +266,15 @@ def _on_room_finished(video_room):
     video_room.refresh_from_db()
     _mark_content_ended(video_room)
     finalize_transcript(video_room)
+
+    if video_room.provider == 'zoom' and video_room.zoom_meeting_id:
+        # NOTE: CloudTask.schedule() is currently a stub (see
+        # common/cloud_tasks.py), so we cannot push a delayed task to
+        # absorb Zoom's ~60s report lag. The sync task itself is
+        # tolerant — it logs and exits when the report is empty, and
+        # is idempotent on re-run, so a manual replay (or future
+        # delay-aware enqueue) catches up cleanly.
+        sync_zoom_attendance.delay(video_room.zoom_meeting_id)
 
 
 def _mark_content_live(video_room):
@@ -317,6 +335,12 @@ def _handle_participant_joined(video_room, payload):
     skipped because the VideoRoom row hadn't committed yet. We re-run
     the room-active side-effects here; everything inside is idempotent
     so this is safe even when room_started was processed normally.
+
+    Provider branching:
+      * LiveKit — match `participant.identity` (a UUID) → User → Registration.
+      * Zoom    — match `participant.registrant_id` (preferred) or
+        ``email`` → Registration. Zoom user_ids are not UUIDs, so the
+        UUID guard used for LiveKit cannot apply here.
     """
     import uuid as _uuid
 
@@ -324,6 +348,9 @@ def _handle_participant_joined(video_room, payload):
     # room_started doesn't leave the room in 'scheduled' status — some
     # downstream attendance logic checks the room state.
     _ensure_room_active(video_room)
+
+    if video_room.provider == 'zoom':
+        return _handle_zoom_participant_joined(video_room, payload)
 
     participant = payload.get('participant', {})
     identity = participant.get('identity', '')
@@ -360,7 +387,16 @@ def _handle_participant_left(video_room, payload):
     end-meeting via the LiveKit API. The empty-room timeout is the
     safety net; this just makes the common case (host clicks Leave
     instead of End) end the meeting promptly for the attendees.
+
+    Provider branching: Zoom rooms close out attendance against a
+    registrant_id/email key; the auto-end-on-last-host-leave logic is
+    LiveKit-only because it depends on a real-time participant list
+    that Zoom's REST API doesn't expose mid-meeting (see
+    ``ZoomProvider.list_participants`` — post-meeting only).
     """
+    if video_room.provider == 'zoom':
+        return _handle_zoom_participant_left(video_room, payload)
+
     participant = payload.get('participant', {})
     identity = participant.get('identity', '')
 
@@ -377,6 +413,359 @@ def _handle_participant_left(video_room, payload):
     _maybe_auto_end_on_last_host_leave(video_room, identity)
 
     return 0
+
+
+# =========================================================================
+# Zoom-specific participant webhook handlers
+# =========================================================================
+#
+# Zoom delivers participant events with a different shape than LiveKit:
+# the participant identity is `user_id` (not a UUID) and matching back
+# to our Registration relies on `registrant_id` or `email` rather than
+# a User-row lookup. The helpers below mirror the LiveKit path
+# (_create_event_attendance / _update_event_attendance) but consume the
+# raw Zoom webhook body and key on Zoom's identifiers.
+
+
+def _zoom_participant_from_payload(payload: dict) -> tuple[dict, dict]:
+    """Pluck ``(participant, object)`` from a raw Zoom webhook body.
+
+    Zoom wraps the meeting/participant payload as
+    ``payload -> object -> {id, uuid, topic, participant: {...}}``.
+    This helper keeps both join and left handlers on the same shape.
+    """
+    obj = (payload.get('payload') or {}).get('object') or {}
+    participant = obj.get('participant') or {}
+    return participant, obj
+
+
+def _resolve_zoom_registration(event, registrant_id: str, email: str):
+    """Match a Zoom participant back to a Registration row.
+
+    Preference order:
+      1. ``zoom_registrant_id`` — exact match, only set when the
+         attendee registered via Zoom's built-in flow.
+      2. ``email`` — case-insensitive fallback for participants that
+         joined without going through Zoom registration (e.g. an
+         instructor who used the ``start_url``).
+
+    Returns the Registration or None.
+    """
+    from registrations.models import Registration
+
+    if registrant_id:
+        reg = Registration.objects.filter(
+            event=event,
+            zoom_registrant_id=registrant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if reg:
+            return reg
+    if email:
+        return Registration.objects.filter(
+            event=event,
+            email__iexact=email,
+            deleted_at__isnull=True,
+        ).first()
+    return None
+
+
+def _handle_zoom_participant_joined(video_room, payload) -> int:
+    """Zoom-shaped ``participant_joined`` — create an AttendanceRecord.
+
+    Creates one open record per ``(event, participant_id, join_time)``.
+    De-dups on a re-delivered webhook so re-running with the same
+    payload is a no-op.
+    """
+    from registrations.models import AttendanceRecord
+
+    if video_room.content_type.model != 'event':
+        # Course-session attendance for Zoom isn't wired yet — log so
+        # the gap is visible if the path ever fires.
+        logger.info(
+            "Zoom participant_joined for non-event content (%s); skipping",
+            video_room.content_type.model,
+        )
+        return 0
+
+    event = video_room.content_object
+    if not event:
+        return 0
+
+    participant, _obj = _zoom_participant_from_payload(payload)
+    user_id = participant.get('user_id') or participant.get('id') or ''
+    name = participant.get('user_name') or ''
+    email = (participant.get('email') or '').strip()
+    registrant_id = participant.get('registrant_id') or ''
+    join_time_raw = participant.get('join_time')
+
+    # The participant_id stored on AttendanceRecord must match the key
+    # used to upsert in sync_zoom_attendance, otherwise the report-pass
+    # leaves stale webhook rows behind. ``registrant_id`` is the
+    # canonical key when present; we fall back to ``user_id`` only
+    # when Zoom didn't surface a registrant (e.g. an instructor that
+    # joined via the start_url).
+    participant_id = registrant_id or user_id
+    if not participant_id and not email:
+        return 0
+
+    join_time = _parse_zoom_timestamp(join_time_raw) or timezone.now()
+
+    registration = _resolve_zoom_registration(event, registrant_id, email)
+
+    # De-dup webhook re-delivery: same participant_id + join_time is
+    # the same join event.
+    if AttendanceRecord.objects.filter(
+        event=event,
+        participant_id=participant_id,
+        join_time=join_time,
+    ).exists():
+        return 0
+
+    resolved_email = (registration.email if registration else email) or ''
+
+    AttendanceRecord.objects.create(
+        event=event,
+        registration=registration,
+        participant_id=participant_id,
+        external_user_id=user_id,
+        participant_email=resolved_email.lower(),
+        participant_name=name,
+        join_time=join_time,
+        is_matched=bool(registration),
+        matched_at=timezone.now() if registration else None,
+    )
+    return 1
+
+
+def _handle_zoom_participant_left(video_room, payload) -> int:
+    """Zoom-shaped ``participant_left`` — close the open AttendanceRecord.
+
+    Looks up the most-recent open (``leave_time IS NULL``) record for
+    the same participant and calls ``record.participant_left(...)`` so
+    duration + registration summary recompute via the model helpers.
+    """
+    from registrations.models import AttendanceRecord
+
+    if video_room.content_type.model != 'event':
+        return 0
+
+    event = video_room.content_object
+    if not event:
+        return 0
+
+    participant, _obj = _zoom_participant_from_payload(payload)
+    user_id = participant.get('user_id') or participant.get('id') or ''
+    registrant_id = participant.get('registrant_id') or ''
+    email = (participant.get('email') or '').strip()
+    leave_time_raw = participant.get('leave_time')
+    leave_time = _parse_zoom_timestamp(leave_time_raw) or timezone.now()
+
+    participant_id = registrant_id or user_id
+    if not participant_id and not email:
+        return 0
+
+    qs = AttendanceRecord.objects.filter(event=event, leave_time__isnull=True)
+    record = None
+    if participant_id:
+        record = qs.filter(participant_id=participant_id).order_by('-join_time').first()
+    if record is None and email:
+        # Fallback: rare case where the join keyed on registrant_id
+        # but the leave event omits it (or vice versa). Match on
+        # email so we don't leak open records.
+        record = qs.filter(participant_email__iexact=email).order_by('-join_time').first()
+
+    if record is None:
+        return 0
+
+    record.participant_left(leave_time=leave_time)
+    return 0
+
+
+def _parse_zoom_timestamp(value):
+    """Parse an ISO-8601 timestamp from a Zoom payload.
+
+    Zoom emits ``2024-01-01T12:34:56Z`` style strings for
+    ``join_time``/``leave_time``. ``django.utils.dateparse.parse_datetime``
+    handles those in standard form; on failure we return None and the
+    caller falls back to ``timezone.now()``.
+    """
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        from django.utils.dateparse import parse_datetime
+        parsed = parse_datetime(str(value))
+        if parsed is not None and timezone.is_naive(parsed):
+            parsed = timezone.make_aware(parsed, _stdlib_tz.utc)
+        return parsed
+    except (ValueError, TypeError):
+        return None
+
+
+@CloudTask
+def sync_zoom_attendance(meeting_id: str):
+    """Reconcile AttendanceRecords for a Zoom meeting against the report API.
+
+    Triggered from ``_on_room_finished`` once Zoom signals
+    ``meeting.ended``. Zoom's ``/report/meetings/{id}/participants``
+    endpoint is the authoritative source for per-participant totals —
+    it dedupes rejoin segments into a single (join_time, leave_time,
+    duration) tuple per participant. Webhook-derived AttendanceRecords
+    capture each segment in real time; this task replaces them with
+    the report's authoritative roll-up so denormalised attendance
+    summaries (``Registration.total_attendance_minutes`` etc.) are
+    correct even when webhooks dropped or arrived out of order.
+
+    Idempotency: re-running on the same ``meeting_id`` produces the
+    same final state. For each report participant we delete any
+    existing AttendanceRecords keyed on the same ``participant_id``
+    and re-insert the report's row, then call
+    ``Registration.update_attendance_summary()`` so the denormalised
+    fields reflect the single deduped record.
+
+    Tolerance: the Zoom report can lag the meeting.ended webhook by
+    ~60 seconds. ``CloudTask.schedule()`` is currently a stub so we
+    cannot defer enqueue; instead we tolerate an empty report (just
+    log + exit) so a future replay can fill it in.
+    """
+    from conferencing.models import VideoRoom
+    from conferencing.service import get_video_provider
+    from registrations.models import AttendanceRecord
+
+    if not meeting_id:
+        return
+
+    video_room = (
+        VideoRoom.objects
+        .filter(zoom_meeting_id=str(meeting_id), provider='zoom')
+        .order_by('-created_at')
+        .first()
+    )
+    if video_room is None:
+        logger.info("sync_zoom_attendance: no Zoom VideoRoom for meeting %s", meeting_id)
+        return
+
+    if video_room.content_type.model != 'event':
+        # Not currently wired for course sessions over Zoom.
+        return
+
+    event = video_room.content_object
+    if event is None:
+        return
+
+    provider = get_video_provider()
+    if not provider.is_configured():
+        logger.warning(
+            "sync_zoom_attendance: provider not configured; skipping meeting %s",
+            meeting_id,
+        )
+        return
+
+    try:
+        participants = provider.list_participants(meeting_id)
+    except Exception:
+        logger.exception(
+            "sync_zoom_attendance: list_participants raised for meeting %s", meeting_id,
+        )
+        return
+
+    if not participants:
+        # Report API hasn't materialised yet (typical 30–90s lag), or
+        # the meeting genuinely had no joiners. Either way, nothing to
+        # reconcile this pass — webhook records remain authoritative.
+        logger.info(
+            "sync_zoom_attendance: empty report for meeting %s; leaving "
+            "webhook-derived records in place",
+            meeting_id,
+        )
+        return
+
+    affected_registrations: set[int] = set()
+    rows_written = 0
+
+    for p in participants:
+        meta = p.metadata or {}
+        registrant_id = (meta.get('registrant_id') or '').strip()
+        email = (meta.get('email') or '').strip()
+        # Zoom report exposes the participant's user_id in `identity`;
+        # we still prefer registrant_id as the upsert key so the row
+        # collapses with whatever the participant_joined webhook
+        # wrote.
+        user_id = p.identity or ''
+        participant_id = registrant_id or user_id
+        if not participant_id and not email:
+            continue
+
+        join_time = _parse_zoom_timestamp(meta.get('join_time'))
+        leave_time = _parse_zoom_timestamp(meta.get('leave_time'))
+        duration_raw = meta.get('duration') or 0
+        try:
+            # Zoom reports duration in seconds.
+            duration_seconds = int(duration_raw)
+        except (TypeError, ValueError):
+            duration_seconds = 0
+        duration_minutes = max(0, duration_seconds // 60)
+
+        registration = _resolve_zoom_registration(event, registrant_id, email)
+
+        # Replace per-participant: delete prior records and insert the
+        # report's authoritative row. Scope tightly so an email-only
+        # participant (rare: empty registrant_id AND empty user_id)
+        # doesn't wipe other email-only rows on the same event.
+        if participant_id:
+            AttendanceRecord.objects.filter(
+                event=event, participant_id=participant_id,
+            ).delete()
+        elif email:
+            AttendanceRecord.objects.filter(
+                event=event,
+                participant_id='',
+                participant_email__iexact=email,
+            ).delete()
+
+        record_join = join_time or timezone.now()
+        record = AttendanceRecord.objects.create(
+            event=event,
+            registration=registration,
+            participant_id=participant_id,
+            external_user_id=user_id,
+            participant_email=((registration.email if registration else email) or '').lower(),
+            participant_name=p.name or '',
+            join_time=record_join,
+            leave_time=leave_time,
+            is_matched=bool(registration),
+            matched_at=timezone.now() if registration else None,
+        )
+        # Zoom's report gives one row per participant where `duration`
+        # is the **sum across rejoins** but `join_time`/`leave_time`
+        # are first-join / last-leave. Wall-clock `(leave - join)` is
+        # therefore inflated for any rejoiner. AttendanceRecord.save()
+        # auto-derives duration_minutes from those timestamps when
+        # leave_time is set, which would clobber the authoritative
+        # value — bypass with a queryset .update().
+        AttendanceRecord.objects.filter(pk=record.pk).update(
+            duration_minutes=duration_minutes,
+        )
+        rows_written += 1
+
+        if registration is not None:
+            affected_registrations.add(registration.id)
+
+    # Recompute denormalised summaries once per registration. Pull
+    # fresh objects to avoid stale field values from the webhook pass.
+    if affected_registrations:
+        from registrations.models import Registration
+
+        for reg in Registration.objects.filter(id__in=affected_registrations):
+            reg.update_attendance_summary()
+
+    logger.info(
+        "sync_zoom_attendance: meeting=%s reconciled %d participants "
+        "(%d registrations updated)",
+        meeting_id, rows_written, len(affected_registrations),
+    )
 
 
 def _maybe_auto_end_on_last_host_leave(video_room, leaving_identity):
@@ -681,11 +1070,31 @@ def _handle_recording_ended(video_room, payload):
 
     Idempotent: re-delivery of egress_ended for an already-finalized row is
     a no-op for the status transition; file rows use update_or_create.
+
+    Zoom branch: cloud recordings are produced server-side by Zoom, so
+    "recording_ended" arrives as ``recording.completed`` (mapped via
+    ZoomProvider.parse_webhook). We don't have an egress to finalize —
+    instead we enqueue the post-meeting downloader. The LiveKit branch
+    below stays unchanged.
     """
     import os
 
     from conferencing.models import VideoRecording, VideoRecordingFile
     from conferencing.state_machine import advance_recording
+
+    if (video_room.provider or '').lower() == 'zoom':
+        meeting_id = (
+            video_room.zoom_meeting_id
+            or str(((payload.get('payload') or {}).get('object') or {}).get('id') or '')
+        )
+        if not meeting_id:
+            logger.warning(
+                "recording_ended for Zoom room %s but no zoom_meeting_id available",
+                video_room.room_name,
+            )
+            return
+        download_zoom_recording.delay(meeting_id)
+        return
 
     egress_info = payload.get('egressInfo', {})
     egress_id = egress_info.get('egressId', '')
@@ -818,6 +1227,436 @@ def _handle_recording_ended(video_room, payload):
         "Recording finalized: room=%s egress=%s status=%s advanced=%s",
         video_room.room_name, egress_id, recording.status, advanced,
     )
+
+
+# =========================================================================
+# Zoom recording ingestion
+# =========================================================================
+#
+# Zoom Cloud auto-records every meeting (set at create_room time). When the
+# meeting ends and Zoom finishes processing, it fires recording.completed.
+# That webhook lands in `_handle_recording_ended` above, which enqueues
+# `download_zoom_recording` — this task pulls every artifact (video / audio /
+# chat / transcript VTT) into our GCS bucket, materialises VideoRecording +
+# VideoRecordingFile rows, parses the VTT into TranscriptSegment rows, and
+# (per setting) trashes the Zoom Cloud copy to keep the admin quota clean.
+#
+# Idempotency contract: re-running on the same meeting_id is safe.
+# - VideoRecording is upserted on egress_id=meeting_id (unique).
+# - VideoRecordingFile rows use update_or_create on (recording, file_name).
+# - TranscriptSegment uses bulk_create(ignore_conflicts=True) keyed on the
+#   partial unique constraint (transcript, provider_segment_id, source).
+
+
+_ZOOM_FILE_TYPE_MAP = {
+    'MP4': 'video',
+    'M4A': 'audio',
+    'CHAT': 'chat',
+    'TRANSCRIPT': 'transcript',
+    'CC': 'transcript',
+    'CAPTIONS': 'transcript',
+}
+
+
+@CloudTask
+def download_zoom_recording(meeting_id: str, webhook_log_id: int | None = None):
+    """
+    Pull a Zoom Cloud recording into GCS and finalize the VideoRecording.
+
+    Looks up the VideoRoom by ``zoom_meeting_id``, fetches the recording
+    manifest from Zoom, streams every file into ``default_storage`` under
+    ``{RECORDING_STORAGE_DIR}/zoom/{meeting_id}/{file_id}.{ext}``, materialises
+    VideoRecording + VideoRecordingFile rows, parses VTT transcripts into
+    TranscriptSegment rows, and (per ``ZOOM_PURGE_AFTER_DOWNLOAD``) trashes
+    the Zoom Cloud copy. Idempotent on ``meeting_id``.
+    """
+    import tempfile
+
+    from django.conf import settings
+    from django.core.files import File
+    from django.core.files.storage import default_storage
+
+    from conferencing.models import (
+        VideoRecording,
+        VideoRecordingFile,
+        VideoRoom,
+    )
+    from conferencing.providers.zoom import ZoomProvider
+    from conferencing.state_machine import advance_recording
+
+    meeting_id = str(meeting_id)
+
+    video_room = VideoRoom.objects.filter(zoom_meeting_id=meeting_id).first()
+    if video_room is None:
+        logger.warning(
+            "download_zoom_recording: no VideoRoom for zoom_meeting_id=%s", meeting_id,
+        )
+        return
+
+    provider = ZoomProvider()
+    if not provider.is_configured():
+        logger.warning(
+            "download_zoom_recording: ZoomProvider not configured; skipping (meeting=%s)",
+            meeting_id,
+        )
+        return
+
+    # Resolve event/course_session link off the parent.
+    from events.models import Event
+    from learning.models import CourseSession
+    parent = video_room.content_object
+    parent_event = parent if isinstance(parent, Event) else None
+    parent_session = parent if isinstance(parent, CourseSession) else None
+
+    # Upsert the parent VideoRecording row. egress_id == meeting_id is the
+    # idempotency key; provider='zoom'. Default status on insert is RECORDING
+    # (the model default); we advance it through the state machine below.
+    recording, created = VideoRecording.objects.get_or_create(
+        egress_id=meeting_id,
+        defaults={
+            'video_room': video_room,
+            'provider': 'zoom',
+            'event': parent_event,
+            'course_session': parent_session,
+            'recording_start': timezone.now(),
+            'access_level': VideoRecording.AccessLevel.REGISTRANTS,
+        },
+    )
+    if not created:
+        # Backfill parent links if missing (mirrors the LiveKit branch).
+        backfill = {}
+        if parent_event and recording.event_id is None:
+            backfill['event'] = parent_event
+        if parent_session and recording.course_session_id is None:
+            backfill['course_session'] = parent_session
+        if backfill:
+            for k, v in backfill.items():
+                setattr(recording, k, v)
+            recording.save(update_fields=list(backfill.keys()) + ['updated_at'])
+
+    # RECORDING → PROCESSING (no-op if already past).
+    advance_recording(recording.id, to_status=VideoRecording.Status.PROCESSING)
+    recording.refresh_from_db()
+
+    try:
+        manifest = provider.get_meeting_recordings(meeting_id)
+    except Exception:
+        logger.exception(
+            "download_zoom_recording: get_meeting_recordings failed (meeting=%s)",
+            meeting_id,
+        )
+        advance_recording(recording.id, to_status=VideoRecording.Status.ERROR)
+        return
+
+    download_token = manifest.get('download_access_token') or ''
+    files = manifest.get('recording_files') or []
+
+    storage_dir = getattr(settings, 'RECORDING_STORAGE_DIR', '/recordings').rstrip('/')
+
+    primary_video_path = ''
+    total_size = 0
+    earliest_start = None
+    latest_end = None
+    transcript_payloads: list[tuple[str, bytes]] = []  # (file_id, vtt_bytes)
+
+    try:
+        for f in files:
+            file_type_raw = (f.get('file_type') or '').upper()
+            if file_type_raw == 'TIMELINE':
+                continue
+            mapped_type = _ZOOM_FILE_TYPE_MAP.get(file_type_raw)
+            if not mapped_type:
+                logger.info(
+                    "download_zoom_recording: skipping unknown Zoom file_type=%s (meeting=%s)",
+                    file_type_raw, meeting_id,
+                )
+                continue
+
+            file_id = str(f.get('id') or '')
+            ext = (f.get('file_extension') or file_type_raw).lower().lstrip('.')
+            if not file_id:
+                logger.warning(
+                    "download_zoom_recording: file with empty id, skipping (meeting=%s type=%s)",
+                    meeting_id, file_type_raw,
+                )
+                continue
+            # `file_name` carries the path relative to RECORDING_STORAGE_DIR so
+            # the streaming endpoint's fallback (`os.path.join(storage_dir,
+            # rec_file.file_name)`) finds non-primary artifacts (audio / chat
+            # / transcript). The video file's full path also lives on
+            # `recording.storage_path` for the primary lookup.
+            file_name = f"zoom/{meeting_id}/{file_id}.{ext}"
+            storage_path = f"{storage_dir}/{file_name}"
+            download_url = f.get('download_url') or ''
+            if not download_url:
+                logger.warning(
+                    "download_zoom_recording: file %s has no download_url (meeting=%s)",
+                    file_id, meeting_id,
+                )
+                continue
+
+            # Stream into a temp file, then hand to default_storage. Avoids
+            # holding the whole MP4 in memory.
+            written = 0
+            transcript_buffer = bytearray() if mapped_type == 'transcript' else None
+            with tempfile.NamedTemporaryFile(delete=True) as tmp:
+                for chunk in provider.stream_recording_file(
+                    download_url, download_token=download_token,
+                ):
+                    tmp.write(chunk)
+                    written += len(chunk)
+                    if transcript_buffer is not None:
+                        transcript_buffer.extend(chunk)
+                tmp.flush()
+                tmp.seek(0)
+
+                # Replace any prior copy at this path so re-runs don't leave
+                # `_1`-suffixed duplicates behind.
+                if default_storage.exists(storage_path):
+                    default_storage.delete(storage_path)
+                saved_path = default_storage.save(storage_path, File(tmp))
+
+            # Track timing across the bundle.
+            rs = f.get('recording_start')
+            re_ = f.get('recording_end')
+            if rs:
+                earliest_start = rs if earliest_start is None or rs < earliest_start else earliest_start
+            if re_:
+                latest_end = re_ if latest_end is None or re_ > latest_end else latest_end
+
+            VideoRecordingFile.objects.update_or_create(
+                recording=recording,
+                file_name=file_name,
+                defaults={
+                    'file_type': mapped_type,
+                    'file_extension': f'.{ext}' if ext else '',
+                    'file_size_bytes': written,
+                    'storage_url': saved_path,
+                },
+            )
+            total_size += written
+
+            if mapped_type == 'video' and not primary_video_path:
+                primary_video_path = saved_path
+
+            if transcript_buffer is not None:
+                transcript_payloads.append((file_id, bytes(transcript_buffer)))
+
+    except Exception:
+        logger.exception(
+            "download_zoom_recording: file ingest failed (meeting=%s)", meeting_id,
+        )
+        advance_recording(recording.id, to_status=VideoRecording.Status.ERROR)
+        return
+
+    # Compute duration from the recording_start/recording_end timestamps Zoom
+    # supplies on the manifest (ISO 8601 strings). Fall back to 0 if unparseable.
+    duration_seconds = 0
+    try:
+        from datetime import datetime
+        if earliest_start and latest_end:
+            s = datetime.fromisoformat(earliest_start.replace('Z', '+00:00'))
+            e = datetime.fromisoformat(latest_end.replace('Z', '+00:00'))
+            duration_seconds = max(0, int((e - s).total_seconds()))
+    except Exception:
+        duration_seconds = 0
+
+    # Inherit auto_publish from parent (mirrors LiveKit branch).
+    auto_publish = False
+    if isinstance(parent, Event):
+        settings_dict = parent.video_settings if isinstance(parent.video_settings, dict) else {}
+        auto_publish = bool(settings_dict.get('auto_publish_recording', False))
+    elif isinstance(parent, CourseSession):
+        auto_publish = bool(getattr(parent, 'recording_auto_publish', False))
+
+    extra: dict = {
+        'recording_end': timezone.now(),
+        'storage_path': primary_video_path or recording.storage_path,
+        'total_size_bytes': total_size,
+        'duration_seconds': duration_seconds or recording.duration_seconds,
+        'auto_publish': auto_publish,
+    }
+    advanced = advance_recording(
+        recording.id,
+        to_status=VideoRecording.Status.AVAILABLE,
+        extra_fields=extra,
+    )
+
+    if advanced:
+        recording.refresh_from_db()
+
+    # Rewrite file storage_url to the streaming endpoint so the frontend uses
+    # the same shape as LiveKit recordings (same playback/download path).
+    for vf in recording.files.all():
+        target = f'/api/v1/video/recordings/{recording.uuid}/files/{vf.uuid}/stream/'
+        if vf.storage_url != target:
+            vf.storage_url = target
+            vf.save(update_fields=['storage_url', 'updated_at'])
+
+    # Parse any VTT transcripts now that file rows + recording exist.
+    if transcript_payloads:
+        transcript = _ensure_zoom_transcript(video_room)
+        for file_id, vtt_bytes in transcript_payloads:
+            try:
+                _parse_zoom_vtt_into_transcript(transcript, vtt_bytes, file_id)
+            except Exception:
+                logger.exception(
+                    "download_zoom_recording: VTT parse failed (meeting=%s file=%s)",
+                    meeting_id, file_id,
+                )
+
+    if advanced and recording.auto_publish and recording.status == VideoRecording.Status.AVAILABLE:
+        recording.publish()
+
+    # Storage hygiene: trash the Zoom Cloud copy now that we own the bytes.
+    if getattr(settings, 'ZOOM_PURGE_AFTER_DOWNLOAD', False):
+        try:
+            ok = provider.delete_recording(meeting_id)
+            if not ok:
+                logger.warning(
+                    "download_zoom_recording: Zoom purge returned non-success (meeting=%s)",
+                    meeting_id,
+                )
+        except Exception:
+            logger.warning(
+                "download_zoom_recording: Zoom purge raised; ignoring (meeting=%s)",
+                meeting_id, exc_info=True,
+            )
+
+    logger.info(
+        "download_zoom_recording done: meeting=%s files=%d bytes=%d advanced=%s",
+        meeting_id, len(files), total_size, advanced,
+    )
+
+
+def _ensure_zoom_transcript(video_room):
+    """Return the Transcript for ``video_room``, creating one if missing.
+
+    The streaming pipeline normally provisions the Transcript at
+    room-started time. Zoom rooms whose ``transcription_enabled`` was
+    off (or whose provision step was skipped) won't have one — we
+    create a minimal row here so VTT cues have somewhere to live.
+    """
+    from conferencing.models import Transcript
+
+    transcript, _ = Transcript.objects.get_or_create(
+        video_room=video_room,
+        defaults={
+            'provider': 'zoom',
+            'language_code': 'en-US',
+            'started_at': timezone.now(),
+        },
+    )
+    return transcript
+
+
+def _parse_zoom_vtt_into_transcript(transcript, vtt_bytes: bytes, file_id: str):
+    """Parse a Zoom VTT payload into TranscriptSegment rows.
+
+    VTT format: ``WEBVTT`` header, blank line, then cues:
+
+        [optional cue id]
+        HH:MM:SS.mmm --> HH:MM:SS.mmm [optional settings]
+        cue body line 1
+        cue body line 2
+        <blank line>
+
+    Bulk-creates with ``ignore_conflicts=True`` so re-running the task is
+    idempotent against the partial unique constraint
+    ``(transcript, provider_segment_id, source='live')``.
+    """
+    from conferencing.models import Transcript, TranscriptSegment
+
+    text = vtt_bytes.decode('utf-8-sig', errors='replace').replace('\r\n', '\n').replace('\r', '\n')
+
+    # Strip the WEBVTT header block (everything up to the first blank line).
+    if text.lstrip().startswith('WEBVTT'):
+        idx = text.find('\n\n')
+        if idx == -1:
+            return  # Header only, no cues.
+        text = text[idx + 2:]
+
+    cues = [c for c in text.split('\n\n') if c.strip()]
+
+    rows: list[TranscriptSegment] = []
+    cue_index = 0
+
+    for cue in cues:
+        lines = [ln for ln in cue.split('\n') if ln.strip()]
+        if not lines:
+            continue
+
+        # Skip NOTE/STYLE/REGION blocks.
+        if lines[0].startswith(('NOTE', 'STYLE', 'REGION')):
+            continue
+
+        # First line might be a cue identifier (no `-->`); skip past it if so.
+        timing_line = None
+        body_start = 0
+        for i, ln in enumerate(lines):
+            if '-->' in ln:
+                timing_line = ln
+                body_start = i + 1
+                break
+        if timing_line is None:
+            continue
+
+        # Trim cue settings ("00:01:25.789 align:start position:50%") off the
+        # end of the second timestamp.
+        try:
+            left, _, right = timing_line.partition('-->')
+            start_str = left.strip()
+            end_str = right.strip().split()[0]
+            start_ms = _vtt_timestamp_to_ms(start_str)
+            end_ms = _vtt_timestamp_to_ms(end_str)
+        except Exception:
+            continue
+
+        body = '\n'.join(lines[body_start:]).strip()
+        if not body:
+            continue
+
+        rows.append(TranscriptSegment(
+            transcript=transcript,
+            start_ms=start_ms,
+            end_ms=end_ms,
+            text=body,
+            is_final=True,
+            source=TranscriptSegment.Source.LIVE,
+            provider_segment_id=f"{file_id}:{cue_index:05d}",
+        ))
+        cue_index += 1
+
+    if rows:
+        TranscriptSegment.objects.bulk_create(rows, ignore_conflicts=True)
+
+    # Recompute word_count from the DB so we count the real (post-conflict)
+    # segment set, not the rows we just tried to insert.
+    current = transcript.segments.filter(replaced_by__isnull=True).only('text')
+    word_count = sum(len(s.text.split()) for s in current)
+    transcript.status = Transcript.Status.FINALIZED
+    transcript.finalized_at = timezone.now()
+    transcript.word_count = word_count
+    transcript.save(update_fields=['status', 'finalized_at', 'word_count', 'updated_at'])
+
+
+def _vtt_timestamp_to_ms(stamp: str) -> int:
+    """Convert ``HH:MM:SS.mmm`` or ``MM:SS.mmm`` to integer milliseconds."""
+    parts = stamp.split(':')
+    if len(parts) == 3:
+        h, m, rest = parts
+    elif len(parts) == 2:
+        h, m, rest = '0', parts[0], parts[1]
+    else:
+        raise ValueError(f"Unparseable VTT timestamp: {stamp!r}")
+    if '.' in rest:
+        s, ms = rest.split('.', 1)
+    else:
+        s, ms = rest, '0'
+    # Pad/truncate ms to 3 digits.
+    ms = (ms + '000')[:3]
+    total = int(h) * 3600_000 + int(m) * 60_000 + int(s) * 1000 + int(ms)
+    return total
 
 
 @CloudTask

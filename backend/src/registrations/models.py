@@ -137,6 +137,20 @@ class Registration(SoftDeleteModel):
         help_text="Organizer who granted the comp seat (when was_comped=True)",
     )
 
+    # =========================================
+    # Zoom integration (per-registrant, populated when meeting uses
+    # Zoom's built-in registration). Both nullable/blank so legacy
+    # rows under LiveKit are unaffected.
+    # =========================================
+    zoom_registrant_id = models.CharField(
+        max_length=64, blank=True, db_index=True,
+        help_text="Zoom registrant_id (returned by POST /meetings/{id}/registrants). Used to match webhook participant events back to this registration.",
+    )
+    zoom_registrant_join_url = models.URLField(
+        max_length=1000, blank=True,
+        help_text="Personalized Zoom join URL with `tk=` token; not echoed in our emails (Zoom emails it directly).",
+    )
+
     # Waitlist position (only if waitlisted)
     waitlist_position = models.PositiveIntegerField(null=True, blank=True, help_text="Position in waitlist (1 = first)")
     promoted_from_waitlist_at = models.DateTimeField(

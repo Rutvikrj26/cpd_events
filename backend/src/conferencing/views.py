@@ -185,13 +185,8 @@ def ensure_recording_started(video_room) -> tuple['VideoRecording', bool]:
     if existing:
         return existing, False
 
-    output_path = getattr(
-        settings,
-        'LIVEKIT_RECORDING_OUTPUT_PATH_TEMPLATE',
-        '/out/{room_name}-{time}.mp4',
-    )
-
     provider = get_video_provider()
+    output_path = provider.recording_output_template() or '/out/{room_name}-{time}.mp4'
     egress_id = provider.start_recording(video_room.room_name, output_path=output_path)
 
     # Link the recording to the parent event/course_session so listing
@@ -683,8 +678,15 @@ class VideoWebhookView(View):
             logger.exception("Failed to parse video webhook")
             return JsonResponse({'error': 'Parse error'}, status=400)
 
-        # Deduplicate by generating a stable webhook_id
-        webhook_id = request.META.get('HTTP_X_LIVEKIT_ID', '') or str(uuid_lib.uuid4())
+        # Deduplicate by extracting the provider's per-delivery ID from
+        # request headers. LiveKit uses ``X-LiveKit-Id``; Zoom emits
+        # ``x-zm-trackingid``. Provider-agnostic — falls back to a fresh
+        # UUID if the header is absent (no dedup, but processing
+        # continues).
+        webhook_id = (
+            provider.get_webhook_dedup_key(dict(request.headers))
+            or str(uuid_lib.uuid4())
+        )
 
         if VideoWebhookLog.objects.filter(webhook_id=webhook_id).exists():
             return JsonResponse({'status': 'duplicate'})
@@ -827,7 +829,7 @@ def _accounts_user_for_identity(identity: str):
 class TranscriptIngestView(generics.GenericAPIView):
     """POST /api/v1/internal/transcripts/{uuid}/segments/ — agent-only.
 
-    Idempotent on `(transcript, livekit_segment_id, source='live')`. The
+    Idempotent on `(transcript, provider_segment_id, source='live')`. The
     agent re-publishes a segment with the same `lk.segment_id` until it's
     finalised (LiveKit's normal interim-then-final flow); we update the
     same row in place so the segment count reflects logical segments, not
@@ -861,7 +863,7 @@ class TranscriptIngestView(generics.GenericAPIView):
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
 
-        # Speaker attribution is an *invariant* of a livekit_segment_id —
+        # Speaker attribution is an *invariant* of a provider_segment_id —
         # LiveKit guarantees the segment maps to one participant for its
         # whole lifetime, so we capture the speaker on first insert and
         # never overwrite it on revisions. This protects against agents
@@ -870,7 +872,7 @@ class TranscriptIngestView(generics.GenericAPIView):
         # snapshot when the row is updated.
         existing = TranscriptSegment.objects.filter(
             transcript=transcript,
-            livekit_segment_id=data['livekit_segment_id'],
+            provider_segment_id=data['provider_segment_id'],
             source=TranscriptSegment.Source.LIVE,
         ).first()
 
@@ -898,7 +900,7 @@ class TranscriptIngestView(generics.GenericAPIView):
         )
         seg = TranscriptSegment.objects.create(
             transcript=transcript,
-            livekit_segment_id=data['livekit_segment_id'],
+            provider_segment_id=data['provider_segment_id'],
             source=TranscriptSegment.Source.LIVE,
             start_ms=data['start_ms'],
             end_ms=data['end_ms'],
@@ -1288,7 +1290,7 @@ class TranscriptSegmentEditView(generics.GenericAPIView):
                 speaker_user=current.speaker_user,
                 speaker_name_snapshot=current.speaker_name_snapshot,
                 confidence=current.confidence,
-                livekit_segment_id=current.livekit_segment_id,
+                provider_segment_id=current.provider_segment_id,
                 # New content + provenance.
                 text=new_text,
                 is_final=True,
@@ -1311,9 +1313,9 @@ class TranscriptSegmentHistoryView(generics.GenericAPIView):
     Returns the full version chain for a segment in chronological order
     (oldest first). Organisers only — non-organisers always get 404.
 
-    The query walks `livekit_segment_id` rather than the FK chain because
+    The query walks `provider_segment_id` rather than the FK chain because
     a chain of N edits produces N+1 rows that all share the same
-    `livekit_segment_id`; one indexed query is faster than recursing
+    `provider_segment_id`; one indexed query is faster than recursing
     via `replaces` relations.
     """
 
@@ -1328,11 +1330,11 @@ class TranscriptSegmentHistoryView(generics.GenericAPIView):
         if not _user_can_edit_transcript(request.user, transcript):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        # Resolve the segment uuid to its livekit_segment_id (the chain key).
+        # Resolve the segment uuid to its provider_segment_id (the chain key).
         anchor = transcript.segments.filter(uuid=segment_uuid).first()
         if anchor is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        if not anchor.livekit_segment_id:
+        if not anchor.provider_segment_id:
             # Edge: a manually-created segment with no chain. Just return
             # the row itself rather than trying to chain.
             return Response({
@@ -1340,7 +1342,7 @@ class TranscriptSegmentHistoryView(generics.GenericAPIView):
             })
 
         chain = transcript.segments.filter(
-            livekit_segment_id=anchor.livekit_segment_id,
+            provider_segment_id=anchor.provider_segment_id,
         ).order_by('created_at')
 
         return Response({

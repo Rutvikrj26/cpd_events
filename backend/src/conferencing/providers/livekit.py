@@ -325,6 +325,29 @@ class LiveKitProvider(VideoProvider):
             room_name, identity, can_publish, can_subscribe, metadata
         )
 
+    # ------------------------------------------------------------------
+    # Provider-extension overrides (defaults from VideoProvider)
+    # ------------------------------------------------------------------
+
+    def get_webhook_dedup_key(self, headers: dict | None) -> str:
+        """LiveKit's webhook delivery ID is in the ``X-LiveKit-Id`` header."""
+        if not headers:
+            return ""
+        return headers.get('X-LiveKit-Id') or headers.get('x-livekit-id') or ""
+
+    def client_join_url(
+        self,
+        room_name: str,
+        *,
+        token: str = "",
+        registrant_join_url: str = "",
+    ) -> str:
+        """LiveKit clients connect to the WebSocket URL; the JWT carries the room."""
+        return self._ws_url
+
+    def recording_output_template(self) -> str:
+        return getattr(settings, 'LIVEKIT_RECORDING_OUTPUT_PATH_TEMPLATE', '') or ''
+
     def verify_webhook(self, body: bytes, auth_header: str) -> bool:
         lk = _get_livekit_api_module()
         try:

@@ -23,6 +23,27 @@ logger = logging.getLogger(__name__)
 # and reschedule signals.
 
 
+def _is_zoom_event(event: Event) -> bool:
+    """True iff the event's active VideoRoom is provisioned on Zoom.
+
+    Used to short-circuit reminder + .ics paths — Zoom owns those for
+    Zoom-provider events. Cheap query (single row by content_type +
+    object_id index, exclude ENDED).
+    """
+    from django.contrib.contenttypes.models import ContentType
+    from conferencing.models import VideoRoom
+
+    try:
+        ct = ContentType.objects.get_for_model(Event)
+    except Exception:
+        return False
+    return (
+        VideoRoom.objects.filter(content_type=ct, object_id=event.id, provider='zoom')
+        .exclude(status=VideoRoom.Status.ENDED)
+        .exists()
+    )
+
+
 def build_event_join_url(event: Event, registration=None) -> str:
     """Return the frontend lobby URL for an event/registration.
 
@@ -78,9 +99,10 @@ def _reminder_context(event: Event, registration) -> dict:
 def enqueue_event_reminders(registration) -> int:
     """Idempotently enqueue ScheduledEmail rows for each reminder offset.
 
-    Skips offsets that are already in the past relative to `now`. Returns the
-    number of rows that ended up PENDING after the operation (created or
-    pre-existing).
+    Skips offsets that are already in the past relative to `now`. Skips
+    entirely when the event runs on Zoom (Zoom owns reminder cadence
+    via per-meeting registration settings). Returns the number of rows
+    that ended up PENDING after the operation (created or pre-existing).
     """
     from integrations.models import ScheduledEmail
     from integrations.services import email_service
@@ -88,6 +110,16 @@ def enqueue_event_reminders(registration) -> int:
     event = registration.event
     if event.status not in (Event.Status.PUBLISHED, Event.Status.LIVE):
         logger.debug("enqueue_event_reminders: event %s not in published/live state", event.id)
+        return 0
+
+    # Zoom-provider events: Zoom emails registrants reminders directly
+    # (configured per-meeting at create time). Suppressing here avoids
+    # duplicate "your event is starting soon" emails from accredit + Zoom.
+    if _is_zoom_event(event):
+        logger.debug(
+            "enqueue_event_reminders: event %s is on Zoom; reminders owned by Zoom — skipping",
+            event.id,
+        )
         return 0
 
     now = timezone.now()

@@ -248,8 +248,13 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
 ]
 
-# Video Conferencing (LiveKit)
+# Video Conferencing
+# VIDEO_PROVIDER selects which provider implementation `get_video_provider()`
+# returns. Supported: 'livekit' (legacy, self-hosted) | 'zoom' (S2S OAuth,
+# private app — no marketplace publication required).
 VIDEO_PROVIDER = os.environ.get('VIDEO_PROVIDER', 'livekit')
+
+# --- LiveKit (legacy provider) ---
 LIVEKIT_API_KEY = os.environ.get('LIVEKIT_API_KEY', '')
 LIVEKIT_API_SECRET = os.environ.get('LIVEKIT_API_SECRET', '')
 LIVEKIT_HOST = os.environ.get('LIVEKIT_HOST', 'http://localhost:7880')
@@ -264,6 +269,32 @@ LIVEKIT_RECORDING_OUTPUT_PATH_TEMPLATE = os.environ.get(
     # read what egress wrote. Both paths point at the same mount point.
     '/recordings/{room_name}-{time}.mp4',
 )
+
+# --- Zoom (Server-to-Server OAuth, private app) ---
+# Single admin Zoom account owns every meeting. S2S app credentials live here
+# and authenticate every Zoom REST call we make. No per-user OAuth flow.
+ZOOM_ACCOUNT_ID = os.environ.get('ZOOM_ACCOUNT_ID', '')
+ZOOM_CLIENT_ID = os.environ.get('ZOOM_CLIENT_ID', '')
+ZOOM_CLIENT_SECRET = os.environ.get('ZOOM_CLIENT_SECRET', '')
+# Email or userId of the Zoom user who owns every meeting (the admin).
+ZOOM_ADMIN_USER_ID = os.environ.get('ZOOM_ADMIN_USER_ID', '')
+# Secret token from the S2S app's Event Subscription page. Used as the HMAC
+# key when verifying incoming webhooks (`x-zm-signature` header).
+ZOOM_WEBHOOK_SECRET_TOKEN = os.environ.get('ZOOM_WEBHOOK_SECRET_TOKEN', '')
+# How instructors get host privileges:
+#   'alternative_host' — pre-assign instructor emails as alternative hosts
+#                        on each meeting. Requires Licensed users on admin's
+#                        Zoom account. Recommended.
+#   'zak_proxy'        — generate join URL signed with admin's ZAK token,
+#                        granting host privileges to whoever clicks. Loses
+#                        instructor identity in chat/recording. Fallback for
+#                        deployments without Licensed seats per instructor.
+ZOOM_INSTRUCTOR_HOST_MODE = os.environ.get('ZOOM_INSTRUCTOR_HOST_MODE', 'alternative_host')
+# After downloading a Zoom Cloud recording into our GCS bucket, also delete
+# it from Zoom Cloud to keep the admin account's quota clean.
+ZOOM_PURGE_AFTER_DOWNLOAD = os.environ.get('ZOOM_PURGE_AFTER_DOWNLOAD', 'true').lower() == 'true'
+ZOOM_API_BASE_URL = os.environ.get('ZOOM_API_BASE_URL', 'https://api.zoom.us/v2')
+ZOOM_OAUTH_TOKEN_URL = os.environ.get('ZOOM_OAUTH_TOKEN_URL', 'https://zoom.us/oauth/token')
 
 # Transcription (LiveKit Agents + STT plugin)
 # `TRANSCRIPTION_PROVIDER='null'` (the default) means transcription is

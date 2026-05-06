@@ -52,9 +52,19 @@ class VideoRoom(BaseModel):
     content_object = GenericForeignKey('content_type', 'object_id')
 
     # Room identification
-    room_id = models.CharField(max_length=200, db_index=True, help_text="Provider's room ID (e.g., LiveKit SID)")
+    room_id = models.CharField(max_length=200, db_index=True, help_text="Provider's room ID (e.g., LiveKit SID, Zoom meeting UUID)")
     room_name = models.CharField(max_length=200, unique=True, db_index=True, help_text="Room name used for joining")
     provider = models.CharField(max_length=50, default='livekit', help_text="Video provider name")
+
+    # Zoom-specific. The numeric Zoom meeting ID (distinct from `room_id`,
+    # which holds the meeting UUID). Used for REST calls that take the
+    # numeric id (e.g. /meetings/{id}/registrants). Nullable so legacy
+    # LiveKit rooms remain unaffected.
+    zoom_meeting_id = models.CharField(max_length=32, blank=True, db_index=True, help_text="Zoom numeric meeting ID")
+    # Personalized join URL surfaced to UI/lobby — for Zoom this is the
+    # meeting's host/start URL or generic join URL; per-attendee
+    # registrant URLs live on Registration.zoom_registrant_join_url.
+    zoom_join_url = models.URLField(blank=True, max_length=1000, help_text="Generic Zoom join URL for this meeting")
 
     # Status
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.SCHEDULED)
@@ -482,8 +492,9 @@ class TranscriptSegment(BaseModel):
     history endpoint walks the chain via the reverse `replaces` relation.
 
     Live revisions DO update in place (LiveKit re-publishes a segment with
-    the same `lk.segment_id` until it's finalised), keyed on
-    `(transcript_id, livekit_segment_id, source='live')`. Once a segment
+    the same `lk.segment_id` until it's finalised; Zoom's VTT cues use a
+    `{file_id}:{cue_index}` key), keyed on
+    `(transcript_id, provider_segment_id, source='live')`. Once a segment
     has been edited by an organiser, the live row's text is locked.
     """
 
@@ -532,10 +543,12 @@ class TranscriptSegment(BaseModel):
     confidence = models.FloatField(null=True, blank=True)
 
     # Provider's stable ID for this segment within the session. Idempotency
-    # key for the live ingest endpoint: `(transcript, livekit_segment_id)`
+    # key for the live ingest endpoint: `(transcript, provider_segment_id)`
     # uniquely identifies the live source row. Edits create siblings with
-    # the same `livekit_segment_id` but different `source`.
-    livekit_segment_id = models.CharField(max_length=128, blank=True, db_index=True)
+    # the same `provider_segment_id` but different `source`. Format depends
+    # on provider: LiveKit uses `lk.segment_id`; Zoom uses
+    # `{recording_file_id}:{cue_index}` for VTT-derived rows.
+    provider_segment_id = models.CharField(max_length=128, blank=True, db_index=True)
 
     # Edit history — acyclic linked list of versions. The newest version
     # has `replaced_by IS NULL`; older versions point forward through this
@@ -571,16 +584,16 @@ class TranscriptSegment(BaseModel):
             # in playback order.
             models.Index(fields=['transcript', 'start_ms']),
             # Idempotency lookups during live ingest.
-            models.Index(fields=['transcript', 'livekit_segment_id', 'source']),
+            models.Index(fields=['transcript', 'provider_segment_id', 'source']),
         ]
         # Live ingest invariant: at most one live segment per (transcript,
-        # livekit_segment_id) — re-publishes update in place. Edit rows
+        # provider_segment_id) — re-publishes update in place. Edit rows
         # get `source='edit'` so they don't collide with this constraint.
         constraints = [
             models.UniqueConstraint(
-                fields=['transcript', 'livekit_segment_id', 'source'],
-                condition=models.Q(source='live') & ~models.Q(livekit_segment_id=''),
-                name='one_live_segment_per_lk_id',
+                fields=['transcript', 'provider_segment_id', 'source'],
+                condition=models.Q(source='live') & ~models.Q(provider_segment_id=''),
+                name='one_live_segment_per_provider_id',
             ),
         ]
 

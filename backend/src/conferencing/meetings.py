@@ -117,7 +117,11 @@ def _build_join_response(
     ).exists()
     return {
         'token': token,
-        'ws_url': getattr(django_settings, 'LIVEKIT_WS_URL', ''),
+        # Provider-agnostic. LiveKit returns the WS URL for SDK connect;
+        # Zoom returns the meeting's generic join URL (per-registrant
+        # personalized URLs are in Registration.zoom_registrant_join_url
+        # and surface to the lobby separately).
+        'ws_url': provider.client_join_url(video_room.room_name, token=token),
         'room_name': video_room.room_name,
         'room_uuid': str(video_room.uuid),
         'is_host': is_host,
@@ -128,17 +132,73 @@ def _build_join_response(
     }
 
 
-def _provision_room(content_object, *, max_participants: int = 0) -> VideoRoom:
-    """Create a fresh VideoRoom row + LiveKit room. DB-first.
+def _build_provider_metadata(content_object, model_name: str) -> dict:
+    """Assemble provider.create_room metadata from the content object.
 
-    Order matters: insert the row first, then call LiveKit. If LiveKit
-    fails after the row is committed, the row is updated to ERROR and
-    surfaces as a 502 to the caller. The reverse order would orphan a
-    LiveKit room with no DB record on a DB rollback.
+    Provider-specific fields (alternative_hosts for Zoom, start_time,
+    duration) only matter to providers that consume them; LiveKit
+    ignores everything except content_type / object_id.
+    """
+    meta: dict = {'content_type': model_name, 'object_id': content_object.id}
+
+    title = getattr(content_object, 'title', None) or ''
+    if title:
+        meta['topic'] = title[:200]
+
+    starts_at = getattr(content_object, 'starts_at', None)
+    if starts_at is not None:
+        meta['start_time'] = starts_at.isoformat()
+        tz = getattr(content_object, 'timezone', '') or 'UTC'
+        meta['timezone'] = tz
+
+    duration = getattr(content_object, 'duration_minutes', None)
+    if duration is not None:
+        meta['duration_minutes'] = int(duration)
+
+    settings = getattr(content_object, 'video_settings', None) or {}
+    meta['waiting_room'] = bool(settings.get('waiting_room_enabled', True))
+
+    # Alternative hosts: event owner + speaker owners. Speakers without a
+    # linked User are skipped (Zoom needs a Licensed-user email under
+    # the admin's account; non-Zoom-user speakers can be promoted to
+    # co-host at runtime instead).
+    emails: list[str] = []
+    owner = getattr(content_object, 'owner', None)
+    if owner is not None and getattr(owner, 'email', ''):
+        emails.append(owner.email)
+    speakers_rel = getattr(content_object, 'speakers', None)
+    if speakers_rel is not None:
+        try:
+            speaker_emails = list(
+                speakers_rel.filter(owner__isnull=False).values_list('owner__email', flat=True)
+            )
+            emails.extend(e for e in speaker_emails if e)
+        except Exception:
+            # speakers M2M may not exist on every content type (CourseSession
+            # has 'instructors' instead). Best-effort.
+            pass
+    if emails:
+        # De-dup, preserve order. Zoom expects a comma-separated string.
+        seen: set[str] = set()
+        deduped = [e for e in emails if not (e in seen or seen.add(e))]
+        meta['alternative_hosts'] = ','.join(deduped)
+
+    return meta
+
+
+def _provision_room(content_object, *, max_participants: int = 0) -> VideoRoom:
+    """Create a fresh VideoRoom row + provider-side meeting. DB-first.
+
+    Order matters: insert the row first, then call the provider. If the
+    provider call fails after the row is committed, the row is updated
+    to ERROR and surfaces as a 502 to the caller. The reverse order
+    would orphan a provider-side meeting with no DB record on a DB
+    rollback.
 
     Caller is responsible for the transactional context (the start view
     holds ``SELECT FOR UPDATE`` on the parent for the whole call).
     """
+    provider_name = getattr(django_settings, 'VIDEO_PROVIDER', 'livekit')
     ct = ContentType.objects.get_for_model(content_object)
     model_name = ct.model  # e.g. 'event', 'coursesession'
     room_name = generate_room_name(model_name, content_object.uuid)
@@ -147,9 +207,9 @@ def _provision_room(content_object, *, max_participants: int = 0) -> VideoRoom:
     video_room = VideoRoom.objects.create(
         content_type=ct,
         object_id=content_object.id,
-        room_id='',  # populated after LiveKit create
+        room_id='',  # populated after provider create
         room_name=room_name,
-        provider='livekit',
+        provider=provider_name,
         status=VideoRoom.Status.SCHEDULED,
         settings={
             'enabled': True,
@@ -163,28 +223,83 @@ def _provision_room(content_object, *, max_participants: int = 0) -> VideoRoom:
 
     provider = get_video_provider()
     if not provider.is_configured():
-        # In dev with a stub provider, skip the real LiveKit call and
+        # In dev with a stub provider, skip the real provider call and
         # treat the row as ready. Production deployments always have a
         # real provider; this branch keeps test fixtures working.
         return video_room
 
+    metadata = _build_provider_metadata(content_object, model_name)
+
     try:
         result = provider.create_room(
             name=room_name,
-            metadata={'content_type': model_name, 'object_id': content_object.id},
+            metadata=metadata,
             max_participants=max_participants,
         )
     except Exception as e:
         logger.exception(
-            "LiveKit create_room failed for %s/%s; marking row ERROR",
-            model_name, content_object.uuid,
+            "%s create_room failed for %s/%s; marking row ERROR",
+            provider_name, model_name, content_object.uuid,
         )
         video_room.mark_error(str(e))
         raise
 
+    update_fields = ['room_id', 'updated_at']
     video_room.room_id = result.room_id
-    video_room.save(update_fields=['room_id', 'updated_at'])
+    # Stash Zoom-specific identifiers when the provider returned them.
+    rmeta = result.metadata or {}
+    if rmeta.get('zoom_meeting_id'):
+        video_room.zoom_meeting_id = str(rmeta['zoom_meeting_id'])
+        update_fields.append('zoom_meeting_id')
+    if rmeta.get('zoom_join_url'):
+        video_room.zoom_join_url = rmeta['zoom_join_url']
+        update_fields.append('zoom_join_url')
+    video_room.save(update_fields=update_fields)
     return video_room
+
+
+# ----------------------------------------------------------------------
+# Event-publish provisioning (Zoom-aware).
+#
+# For Zoom we want the meeting to exist BEFORE registrations open so the
+# registrant API has something to attach attendees to. LiveKit creates
+# rooms on host-click; that path remains via _provision_room above. The
+# function below is the pre-emptive variant — invoked from the event
+# lifecycle signal when status transitions to PUBLISHED.
+# ----------------------------------------------------------------------
+
+
+def provision_meeting_for_event(event) -> VideoRoom | None:
+    """Idempotently provision the Zoom meeting for an Event at publish time.
+
+    No-ops when:
+      * the configured provider is LiveKit (rooms are on-demand there),
+      * the event is not in PUBLISHED/LIVE state,
+      * a non-ENDED VideoRoom already exists for the event.
+
+    Returns the VideoRoom row when one is created, else None.
+    """
+    from events.models import Event
+
+    provider_name = getattr(django_settings, 'VIDEO_PROVIDER', 'livekit')
+    if provider_name != 'zoom':
+        return None
+    if event.status not in (Event.Status.PUBLISHED, Event.Status.LIVE):
+        return None
+
+    ct = ContentType.objects.get_for_model(Event)
+    existing = VideoRoom.objects.filter(
+        content_type=ct,
+        object_id=event.id,
+    ).exclude(status=VideoRoom.Status.ENDED).first()
+    if existing is not None:
+        return existing
+
+    try:
+        return _provision_room(event, max_participants=event.max_attendees or 0)
+    except Exception:
+        # _provision_room already marks the row ERROR and logs.
+        return None
 
 
 def _start_meeting(

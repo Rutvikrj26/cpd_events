@@ -27,6 +27,10 @@ def get_video_provider() -> VideoProvider:
         from conferencing.providers.livekit import LiveKitProvider
 
         _provider_instance = LiveKitProvider()
+    elif provider_name == 'zoom':
+        from conferencing.providers.zoom import ZoomProvider
+
+        _provider_instance = ZoomProvider()
     else:
         raise ValueError(f"Unknown video provider: {provider_name}")
 
